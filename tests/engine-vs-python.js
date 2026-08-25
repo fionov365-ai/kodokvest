@@ -1,5 +1,10 @@
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { execFileSync } = require('child_process');
+
+/* своя папка под временные .py — /tmp может быть занят чужими файлами */
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'kodokvest-'));
 require('../js/engine-mini.js');
 const MiniPy = globalThis.MiniPy;
 
@@ -15,7 +20,7 @@ cases.forEach(c => c.code = c.code.join('\n').replace(/\n+$/, '') + '\n');
 
 let pass = 0, fail = 0;
 for (const c of cases) {
-  const f = '/tmp/t_' + c.name + '.py';
+  const f = path.join(TMP, 't_' + c.name + '.py');
   fs.writeFileSync(f, c.code);
   let expected;
   try {
@@ -34,3 +39,5 @@ for (const c of cases) {
   }
 }
 console.log('\npass ' + pass + ' / fail ' + fail);
+try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
+process.exit(fail ? 1 : 0);

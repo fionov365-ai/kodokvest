@@ -24,10 +24,18 @@ var RANKS = [
 ];
 var STAR_XP = [0, 25, 60, 100];
 
+/* ===== код входа в панель наставника =====
+   Панель открывается адресом сайта с #admin на конце, например
+     https://fionov365-ai.github.io/kodokvest/#admin
+   Чтобы сменить код — поменяй строку ниже и перезалей сайт.
+   Честно: сайт публичный, и этот код видно в исходнике страницы.
+   Это защита от случайного нажатия, а не настоящий пароль. */
+var ADMIN_CODE = "kodokvest-2026";
+
 /* ================= сохранение ================= */
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0 };
+          drawDone:{}, firstTry:0, perfect:0, log:{}, admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -44,7 +52,39 @@ try {
     }
   }
 } catch(e){}
+if (!S.log || typeof S.log !== "object") S.log = {};
+if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+
+/* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
+function logOf(id){
+  if (!S.log[id]) S.log[id] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0,
+                                first:null, last:null, solvedAt:null, stars:0 };
+  return S.log[id];
+}
+function touchLog(id){
+  var g = logOf(id), now = Date.now();
+  if (!g.first) g.first = now;
+  g.last = now; save();
+}
+var timeTick = null;
+function startTimer(id){
+  stopTimer();
+  timeTick = setInterval(function(){
+    var g = logOf(id); g.timeMs += 10000; g.last = Date.now(); save();
+  }, 10000);
+}
+function stopTimer(){ if (timeTick){ clearInterval(timeTick); timeTick = null; } }
+/* поставить или снять звёзды вручную, честно пересчитав XP */
+function setStars(id, k){
+  var prev = S.stars[id] === undefined ? 0 : S.stars[id];
+  if (k <= 0){ delete S.stars[id]; S.xp = Math.max(0, S.xp - STAR_XP[prev]); }
+  else { S.stars[id] = k; S.xp = Math.max(0, S.xp + STAR_XP[k] - STAR_XP[prev]); }
+  var g = logOf(id);
+  g.stars = k > 0 ? k : 0;
+  g.solvedAt = k > 0 ? (g.solvedAt || Date.now()) : null;
+  save();
+}
 
 function starsOf(id){ return S.stars[id] || 0; }
 function solved(id){ return S.stars[id] !== undefined; }
@@ -103,6 +143,7 @@ function worldReadyLessons(w){
   return w.lessons.filter(function(l){ return !!c[l.id]; });
 }
 function lessonOpen(l){
+  if (S.admin && S.admin.unlockAll) return !!lessonBody(l);
   var w = CURRICULUM.world(l.world);
   var ready = worldReadyLessons(w);
   var i = ready.indexOf(l);
@@ -207,11 +248,11 @@ function errHTML(e){
 }
 
 /* ================= редактор ================= */
-function makeEditor(initial){
+function makeEditor(initial, label){
   var box = document.createElement("div");
   box.className = "editorbox";
   box.innerHTML =
-    '<div class="ehead"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="lbl">твой код</span></div>' +
+    '<div class="ehead"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="lbl">' + esc(label || "твой код") + '</span></div>' +
     '<div class="edit-area"><div class="gutter"></div><div class="edit-scroll">' +
       '<pre class="hl"></pre><textarea spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
     '</div></div><div class="runbar"></div>';
@@ -264,11 +305,12 @@ function makeStudio(cfg){
   var wrap = document.createElement("div");
   wrap.className = "studio" + (cfg.draw ? " split" : "");
 
-  var ed = makeEditor(cfg.code || "");
+  var ed = makeEditor(cfg.code || "", cfg.label);
   ed.querySelector(".runbar").innerHTML =
     '<button class="rbtn" data-role="run">▶ Запустить</button>' +
     (eng.supportsStep ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
     '<button class="rbtn sec" data-role="reset">↺ Сброс</button>' +
+    (cfg.restore ? '<button class="rbtn sec" data-role="restore">↩ Вернуть как было</button>' : "") +
     (cfg.check ? '<button class="rbtn check" data-role="check">✓ Проверить</button>' : "") +
     '<span class="sp"></span><span class="tip"><span class="kbd">Ctrl</span>+<span class="kbd">Enter</span></span>';
 
@@ -360,6 +402,7 @@ function makeStudio(cfg){
     if (r === "run") doRun();
     else if (r === "step") doStep();
     else if (r === "reset") doReset();
+    else if (r === "restore"){ ed.setCode(cfg.restore); doReset(); }
     else if (r === "check") cfg.check(ed, showMsg, canvas);
   });
 
@@ -369,17 +412,45 @@ function makeStudio(cfg){
 }
 
 /* ================= проверка ================= */
-function normSeg(s){
+function normSeg(s, pen){
   var a = [Math.round(s.x1), Math.round(s.y1)], b = [Math.round(s.x2), Math.round(s.y2)];
   if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])){ var t = a; a = b; b = t; }
-  return a[0] + "," + a[1] + "|" + b[0] + "," + b[1];
+  var key = a[0] + "," + a[1] + "|" + b[0] + "," + b[1];
+  return pen ? key + "|" + s.c + "|" + Math.round(s.w) : key;
 }
-function sameDrawing(u, r){
+function sameDrawing(u, r, pen){
   if (!u.length) return false;
-  var A = u.map(normSeg).sort(), B = r.map(normSeg).sort();
+  var A = u.map(function(s){ return normSeg(s, pen); }).sort();
+  var B = r.map(function(s){ return normSeg(s, pen); }).sort();
   if (A.length !== B.length) return false;
   for (var i = 0; i < A.length; i++) if (A[i] !== B[i]) return false;
   return true;
+}
+
+/* ===== задание «найди ошибку»: считаем, сколько строк тронул ученик =====
+   Смысл задания — найти одну поломку, а не написать программу заново.
+   Пустые строки и комментарии не считаем: их правка ничего не меняет.
+   Единица измерения — «строка»: одна переписанная строка это 2 единицы
+   (одну убрали, другую добавили). */
+function codeLines(src){
+  return String(src === null || src === undefined ? "" : src).split("\n")
+    .map(function(s){ return s.replace(/\s+$/, ""); })
+    .filter(function(s){ var t = s.trim(); return t !== "" && t.charAt(0) !== "#"; });
+}
+function lcsLen(A, B){
+  var prev = [], cur, i, j;
+  for (j = 0; j <= B.length; j++) prev[j] = 0;
+  for (i = 1; i <= A.length; i++){
+    cur = [0];
+    for (j = 1; j <= B.length; j++)
+      cur[j] = A[i-1] === B[j-1] ? prev[j-1] + 1 : Math.max(prev[j], cur[j-1]);
+    prev = cur;
+  }
+  return prev[B.length];
+}
+function editUnits(a, b){
+  var A = codeLines(a), B = codeLines(b);
+  return A.length + B.length - 2 * lcsLen(A, B);
 }
 var CUSTOM = {
   card: function(res){
@@ -402,6 +473,7 @@ function diffBlock(exp, got){
 
 /* ================= экран: миры ================= */
 function screenWorlds(){
+  stopTimer(); clearAdminHash();
   var doneTotal = Object.keys(S.stars).length;
   var h = '<div class="hero">' +
     '<h1>Кодоквест</h1>' +
@@ -460,6 +532,7 @@ function screenWorlds(){
 
 /* ================= экран: мир ================= */
 function screenWorld(n){
+  stopTimer(); clearAdminHash();
   var w = CURRICULUM.world(n);
   worldContent(n).then(function(){
     var ready = worldReadyLessons(w);
@@ -508,6 +581,7 @@ function openLesson(id){
     var body = lessonBody(l);
     if (!body) return screenWorld(l.world);
     session = { id:id, attempts:0, hints:0, shown:false };
+    touchLog(id); startTimer(id);
     var w = CURRICULUM.world(l.world);
     var ready = worldReadyLessons(w);
     var pos = ready.indexOf(l);
@@ -523,11 +597,20 @@ function openLesson(id){
         '<div class="demo" data-demo="' + i + '"><pre><code>' + hl(t.demo) + '</code></pre>' +
         '<div class="bar"><button class="minibtn" data-run="' + i + '">▶ Запустить пример</button>' +
         '<button class="minibtn" data-copy="' + i + '">→ В редактор</button>' +
-        '<span class="hintx">можно менять и запускать снова</span></div><div class="res"></div></div></div>';
+        '<span class="hintx' + (t.err ? " errx" : "") + '">' +
+        (t.err ? "этот пример падает с ошибкой — так и задумано" : "можно менять и запускать снова") +
+        '</span></div><div class="res"></div></div></div>';
     }).join("");
 
-    var goal = '<div class="goal"><h3>🎯 Твоя задача</h3><p>' + body.task.goal + '</p><ul>' +
+    var isFix = body.task.type === "fix";
+    var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: починить" : "🎯 Твоя задача") + '</h3><p>' +
+      body.task.goal + '</p><ul>' +
       body.task.list.map(function(x){ return "<li>" + x + "</li>"; }).join("") + '</ul></div>';
+    var bug = isFix
+      ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + body.task.symptom + '</p>' +
+        '<span class="bugtip">Код ниже нужно починить, а не заменить своим. Если запутался, ' +
+        'кнопка «↩ Вернуть как было» вернёт исходный сломанный вариант.</span></div>'
+      : "";
 
     var hints = '<div class="hintbox">' +
       '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
@@ -539,10 +622,13 @@ function openLesson(id){
       (prev ? '<button class="bigbtn ghost" data-open="' + prev.id + '">Назад</button>' : '') +
       (next ? '<button class="bigbtn ghost" data-open="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
-    app.innerHTML = head + theory + goal + '<div id="studio"></div>' + hints + pager;
+    app.innerHTML = head + theory + goal + bug + '<div id="studio"></div>' + hints + pager;
 
     var studio = makeStudio({
       engine: l.engine, draw: body.draw, code: body.task.starter,
+      label: isFix ? "сломанный код — почини его" : "твой код",
+      restore: isFix ? body.task.starter : null,
+      onRun: function(){ logOf(l.id).runs++; save(); },
       check: function(ed, showMsg, canvas){ runCheck(l, body, ed, showMsg, canvas); }
     });
     document.getElementById("studio").appendChild(studio);
@@ -572,6 +658,7 @@ function openLesson(id){
       var hs = body.task.hints;
       if (session.hints >= hs.length) return;
       session.hints++;
+      logOf(l.id).hints++; save();
       var out = document.getElementById("hintout");
       out.className = "hintout show";
       out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
@@ -581,6 +668,7 @@ function openLesson(id){
     };
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
+      logOf(l.id).shown++; save();
       studio.editor.setCode(body.task.solution);
       studio.showMsg("warn", "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой, запусти, а потом поменяй числа и посмотри, что изменится. За урок будет одна звезда.");
     };
@@ -601,6 +689,7 @@ function openLesson(id){
 
 function runCheck(l, body, ed, showMsg, canvas){
   session.attempts++;
+  logOf(l.id).attempts++; touchLog(l.id);
   var chk = body.task.check, code = ed.getCode(), eng = Runtime.get(l.engine);
 
   if (chk.needCode){
@@ -633,10 +722,23 @@ function runCheck(l, body, ed, showMsg, canvas){
         : t.segs.length === ref.segs.length
           ? "Линий столько, сколько нужно (" + ref.segs.length + "), но рисунок другой. Значит, дело в длине стороны или в угле поворота."
           : "Линий должно быть " + ref.segs.length + ", а у тебя " + t.segs.length + ". Проверь, сколько раз повторяется цикл и сколько команд внутри него.";
+    } else if (chk.pen && !sameDrawing(t.segs, ref.segs, true)){
+      problem = "Форма правильная, а вот цвет или толщина не те. Проверь, что перед каждой линией стоит нужный color(...) и что width(...) задан там, где нужно.";
     }
   }
 
   if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+
+  /* «найди ошибку»: вывод верный — но код починен или написан заново? */
+  if (body.task.type === "fix"){
+    var budget = chk.fixBudget || (editUnits(body.task.starter, body.task.solution) + 1);
+    if (editUnits(body.task.starter, code) > budget){
+      showMsg("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно: " +
+        "похоже, программа написана заново. Смысл задания в другом: найти одну поломку и тронуть только её. " +
+        "Нажми «↩ Вернуть как было» и попробуй ещё раз.");
+      return;
+    }
+  }
   winLesson(l, body);
 }
 
@@ -656,6 +758,10 @@ function winLesson(l, body){
   var w = CURRICULUM.world(l.world);
   if (worldReadyLessons(w).length === w.lessons.length &&
       w.lessons.every(function(x){ return solved(x.id); })) award("world1");
+  var lg = logOf(l.id);
+  lg.stars = Math.max(lg.stars || 0, stars);
+  if (!lg.solvedAt) lg.solvedAt = Date.now();
+  lg.last = Date.now();
   save(); refreshTop();
 
   var ready = worldReadyLessons(w), pos = ready.indexOf(l);
@@ -713,6 +819,7 @@ function confetti(n){
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
+  stopTimer(); clearAdminHash();
   session = { id:null, attempts:0, hints:0, shown:false };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
              "goto(0, 0)","dot(10)","circle(60)","print(x)","range(10)","len(s)","sum(xs)","randint(1, 6)","sqrt(16)"];
@@ -746,6 +853,268 @@ function screenSandbox(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ================= экран: панель наставника =================
+   Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
+   с #admin на конце. Показывает прогресс, позволяет открывать и
+   зачитывать уроки, переносить прогресс между устройствами файлом.
+   ============================================================ */
+function clearAdminHash(){
+  try {
+    if ((location.hash || "").toLowerCase() === "#admin" && history.replaceState)
+      history.replaceState(null, "", location.pathname + location.search);
+  } catch(e){}
+}
+function adminUnlocked(){
+  try { return sessionStorage.getItem("kodokvest_admin") === "1"; } catch(e){ return !!window.__adminOk; }
+}
+function adminUnlock(){
+  window.__adminOk = true;
+  try { sessionStorage.setItem("kodokvest_admin", "1"); } catch(e){}
+}
+function adminLock(){
+  window.__adminOk = false;
+  try { sessionStorage.removeItem("kodokvest_admin"); } catch(e){}
+}
+function routeHash(){
+  if ((location.hash || "").toLowerCase() === "#admin"){ screenAdmin(); return true; }
+  return false;
+}
+function fmtMins(ms){
+  var m = Math.round((ms || 0) / 60000);
+  if (m < 1) return "—";
+  if (m < 60) return m + " мин";
+  return Math.floor(m / 60) + " ч " + (m % 60) + " мин";
+}
+function fmtWhen(ts){
+  if (!ts) return "—";
+  var d = new Date(ts), p = function(x){ return (x < 10 ? "0" : "") + x; };
+  return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear() +
+         " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function progressJSON(){ return JSON.stringify(S, null, 2); }
+function statBox(k, v){
+  return '<div class="admstat"><span>' + k + '</span><b>' + v + '</b></div>';
+}
+
+function adminGate(){
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">служебный экран</div><h1>🔐 Панель наставника</h1></div></div>' +
+    '<p class="lede">Здесь видно, как идут занятия, и можно открывать уроки. Введи код доступа.</p>' +
+    '<div class="card"><div class="admgate">' +
+      '<input type="password" id="admcode" placeholder="код доступа" autocomplete="off" spellcheck="false">' +
+      '<button class="rbtn check" id="admgo">Войти</button>' +
+    '</div><div class="msg" id="admgatemsg"></div></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="admback">← Ко всем мирам</button></div>';
+  var inp = document.getElementById("admcode");
+  var msg = document.getElementById("admgatemsg");
+  function tryIn(){
+    if (inp.value === ADMIN_CODE){ adminUnlock(); screenAdmin(); return; }
+    msg.className = "msg show bad";
+    msg.innerHTML = "<b>Код не подошёл</b>Проверь раскладку клавиатуры и большие буквы.";
+    inp.value = ""; inp.focus();
+  }
+  document.getElementById("admgo").onclick = tryIn;
+  inp.addEventListener("keydown", function(e){ if (e.key === "Enter") tryIn(); });
+  document.getElementById("admback").onclick = screenWorlds;
+  inp.focus();
+  refreshTop();
+}
+
+function screenAdmin(){
+  stopTimer();
+  if (!adminUnlocked()) return adminGate();
+
+  var readyTotal = 0, totalTime = 0, totalAttempts = 0, totalHints = 0, lastSeen = 0;
+  CURRICULUM.forEach(function(w){ readyTotal += worldReadyLessons(w).length; });
+  Object.keys(S.log).forEach(function(k){
+    var g = S.log[k] || {};
+    totalTime += g.timeMs || 0;
+    totalAttempts += g.attempts || 0;
+    totalHints += g.hints || 0;
+    if ((g.last || 0) > lastSeen) lastSeen = g.last;
+  });
+  var doneTotal = Object.keys(S.stars).length;
+
+  var h = '<div class="lvlhead"><div><div class="idx">служебный экран</div>' +
+    '<h1>🔐 Панель наставника</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
+    '<p class="lede">Прогресс лежит в памяти <b>этого</b> браузера. Чтобы посмотреть его на другом ' +
+    'устройстве, выгрузи файл в самом низу страницы и загрузи его там же.</p>';
+
+  h += '<div class="admstats">' +
+    statBox("Пройдено уроков", doneTotal + " из " + CURRICULUM.total) +
+    statBox("Уроков готово", String(readyTotal)) +
+    statBox("Звёзды", totalStars() + " из " + (readyTotal * 3)) +
+    statBox("Опыт", S.xp + " XP") +
+    statBox("Ранг", rankName()) +
+    statBox("Попыток всего", String(totalAttempts)) +
+    statBox("Подсказок взято", String(totalHints)) +
+    statBox("Время за тренажёром", fmtMins(totalTime)) +
+    statBox("Последнее занятие", fmtWhen(lastSeen)) +
+    statBox("Бейджи", S.badges.length + " из " + BADGES.length) +
+    '</div>';
+
+  h += '<div class="card"><h3>Быстрые действия</h3><div class="admrow">' +
+    '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
+      (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
+    '<button class="rbtn sec" data-act="passready">Зачесть все готовые на 3★</button>' +
+    '<button class="rbtn sec" data-act="resetall">Сбросить весь прогресс</button>' +
+    '</div><p class="dim">«Открыть все уроки» только снимает замки — звёзды не ставит. ' +
+    'Ребёнок сможет зайти в любой урок и решить его сам, порядок перестанет быть обязательным.</p></div>';
+
+  h += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
+    '<label class="admlbl">XP <input type="number" id="xpin" value="' + S.xp + '" min="0" step="25"></label>' +
+    '<button class="rbtn sec" data-act="setxp">Записать</button></div>' +
+    '<div class="admbadges">' +
+    BADGES.map(function(b){
+      var got = S.badges.indexOf(b.id) >= 0;
+      return '<button class="admbadge' + (got ? " got" : "") + '" data-act="badge" data-id="' + b.id + '">' +
+        '<span class="em">' + b.em + '</span><span>' + b.name + '</span></button>';
+    }).join("") +
+    '</div><p class="dim">Нажатие на бейдж выдаёт его или отбирает.</p></div>';
+
+  CURRICULUM.forEach(function(w){
+    var c = CONTENT["world" + w.n] || {};
+    h += '<div class="sect"><h2>' + w.icon + ' Мир ' + w.n + ' · ' + w.title + '</h2>' +
+      '<div class="line"></div><span class="cnt">' + worldReadyLessons(w).length + ' с контентом</span></div>';
+    h += '<div class="admtable"><div class="admwide"><div class="admhead">' +
+      '<span>№</span><span>урок</span><span>звёзды</span><span>попыток</span><span>подсказок</span>' +
+      '<span>решение</span><span>время</span><span>когда</span><span></span></div>';
+    w.lessons.forEach(function(l){
+      var has = !!c[l.id], g = S.log[l.id] || {};
+      var st = starsOf(l.id), stars = "";
+      for (var k = 0; k < 3; k++) stars += (k < st) ? "<b>★</b>" : "★";
+      h += '<div class="admrowl' + (has ? "" : " soon") + '">' +
+        '<span class="n">' + l.num + '</span>' +
+        '<span class="t">' + l.title + (l.boss ? ' <em>босс</em>' : '') + (has ? '' : ' <em>скоро</em>') + '</span>' +
+        '<span class="stars">' + (solved(l.id) ? stars : "—") + '</span>' +
+        '<span>' + (g.attempts || "—") + '</span>' +
+        '<span>' + (g.hints || "—") + '</span>' +
+        '<span>' + (g.shown ? "смотрел" : "—") + '</span>' +
+        '<span>' + fmtMins(g.timeMs) + '</span>' +
+        '<span>' + fmtWhen(g.solvedAt || g.last) + '</span>' +
+        '<span class="acts">' + (has
+          ? '<button class="minibtn" data-act="go" data-id="' + l.id + '">открыть</button>' +
+            '<button class="minibtn" data-act="pass" data-id="' + l.id + '">зачесть</button>' +
+            '<button class="minibtn" data-act="clear" data-id="' + l.id + '">сбросить</button>'
+          : '') + '</span></div>';
+    });
+    h += '</div></div>';
+  });
+
+  h += '<div class="card"><h3>Перенос прогресса на другое устройство</h3>' +
+    '<div class="admrow">' +
+      '<button class="rbtn sec" data-act="download">↓ Скачать файл прогресса</button>' +
+      '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
+    '</div>' +
+    '<p class="dim">Порядок такой: здесь скачал файл — на другом устройстве открыл эту же панель, ' +
+    'вставил содержимое файла в поле ниже и нажал «Загрузить». Если скачивание заблокировано ' +
+    '(бывает внутри предпросмотра), просто скопируй текст.</p>' +
+    '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
+    '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
+    '<div class="msg" id="admmsg"></div></div>';
+
+  h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← Ко всем мирам</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
+
+  /* контейнер создаётся заново при каждой отрисовке — обработчик не копится */
+  app.innerHTML = '<div id="adm"></div>';
+  var box = document.getElementById("adm");
+  box.innerHTML = h;
+
+  function say(cls, html){
+    var m = document.getElementById("admmsg");
+    if (m){ m.className = "msg show " + cls; m.innerHTML = html; }
+  }
+
+  box.addEventListener("click", function(e){
+    var b = e.target.closest("[data-act]");
+    if (!b) return;
+    var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
+
+    if (act === "tomap"){ screenWorlds(); }
+    else if (act === "lock"){ adminLock(); screenWorlds(); }
+    else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; save(); screenAdmin(); }
+    else if (act === "passready"){
+      CURRICULUM.forEach(function(w){
+        worldReadyLessons(w).forEach(function(l){ setStars(l.id, 3); });
+      });
+      refreshTop(); screenAdmin();
+    }
+    else if (act === "resetall"){
+      var yes = true;
+      try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи и статистику? Отменить будет нельзя."); } catch(e2){}
+      if (!yes) return;
+      S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
+      S.firstTry = 0; S.perfect = 0;
+      save(); refreshTop(); screenAdmin();
+    }
+    else if (act === "go"){ openLesson(id); }
+    else if (act === "pass"){ setStars(id, 3); refreshTop(); screenAdmin(); }
+    else if (act === "clear"){ setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin(); }
+    else if (act === "badge"){
+      var i = S.badges.indexOf(id);
+      if (i >= 0) S.badges.splice(i, 1); else S.badges.push(id);
+      save(); screenAdmin();
+    }
+    else if (act === "setxp"){
+      var v = parseInt(document.getElementById("xpin").value, 10);
+      if (isNaN(v) || v < 0){ say("bad", "<b>Не подходит</b>XP должен быть целым числом не меньше нуля."); return; }
+      S.xp = v; save(); refreshTop(); screenAdmin();
+    }
+    else if (act === "download"){
+      try {
+        var blob = new Blob([progressJSON()], { type:"application/json" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url; a.download = "kodokvest-progress.json";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+        say("ok", "<b>Файл сохранён</b>Ищи kodokvest-progress.json в папке загрузок.");
+      } catch(e3){
+        say("warn", "<b>Скачать не получилось</b>Скопируй текст из поля ниже вручную.");
+      }
+    }
+    else if (act === "copy"){
+      var ta = document.getElementById("admjson"), done = false;
+      try { ta.focus(); ta.select(); done = document.execCommand("copy"); } catch(e4){}
+      if (!done && navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(progressJSON()).then(
+          function(){ say("ok", "<b>Скопировано</b>Прогресс в буфере обмена."); },
+          function(){ say("warn", "<b>Не вышло</b>Выдели текст в поле и скопируй сам."); });
+        return;
+      }
+      say(done ? "ok" : "warn", done
+        ? "<b>Скопировано</b>Прогресс в буфере обмена."
+        : "<b>Не вышло</b>Выдели текст в поле и скопируй сам.");
+    }
+    else if (act === "import"){
+      var txt = document.getElementById("admjson").value, obj = null;
+      try { obj = JSON.parse(txt); } catch(e5){
+        say("bad", "<b>Это не файл прогресса</b>Текст не разбирается как JSON. Скопируй содержимое файла целиком, вместе с фигурными скобками.");
+        return;
+      }
+      if (!obj || typeof obj !== "object" || typeof obj.xp !== "number" || typeof obj.stars !== "object"){
+        say("bad", "<b>Не тот файл</b>Внутри должны быть поля xp и stars. Похоже, это что-то другое.");
+        return;
+      }
+      var ok = true;
+      try { ok = confirm("Заменить прогресс на этом устройстве загруженным? Нынешний будет стёрт."); } catch(e6){}
+      if (!ok) return;
+      Object.keys(S).forEach(function(k){ delete S[k]; });
+      S.v = 2; S.xp = 0; S.stars = {}; S.badges = []; S.sandbox = null; S.sandboxRuns = 0;
+      S.drawDone = {}; S.firstTry = 0; S.perfect = 0; S.log = {}; S.admin = { unlockAll:false };
+      Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
+      if (!S.log || typeof S.log !== "object") S.log = {};
+      if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
+      save(); refreshTop(); screenAdmin();
+      say("ok", "<b>Прогресс загружен</b>Данные заменены.");
+    }
+  });
+
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ================= старт ================= */
 document.getElementById("btn-map").onclick = screenWorlds;
 document.getElementById("logo").onclick = screenWorlds;
@@ -762,10 +1131,14 @@ window.addEventListener("resize", function(){
   });
 });
 
-worldContent(1).then(screenWorlds);
+worldContent(1).then(function(){ if (!routeHash()) screenWorlds(); });
+window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds(); });
 
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
-  screenSandbox: screenSandbox, state: S, save: save, CUSTOM: CUSTOM, sameDrawing: sameDrawing
+  screenSandbox: screenSandbox, screenAdmin: screenAdmin, state: S, save: save,
+  CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
+  stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
+  getSession: function(){ return session; }
 };
 })();

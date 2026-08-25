@@ -13,8 +13,23 @@ const read = p => fs.readFileSync(path.join(root, p), "utf8");
 
 const css = read("css/style.css");
 
-/* размётка берётся из index.html — один источник правды */
+/* и размётка, и «голова» страницы берутся из index.html — один источник правды.
+   Голова обязательна: без <meta charset="utf-8"> браузер, открывающий файл
+   с диска (file://), читает его в однобайтовой кодировке и весь русский текст
+   превращается в «РљРѕРґРѕРєРІРµСЃС‚». На сервере кодировку сообщает сам сервер,
+   поэтому такую поломку легко не заметить. */
 const index = read("index.html");
+
+const headStart = index.indexOf("<head>") + "<head>".length;
+const headEnd = index.indexOf("</head>");
+if (headStart < 6 || headEnd < 0) throw new Error("в index.html не найден <head>");
+let head = index.slice(headStart, headEnd).trim();
+
+const cssLink = '<link rel="stylesheet" href="css/style.css">';
+if (head.indexOf(cssLink) < 0) throw new Error("в <head> не найдена ссылка на css/style.css");
+head = head.replace(cssLink, "<style>\n" + css + "\n</style>");
+if (head.indexOf('<meta charset="utf-8">') < 0) throw new Error("в <head> нет <meta charset=\"utf-8\">");
+
 const bodyStart = index.indexOf("<body>") + "<body>".length;
 const scriptStart = index.indexOf("<script src=");
 const markup = index.slice(bodyStart, scriptStart).trim();
@@ -31,13 +46,19 @@ const contentFiles = fs.readdirSync(contentDir)
 const wrap = code => "<script>\n" + code + "\n</" + "script>";
 
 const out = [
-  "<title>Кодоквест</title>",
-  "<style>\n" + css + "\n</style>",
+  "<!doctype html>",
+  '<html lang="ru">',
+  "<head>",
+  head,
+  "</head>",
+  "<body>",
   markup,
   wrap("window.__SINGLE_FILE__ = true;"),
   ...scripts.map(f => wrap(read(f))),
   ...contentFiles.map(f => wrap(read(f))),
-  wrap(read("js/app.js"))
+  wrap(read("js/app.js")),
+  "</body>",
+  "</html>"
 ].join("\n\n");
 
 fs.mkdirSync(path.join(root, "dist"), { recursive: true });

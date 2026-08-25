@@ -124,6 +124,7 @@ button{font-family:inherit}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
 .card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:#b9c6ff}
+.demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
 
 .note{border-left:3px solid var(--acc2);background:rgba(0,224,184,.07);padding:13px 16px;border-radius:0 12px 12px 0;margin:0 0 18px;font-size:14.5px;color:var(--soft)}
 .note b{display:block;color:var(--ink);margin-bottom:3px;font-size:13px}
@@ -263,4 +264,44 @@ body.focus .lede{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
-.demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+/* ---------- задание «найди и почини ошибку» ---------- */
+.bugcard{background:linear-gradient(150deg,#3a2030,#2b1c36);border:1px solid #6d2f42;border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.bugcard h3{margin:0 0 6px;font-size:17px;color:#ffb3c6}
+.bugcard p{margin:0 0 9px;color:#f0d8e0}
+.bugcard code{background:rgba(0,0,0,.32);border:1px solid #6d2f42;border-radius:5px;padding:1px 6px;font-size:.86em;color:#ffd0dc}
+.bugcard .bugtip{display:block;font-size:12.5px;color:#a98a9a}
+.demo .bar .hintx.errx{color:var(--warn)}
+
+/* ---------- панель наставника ---------- */
+.admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}
+.admgate input:focus{outline:none;border-color:var(--acc)}
+.admstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:10px;margin-bottom:18px}
+.admstat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+.admstat span{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.admstat b{font-size:19px;font-family:'Fredoka','Inter',sans-serif;font-weight:600}
+.admrow{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:6px 0 4px}
+.admlbl{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--soft)}
+.admlbl input{width:118px;background:var(--sunken);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;color:var(--ink);font-size:14px;font-family:'JetBrains Mono',monospace}
+.admlbl input:focus{outline:none;border-color:var(--acc)}
+.admbadges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.admbadge{display:flex;align-items:center;gap:7px;background:var(--sunken);border:1px solid var(--line);border-radius:99px;padding:6px 13px;color:var(--faint);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+.admbadge .em{font-size:14px;filter:grayscale(1);opacity:.6}
+.admbadge.got{background:rgba(255,197,61,.11);border-color:var(--gold);color:var(--gold)}
+.admbadge.got .em{filter:none;opacity:1}
+.admbadge:hover{border-color:var(--acc);color:var(--ink)}
+.admtable{border:1px solid var(--line);border-radius:12px;overflow-x:auto;margin-bottom:20px;background:var(--panel)}
+.admhead,.admrowl{display:grid;grid-template-columns:44px minmax(150px,1.5fr) 64px 76px 88px 84px 88px 132px minmax(210px,auto);gap:6px;align-items:center;padding:8px 12px;font-size:12.5px}
+.admhead{background:var(--panel2);color:var(--faint);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.admrowl{border-top:1px solid var(--line);color:var(--soft)}
+.admrowl.soon{opacity:.42}
+.admrowl .n{color:var(--faint);font-weight:700}
+.admrowl .t{color:var(--ink);font-weight:600}
+.admrowl .t em{font-style:normal;font-size:10px;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:1px 5px;margin-left:5px;vertical-align:1px}
+.admrowl .stars{color:var(--line2);letter-spacing:1px}
+.admrowl .stars b{color:var(--gold)}
+.admrowl .acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.admrowl .acts .minibtn{padding:3px 9px;font-size:11.5px}
+.admwide{min-width:900px}
+.admjson{width:100%;height:150px;background:var(--sunken);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;color:var(--soft);font-size:12px;line-height:1.5;resize:vertical;margin:8px 0 4px}
+.admjson:focus{outline:none;border-color:var(--acc)}
