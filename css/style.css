@@ -262,3 +262,5 @@ body.focus .lede{display:none}
   .worlds{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+
+.demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
