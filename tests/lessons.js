@@ -44,6 +44,17 @@ function editUnits(a, b){
   const A = codeLines(a), B = codeLines(b);
   return A.length + B.length - 2 * lcsLen(A, B);
 }
+/* файлы урока: {"tools.py": "..."} — отдельно для заготовки и для решения */
+function starterSources(task){
+  const out = {};
+  (task.files || []).forEach(f => { out[f.name] = f.starter; });
+  return out;
+}
+function solutionSources(task){
+  const out = {};
+  (task.files || []).forEach(f => { out[f.name] = f.solution !== undefined ? f.solution : f.starter; });
+  return out;
+}
 function drawingKey(segs){
   return segs.map(s => [Math.round(s.x1), Math.round(s.y1), Math.round(s.x2), Math.round(s.y2)]
     .join(",")).sort().join(";");
@@ -64,13 +75,19 @@ CURRICULUM.forEach(w => {
     if (isFix) fixes++;
 
     if (!task.type) say(`[схема] ${l.id}: у задания не указан type`);
+    (task.files || []).forEach(f => {
+      if (!f.name || !/^[a-z_][a-z0-9_]*\.py$/.test(f.name))
+        say(`[схема] ${l.id}: имя файла «${f.name}» не годится для import (нужно вроде tools.py)`);
+      if (f.starter === undefined) say(`[схема] ${l.id}: у файла ${f.name} нет starter`);
+    });
 
     /* 1. решение */
-    const sol = MP.run(task.solution, { turtle: new MP.Turtle() });
+    const solSrc = solutionSources(task), stSrc = starterSources(task);
+    const sol = MP.run(task.solution, { turtle: new MP.Turtle(), sources: solSrc });
     if (sol.error) say(`[решение] ${l.id}: ${sol.error.kind} — ${sol.error.msg}`);
 
     /* 2. заготовка */
-    const st = MP.run(task.starter, { turtle: new MP.Turtle() });
+    const st = MP.run(task.starter, { turtle: new MP.Turtle(), sources: stSrc });
     if (!isFix){
       if (st.error) say(`[заготовка] ${l.id}: ${st.error.kind} — ${st.error.msg}`);
     } else {
@@ -95,12 +112,32 @@ CURRICULUM.forEach(w => {
     /* 3. примеры теории */
     body.theory.forEach((t, i) => {
       demos++;
-      const r = MP.run(t.demo, { turtle: new MP.Turtle() });
+      const r = MP.run(t.demo, { turtle: new MP.Turtle(), sources: t.files || {} });
       if (r.error && !t.err)
         say(`[пример ${i+1}] ${l.id}: ${r.error.kind} — ${r.error.msg}`);
       if (!r.error && t.err)
         say(`[пример ${i+1}] ${l.id}: помечен err:true, но ошибки нет`);
     });
+
+    /* 3.5. скрытые тесты: каждый вызов обязан что-то возвращать на эталоне,
+       и заготовка обязана их НЕ проходить — иначе задания нет */
+    if (task.check.kind === "tests"){
+      if (!Array.isArray(task.check.calls) || !task.check.calls.length)
+        say(`[схема] ${l.id}: проверка «tests» без списка calls`);
+      else {
+        let starterPasses = 0;
+        task.check.calls.forEach(call => {
+          const probe = "\nprint(repr(" + call + "))\n";
+          const w = MP.run(task.solution + probe, { sources: solSrc });
+          if (w.error)
+            say(`[tests] ${l.id}: вызов ${call} на решении падает — ${w.error.kind}: ${w.error.msg}`);
+          const g = MP.run(task.starter + probe, { sources: stSrc });
+          if (!g.error && g.lines[g.lines.length - 1] === w.lines[w.lines.length - 1]) starterPasses++;
+        });
+        if (starterPasses === task.check.calls.length)
+          say(`[tests] ${l.id}: заготовка проходит все скрытые проверки — задание нечего решать`);
+      }
+    }
 
     /* 4. check.lines против настоящего вывода решения */
     if (task.check.kind === "output" && task.check.lines && !sol.error){

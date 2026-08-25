@@ -154,6 +154,12 @@ button{font-family:inherit}
 .ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f1428;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint)}
 .ehead .dot{width:9px;height:9px;border-radius:50%;background:#39406e}
 .ehead .lbl{margin-left:6px}
+/* вкладки файлов: урок из нескольких файлов, как в настоящем проекте */
+.ftabs{display:flex;gap:2px;padding:0 8px;background:#0c1122;border-bottom:1px solid var(--line);overflow-x:auto}
+.ftab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--faint);
+  font:600 12px/1 'JetBrains Mono',ui-monospace,monospace;padding:9px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
+.ftab:hover{color:var(--soft)}
+.ftab.on{color:var(--acc2);border-bottom-color:var(--acc2)}
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
@@ -305,3 +311,8 @@ body.focus .lede{display:none}
 .admwide{min-width:900px}
 .admjson{width:100%;height:150px;background:var(--sunken);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;color:var(--soft);font-size:12px;line-height:1.5;resize:vertical;margin:8px 0 4px}
 .admjson:focus{outline:none;border-color:var(--acc)}
+.admlist{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.admlrow{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.22);border-radius:9px;padding:7px 11px;flex-wrap:wrap}
+.admlrow b{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink)}
+.admlrow span{font-size:12px;color:var(--soft);margin-right:auto}
+.admlbl input[type=text],.admlbl input[type=password]{width:190px;font-family:'JetBrains Mono',monospace;font-size:13px}

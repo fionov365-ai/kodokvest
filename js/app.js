@@ -54,7 +54,11 @@ try {
 } catch(e){}
 if (!S.log || typeof S.log !== "object") S.log = {};
 if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function saveLocal(){
+  S.savedAt = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+}
+function save(){ saveLocal(); schedulePush(); }
 
 /* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
 function logOf(id){
@@ -120,6 +124,136 @@ function refreshTop(){
   document.getElementById("stars").textContent = "★ " + totalStars() + " · " + done + "/" + CURRICULUM.total;
 }
 
+/* ============================================================
+   СИНХРОНИЗАЦИЯ С СЕРВЕРОМ
+   Прогресс не «перезаписывается», а СЛИВАЕТСЯ: по каждому уроку берётся
+   лучший результат из двух копий. Так ничего не теряется, даже если
+   ребёнок занимался с двух устройств по очереди.
+
+   Почему время и попытки берутся по максимуму, а не складываются:
+   после первой же синхронизации обе копии становятся одинаковыми, и
+   сложение удваивало бы цифры при каждом следующем обмене.
+
+   Поле admin (снятые замки) намеренно НЕ синхронизируется: это настройка
+   конкретного устройства, а не результат ученика.
+   ============================================================ */
+var cloudState = { busy:false, lastSync:0, lastError:null, lastPush:0, timer:null };
+
+function maxN(a, b){ a = a || 0; b = b || 0; return a > b ? a : b; }
+
+function mergeProgress(a, b){
+  a = a || {}; b = b || {};
+  var out = { v:2, stars:{}, badges:[], log:{} };
+
+  [a.stars || {}, b.stars || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ out.stars[k] = maxN(out.stars[k], src[k]); });
+  });
+
+  /* опыт: наибольшее из трёх — двух копий и суммы по звёздам. Так и ручная
+     выдача XP в панели не пропадёт, и опыт не разойдётся со звёздами. */
+  var byStars = 0;
+  Object.keys(out.stars).forEach(function(k){ byStars += STAR_XP[out.stars[k]] || 0; });
+  out.xp = Math.max(maxN(a.xp, b.xp), byStars);
+
+  (a.badges || []).concat(b.badges || []).forEach(function(x){
+    if (out.badges.indexOf(x) < 0) out.badges.push(x);
+  });
+
+  out.drawDone = {};
+  [a.drawDone || {}, b.drawDone || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ out.drawDone[k] = 1; });
+  });
+
+  out.firstTry = maxN(a.firstTry, b.firstTry);
+  out.perfect = maxN(a.perfect, b.perfect);
+  out.sandboxRuns = maxN(a.sandboxRuns, b.sandboxRuns);
+
+  /* код в песочнице сложить нельзя — берём из более свежего сохранения */
+  var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
+  var older = fresher === b ? a : b;
+  out.sandbox = fresher.sandbox || older.sandbox || null;
+
+  var ids = {};
+  Object.keys(a.log || {}).forEach(function(k){ ids[k] = 1; });
+  Object.keys(b.log || {}).forEach(function(k){ ids[k] = 1; });
+  Object.keys(ids).forEach(function(k){
+    var x = (a.log || {})[k] || {}, y = (b.log || {})[k] || {};
+    out.log[k] = {
+      attempts: maxN(x.attempts, y.attempts),
+      hints:    maxN(x.hints, y.hints),
+      shown:    maxN(x.shown, y.shown),
+      runs:     maxN(x.runs, y.runs),
+      timeMs:   maxN(x.timeMs, y.timeMs),
+      first:    (x.first && y.first) ? Math.min(x.first, y.first) : (x.first || y.first || null),
+      last:     maxN(x.last, y.last) || null,
+      solvedAt: maxN(x.solvedAt, y.solvedAt) || null,
+      stars:    maxN(x.stars, y.stars)
+    };
+  });
+
+  out.savedAt = maxN(a.savedAt, b.savedAt);
+  return out;
+}
+
+/* то, что уходит на сервер: всё, кроме настроек устройства */
+function cloudSnapshot(){
+  var o = {};
+  Object.keys(S).forEach(function(k){ if (k !== "admin") o[k] = S[k]; });
+  return JSON.parse(JSON.stringify(o));
+}
+
+function applyProgress(data){
+  var merged = mergeProgress(cloudSnapshot(), data);
+  Object.keys(merged).forEach(function(k){ S[k] = merged[k]; });
+  saveLocal();
+}
+
+function cloudEnabled(){
+  return typeof Cloud !== "undefined" && Cloud.configured();
+}
+
+/* забрать с сервера и слить с тем, что уже есть здесь */
+function cloudPull(){
+  if (!cloudEnabled()) return Promise.resolve(false);
+  cloudState.busy = true;
+  return Cloud.load().then(function(res){
+    cloudState.busy = false; cloudState.lastError = null; cloudState.lastSync = Date.now();
+    if (!res.found || !res.data) return false;
+    var before = JSON.stringify(cloudSnapshot());
+    applyProgress(res.data);
+    return JSON.stringify(cloudSnapshot()) !== before;
+  }, function(err){
+    cloudState.busy = false; cloudState.lastError = err.message || String(err);
+    throw err;
+  });
+}
+
+/* отправить на сервер */
+function cloudPush(){
+  if (!cloudEnabled()) return Promise.resolve(false);
+  cloudState.busy = true;
+  return Cloud.save(cloudSnapshot()).then(function(){
+    cloudState.busy = false; cloudState.lastError = null;
+    cloudState.lastSync = Date.now(); cloudState.lastPush = Date.now();
+    return true;
+  }, function(err){
+    cloudState.busy = false; cloudState.lastError = err.message || String(err);
+    throw err;
+  });
+}
+
+/* Отправка не чаще раза в 25 секунд: локальное сохранение случается
+   каждые 10 секунд, пока открыт урок, и гонять сеть так часто незачем. */
+function schedulePush(){
+  if (!cloudEnabled()) return;
+  if (cloudState.timer) return;
+  var wait = Math.max(2000, 25000 - (Date.now() - cloudState.lastPush));
+  cloudState.timer = setTimeout(function(){
+    cloudState.timer = null;
+    cloudPush().catch(function(){});
+  }, wait);
+}
+
 /* ================= контент ================= */
 window.CONTENT = window.CONTENT || {};
 function worldContent(n){
@@ -154,7 +288,7 @@ function lessonOpen(l){
 
 /* ================= подсветка ================= */
 var KW = "and|or|not|in|is|if|elif|else|while|for|def|return|break|continue|pass|True|False|None|import|from|as|global|lambda|class|try|except|finally|with|yield";
-var BI = "print|len|range|str|int|float|bool|list|tuple|set|dict|sum|min|max|abs|round|sorted|reversed|enumerate|zip|type|forward|back|right|left|penup|pendown|color|width|goto|home|dot|circle|speed|sqrt|randint|choice|append|pop|insert|remove|sort|reverse|split|join|upper|lower|strip|replace|startswith|endswith|count|index|keys|values|items|get";
+var BI = "print|len|range|str|int|float|bool|list|tuple|set|dict|sum|min|max|abs|round|sorted|reversed|enumerate|zip|type|forward|back|right|left|penup|pendown|color|width|goto|home|dot|circle|speed|sqrt|randint|choice|random|shuffle|sample|append|pop|insert|remove|sort|reverse|split|join|upper|lower|strip|replace|startswith|endswith|count|index|keys|values|items|get|add|discard|update|union|intersection|difference|issubset|issuperset|isdisjoint|copy|clear|extend|setdefault|isdigit|isalpha|title|capitalize|find|key";
 var HLRE = new RegExp(
   "(#[^\\n]*)" +
   "|(f?\"(?:\\\\.|[^\"\\\\])*\"|f?'(?:\\\\.|[^'\\\\])*')" +
@@ -241,23 +375,40 @@ var KIND_RU = {
   IndexError:"Номер за пределами", KeyError:"Нет такого ключа",
   ValueError:"Неподходящее значение", ZeroDivisionError:"Деление на ноль",
   AttributeError:"Нет такой команды", RuntimeError:"Программа не остановилась",
-  NotSupported:"Здесь так нельзя"
+  NotSupported:"Здесь так нельзя",
+  AssertionError:"Проверка не прошла", ImportError:"Не удалось подключить модуль",
+  RecursionError:"Слишком глубокая рекурсия", StopIteration:"Значения закончились",
+  NotImplementedError:"Ещё не написано", ArithmeticError:"Ошибка в вычислении",
+  LookupError:"Ничего не найдено", Exception:"Ошибка", BaseException:"Ошибка"
 };
 function errHTML(e){
   return '<b>' + (KIND_RU[e.kind] || e.kind) + (e.line ? ' — строка ' + e.line : '') + '</b>' + esc(e.msg);
 }
 
 /* ================= редактор ================= */
-function makeEditor(initial, label){
+/* files — список файлов урока: [{ name:"main.py", code:"..." }, ...].
+   Настоящих файлов в браузере нет, но для ученика всё выглядит как в жизни:
+   вкладки сверху, import между файлами работает. */
+function makeEditor(initial, label, files){
   var box = document.createElement("div");
+  var many = files && files.length > 1;
   box.className = "editorbox";
+  var tabs = many
+    ? '<div class="ftabs">' + files.map(function(f, i){
+        return '<button class="ftab' + (i === 0 ? " on" : "") + '" data-file="' + i + '">' + esc(f.name) + '</button>';
+      }).join("") + '</div>'
+    : "";
   box.innerHTML =
-    '<div class="ehead"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="lbl">' + esc(label || "твой код") + '</span></div>' +
+    '<div class="ehead"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="lbl">' +
+      esc(many ? files[0].name : (label || "твой код")) + '</span></div>' + tabs +
     '<div class="edit-area"><div class="gutter"></div><div class="edit-scroll">' +
       '<pre class="hl"></pre><textarea spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
     '</div></div><div class="runbar"></div>';
   var ta = box.querySelector("textarea"), pre = box.querySelector("pre.hl"), gut = box.querySelector(".gutter");
-  ta.value = initial || "";
+  var fileList = files && files.length ? files.map(function(f){ return { name:f.name, code:f.code || "" }; })
+                                       : [{ name:"main.py", code: initial || "" }];
+  var active = 0;
+  ta.value = fileList[0].code;
   function sync(){
     pre.innerHTML = hl(ta.value) + "\n";
     ta.style.height = "auto";
@@ -289,10 +440,39 @@ function makeEditor(initial, label){
       var rb = box.querySelector('[data-role="run"]'); if (rb) rb.click();
     }
   });
+  function stash(){ fileList[active].code = ta.value; }
+  function openFile(i){
+    stash();
+    active = i;
+    ta.value = fileList[i].code;
+    box._errLine = 0; box._curLine = 0;
+    box.querySelector(".lbl").textContent = fileList[i].name;
+    box.querySelectorAll(".ftab").forEach(function(b, k){ b.className = "ftab" + (k === i ? " on" : ""); });
+    sync();
+  }
+  if (many) box.querySelector(".ftabs").addEventListener("click", function(e){
+    var b = e.target.closest(".ftab"); if (!b) return;
+    openFile(+b.getAttribute("data-file"));
+  });
+
   box.setLine = function(n){ box._curLine = n; box._errLine = 0; sync(); };
   box.setError = function(n){ box._errLine = n; box._curLine = 0; sync(); };
-  box.getCode = function(){ return ta.value; };
-  box.setCode = function(v){ ta.value = v; box._errLine = 0; box._curLine = 0; sync(); };
+  box.getCode = function(){ stash(); return fileList[0].code; };
+  box.setCode = function(v){ ta.value = v; fileList[active].code = v; box._errLine = 0; box._curLine = 0; sync(); };
+  /* Все файлы, кроме главного: именно они уходят в движок как модули. */
+  box.getSources = function(){
+    stash();
+    var out = {};
+    for (var i = 1; i < fileList.length; i++) out[fileList[i].name] = fileList[i].code;
+    return out;
+  };
+  box.getFiles = function(){ stash(); return fileList.map(function(f){ return { name:f.name, code:f.code }; }); };
+  box.setFiles = function(list){
+    for (var i = 0; i < fileList.length && i < list.length; i++) fileList[i].code = list[i].code;
+    ta.value = fileList[active].code;
+    box._errLine = 0; box._curLine = 0; sync();
+  };
+  box.fileCount = fileList.length;
   box.focusEditor = function(){ ta.focus(); };
   setTimeout(sync, 0);
   return box;
@@ -305,7 +485,7 @@ function makeStudio(cfg){
   var wrap = document.createElement("div");
   wrap.className = "studio" + (cfg.draw ? " split" : "");
 
-  var ed = makeEditor(cfg.code || "", cfg.label);
+  var ed = makeEditor(cfg.code || "", cfg.label, cfg.files);
   ed.querySelector(".runbar").innerHTML =
     '<button class="rbtn" data-role="run">▶ Запустить</button>' +
     (eng.supportsStep ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
@@ -346,7 +526,7 @@ function makeStudio(cfg){
   function doRun(){
     hideMsg(); ed.setError(0); stepper = null; varsPane.style.display = "none";
     var t = eng.newTurtle ? eng.newTurtle() : null;
-    var res = eng.run(ed.getCode(), { turtle: t });
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources() });
     setConsole(res.output);
     if (canvas) animateTurtle(canvas, res.turtle || t);
     if (res.error){
@@ -364,7 +544,7 @@ function makeStudio(cfg){
     if (!stepper){
       try {
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        stepper = { s: eng.stepper(ed.getCode(), { turtle: t }), t: t };
+        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources() }), t: t };
       } catch(e){
         if (!e.pyKind) throw e;
         ed.setError(e.pyLine);
@@ -402,7 +582,10 @@ function makeStudio(cfg){
     if (r === "run") doRun();
     else if (r === "step") doStep();
     else if (r === "reset") doReset();
-    else if (r === "restore"){ ed.setCode(cfg.restore); doReset(); }
+    else if (r === "restore"){
+      if (cfg.restoreFiles) ed.setFiles(cfg.restoreFiles); else ed.setCode(cfg.restore);
+      doReset();
+    }
     else if (r === "check") cfg.check(ed, showMsg, canvas);
   });
 
@@ -453,6 +636,46 @@ function editUnits(a, b){
   return A.length + B.length - 2 * lcsLen(A, B);
 }
 var CUSTOM = {
+  /* Задания со случайностью нельзя проверять сравнением вывода — числа каждый раз
+     другие. Поэтому проверяем форму: строки нужного вида и сходящиеся итоги. */
+  dice: function(res){
+    var L = res.lines, sum = 0;
+    if (L.length !== 11)
+      return "Нужно 11 строк: десять бросков и итог. Сейчас их " + L.length + ".";
+    for (var i = 0; i < 10; i++){
+      var m = /^Бросок (\d+): (\d+)$/.exec(L[i]);
+      if (!m) return "Строка " + (i+1) + " должна выглядеть так: «Бросок 1: 4». Сейчас там «" + L[i] + "».";
+      if (+m[1] !== i + 1) return "В строке " + (i+1) + " номер броска " + m[1] + ", а ожидался " + (i+1) + ". Проверь range.";
+      var v = +m[2];
+      if (v < 1 || v > 6) return "Кубик выдал " + v + ", а у кубика бывает только от 1 до 6. Проверь randint(1, 6).";
+      sum += v;
+    }
+    var t = /^Всего: (\d+)$/.exec(L[10]);
+    if (!t) return "Последняя строка должна быть «Всего: N». Сейчас там «" + L[10] + "».";
+    if (+t[1] !== sum)
+      return "Сумма не сходится: броски в строках дают " + sum + ", а написано " + t[1] +
+             ". Скорее всего, randint вызывается дважды — и в строку попадает одно число, а в сумму другое.";
+    return null;
+  },
+  password: function(res){
+    var L = res.lines;
+    if (L.length !== 3)
+      return "Нужно ровно три строки: сам пароль, длина, число цифр. Сейчас их " + L.length + ".";
+    var pw = L[0];
+    if (pw.length !== 10) return "Пароль должен быть из 10 знаков, а в нём " + pw.length + ".";
+    if (!/^[a-zA-Z0-9]+$/.test(pw))
+      return "В пароле должны быть только латинские буквы и цифры из заданного алфавита. Сейчас: «" + pw + "».";
+    var digits = (pw.match(/[0-9]/g) || []).length;
+    var m1 = /^Длина: (\d+)$/.exec(L[1]);
+    if (!m1) return "Вторая строка должна быть «Длина: 10». Сейчас «" + L[1] + "».";
+    if (+m1[1] !== pw.length)
+      return "Во второй строке написано " + m1[1] + ", а в пароле " + pw.length + " знаков. Считай длину через len(pw).";
+    var m2 = /^Цифр: (\d+)$/.exec(L[2]);
+    if (!m2) return "Третья строка должна быть «Цифр: N». Сейчас «" + L[2] + "».";
+    if (+m2[1] !== digits)
+      return "Цифр в пароле " + digits + ", а написано " + m2[1] + ". Считай их по самому паролю, а не заранее.";
+    return null;
+  },
   card: function(res){
     var L = res.lines;
     if (L.length < 3) return "Нужно три строки, а получилось " + L.length + ". Каждая строка — отдельная команда print.";
@@ -461,6 +684,36 @@ var CUSTOM = {
     return null;
   }
 };
+/* Файлы урока для эталонного решения: {"tools.py": "…"} */
+function solutionSources(body){
+  var out = {};
+  (body.task.files || []).forEach(function(f){ out[f.name] = f.solution !== undefined ? f.solution : f.starter; });
+  return out;
+}
+
+/* ===== проверка скрытыми тестами =====
+   Ученик пишет функции по описанию и не видит проверок — как на работе.
+   Каждый вызов из chk.calls дописывается к его коду отдельной программой,
+   результат сравнивается с тем же вызовом на эталонном решении. */
+function runHiddenTests(eng, calls, code, srcs, solution, refSrcs){
+  for (var i = 0; i < calls.length; i++){
+    var call = calls[i];
+    var probe = "\nprint(repr(" + call + "))\n";
+    var want = eng.run(solution + probe, { sources: refSrcs });
+    var got = eng.run(code + probe, { sources: srcs });
+    if (got.error)
+      return "Проверка вызвала <code>" + esc(call) + "</code> — и программа упала: " +
+             (KIND_RU[got.error.kind] || got.error.kind) + ", " + esc(got.error.msg);
+    var w = want.lines[want.lines.length - 1], g = got.lines[got.lines.length - 1];
+    if (w !== g)
+      return "Проверка вызвала <code>" + esc(call) + "</code>." +
+             '<div class="cmp"><div><u>должно вернуть</u>' + esc(String(w)) +
+             '</div><div><u>вернулось</u>' + esc(String(g === undefined ? "(ничего)" : g)) + '</div></div>' +
+             "Всего скрытых проверок: " + calls.length + ". Эта — номер " + (i + 1) + ".";
+  }
+  return null;
+}
+
 function diffBlock(exp, got){
   var n = Math.max(exp.length, got.length), bad = -1;
   for (var i = 0; i < n; i++) if ((exp[i] || "") !== (got[i] || "")){ bad = i; break; }
@@ -624,10 +877,22 @@ function openLesson(id){
 
     app.innerHTML = head + theory + goal + bug + '<div id="studio"></div>' + hints + pager;
 
+    /* Задание может состоять из нескольких файлов: главный плюс модули. */
+    var taskFiles = body.task.files
+      ? [{ name: body.task.mainName || "main.py", code: body.task.starter }].concat(
+          body.task.files.map(function(f){ return { name:f.name, code:f.starter }; }))
+      : null;
+    var solutionFiles = body.task.files
+      ? [{ name: body.task.mainName || "main.py", code: body.task.solution }].concat(
+          body.task.files.map(function(f){ return { name:f.name, code: f.solution !== undefined ? f.solution : f.starter }; }))
+      : null;
+
     var studio = makeStudio({
       engine: l.engine, draw: body.draw, code: body.task.starter,
       label: isFix ? "сломанный код — почини его" : "твой код",
+      files: taskFiles,
       restore: isFix ? body.task.starter : null,
+      restoreFiles: isFix ? taskFiles : null,
       onRun: function(){ logOf(l.id).runs++; save(); },
       check: function(ed, showMsg, canvas){ runCheck(l, body, ed, showMsg, canvas); }
     });
@@ -639,7 +904,7 @@ function openLesson(id){
       d.querySelector("[data-run]").onclick = function(){
         var eng = studio.engine;
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        var r = eng.run(body.theory[i].demo, { turtle:t });
+        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {} });
         res.className = "res show";
         res.textContent = r.error
           ? ("⚠ " + (KIND_RU[r.error.kind] || r.error.kind) + (r.error.line ? " (строка " + r.error.line + ")" : "") + ": " + r.error.msg)
@@ -669,7 +934,8 @@ function openLesson(id){
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
       logOf(l.id).shown++; save();
-      studio.editor.setCode(body.task.solution);
+      if (solutionFiles && studio.editor.setFiles) studio.editor.setFiles(solutionFiles);
+      else studio.editor.setCode(body.task.solution);
       studio.showMsg("warn", "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой, запусти, а потом поменяй числа и посмотри, что изменится. За урок будет одна звезда.");
     };
     app.querySelectorAll("[data-go]").forEach(function(b){
@@ -700,22 +966,36 @@ function runCheck(l, body, ed, showMsg, canvas){
       }
     }
   }
+  /* Запрещённые конструкции: например урок про рекурсию должен решаться
+     рекурсией, а не циклом — иначе смысл урока теряется. */
+  if (chk.noCode){
+    for (var j = 0; j < chk.noCode.length; j++){
+      if (new RegExp("\\b" + chk.noCode[j] + "\\b").test(code)){
+        showMsg("warn", "<b>Так нельзя</b>" + (chk.noMsg || ("В этом задании нельзя использовать «" + chk.noCode[j] + "».")));
+        return;
+      }
+    }
+  }
 
+  var srcs = ed.getSources ? ed.getSources() : {};
+  var refSrcs = solutionSources(body);
   var t = eng.newTurtle ? eng.newTurtle() : null;
-  var res = eng.run(code, { turtle:t });
+  var res = eng.run(code, { turtle:t, sources: srcs });
   if (canvas) animateTurtle(canvas, t);
   if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
 
   var problem = null;
   if (chk.kind === "custom"){
     problem = (CUSTOM[chk.fn] || function(){ return null; })(res);
+  } else if (chk.kind === "tests"){
+    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs);
   } else if (chk.kind === "output"){
-    var exp = chk.lines || eng.run(body.task.solution, {}).lines;
+    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs }).lines;
     var got = res.lines;
     if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; })))
       problem = diffBlock(exp, got);
   } else if (chk.kind === "turtle"){
-    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle() }).turtle;
+    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs }).turtle;
     if (!sameDrawing(t.segs, ref.segs)){
       problem = t.segs.length === 0
         ? "Черепашка не нарисовала ни одной линии. Проверь, что вызываешь forward(...) — и что карандаш опущен."
@@ -856,7 +1136,8 @@ function screenSandbox(){
 /* ================= экран: панель наставника =================
    Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
    с #admin на конце. Показывает прогресс, позволяет открывать и
-   зачитывать уроки, переносить прогресс между устройствами файлом.
+   зачитывать уроки, обмениваться данными с сервером и смотреть
+   прогресс другого ученика по его коду.
    ============================================================ */
 function clearAdminHash(){
   try {
@@ -895,6 +1176,22 @@ function progressJSON(){ return JSON.stringify(S, null, 2); }
 function statBox(k, v){
   return '<div class="admstat"><span>' + k + '</span><b>' + v + '</b></div>';
 }
+function rankOf(xp){
+  var r = RANKS[0][1];
+  for (var i = 0; i < RANKS.length; i++) if (xp >= RANKS[i][0]) r = RANKS[i][1];
+  return r;
+}
+function adminKeySaved(){
+  try { return sessionStorage.getItem("kodokvest_srvkey") || ""; } catch(e){ return window.__srvKey || ""; }
+}
+function adminKeyRemember(v){
+  window.__srvKey = v;
+  try { sessionStorage.setItem("kodokvest_srvkey", v); } catch(e){}
+}
+
+/* Когда смотрим чужой прогресс, viewState держит его копию.
+   Локальные данные при этом не трогаются вообще. */
+var viewState = null;
 
 function adminGate(){
   app.innerHTML =
@@ -920,58 +1217,40 @@ function adminGate(){
   refreshTop();
 }
 
-function screenAdmin(){
-  stopTimer();
-  if (!adminUnlocked()) return adminGate();
-
-  var readyTotal = 0, totalTime = 0, totalAttempts = 0, totalHints = 0, lastSeen = 0;
+/* ---------- сводка по любому набору данных ---------- */
+function statsGridHTML(st){
+  var readyTotal = 0;
   CURRICULUM.forEach(function(w){ readyTotal += worldReadyLessons(w).length; });
-  Object.keys(S.log).forEach(function(k){
-    var g = S.log[k] || {};
-    totalTime += g.timeMs || 0;
-    totalAttempts += g.attempts || 0;
-    totalHints += g.hints || 0;
-    if ((g.last || 0) > lastSeen) lastSeen = g.last;
+  var stars = 0, solved = 0;
+  var sm = st.stars || {};
+  Object.keys(sm).forEach(function(k){ stars += sm[k] || 0; solved++; });
+  var timeMs = 0, attempts = 0, hints = 0, last = 0;
+  var lg = st.log || {};
+  Object.keys(lg).forEach(function(k){
+    var g = lg[k] || {};
+    timeMs += g.timeMs || 0;
+    attempts += g.attempts || 0;
+    hints += g.hints || 0;
+    if ((g.last || 0) > last) last = g.last;
   });
-  var doneTotal = Object.keys(S.stars).length;
-
-  var h = '<div class="lvlhead"><div><div class="idx">служебный экран</div>' +
-    '<h1>🔐 Панель наставника</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
-    '<p class="lede">Прогресс лежит в памяти <b>этого</b> браузера. Чтобы посмотреть его на другом ' +
-    'устройстве, выгрузи файл в самом низу страницы и загрузи его там же.</p>';
-
-  h += '<div class="admstats">' +
-    statBox("Пройдено уроков", doneTotal + " из " + CURRICULUM.total) +
+  return '<div class="admstats">' +
+    statBox("Пройдено уроков", solved + " из " + CURRICULUM.total) +
     statBox("Уроков готово", String(readyTotal)) +
-    statBox("Звёзды", totalStars() + " из " + (readyTotal * 3)) +
-    statBox("Опыт", S.xp + " XP") +
-    statBox("Ранг", rankName()) +
-    statBox("Попыток всего", String(totalAttempts)) +
-    statBox("Подсказок взято", String(totalHints)) +
-    statBox("Время за тренажёром", fmtMins(totalTime)) +
-    statBox("Последнее занятие", fmtWhen(lastSeen)) +
-    statBox("Бейджи", S.badges.length + " из " + BADGES.length) +
+    statBox("Звёзды", stars + " из " + (readyTotal * 3)) +
+    statBox("Опыт", (st.xp || 0) + " XP") +
+    statBox("Ранг", rankOf(st.xp || 0)) +
+    statBox("Попыток всего", String(attempts)) +
+    statBox("Подсказок взято", String(hints)) +
+    statBox("Время за тренажёром", fmtMins(timeMs)) +
+    statBox("Последнее занятие", fmtWhen(last)) +
+    statBox("Бейджи", (st.badges || []).length + " из " + BADGES.length) +
     '</div>';
+}
 
-  h += '<div class="card"><h3>Быстрые действия</h3><div class="admrow">' +
-    '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
-      (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
-    '<button class="rbtn sec" data-act="passready">Зачесть все готовые на 3★</button>' +
-    '<button class="rbtn sec" data-act="resetall">Сбросить весь прогресс</button>' +
-    '</div><p class="dim">«Открыть все уроки» только снимает замки — звёзды не ставит. ' +
-    'Ребёнок сможет зайти в любой урок и решить его сам, порядок перестанет быть обязательным.</p></div>';
-
-  h += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
-    '<label class="admlbl">XP <input type="number" id="xpin" value="' + S.xp + '" min="0" step="25"></label>' +
-    '<button class="rbtn sec" data-act="setxp">Записать</button></div>' +
-    '<div class="admbadges">' +
-    BADGES.map(function(b){
-      var got = S.badges.indexOf(b.id) >= 0;
-      return '<button class="admbadge' + (got ? " got" : "") + '" data-act="badge" data-id="' + b.id + '">' +
-        '<span class="em">' + b.em + '</span><span>' + b.name + '</span></button>';
-    }).join("") +
-    '</div><p class="dim">Нажатие на бейдж выдаёт его или отбирает.</p></div>';
-
+/* ---------- таблица уроков по любому набору данных ---------- */
+function lessonTableHTML(st, withActions){
+  var h = "";
+  var sm = st.stars || {}, lg = st.log || {};
   CURRICULUM.forEach(function(w){
     var c = CONTENT["world" + w.n] || {};
     h += '<div class="sect"><h2>' + w.icon + ' Мир ' + w.n + ' · ' + w.title + '</h2>' +
@@ -980,19 +1259,19 @@ function screenAdmin(){
       '<span>№</span><span>урок</span><span>звёзды</span><span>попыток</span><span>подсказок</span>' +
       '<span>решение</span><span>время</span><span>когда</span><span></span></div>';
     w.lessons.forEach(function(l){
-      var has = !!c[l.id], g = S.log[l.id] || {};
-      var st = starsOf(l.id), stars = "";
-      for (var k = 0; k < 3; k++) stars += (k < st) ? "<b>★</b>" : "★";
+      var has = !!c[l.id], g = lg[l.id] || {};
+      var stn = sm[l.id] === undefined ? -1 : sm[l.id], stars = "";
+      for (var k = 0; k < 3; k++) stars += (k < stn) ? "<b>★</b>" : "★";
       h += '<div class="admrowl' + (has ? "" : " soon") + '">' +
         '<span class="n">' + l.num + '</span>' +
         '<span class="t">' + l.title + (l.boss ? ' <em>босс</em>' : '') + (has ? '' : ' <em>скоро</em>') + '</span>' +
-        '<span class="stars">' + (solved(l.id) ? stars : "—") + '</span>' +
+        '<span class="stars">' + (stn >= 0 ? stars : "—") + '</span>' +
         '<span>' + (g.attempts || "—") + '</span>' +
         '<span>' + (g.hints || "—") + '</span>' +
         '<span>' + (g.shown ? "смотрел" : "—") + '</span>' +
         '<span>' + fmtMins(g.timeMs) + '</span>' +
         '<span>' + fmtWhen(g.solvedAt || g.last) + '</span>' +
-        '<span class="acts">' + (has
+        '<span class="acts">' + (has && withActions
           ? '<button class="minibtn" data-act="go" data-id="' + l.id + '">открыть</button>' +
             '<button class="minibtn" data-act="pass" data-id="' + l.id + '">зачесть</button>' +
             '<button class="minibtn" data-act="clear" data-id="' + l.id + '">сбросить</button>'
@@ -1000,21 +1279,128 @@ function screenAdmin(){
     });
     h += '</div></div>';
   });
+  return h;
+}
 
-  h += '<div class="card"><h3>Перенос прогресса на другое устройство</h3>' +
-    '<div class="admrow">' +
-      '<button class="rbtn sec" data-act="download">↓ Скачать файл прогресса</button>' +
-      '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
+/* ---------- карточка сервера ---------- */
+function serverCardHTML(){
+  if (typeof Cloud === "undefined" || !Cloud.hasUrl()){
+    return '<div class="card"><h3>Сервер</h3>' +
+      '<p class="dim">Сервер не подключён: прогресс хранится только в этом браузере, ' +
+      'и посмотреть его с другого устройства нельзя. Чтобы подключить, нужно вписать адрес функции ' +
+      'в файл <code>js/cloud-config.js</code> — по шагам это описано в <code>cloud/README.md</code>.</p></div>';
+  }
+  var code = Cloud.myCode();
+  var state = cloudState.busy ? "обмен…" : (cloudState.lastError ? "была ошибка" : "в порядке");
+  return '<div class="card"><h3>Сервер</h3>' +
+    '<div class="admstats">' +
+      statBox("Код этого устройства", code ? esc(code) : "не задан") +
+      statBox("Последний обмен", cloudState.lastSync ? fmtWhen(cloudState.lastSync) : "ещё не было") +
+      statBox("Состояние", code ? state : "ждёт код") +
     '</div>' +
-    '<p class="dim">Порядок такой: здесь скачал файл — на другом устройстве открыл эту же панель, ' +
-    'вставил содержимое файла в поле ниже и нажал «Загрузить». Если скачивание заблокировано ' +
-    '(бывает внутри предпросмотра), просто скопируй текст.</p>' +
-    '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
-    '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
-    '<div class="msg" id="admmsg"></div></div>';
+    (code ? '' : '<div class="msg show warn"><b>Код ученика не задан</b>Пока его нет, прогресс ' +
+      'не уходит на сервер. Придумайте код — латинские буквы, цифры и дефис, от 3 до 32 знаков ' +
+      '(например <code>misha-7f3a</code>) — и впишите ниже. У каждого ребёнка код свой. ' +
+      'Не делайте его угадываемым: кто знает код, тот видит прогресс.</div>') +
+    '<div class="admrow">' +
+      '<label class="admlbl">код ученика <input type="text" id="devcode" value="' + esc(code) +
+        '" placeholder="misha-7f3a" autocomplete="off" spellcheck="false"></label>' +
+      '<button class="rbtn ' + (code ? 'sec' : 'check') + '" data-act="setcode">Записать код</button>' +
+    '</div>' +
+    '<p class="dim">Код относится только к этому браузеру, в файлах сайта он не хранится. ' +
+    'Тот же код можно задать ссылкой: добавьте к адресу <code>?kid=ваш-код</code> и откройте её один раз ' +
+    'на устройстве ребёнка.</p>' +
+    (cloudState.lastError
+      ? '<div class="msg show bad"><b>Последняя ошибка</b>' + esc(cloudState.lastError) + '</div>' : '') +
+    '<div class="admrow">' +
+      '<button class="rbtn sec" data-act="push">↑ Отправить сейчас</button>' +
+      '<button class="rbtn sec" data-act="pull">↓ Забрать с сервера</button>' +
+      '<button class="rbtn sec" data-act="ping">Проверить настройку</button>' +
+    '</div>' +
+    '<p class="dim">При обмене прогресс не перезаписывается, а сливается: по каждому уроку ' +
+    'остаётся лучший результат из двух копий. Поэтому «Забрать» ничего не портит.</p>' +
+    '<h3 style="margin-top:20px">Прогресс другого ученика</h3>' +
+    '<div class="admrow">' +
+      '<label class="admlbl">код <input type="text" id="othercode" placeholder="misha-7f3a" ' +
+        'autocomplete="off" spellcheck="false"></label>' +
+      '<button class="rbtn sec" data-act="viewother">Посмотреть</button>' +
+    '</div>' +
+    '<div class="admrow">' +
+      '<label class="admlbl">ключ наставника <input type="password" id="adminkey" ' +
+        'value="' + esc(adminKeySaved()) + '" autocomplete="off"></label>' +
+      '<button class="rbtn sec" data-act="listall">Список всех учеников</button>' +
+    '</div>' +
+    '<p class="dim">Чужой прогресс только показывается — на этом устройстве ничего не меняется.</p>' +
+    '<div id="srvout"></div></div>';
+}
 
-  h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← Ко всем мирам</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
+function screenAdmin(){
+  stopTimer();
+  if (!adminUnlocked()) return adminGate();
+
+  var h = "";
+
+  if (viewState){
+    /* ---------- режим просмотра чужого прогресса ---------- */
+    h += '<div class="lvlhead"><div><div class="idx">только чтение</div>' +
+      '<h1>👀 Ученик: ' + esc(viewState.code) + '</h1></div>' +
+      '<div class="right"><span class="tag">данные с сервера</span></div></div>' +
+      '<p class="lede">Это копия с сервера на момент ' + fmtWhen(viewState.serverAt) +
+      '. Изменить здесь ничего нельзя, и на ваш собственный прогресс это не влияет.</p>' +
+      '<div class="admrow"><button class="rbtn check" data-act="myown">← Вернуться к своему прогрессу</button></div>';
+    h += statsGridHTML(viewState.data);
+    h += lessonTableHTML(viewState.data, false);
+    h += '<div class="pager"><button class="bigbtn ghost" data-act="myown">← Свой прогресс</button>' +
+      '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">Ко всем мирам</button></div>';
+  } else {
+    /* ---------- обычный режим ---------- */
+    h += '<div class="lvlhead"><div><div class="idx">служебный экран</div>' +
+      '<h1>🔐 Панель наставника</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
+      '<p class="lede">' + (cloudEnabled()
+        ? 'Прогресс синхронизируется с сервером — его видно с любого устройства.'
+        : 'Прогресс лежит в памяти <b>этого</b> браузера. Чтобы видеть его с другого устройства, ' +
+          'подключите сервер или выгрузите файл в самом низу страницы.') + '</p>';
+
+    h += statsGridHTML(S);
+    h += serverCardHTML();
+
+    h += '<div class="card"><h3>Быстрые действия</h3><div class="admrow">' +
+      '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
+        (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
+      '<button class="rbtn sec" data-act="passready">Зачесть все готовые на 3★</button>' +
+      '<button class="rbtn sec" data-act="resetall">Сбросить весь прогресс</button>' +
+      '</div><p class="dim">«Открыть все уроки» только снимает замки — звёзды не ставит. ' +
+      'Ребёнок сможет зайти в любой урок и решить его сам, порядок перестанет быть обязательным. ' +
+      'Эта настройка относится только к текущему устройству и на сервер не уходит.</p></div>';
+
+    h += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
+      '<label class="admlbl">XP <input type="number" id="xpin" value="' + S.xp + '" min="0" step="25"></label>' +
+      '<button class="rbtn sec" data-act="setxp">Записать</button></div>' +
+      '<div class="admbadges">' +
+      BADGES.map(function(b){
+        var got = S.badges.indexOf(b.id) >= 0;
+        return '<button class="admbadge' + (got ? " got" : "") + '" data-act="badge" data-id="' + b.id + '">' +
+          '<span class="em">' + b.em + '</span><span>' + b.name + '</span></button>';
+      }).join("") +
+      '</div><p class="dim">Нажатие на бейдж выдаёт его или отбирает.</p></div>';
+
+    h += lessonTableHTML(S, true);
+
+    h += '<div class="card"><h3>Перенос прогресса файлом</h3>' +
+      '<div class="admrow">' +
+        '<button class="rbtn sec" data-act="download">↓ Скачать файл прогресса</button>' +
+        '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
+      '</div>' +
+      '<p class="dim">Способ без сервера: здесь скачал файл — на другом устройстве открыл эту же ' +
+      'панель, вставил содержимое в поле ниже и нажал «Загрузить». В отличие от обмена с сервером, ' +
+      'загрузка файла <b>заменяет</b> прогресс целиком, а не сливает его.</p>' +
+      '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
+      '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
+      '<div class="msg" id="admmsg"></div></div>';
+
+    h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← Ко всем мирам</button>' +
+      '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
+  }
 
   /* контейнер создаётся заново при каждой отрисовке — обработчик не копится */
   app.innerHTML = '<div id="adm"></div>';
@@ -1025,15 +1411,20 @@ function screenAdmin(){
     var m = document.getElementById("admmsg");
     if (m){ m.className = "msg show " + cls; m.innerHTML = html; }
   }
+  function srv(cls, html){
+    var m = document.getElementById("srvout");
+    if (m) m.innerHTML = '<div class="msg show ' + cls + '">' + html + '</div>';
+  }
 
   box.addEventListener("click", function(e){
     var b = e.target.closest("[data-act]");
     if (!b) return;
     var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
 
-    if (act === "tomap"){ screenWorlds(); }
-    else if (act === "lock"){ adminLock(); screenWorlds(); }
-    else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; save(); screenAdmin(); }
+    if (act === "tomap"){ viewState = null; screenWorlds(); }
+    else if (act === "myown"){ viewState = null; screenAdmin(); }
+    else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
+    else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
       CURRICULUM.forEach(function(w){
         worldReadyLessons(w).forEach(function(l){ setStars(l.id, 3); });
@@ -1061,6 +1452,80 @@ function screenAdmin(){
       if (isNaN(v) || v < 0){ say("bad", "<b>Не подходит</b>XP должен быть целым числом не меньше нуля."); return; }
       S.xp = v; save(); refreshTop(); screenAdmin();
     }
+
+    /* ---------- сервер ---------- */
+    else if (act === "setcode"){
+      var raw = (document.getElementById("devcode").value || "").trim();
+      if (!Cloud.setCode(raw)){
+        srv("bad", "<b>Код не подходит</b>Нужно от 3 до 32 знаков: латинские буквы, цифры, " +
+          "дефис и подчёркивание. Первый знак — буква или цифра. Заглавные буквы можно, они сами " +
+          "станут маленькими. Русские буквы, пробелы и точки нельзя.");
+        return;
+      }
+      screenAdmin();
+      srv("ok", "<b>Код записан</b>Теперь можно отправить прогресс на сервер.");
+    }
+    else if (act === "push"){
+      srv("warn", "<b>Отправляю…</b>");
+      cloudPush().then(function(){ screenAdmin(); srv("ok", "<b>Отправлено</b>Прогресс лежит на сервере."); },
+                       function(err){ srv("bad", "<b>Не отправилось</b>" + esc(err.message || err)); });
+    }
+    else if (act === "pull"){
+      srv("warn", "<b>Забираю…</b>");
+      cloudPull().then(function(changed){
+        refreshTop(); screenAdmin();
+        srv(changed ? "ok" : "warn", changed
+          ? "<b>Забрано и слито</b>Прогресс с сервера добавлен к тому, что было здесь."
+          : "<b>Уже одинаково</b>На сервере нет ничего нового.");
+      }, function(err){ srv("bad", "<b>Не получилось</b>" + esc(err.message || err)); });
+    }
+    else if (act === "ping"){
+      srv("warn", "<b>Проверяю…</b>");
+      Cloud.ping().then(function(r){
+        srv("ok", "<b>Сервер настроен верно</b>Папка: " + esc(r.dir) + ". Учеников в ней: " + r.students +
+          ". Ключ наставника " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
+      }, function(err){ srv("bad", "<b>Проверка не прошла</b>" + esc(err.message || err)); });
+    }
+    else if (act === "viewother"){
+      var code = (document.getElementById("othercode").value || "").trim().toLowerCase();
+      if (!code){ srv("bad", "<b>Пусто</b>Введите код ученика."); return; }
+      srv("warn", "<b>Загружаю…</b>");
+      Cloud.load(code).then(function(r){
+        if (!r.found || !r.data){ srv("warn", "<b>Ничего нет</b>Под кодом «" + esc(code) +
+          "» на сервере пока нет прогресса. Проверьте код."); return; }
+        viewState = { code: code, data: r.data, serverAt: r.serverAt || 0 };
+        screenAdmin();
+      }, function(err){ srv("bad", "<b>Не получилось</b>" + esc(err.message || err)); });
+    }
+    else if (act === "listall"){
+      var key = (document.getElementById("adminkey").value || "").trim();
+      if (!key){ srv("bad", "<b>Пусто</b>Нужен ключ наставника — тот, что задан в настройках функции как ADMIN_KEY."); return; }
+      adminKeyRemember(key);
+      srv("warn", "<b>Загружаю…</b>");
+      Cloud.list(key).then(function(r){
+        var st = r.students || [];
+        if (!st.length){ srv("warn", "<b>Пока никого</b>На сервере нет ни одного ученика."); return; }
+        srv("ok", "<b>Учеников на сервере: " + st.length + "</b>" +
+          '<div class="admlist">' + st.map(function(s){
+            return s.broken
+              ? '<div class="admlrow"><b>' + esc(s.code) + '</b><span>файл испорчен</span></div>'
+              : '<div class="admlrow"><b>' + esc(s.code) + '</b>' +
+                '<span>' + s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
+                fmtMins(s.timeMs) + ' · ' + fmtWhen(s.serverAt) + '</span>' +
+                '<button class="minibtn" data-act="viewcode" data-id="' + esc(s.code) + '">открыть</button></div>';
+          }).join("") + '</div>');
+      }, function(err){ srv("bad", "<b>Не получилось</b>" + esc(err.message || err)); });
+    }
+    else if (act === "viewcode"){
+      srv("warn", "<b>Загружаю…</b>");
+      Cloud.load(id).then(function(r){
+        if (!r.found || !r.data){ srv("warn", "<b>Ничего нет</b>Прогресс пуст."); return; }
+        viewState = { code: id, data: r.data, serverAt: r.serverAt || 0 };
+        screenAdmin();
+      }, function(err){ srv("bad", "<b>Не получилось</b>" + esc(err.message || err)); });
+    }
+
+    /* ---------- файл ---------- */
     else if (act === "download"){
       try {
         var blob = new Blob([progressJSON()], { type:"application/json" });
@@ -1131,7 +1596,32 @@ window.addEventListener("resize", function(){
   });
 });
 
-worldContent(1).then(function(){ if (!routeHash()) screenWorlds(); });
+/* Ссылка вида .../kodokvest/?kid=misha-7f3a один раз задаёт код ученика
+   на этом устройстве. Дальше он живёт в памяти браузера, а из адреса
+   убирается — чтобы не болтался на виду и не попал в закладку. */
+(function(){
+  if (typeof Cloud === "undefined") return;
+  var m = /[?&]kid=([^&]+)/.exec(location.search || "");
+  if (!m) return;
+  var set = Cloud.setCode(decodeURIComponent(m[1]));
+  try {
+    if (set && history.replaceState)
+      history.replaceState(null, "", location.pathname + location.hash);
+  } catch(e){}
+})();
+
+worldContent(1).then(function(){
+  if (!routeHash()) screenWorlds();
+  /* сервер подключаем в фоне: игра должна открываться сразу и работать без сети */
+  if (cloudEnabled()){
+    cloudPull().then(function(changed){
+      refreshTop();
+      /* перерисовываем только карту миров — не выдёргиваем ученика из урока */
+      if (changed && document.querySelector(".worlds")) screenWorlds();
+      return cloudPush();
+    }).catch(function(){ refreshTop(); });
+  }
+});
 window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds(); });
 
 window.__game = {
@@ -1139,6 +1629,8 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
-  getSession: function(){ return session; }
+  getSession: function(){ return session; },
+  mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
+  cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState
 };
 })();
