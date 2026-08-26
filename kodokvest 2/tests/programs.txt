@@ -1,0 +1,1390 @@
+### basic_print
+print("Привет, мир!")
+print(1, 2, 3)
+print("а" * 3)
+### vars
+x = 5
+y = 3
+print(x + y, x - y, x * y)
+print(x / y)
+print(x // y, x % y, x ** y)
+### floats
+print(10 / 2)
+print(7 // 2)
+print(2 ** 10)
+print(1.5 + 1.5)
+print(round(3.14159, 2))
+print(abs(-7))
+### strings
+s = "Привет"
+print(len(s))
+print(s.upper())
+print(s[0], s[-1])
+print(s[1:4])
+print(s + "!")
+print("-".join(["a", "b", "c"]))
+print("  hi  ".strip())
+print("a,b,c".split(","))
+print("Hello".replace("l", "L"))
+### fstring
+name = "Аня"
+age = 12
+print(f"{name} — {age} лет")
+print(f"{3.14159:.2f}")
+print(f"{5 * 5}")
+### bools
+print(True, False, None)
+print(3 > 2, 3 == 2, 3 != 2)
+print(True and False, True or False, not True)
+print(5 > 3 and 2 < 4)
+### if
+x = 7
+if x > 10:
+    print("большое")
+elif x > 5:
+    print("среднее")
+else:
+    print("маленькое")
+### forloop
+for i in range(5):
+    print(i)
+for c in "abc":
+    print(c)
+total = 0
+for i in range(1, 11):
+    total += i
+print(total)
+### while
+n = 5
+while n > 0:
+    print(n)
+    n -= 1
+print("пуск!")
+### lists
+xs = [3, 1, 2]
+xs.append(10)
+print(xs)
+print(len(xs), sum(xs), max(xs), min(xs))
+print(sorted(xs))
+xs.sort()
+print(xs)
+print(xs[0], xs[-1])
+print(xs[1:3])
+xs.reverse()
+print(xs)
+### list2
+a = [1, 2, 3]
+b = a + [4]
+print(b)
+print([0] * 4)
+print(3 in a, 9 in a)
+a.remove(2)
+print(a)
+print(a.pop())
+### nested
+for i in range(3):
+    for j in range(2):
+        print(i, j)
+### funcs
+def add(a, b):
+    return a + b
+print(add(2, 3))
+
+def greet(name, greeting="Привет"):
+    return greeting + ", " + name + "!"
+print(greet("Ваня"))
+print(greet("Ваня", "Хай"))
+
+def no_return():
+    x = 1
+print(no_return())
+### recursion
+def fact(n):
+    if n <= 1:
+        return 1
+    return n * fact(n - 1)
+print(fact(5))
+### dicts
+d = {"a": 1, "b": 2}
+print(d)
+print(d["a"])
+d["c"] = 3
+print(d)
+print(len(d))
+print(d.get("z", 0))
+for k in d:
+    print(k, d[k])
+print(list(d.keys()))
+print(list(d.values()))
+### tuple_unpack
+a, b = 1, 2
+print(a, b)
+a, b = b, a
+print(a, b)
+for i, c in enumerate("ab"):
+    print(i, c)
+### breakcont
+for i in range(10):
+    if i == 3:
+        break
+    print(i)
+for i in range(5):
+    if i % 2 == 0:
+        continue
+    print(i)
+### slicing
+xs = [0, 1, 2, 3, 4, 5]
+print(xs[::2])
+print(xs[::-1])
+print(xs[2:])
+print(xs[:2])
+print(xs[-2:])
+s = "abcdef"
+print(s[::-1])
+print(s[1:4])
+### mixed
+words = ["кот", "слон", "ёж"]
+longest = ""
+for w in words:
+    if len(w) > len(longest):
+        longest = w
+print(longest)
+print(", ".join(words))
+counts = {}
+for w in words:
+    counts[len(w)] = counts.get(len(w), 0) + 1
+print(counts)
+### ternary
+x = 5
+print("да" if x > 3 else "нет")
+### strmethods
+print("abc".startswith("a"))
+print("abc".endswith("c"))
+print("banana".count("a"))
+print("123".isdigit())
+print(str(42) + "!")
+print(int("42") + 1)
+print(float("2.5") + 1)
+### zipsorted
+a = [1, 2, 3]
+b = ["x", "y", "z"]
+print(list(zip(a, b)))
+print(sorted([3, 1, 2], reverse=True))
+print(sorted(["bb", "a", "ccc"], key=len) if False else sorted(["bb", "a", "ccc"]))
+
+### set_basic
+nums = {3, 1, 2, 3, 1}
+print(len(nums))
+print(sorted(nums))
+print(2 in nums, 9 in nums)
+### set_from_list
+words = ["кот", "пёс", "кот", "ёж", "пёс"]
+uniq = set(words)
+print(len(uniq))
+print(sorted(uniq))
+### set_empty
+s = set()
+print(len(s), s)
+print(bool(s))
+s.add(5)
+print(bool(s), len(s))
+### set_methods
+a = {1, 2, 3, 4}
+b = {3, 4, 5}
+print(sorted(a.union(b)))
+print(sorted(a.intersection(b)))
+print(sorted(a.difference(b)))
+print(sorted(a.symmetric_difference(b)))
+print(a.issubset({1, 2, 3, 4, 5}))
+print(a.isdisjoint({9}))
+### set_operators
+a = {1, 2, 3}
+b = {3, 4}
+print(sorted(a | b))
+print(sorted(a & b))
+print(sorted(a - b))
+print(sorted(a ^ b))
+### set_mutate
+s = {1, 2, 3}
+s.add(4)
+s.discard(1)
+s.discard(99)
+s.update([7, 8])
+print(sorted(s))
+print(len(s))
+### set_loop
+for x in sorted({5, 1, 3}):
+    print(x)
+### set_eq
+print({1, 2} == {2, 1})
+print({1, 2} == {1, 2, 3})
+### comp_basic
+nums = [1, 2, 3, 4, 5]
+print([n * n for n in nums])
+print([n for n in range(10) if n % 3 == 0])
+### comp_str
+words = ["кот", "пёс", "ёж"]
+print([w.upper() for w in words])
+print([len(w) for w in words])
+### comp_two_ifs
+print([n for n in range(30) if n % 2 == 0 if n % 3 == 0])
+### comp_nested
+print([a * b for a in [1, 2] for b in [10, 20]])
+### comp_no_leak
+x = 5
+ys = [x for x in range(3)]
+print(x, ys)
+### comp_dict
+words = ["кот", "пёс", "ёж"]
+print({w: len(w) for w in words})
+### comp_dict_filter
+d = {"а": 1, "б": 5, "в": 3}
+print({k: v for k, v in d.items() if v > 2})
+### comp_set
+print(sorted({n % 3 for n in range(10)}))
+### comp_ternary
+print([("чёт" if n % 2 == 0 else "нечёт") for n in range(4)])
+### lambda_basic
+double = lambda x: x * 2
+print(double(5))
+add = lambda a, b: a + b
+print(add(3, 4))
+### lambda_sorted
+words = ["груша", "ёж", "апельсин", "кот"]
+print(sorted(words, key=lambda w: len(w)))
+print(sorted(words, key=len))
+### lambda_sorted_tuples
+people = [("Аня", 14), ("Боря", 12), ("Вика", 16)]
+print(sorted(people, key=lambda p: p[1]))
+print(sorted(people, key=lambda p: p[1], reverse=True))
+### lambda_sort_inplace
+nums = [5, 1, 4, 2]
+nums.sort()
+print(nums)
+words = ["ааа", "б", "вв"]
+words.sort(key=lambda w: len(w))
+print(words)
+words.sort(key=len, reverse=True)
+print(words)
+### lambda_dict_sort
+scores = {"Аня": 5, "Боря": 3, "Вика": 4}
+print(sorted(scores.items(), key=lambda pair: pair[1], reverse=True))
+### chained
+x = 5
+print(0 < x < 10)
+print(0 < x < 3)
+print(1 <= x <= 5)
+print("б" < "в" < "г")
+### chained_once
+print(3 == 3 == 3)
+print(1 < 2 < 3 < 4)
+print(1 < 2 > 0)
+### bitwise_ints
+print(6 & 3, 6 | 3, 6 ^ 3)
+### mixed_real
+data = ["Аня:5", "Боря:3", "Вика:5", "Аня:4"]
+marks = {}
+for item in data:
+    name, mark = item.split(":")
+    if name not in marks:
+        marks[name] = []
+    marks[name].append(int(mark))
+print(sorted(marks.keys()))
+avg = {name: sum(v) / len(v) for name, v in marks.items()}
+print(sorted(avg.items(), key=lambda p: p[1], reverse=True))
+### text_stats
+text = "мама мыла раму а рама мыла маму"
+words = text.split()
+uniq = set(words)
+print(len(words), len(uniq))
+counts = {}
+for w in words:
+    counts[w] = counts.get(w, 0) + 1
+top = sorted(counts.items(), key=lambda p: (-p[1], p[0]))
+print(top[:3])
+
+### sort_returns_none
+xs = [3, 1, 2]
+print(xs.sort())
+print(xs)
+print(sorted([3, 1, 2]))
+### grid_trap
+field = [["."] * 3] * 3
+field[1][1] = "*"
+for row in field:
+    print("".join(row))
+### grid_ok
+field = [["."] * 3, ["."] * 3, ["."] * 3]
+field[1][1] = "*"
+for row in field:
+    print("".join(row))
+### grid_loop
+field = []
+for i in range(3):
+    field.append(["."] * 3)
+field[1][1] = "*"
+for row in field:
+    print("".join(row))
+### dict_counter_ok
+words = "кот пёс кот ёж пёс кот".split()
+counts = {}
+for w in words:
+    counts[w] = counts.get(w, 0) + 1
+print(counts)
+### tuple_ops
+point = (3, 4)
+x, y = point
+print(x, y)
+print(len(point), point[0], point[-1])
+places = {(0, 0): "старт", (1, 2): "клад"}
+print(places[(1, 2)])
+### dict_pop_get
+d = {"а": 1, "б": 2}
+print(d.pop("а"))
+print(d)
+print(d.get("нет", 0))
+print("б" in d, "а" in d)
+print(len(d))
+### key_abs_len
+print(sorted([-5, 2, -1], key=abs))
+print(sorted(["ааа", "б", "вв"], key=len))
+### slice_bug
+nums = [1, 2, 3, 4, 5, 6, 7]
+print(nums[-3:0])
+print(nums[-3:])
+print(nums[:3])
+print(nums[::2])
+print(nums[::-1])
+copy = nums[:]
+copy[0] = 99
+print(nums[0], copy[0])
+### join_grid
+row = [".", "*", "."]
+print("".join(row))
+print(" ".join(row))
+### nested_dicts
+heroes = [{"имя": "Аня", "сила": 7}, {"имя": "Боря", "сила": 5}]
+for h in heroes:
+    print(h["имя"], h["сила"])
+print(sorted(heroes, key=lambda h: h["сила"], reverse=True)[0]["имя"])
+### enumerate_grid
+for i, row in enumerate([["a","b"],["c","d"]]):
+    for j, cell in enumerate(row):
+        print(i, j, cell)
+### values_sum
+prices = {"хлеб": 40, "сыр": 250}
+print(sum(prices.values()))
+print(max(prices, key=prices.get))
+### fstring_spec_dict
+h = {"имя": "Боря", "сила": 9}
+print(f"[{h['имя']:8}]{h['сила']}")
+### fstring_spec_slice
+s = "abcdef"
+print(f"[{s[1:3]}]")
+print(f"[{ {'a': 1}['a'] }]")
+### fstring_align
+n = 7
+name = "Боря"
+print(f"[{n:5}][{n:<5}][{n:^5}]")
+print(f"[{name:8}][{name:>8}]")
+print(f"[{3.14159:.2f}]")
+### sort_stable_reverse
+counts = {"кот": 2, "ёж": 2, "пёс": 1}
+print(sorted(counts.items(), key=lambda p: p[1], reverse=True))
+xs = [("а", 1), ("б", 1), ("в", 2)]
+print(sorted(xs, key=lambda p: p[1], reverse=True))
+ys = [("а", 1), ("б", 1), ("в", 2)]
+ys.sort(key=lambda p: p[1], reverse=True)
+print(ys)
+### sort_stable_plain
+words = ["кот", "ёж", "уж", "кит"]
+print(sorted(words, key=len, reverse=True))
+### table_format
+heroes = [{"имя": "Аня", "сила": 7}, {"имя": "Боря", "сила": 9}]
+for h in sorted(heroes, key=lambda x: x["сила"], reverse=True):
+    print(f"{h['имя']:8} {h['сила']}")
+### type_names
+print(type(12))
+print(type(1.5))
+print(type("а"))
+print(type([1]))
+print(type((1,)))
+print(type({1: 2}))
+print(type(None))
+print(type(True))
+print(type(12).__name__, type("а").__name__)
+print(type(12) is int, type(12) is str)
+### isinstance_basic
+print(isinstance(5, int), isinstance(5.0, float), isinstance("а", str))
+print(isinstance(5, (str, int)), isinstance([1], list))
+print(issubclass(bool, int), issubclass(int, bool))
+### args_sum
+def total(*nums):
+    s = 0
+    for n in nums:
+        s += n
+    return s
+
+print(total(), total(5), total(1, 2, 3, 4))
+print(total(*[10, 20, 30]))
+### kwargs_card
+def card(name, **extra):
+    parts = [name]
+    for k in extra:
+        parts.append(f"{k}={extra[k]}")
+    return " ".join(parts)
+
+print(card("Аня"))
+print(card("Боря", hp=10, mp=3))
+print(card("Витя", **{"hp": 1}))
+### args_mixed
+def mix(a, b=2, *rest, **kw):
+    return (a, b, rest, sorted(kw.keys()))
+
+print(mix(1))
+print(mix(1, 5))
+print(mix(1, 5, 7, 8, x=1, y=2))
+### default_trap
+def grow(item, box=[]):
+    box.append(item)
+    return box
+
+print(grow("а"))
+print(grow("б"))
+print(grow("в"))
+### default_fixed
+def grow(item, box=None):
+    if box is None:
+        box = []
+    box.append(item)
+    return box
+
+print(grow("а"))
+print(grow("б"))
+### scope_local
+x = 10
+
+
+def touch():
+    x = 99
+    return x
+
+
+print(touch(), x)
+
+
+def touch_global():
+    global x
+    x = 5
+
+
+touch_global()
+print(x)
+### recursion_fact
+def fact(n):
+    if n <= 1:
+        return 1
+    return n * fact(n - 1)
+
+
+print(fact(1), fact(5), fact(10))
+### recursion_sum_list
+def deep_sum(items):
+    if not items:
+        return 0
+    return items[0] + deep_sum(items[1:])
+
+
+print(deep_sum([]), deep_sum([1, 2, 3, 4, 5]))
+### recursion_fib
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+print([fib(i) for i in range(10)])
+### fn_as_value
+def double(x):
+    return x * 2
+
+
+def apply_all(fn, items):
+    return [fn(i) for i in items]
+
+
+print(apply_all(double, [1, 2, 3]))
+print(apply_all(len, ["аб", "в"]))
+ops = {"двойной": double, "строка": str}
+print(ops["двойной"](4), ops["строка"](4))
+### try_int
+for text in ["10", "нет", "3"]:
+    try:
+        n = int(text)
+    except ValueError:
+        print(text, "не число")
+    else:
+        print(text, "->", n * 2)
+### try_message
+try:
+    int("сто")
+except ValueError as e:
+    print(e)
+try:
+    10 / 0
+except ZeroDivisionError as e:
+    print(e)
+try:
+    {"a": 1}["b"]
+except KeyError as e:
+    print(e)
+try:
+    [1, 2][5]
+except IndexError as e:
+    print(e)
+try:
+    "а" + 1
+except TypeError as e:
+    print(e)
+### try_finally
+def safe(text):
+    try:
+        return int(text)
+    except ValueError:
+        return 0
+    finally:
+        print("проверили", text)
+
+
+print(safe("7"))
+print(safe("нет"))
+### try_tuple
+for value in [{"a": 1}, [1], "x"]:
+    try:
+        print(value["b"])
+    except (KeyError, IndexError, TypeError) as e:
+        print(type(e).__name__)
+### raise_own
+def check_age(n):
+    if n < 0:
+        raise ValueError("возраст не бывает отрицательным")
+    return n
+
+
+print(check_age(10))
+try:
+    check_age(-1)
+except ValueError as e:
+    print("ошибка:", e)
+    print(repr(e))
+### raise_reraise
+try:
+    try:
+        raise ValueError("внутри")
+    except ValueError:
+        print("логируем")
+        raise
+except ValueError as e:
+    print("снаружи:", e)
+### raise_custom_class
+class TooLoud(Exception):
+    pass
+
+
+def shout(text):
+    if text.isupper():
+        raise TooLoud("не кричи")
+    return text
+
+
+try:
+    shout("АААА")
+except TooLoud as e:
+    print(type(e).__name__, e)
+except Exception:
+    print("сюда не должно дойти")
+print(isinstance(TooLoud("x"), Exception))
+### assert_basic
+def div(a, b):
+    assert b != 0, "делитель не может быть нулём"
+    return a / b
+
+
+print(div(9, 3))
+try:
+    div(1, 0)
+except AssertionError as e:
+    print("assert:", e)
+try:
+    assert 1 == 2
+except AssertionError as e:
+    print("пусто:", repr(e))
+### class_first
+class Dog:
+    def __init__(self, name, hp=10):
+        self.name = name
+        self.hp = hp
+
+    def bark(self):
+        return f"{self.name}: гав"
+
+    def hit(self, dmg):
+        self.hp -= dmg
+        return self.hp
+
+    def __repr__(self):
+        return f"Dog({self.name!r}, hp={self.hp})"
+
+
+d = Dog("Рекс")
+print(d.bark())
+print(d.hit(4))
+print(d)
+print(type(d), type(d).__name__)
+### class_fields
+class Box:
+    def __init__(self):
+        self.items = []
+
+    def put(self, item):
+        self.items.append(item)
+        return len(self.items)
+
+    def total(self):
+        return len(self.items)
+
+
+b = Box()
+print(b.put("а"), b.put("б"))
+print(b.items, b.total())
+b.label = "мой"
+print(b.label)
+### class_attr_shared
+class Counter:
+    total = 0
+
+    def add(self):
+        Counter.total += 1
+        return Counter.total
+
+
+a = Counter()
+b = Counter()
+print(a.add(), b.add(), Counter.total)
+### class_inherit
+class Hero:
+    def __init__(self, name, hp):
+        self.name = name
+        self.hp = hp
+
+    def hit(self):
+        return 1
+
+    def card(self):
+        return f"{self.name} ({self.hp})"
+
+
+class Mage(Hero):
+    def __init__(self, name):
+        super().__init__(name, 8)
+        self.mana = 5
+
+    def hit(self):
+        return 3
+
+
+m = Mage("Аня")
+print(m.card())
+print(m.hit(), m.hp, m.mana)
+print(isinstance(m, Hero), isinstance(m, Mage))
+h = Hero("Боря", 12)
+print(h.hit(), isinstance(h, Mage))
+for who in [h, m]:
+    print(who.card(), who.hit())
+### class_str_repr
+class Coin:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f"Coin({self.value})"
+
+    def __str__(self):
+        return f"монета на {self.value}"
+
+
+c = Coin(5)
+print(c)
+print(repr(c))
+print([c, Coin(1)])
+print(f"{c} / {c!r}")
+### class_eq
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        return isinstance(other, Point) and self.x == other.x and self.y == other.y
+
+    def __repr__(self):
+        return f"Point({self.x}, {self.y})"
+
+
+print(Point(1, 2) == Point(1, 2), Point(1, 2) == Point(2, 1))
+print(Point(1, 2) in [Point(0, 0), Point(1, 2)])
+### math_module
+import math
+from math import sqrt, floor
+
+print(math.sqrt(16), sqrt(2.25))
+print(math.floor(2.9), math.ceil(2.1), floor(-1.5))
+print(round(math.pi, 5), round(math.e, 5))
+print(math.factorial(6), math.gcd(24, 36))
+print(math.fabs(-2.5), math.trunc(-2.7))
+### math_as
+import math as m
+
+print(m.sqrt(81))
+print(m.floor(m.pi))
+### dataclass_point
+from dataclasses import dataclass
+
+
+@dataclass
+class Point:
+    x: int
+    y: int = 0
+
+
+p = Point(3, 4)
+print(p)
+print(p.x, p.y)
+print(Point(1), Point(1, 0), Point(1) == Point(1, 0), Point(1) == Point(9))
+p.y = 100
+print(p)
+### dataclass_hero
+from dataclasses import dataclass
+
+
+@dataclass
+class Hero:
+    name: str
+    hp: int = 100
+    tags: tuple = ()
+
+
+h = Hero("Аня", 30, ("маг",))
+print(h)
+print(Hero("Б"), Hero("Б") == Hero("Б"))
+print([Hero("В", 1), Hero("Г")])
+print(sorted([Hero("Б", 5), Hero("А", 9)], key=lambda x: x.name))
+### fstring_conv
+name = "аня"
+items = [1, 2]
+print(f"{name!r} и {items!r}")
+print(f"{name!s} и {name}")
+print(f"{name!r:>10}|")
+### string_methods_new
+s = "  Привет Мир  "
+print(s.strip().isupper(), "АБВ".isupper(), "абв".islower())
+print("абв123".isalnum(), "   ".isspace())
+print("аБв".swapcase())
+print("7".zfill(3), "-7".zfill(4))
+print("да".ljust(5, ".") + "|", "да".rjust(5, ".") + "|", "да".center(6, "-") + "|")
+print("абвабв".rfind("аб"), "абв".index("б"))
+print("а\nб\nв".splitlines())
+print("шаг-раз".removeprefix("шаг-"), "файл.txt".removesuffix(".txt"))
+### dict_methods_new
+d = {"а": 1}
+c = d.copy()
+c["б"] = 2
+print(sorted(d.items()), sorted(c.items()))
+d.update({"в": 3})
+d.update([("г", 4)])
+print(sorted(d.items()))
+### isalpha_cyrillic
+print("абв".isalpha(), "abc".isalpha(), "абв1".isalpha(), "".isalpha())
+print("Аня".isalpha(), "Аня Б".isalpha())
+print("абв123".isalnum(), "абв_".isalnum())
+print("Ёлка".isalpha(), "ёж".islower(), "ЁЖ".isupper())
+### format_zero_pad
+for n in [5, 42, 7, 0]:
+    print(f"{n:02d}", f"{n:03d}", f"{n:5d}|", f"{n:<5d}|")
+print(f"{185 // 60}:{185 % 60:02d}")
+print(f"{245 // 60}:{245 % 60:02d}")
+print(f"{60 // 60}:{60 % 60:02d}")
+print(f"{-7:04d}", f"{-7:4d}|", f"{-7:<4d}|")
+### format_fill_align
+name = "аня"
+print(f"[{name:>8}]", f"[{name:<8}]", f"[{name:^8}]")
+print(f"[{name:*>8}]", f"[{name:-<8}]", f"[{name:.^9}]")
+print(f"[{42:*>8}]", f"[{42:0>8}]")
+### format_sign_group
+print(f"{7:+d}", f"{-7:+d}", f"{0:+d}")
+print(f"{1234567:,}")
+print(f"{1234567.891:,.2f}")
+print(f"{-1234.5:,.1f}")
+### format_percent_prec
+print(f"{0.256:.1%}", f"{0.5:.0%}", f"{1:.2%}")
+print(f"{3.14159:.2f}", f"{3.14159:.0f}", f"{2.5:.0f}", f"{3.5:.0f}")
+print(f"{2.675:8.2f}|", f"{2.675:<8.2f}|")
+### format_str_prec
+word = "необычайно"
+print(f"{word:.4}", f"[{word:.4}]", f"[{word:>8.4}]")
+### round_half_even
+print(round(2.5), round(3.5), round(0.5), round(1.5), round(-2.5), round(-3.5))
+print(round(2.675, 2), round(1.005, 2), round(2.345, 2))
+print(round(7), round(7.4), round(7.6))
+print(round(3.14159, 3), round(10 / 3, 4))
+print(f"{2.5:.0f}", f"{3.5:.0f}", f"{-2.5:.0f}")
+### repr_escapes
+print(repr("а\nб"))
+print(repr("таб\tтаб"))
+print(repr("это 'кавычки'"))
+print(repr('он сказал "да"'))
+print(repr("и 'то' и \"то\""))
+print(repr("обратный \\ слеш"))
+print(["а\nб", "в"])
+print({"ключ\n": "знач\t"})
+print(repr(""), repr(" "))
+### gen_basic
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+
+
+g = countdown(3)
+print(type(g).__name__)
+print(next(g), next(g), next(g))
+try:
+    next(g)
+except StopIteration:
+    print("значения закончились")
+for x in countdown(4):
+    print("шаг", x)
+print(list(countdown(5)))
+print(sum(countdown(10)), max(countdown(4)), min(countdown(4)))
+### gen_endless
+def endless():
+    n = 0
+    while True:
+        yield n
+        n += 1
+
+
+e = endless()
+print(next(e), next(e), next(e))
+got = []
+for v in endless():
+    if v > 4:
+        break
+    got.append(v)
+print(got)
+### gen_from
+def squares(nums):
+    for n in nums:
+        yield n * n
+
+
+def chain_two(a, b):
+    yield from a
+    yield from b
+
+
+print(list(squares([1, 2, 3])))
+print([v for v in squares([2, 3])])
+print(list(chain_two([1, 2], "аб")))
+print(sorted(squares([3, 1, 2])))
+### gen_send_none
+def echo():
+    got = yield 1
+    print("получил:", got)
+    yield 2
+
+
+g = echo()
+print(next(g))
+print(next(g))
+### closures_decorator
+def logged(fn):
+    def inner(*args, **kwargs):
+        result = fn(*args, **kwargs)
+        print("  " + fn.__name__ + " ->", result)
+        return result
+    return inner
+
+
+@logged
+def add(a, b):
+    return a + b
+
+
+@logged
+def mul(a, b):
+    return a * b
+
+
+print(add(2, 3))
+print(mul(4, 5))
+print(add.__name__)
+
+
+def multiplier(k):
+    def inner(x):
+        return x * k
+    return inner
+
+
+double = multiplier(2)
+triple = multiplier(3)
+print(double(5), triple(5))
+### with_class
+class Timer:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        print("открыли", self.name)
+        return self
+
+    def __exit__(self, a, b, c):
+        print("закрыли", self.name)
+        return False
+
+    def work(self):
+        return self.name.upper()
+
+
+with Timer("замер") as t:
+    print(t.work())
+
+try:
+    with Timer("падение") as t:
+        raise ValueError("ой")
+except ValueError as e:
+    print("поймали снаружи:", e)
+### files_write_read
+with open("данные.txt", "w") as f:
+    f.write("аня 7\n")
+    f.write("боря 9\n")
+
+with open("данные.txt") as f:
+    print(repr(f.read()))
+
+with open("данные.txt") as f:
+    for line in f:
+        name, power = line.split()
+        print(name, "->", int(power) * 2)
+
+with open("данные.txt") as f:
+    rows = f.readlines()
+print(len(rows), repr(rows[0]), repr(rows[-1]))
+### files_append
+with open("log.txt", "w") as f:
+    f.write("первая\n")
+with open("log.txt", "a") as f:
+    f.write("вторая\n")
+    f.write("третья\n")
+with open("log.txt") as f:
+    lines = f.read().strip().split("\n")
+print(len(lines), lines)
+### files_closed
+f = open("x.txt", "w")
+f.write("привет")
+print(f.closed)
+f.close()
+print(f.closed)
+try:
+    f.read()
+except ValueError as e:
+    print("ошибка:", e)
+try:
+    open("нет-такого-файла.txt")
+except FileNotFoundError as e:
+    print("нет файла:", type(e).__name__)
+### files_lines_no_newline
+with open("t.txt", "w") as f:
+    f.write("одна\nдве\nтри")
+with open("t.txt") as f:
+    print(f.readlines())
+with open("t.txt") as f:
+    print([line.strip() for line in f])
+with open("t.txt") as f:
+    print(repr(f.readline()), repr(f.readline()), repr(f.readline()), repr(f.readline()))
+### files_writelines
+rows = ["раз\n", "два\n", "три\n"]
+with open("out.txt", "w") as f:
+    f.writelines(rows)
+with open("out.txt") as f:
+    print(f.read().count("\n"), repr(f.read()))
+with open("out.txt") as f:
+    print(len(f.readlines()))
+### json_module
+import json
+
+data = {"имя": "аня", "сила": 7, "теги": ["маг", "юг"], "жив": True, "мана": None}
+print(json.dumps(data, ensure_ascii=False))
+print(json.dumps({"a": 1, "b": [1, 2]}))
+print(json.dumps(data["теги"]))
+print(json.dumps(data, ensure_ascii=False, indent=2))
+back = json.loads('{"a": 1, "b": [1, 2.5], "c": null, "d": true}')
+print(back)
+print(type(back["a"]).__name__, type(back["b"][1]).__name__, back["c"], back["d"])
+### collections_module
+from collections import Counter, defaultdict
+
+words = ["да", "нет", "да", "может", "да"]
+c = Counter(words)
+print(c)
+print(c["да"], c["нету"])
+print(c.most_common(2))
+print(sorted(c.elements()))
+
+groups = defaultdict(list)
+for w in words:
+    groups[len(w)].append(w)
+print(sorted(groups.items()))
+print(dict(groups))
+
+counts = defaultdict(int)
+for ch in "абракадабра":
+    counts[ch] += 1
+print(sorted(counts.items()))
+### collections_repr
+from collections import Counter, defaultdict
+
+c = Counter(["да", "нет", "да"])
+print(c)
+print(repr(c))
+d = defaultdict(list)
+d["а"].append(1)
+print(d)
+print(dict(d))
+i = defaultdict(int)
+i["х"] += 2
+print(i)
+print(len(c), "да" in c, "нет такого" in c)
+c2 = Counter("абракадабра")
+print(c2.most_common(3))
+print(sorted(c2.items())[:3])
+### itertools_module
+import itertools
+
+print(list(itertools.islice(itertools.count(), 5)))
+print(list(itertools.islice(itertools.count(10, 5), 4)))
+print(list(itertools.islice(itertools.cycle("аб"), 5)))
+print(list(itertools.repeat("х", 3)))
+print(list(itertools.chain([1, 2], "аб", (3,))))
+print(list(itertools.product("аб", [1, 2])))
+print(list(itertools.permutations("абв", 2)))
+print(list(itertools.combinations([1, 2, 3, 4], 2)))
+print(list(itertools.islice(itertools.count(), 2, 6)))
+### datetime_module
+from datetime import date, datetime, timedelta
+
+d = date(2026, 8, 26)
+print(d)
+print(repr(d))
+print(d.year, d.month, d.day, d.weekday())
+print(d.strftime("%d.%m.%Y"))
+print(d.strftime("%A, %d %B %Y"))
+print(d.isoformat())
+
+later = d + timedelta(days=10)
+print(later, later.strftime("%d.%m"))
+print(later - d)
+print((later - d).days)
+print(d < later, d == date(2026, 8, 26), d > later)
+
+dt = datetime(2026, 8, 26, 14, 30, 5)
+print(dt)
+print(repr(dt))
+print(dt.hour, dt.minute, dt.second)
+print(dt.strftime("%H:%M"))
+print(dt.date(), type(dt.date()).__name__)
+
+week = timedelta(weeks=2)
+print(week.days, week.total_seconds())
+print(date.fromisoformat("2026-01-01").strftime("%d %b %Y"))
+print(sorted([date(2026, 5, 1), date(2025, 12, 31), date(2026, 1, 1)]))
+### csv_module
+import csv
+
+with open("heroes.csv", "w") as f:
+    w = csv.writer(f)
+    w.writerow(["имя", "сила", "класс"])
+    w.writerows([["аня", 7, "маг"], ["боря", 9, "воин"]])
+
+with open("heroes.csv") as f:
+    print(repr(f.read()))
+
+with open("heroes.csv") as f:
+    rows = csv.reader(f)
+    for row in rows:
+        print(row)
+
+with open("heroes.csv") as f:
+    for item in csv.DictReader(f):
+        print(item["имя"], "->", item["сила"])
+
+with open("q.csv", "w") as f:
+    csv.writer(f).writerow(["с, запятой", 'с "кавычкой"'])
+with open("q.csv") as f:
+    print(repr(f.read()))
+### re_module
+import re
+
+text = "аня 7, боря 9, витя 12"
+m = re.search(r"(\w+) (\d+)", text)
+print(m.group(0), "|", m.group(1), "|", m.group(2))
+print(m.groups(), m.start(), m.end())
+print(re.findall(r"\d+", text))
+print(re.findall(r"(\w+) (\d+)", text))
+print(re.sub(r"\d+", "N", text))
+print(re.split(r",\s*", text))
+print(re.match(r"аня", text) is not None, re.match(r"боря", text) is None)
+print(re.search(r"АНЯ", text, re.IGNORECASE).group(0))
+print(re.fullmatch(r"[а-я ,\d]+", text) is not None)
+### pathlib_module
+from pathlib import Path
+
+p = Path("герои.txt")
+print(p)
+print(p.name, p.suffix, p.stem)
+print(p.parent, Path("данные") / "герои.txt")
+print(p.exists())
+p.write_text("аня\nборя\n")
+print(p.exists(), repr(p.read_text()))
+print(p.with_suffix(".csv"))
+print(Path("a.txt") == Path("a.txt"))
+### csv_newline_modes
+import csv
+
+with open("t.csv", "w", encoding="utf-8", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["имя", "сила"])
+    w.writerows([["аня", 7], ["ручка, синяя", 30]])
+
+with open("t.csv", encoding="utf-8", newline="") as f:
+    print(repr(f.read()))
+
+with open("t.csv", encoding="utf-8") as f:
+    print(repr(f.read()))
+
+with open("t.csv", encoding="utf-8", newline="") as f:
+    for row in csv.reader(f):
+        print(row)
+
+with open("t.csv", encoding="utf-8") as f:
+    print(len(list(csv.DictReader(f))))
+### percent_format
+print("оценка: %d" % 5)
+print("%s и %s" % ("аня", "боря"))
+print("%.2f" % 3.14159)
+print("%5d|%-5d|" % (42, 42))
+print("%d%%" % 80)
+print("итого: %s" % [1, 2])
+### input_basic
+#!stdin: Аня
+#!stdin: 12
+name = input("Как тебя зовут? ")
+print()
+age = int(input("Сколько тебе лет? "))
+print()
+print(name, "через год будет", age + 1)
+### input_loop
+#!stdin: север
+#!stdin: взять ключ
+#!stdin: выход
+while True:
+    cmd = input("> ")
+    print()
+    if cmd == "выход":
+        print("пока")
+        break
+    print("команда:", cmd)
+### input_no_prompt
+#!stdin: 7
+#!stdin: 3
+a = int(input())
+b = int(input())
+print(a * b)
+### input_eof
+#!stdin: один
+print(input())
+try:
+    input()
+except EOFError as e:
+    print("кончились:", e)
+### input_strip
+#!stdin:   пробелы вокруг  
+#!stdin: 
+s = input()
+print(repr(s))
+print(repr(input()))
+### dunder_name_main
+print(__name__)
+if __name__ == "__main__":
+    print("это главный файл")
+else:
+    print("меня подключили")
+### docstrings
+"""Программа-пример."""
+def clean(text):
+    """Убирает пробелы по краям и делает строчные буквы."""
+    return text.strip().lower()
+
+class Book:
+    """Книга на полке."""
+    def __init__(self, title):
+        self.title = title
+    def short(self):
+        """Первые пять букв названия."""
+        return self.title[:5]
+
+print(clean.__doc__)
+print(Book.__doc__)
+print(Book.short.__doc__)
+print(clean("  Привет  "))
+def no_doc(x):
+    return x
+print(no_doc.__doc__)
+### docstring_of_object
+class Cat:
+    """Кошка."""
+    def __init__(self, name):
+        self.name = name
+    def __repr__(self):
+        return f"Cat({self.name!r})"
+c = Cat("Мурка")
+print(c.__doc__)
+print(c)
+### dir_own_class
+class Player:
+    speed = 5
+    def __init__(self, name):
+        self.name = name
+        self.hp = 10
+    def hit(self, n):
+        self.hp -= n
+    def __repr__(self):
+        return f"Player({self.name!r})"
+
+p = Player("Аня")
+print([n for n in dir(p) if not n.startswith("_")])
+print([n for n in dir(Player) if not n.startswith("_")])
+p.gold = 3
+print([n for n in dir(p) if not n.startswith("_")])
+### dir_inherited
+class Animal:
+    def sound(self):
+        return "..."
+
+class Dog(Animal):
+    def sound(self):
+        return "гав"
+    def fetch(self):
+        return "принёс"
+
+print([n for n in dir(Dog) if not n.startswith("_")])
+print([n for n in dir(Animal) if not n.startswith("_")])
+### json_decode_error
+import json
+def read(text):
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+print(read('{"a": 1}'))
+print(read("не json"))
+print(read("[1, 2, 3]"))
+### json_decode_error_is_value_error
+import json
+try:
+    json.loads("{сломано}")
+except ValueError:
+    print("ValueError тоже ловит — JSONDecodeError его наследник")
+try:
+    json.loads("{сломано}")
+except json.JSONDecodeError as e:
+    print(type(e).__name__)
+### fstring_nested_spec
+ширина = 12
+точность = 3
+имя = "аня"
+число = 3.14159
+print(f"[{имя:<{ширина}}]")
+print(f"[{имя:>{ширина}}]")
+print(f"[{имя:^{ширина}}]")
+print(f"[{число:.{точность}f}]")
+print(f"[{число:{ширина}.{точность}f}]")
+полоска = "█" * 4
+print(f"{'тест':<10}{полоска:<8}|")
+for n in [1, 22, 333]:
+    print(f"{n:>{len(str(n)) + 3}}")
+### genexp_in_call
+числа = [1, 2, 3, 4]
+print(sum(x * 2 for x in числа))
+print(", ".join(str(x) for x in числа))
+print(max(len(s) for s in ["аб", "абвг", "а"]))
+print(min(abs(x - 3) for x in числа))
+print(sorted(x % 3 for x in числа))
+print(sum(1 for x in числа if x > 2))
+print(list(dict((x, x * x) for x in числа)))
+### genexp_parens
+g = (x * 2 for x in [1, 2, 3])
+print(type(g).__name__)
+print(next(g))
+print(list(g))
+print(list(g))
+слова = ["аня", "боря"]
+пары = ((с, len(с)) for с in слова)
+for пара in пары:
+    print(пара)
+### any_all
+числа = [2, 4, 6]
+print(any(x > 5 for x in числа))
+print(all(x % 2 == 0 for x in числа))
+print(any(x > 100 for x in числа))
+print(all(x > 100 for x in числа))
+print(any([]), all([]))
+print(any(["", 0, "да"]))
+print(all(["да", 1]))
+имена = ["аня", "", "вика"]
+print(all(имена), any(имена))
+### format_named
+шаблон = "{имя} набрал {балл} из {всего}"
+print(шаблон.format(имя="аня", балл=5, всего=5))
+print("{} и {}".format("а", "б"))
+print("{0} {1} {0}".format("раз", "два"))
+print("{:.2f} и {:>6}".format(3.14159, "хвост"))
+print("{n:03d}".format(n=7))
+print("{{это скобки}} и {x}".format(x=1))
+print("{:{}}|".format("а", 5))
+print("{:.{}f}".format(2.71828, 3))
+### format_errors
+try:
+    print("{нет}".format(есть=1))
+except KeyError as e:
+    print("KeyError:", e)
+try:
+    print("{} {}".format(1))
+except IndexError as e:
+    print("IndexError:", e)
+### split_maxsplit
+print("a=b=c".split("=", 1))
+print("a=b=c".rsplit("=", 1))
+print("a b  c".split(None, 1))
+print("a,b,c,d".split(",", 2))
+print("а=б=в".split("=", 1))
+print("a=b".split("=", 5))
+print("".split(","))
+print("нет разделителя".split(",", 1))
+print("один два три".rsplit(None, 1))
+print("путь/к/файлу".rsplit("/", 1))
+строка = "/оценка?имя=аня&балл=5"
+путь, хвост = строка.split("?", 1)
+print(путь, хвост.split("&"))
