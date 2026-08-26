@@ -511,9 +511,53 @@ function checkEncoding(){
     if (good.ok && !wr.ok) warmupsChecked++;
   }
 
+  /* --- визуализатор (машина времени) --- */
+  let vizChecked = 0;
+  if (typeof g.screenViz === "function"){
+    g.screenViz();
+    await tick();
+    const vbtn = doc.querySelector('[data-role="viz"]');
+    if (!vbtn) bad("[виз] нет кнопки «Показать по шагам»");
+    else {
+      /* прогоняем пример с алиасингом через кнопки примеров */
+      const exBtns = doc.querySelectorAll("[data-ex]");
+      if (exBtns.length < 2) bad("[виз] мало примеров");
+      exBtns[1].click();               // «Два имени — один список»
+      await tick();
+      const player = doc.querySelector(".vizplayer");
+      /* листаем вперёд: на первом кадре объектов ещё нет — они появляются
+         после того, как список создан */
+      const nextBtn = player && player.querySelector('[data-v="next"]');
+      const lastBtn = player && player.querySelector('[data-v="prev"]');
+      for (let k = 0; k < 8 && nextBtn; k++){ nextBtn.click(); await tick(2); }
+      const objs = player ? player.querySelectorAll(".vizobj").length : 0;
+      if (!objs) bad("[виз] после прогона не отрисовалась ни одна коробка объекта");
+      if (lastBtn){ lastBtn.click(); await tick(2); }
+      const slider = player && player.querySelector(".vizslider");
+      if (slider){ slider.value = 0; slider.dispatchEvent(new w.Event("input")); await tick(2); }
+      /* данные снимка: a и b должны ссылаться на один объект */
+      if (typeof g.vizRecord === "function"){
+        const rec = g.vizRecord("a = [1, 2, 3]\nb = a\nb.append(4)\n");
+        const last = rec.frames[rec.frames.length - 1];
+        const av = last.vars.find(v => v.name === "a"), bv = last.vars.find(v => v.name === "b");
+        if (!(av && bv && av.cell.t === "ref" && av.cell.id === bv.cell.id))
+          bad("[виз] алиасинг не распознан: a и b должны ссылаться на один объект");
+        else vizChecked++;
+        /* словарь: ключи настоящие, а не закодированные (не должно быть 's:') */
+        const dr = g.vizRecord('d = {"м": 1}\n');
+        const dlast = dr.frames[dr.frames.length - 1];
+        const dobj = Object.values(dlast.objects)[0];
+        if (!dobj || dobj.kind !== "dict" || dobj.pairs[0].key !== "'м'")
+          bad(`[виз] ключ словаря показан неверно: ${dobj && dobj.pairs && JSON.stringify(dobj.pairs[0])}`);
+      }
+    }
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
+  console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

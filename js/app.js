@@ -1825,6 +1825,267 @@ function winWarmup(w){
   document.getElementById("wstay").onclick = closeWin;
 }
 
+/* ================= экран: визуализатор (машина времени) =================
+   Прогоняем программу по шагам, на каждом шаге снимаем неизменяемый снимок
+   памяти (heapSnapshot в engine-mini): переменные + списки/словари/кортежи/
+   множества с идентичностью объектов. Потом отлистываем историю вперёд и
+   назад ползунком. Списки и словари рисуются коробками, а b = a — двумя
+   стрелками к одной коробке (алиасинг видно глазами).
+   Отдельный раздел, вне сотни уроков. Прогресс не хранит.
+   ============================================================ */
+var VIZ_EXAMPLES = [
+  { title: "Список растёт",
+    code: 'nums = []\nfor i in range(1, 5):\n    nums.append(i * i)\n\nprint(nums)\n' },
+  { title: "Два имени — один список",
+    code: 'a = [1, 2, 3]\nb = a\nb.append(4)\n\nprint(a)\nprint(b)\n' },
+  { title: "Словарь-счётчик",
+    code: 'counts = {}\nfor c in "миссисипи":\n    counts[c] = counts.get(c, 0) + 1\n\nprint(counts)\n' },
+  { title: "Обмен значений",
+    code: 'x = 5\ny = 9\n\nx, y = y, x\n\nprint(x, y)\n' },
+  { title: "Список списков",
+    code: 'matrix = [[1, 2], [3, 4]]\nrow = matrix[0]\nrow.append(99)\n\nprint(matrix)\n' }
+];
+var VIZ_COLORS = ["#7c5cff","#00e0b8","#ffc53d","#ff6b6b","#3ddc84","#4aa3ff","#e06bff","#ff9f45"];
+var VIZ_MAX_FRAMES = 800;
+
+function vizColorIdx(id){ var n = parseInt(String(id).replace(/\D/g, ""), 10) || 0; return n % VIZ_COLORS.length; }
+function vizColor(id){ return VIZ_COLORS[vizColorIdx(id)]; }
+function vizKind(k){ return k === "list" ? "список" : k === "tuple" ? "кортеж" : k === "set" ? "множество" : k === "dict" ? "словарь" : k; }
+
+/* Прогон программы с записью всех кадров. Каждый кадр:
+   { line, output, vars, objects, error?, done? }. line — строка, которая
+   вот-вот выполнится (её и подсвечиваем), состояние — ПЕРЕД ней. Последний
+   кадр (done) — итоговое состояние после конца программы. */
+function vizRecord(code){
+  var MP = window.MiniPy, st;
+  try { st = MP.stepper(code, {}); }
+  catch(e){
+    if (!e.pyKind) throw e;
+    return { frames: [], error: { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 } };
+  }
+  var idMap = new Map();
+  var skip = st.interp && st.interp.builtinNames;
+  var frames = [], truncated = false, error = null, guard = 0;
+  while (true){
+    var s = st.next();
+    if (s.error){
+      var last = frames.length ? frames[frames.length - 1] : { vars: [], objects: {} };
+      frames.push({ line: s.error.line, output: s.output, vars: last.vars, objects: last.objects, error: s.error });
+      error = s.error; break;
+    }
+    if (s.done){
+      var h = MP.heapSnapshot(st.interp.global, idMap, skip);
+      frames.push({ line: 0, output: s.output, vars: h.vars, objects: h.objects, done: true });
+      break;
+    }
+    var hs = MP.heapSnapshot(s.env, idMap, skip);
+    frames.push({ line: s.line, output: s.output, vars: hs.vars, objects: hs.objects });
+    if (++guard >= VIZ_MAX_FRAMES){ truncated = true; break; }
+  }
+  return { frames: frames, error: error, truncated: truncated };
+}
+
+/* значение ячейки: скаляр или стрелка-ссылка на объект */
+function vizCellHTML(cell){
+  if (cell.t === "ref"){
+    var c = vizColor(cell.id);
+    return '<span class="vref" data-ref="' + cell.id + '" style="color:' + c + ';border-color:' + c + '">→</span>';
+  }
+  return '<span class="vval">' + esc(cell.text) + '</span>';
+}
+function vizObjHTML(obj, names){
+  var c = vizColor(obj.id);
+  var head = '<div class="vohead" style="color:' + c + '">' + vizKind(obj.kind) +
+    (names && names.length ? ' <span class="vonames">' + names.map(esc).join(", ") + '</span>' : '') + '</div>';
+  var body;
+  if (obj.kind === "dict"){
+    body = obj.pairs.length
+      ? obj.pairs.map(function(p){
+          return '<div class="vopair"><span class="vokey">' + esc(p.key) + '</span>' +
+                 '<span class="vosep">:</span>' + vizCellHTML(p.val) + '</div>';
+        }).join("")
+      : '<span class="voempty">пусто</span>';
+    body = '<div class="vodict">' + body + '</div>';
+  } else {
+    var withIdx = obj.kind === "list" || obj.kind === "tuple";
+    body = obj.items.length
+      ? obj.items.map(function(it, i){
+          return '<div class="vocell">' + (withIdx ? '<span class="voidx">' + i + '</span>' : '') +
+                 '<span class="voval">' + vizCellHTML(it) + '</span></div>';
+        }).join("")
+      : '<span class="voempty">пусто</span>';
+    body = '<div class="vocells">' + body + '</div>';
+  }
+  return '<div class="vizobj" data-id="' + obj.id + '" style="border-color:' + c + '">' + head + body + '</div>';
+}
+function vizMemoryHTML(frame){
+  var namesByObj = {};
+  frame.vars.forEach(function(v){
+    if (v.cell.t === "ref") (namesByObj[v.cell.id] = namesByObj[v.cell.id] || []).push(v.name);
+  });
+  var varsHTML = frame.vars.length
+    ? frame.vars.map(function(v){
+        return '<div class="vizvar"><b>' + esc(v.name) + '</b><span class="veq">=</span>' + vizCellHTML(v.cell) + '</div>';
+      }).join("")
+    : '<div class="vizempty">переменных пока нет</div>';
+  var ids = Object.keys(frame.objects);
+  var objsHTML = ids.length
+    ? ids.map(function(id){ return vizObjHTML(frame.objects[id], namesByObj[id]); }).join("")
+    : '<div class="vizempty">списков и словарей пока нет</div>';
+  return '<div class="vizvars">' + varsHTML + '</div>' +
+         '<div class="vizheap">' + objsHTML + '</div>' +
+         '<svg class="vizarrows" preserveAspectRatio="none"></svg>';
+}
+/* Стрелки от каждой ссылки к её объекту. Рисуем поверх, по реальным
+   координатам элементов. Если геометрии нет (например, скрытый блок) —
+   молча пропускаем: цвет ссылки и коробки всё равно совпадает. */
+function vizDrawArrows(mem){
+  try {
+    var svg = mem.querySelector(".vizarrows"); if (!svg) return;
+    var base = mem.getBoundingClientRect();
+    if (!base.width || !base.height) return;
+    svg.setAttribute("width", base.width);
+    svg.setAttribute("height", base.height);
+    svg.setAttribute("viewBox", "0 0 " + base.width + " " + base.height);
+    var defs = VIZ_COLORS.map(function(col, i){
+      return '<marker id="vzar' + i + '" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">' +
+             '<path d="M0,0 L6,3 L0,6 Z" fill="' + col + '"/></marker>';
+    }).join("");
+    var parts = "";
+    mem.querySelectorAll("[data-ref]").forEach(function(src){
+      var id = src.getAttribute("data-ref");
+      var tgt = mem.querySelector('.vizobj[data-id="' + id + '"]'); if (!tgt) return;
+      var s = src.getBoundingClientRect(), t = tgt.getBoundingClientRect();
+      var x1 = s.right - base.left, y1 = s.top + s.height / 2 - base.top;
+      var x2 = t.left - base.left, y2 = t.top + Math.min(16, t.height / 2) - base.top;
+      if (x2 < x1){ x2 = t.right - base.left; }         // объект левее ссылки — целимся в правый край
+      var mx = (x1 + x2) / 2, ci = vizColorIdx(id);
+      parts += '<path d="M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2 +
+               '" fill="none" stroke="' + VIZ_COLORS[ci] + '" stroke-width="2" opacity="0.85" marker-end="url(#vzar' + ci + ')"/>';
+    });
+    svg.innerHTML = "<defs>" + defs + "</defs>" + parts;
+  } catch(e){}
+}
+
+function screenViz(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var h = '<div class="lvlhead"><div><div class="idx">загляни внутрь программы</div><h1>🔍 Визуализатор</h1></div></div>' +
+    '<p class="lede">Запусти программу по шагам и смотри, что происходит в памяти: переменные, списки и словари рисуются коробками, ' +
+    'а стрелки показывают, кто на что ссылается. Ползунком можно отматывать вперёд и назад — как в машине времени. ' +
+    'Это лучший способ понять, почему <code>b = a</code> меняет оба списка сразу.</p>' +
+    '<div class="vizex"><span>Примеры:</span> ' +
+      VIZ_EXAMPLES.map(function(e, i){ return '<button class="minibtn" data-ex="' + i + '">' + esc(e.title) + '</button>'; }).join("") +
+    '</div><div id="vizstudio"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+
+  var ed = makeEditor(VIZ_EXAMPLES[0].code, "программа для разбора");
+  var box = document.createElement("div"); box.className = "vizbox";
+  box.appendChild(ed);
+  var bar = document.createElement("div"); bar.className = "runbar";
+  bar.innerHTML = '<button class="rbtn" data-role="viz">▶ Показать по шагам</button>' +
+    '<span class="sp"></span><span class="tip"><span class="kbd">Ctrl</span>+<span class="kbd">Enter</span></span>';
+  box.appendChild(bar);
+  var player = document.createElement("div"); player.className = "vizplayer"; player.style.display = "none";
+  box.appendChild(player);
+  document.getElementById("vizstudio").appendChild(box);
+  session.studio = box;
+
+  function go(){ vizStart(player, ed); }
+  bar.querySelector('[data-role="viz"]').onclick = go;
+  ed.querySelector("textarea").addEventListener("keydown", function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); go(); }
+  });
+  app.querySelectorAll("[data-ex]").forEach(function(b){
+    b.onclick = function(){ ed.setCode(VIZ_EXAMPLES[+b.getAttribute("data-ex")].code); vizStart(player, ed); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function vizStart(player, ed){
+  var rec = vizRecord(ed.getCode());
+  player.style.display = "";
+  if (rec.error && !rec.frames.length){
+    ed.setError(rec.error.line || 0);
+    player.innerHTML = '<div class="msg show bad"><b>' + (KIND_RU[rec.error.kind] || rec.error.kind) +
+      (rec.error.line ? " — строка " + rec.error.line : "") + '</b>' + esc(rec.error.msg) +
+      '<br>Исправь программу слева и запусти снова.</div>';
+    return;
+  }
+  vizPlayer(player, ed, rec);
+}
+
+function vizPlayer(player, ed, rec){
+  var frames = rec.frames, i = 0, timer = null;
+  player.innerHTML =
+    '<div class="vizctl">' +
+      '<button class="rbtn sec" data-v="first" title="в начало">⏮</button>' +
+      '<button class="rbtn sec" data-v="prev" title="шаг назад">◀ Назад</button>' +
+      '<button class="rbtn" data-v="play" title="проиграть">▶ Играть</button>' +
+      '<button class="rbtn sec" data-v="next" title="шаг вперёд">Вперёд ▶</button>' +
+      '<input class="vizslider" type="range" min="0" max="' + (frames.length - 1) + '" value="0" aria-label="шаг">' +
+      '<span class="vizpos"></span>' +
+    '</div>' +
+    (rec.truncated ? '<div class="viznote">Программа длинная — показаны первые ' + frames.length + ' шагов.</div>' : '') +
+    '<div class="vizstage"><div class="vizcode"></div><div class="vizmem"></div></div>' +
+    '<div class="vizerr" style="display:none"></div>' +
+    '<div class="pane pout"><div class="ph">вывод к этому шагу</div><div class="console"></div></div>';
+
+  var codeEl = player.querySelector(".vizcode");
+  var memEl = player.querySelector(".vizmem");
+  var conEl = player.querySelector(".console");
+  var errEl = player.querySelector(".vizerr");
+  var slider = player.querySelector(".vizslider");
+  var posEl = player.querySelector(".vizpos");
+  var playBtn = player.querySelector('[data-v="play"]');
+  var codeLines = ed.getCode().replace(/\r/g, "").split("\n");
+
+  function renderCode(line){
+    codeEl.innerHTML = codeLines.map(function(ln, idx){
+      var n = idx + 1;
+      return '<div class="vcl' + (n === line ? " on" : "") + '"><span class="vcn">' + n + '</span>' +
+        '<span class="vct">' + (ln ? hl(ln) : "&nbsp;") + '</span></div>';
+    }).join("");
+  }
+  function render(){
+    var f = frames[i];
+    renderCode(f.line);
+    memEl.innerHTML = vizMemoryHTML(f);
+    vizDrawArrows(memEl);
+    conEl.innerHTML = f.output ? esc(f.output) : '<span class="empty">пока ничего не напечатано</span>';
+    posEl.textContent = "шаг " + (i + 1) + " из " + frames.length +
+      (f.error ? " · ошибка" : f.done ? " · конец" : "");
+    slider.value = i;
+    if (f.error){
+      errEl.style.display = "";
+      errEl.innerHTML = '<b>' + (KIND_RU[f.error.kind] || f.error.kind) +
+        (f.error.line ? " — строка " + f.error.line : "") + '</b>' + esc(f.error.msg);
+    } else errEl.style.display = "none";
+  }
+  function goto(k){ i = Math.max(0, Math.min(frames.length - 1, k)); render(); }
+  function stop(){ if (timer){ clearInterval(timer); timer = null; playBtn.textContent = "▶ Играть"; playBtn.classList.remove("on"); } }
+  function play(){
+    if (timer){ stop(); return; }
+    if (i >= frames.length - 1) i = 0;
+    playBtn.textContent = "⏸ Пауза"; playBtn.classList.add("on");
+    timer = setInterval(function(){ if (i >= frames.length - 1){ stop(); return; } goto(i + 1); }, 800);
+  }
+  player.querySelector('[data-v="first"]').onclick = function(){ stop(); goto(0); };
+  player.querySelector('[data-v="prev"]').onclick = function(){ stop(); goto(i - 1); };
+  player.querySelector('[data-v="next"]').onclick = function(){ stop(); goto(i + 1); };
+  playBtn.onclick = play;
+  slider.oninput = function(){ stop(); goto(+slider.value); };
+
+  function onResize(){ if (!document.body.contains(memEl)){ window.removeEventListener("resize", onResize); return; } vizDrawArrows(memEl); }
+  window.addEventListener("resize", onResize);
+
+  render();
+  if (player.scrollIntoView) player.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
 /* ================= экран: панель наставника =================
    Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
    с #admin на конце. Показывает прогресс, позволяет открывать и
@@ -1867,6 +2128,7 @@ function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
   if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
   if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
+  if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
   return false;
 }
 function fmtMins(ms){
@@ -2295,6 +2557,7 @@ document.getElementById("logo").onclick = screenWorlds;
 document.getElementById("btn-sand").onclick = screenSandbox;
 (function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
 (function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
+(function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
 document.getElementById("btn-focus").onclick = function(){
   document.body.classList.toggle("focus");
   this.classList.toggle("on");
@@ -2340,7 +2603,8 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
-  openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup, state: S, save: save,
+  openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
+  screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

@@ -4382,8 +4382,10 @@ function heapSnapshot(env, idMap, skip){
         var node = { kind: list ? "list" : tuple ? "tuple" : set ? "set" : "dict", id: id };
         objects[id] = node;                     // ставим заранее — защита от циклов
         if (dict){
+          /* словарь — это Map, где значение это пара [настоящий_ключ, значение],
+             а ключ Map закодирован (keyOf). Берём настоящие ключ и значение. */
           node.pairs = [];
-          v.forEach(function(val, k){ node.pairs.push({ key: pyRepr(k), val: cell(val) }); });
+          v.forEach(function(pair){ node.pairs.push({ key: pyRepr(pair[0]), val: cell(pair[1]) }); });
         } else {
           var arr = set ? v.values() : v;
           node.items = arr.map(function(x){ return cell(x); });
