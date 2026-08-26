@@ -9727,43 +9727,48 @@ function shiftDay(key, delta){
   d.setDate(d.getDate() + delta);
   return dayKey(d);
 }
-function activeOn(key){ return !!(S.days && S.days[key]); }
-
+/* базовые функции работают с ЛЮБЫМ набором дней (объект дата→1) — это нужно
+   панели наставника, где считается стрик и чужого ученика по его данным */
+function activeIn(days, key){ return !!(days && days[key]); }
 /* сколько дней подряд заканчивается ровно этой датой */
-function streakEndingAt(key){
+function streakEndingIn(days, key){
   var n = 0, cur = key;
-  while (activeOn(cur)){ n++; cur = shiftDay(cur, -1); }
+  while (activeIn(days, cur)){ n++; cur = shiftDay(cur, -1); }
+  return n;
+}
+/* длина серии, НАЧИНАЮЩЕЙСЯ этой датой (идём вперёд) */
+function streakForwardIn(days, key){
+  var n = 0, cur = key;
+  while (activeIn(days, cur)){ n++; cur = shiftDay(cur, 1); }
   return n;
 }
 /* текущий стрик: если сегодня уже занимались — считаем по сегодня; если нет,
    но занимались вчера — стрик ещё живой (продолжится, если позаниматься сегодня);
    если и вчера не было — стрик прерван, показываем 0 */
-function streakCurrent(){
+function streakCurrentIn(days){
   var today = dayKey();
-  if (activeOn(today)) return streakEndingAt(today);
+  if (activeIn(days, today)) return streakEndingIn(days, today);
   var y = shiftDay(today, -1);
-  if (activeOn(y)) return streakEndingAt(y);
+  if (activeIn(days, y)) return streakEndingIn(days, y);
   return 0;
 }
-/* длина серии, НАЧИНАЮЩЕЙСЯ этой датой (идём вперёд) */
-function streakForwardFrom(key){
-  var n = 0, cur = key;
-  while (activeOn(cur)){ n++; cur = shiftDay(cur, 1); }
-  return n;
-}
-/* рекорд: самая длинная серия за всю историю в S.days */
-function streakBest(){
-  var keys = Object.keys(S.days || {}).sort();
+/* рекорд: самая длинная серия за всю историю в наборе дней */
+function streakBestIn(days){
+  var keys = Object.keys(days || {}).sort();
   var best = 0;
   for (var i = 0; i < keys.length; i++){
     /* считаем каждую серию один раз — только от её первого дня */
-    if (!activeOn(shiftDay(keys[i], -1))){
-      var run = streakForwardFrom(keys[i]);
+    if (!activeIn(days, shiftDay(keys[i], -1))){
+      var run = streakForwardIn(days, keys[i]);
       if (run > best) best = run;
     }
   }
   return best;
 }
+/* обёртки над локальным прогрессом */
+function activeOn(key){ return activeIn(S.days, key); }
+function streakCurrent(){ return streakCurrentIn(S.days); }
+function streakBest(){ return streakBestIn(S.days); }
 /* отметить, что сегодня занимались (урок, разминка или задача дня).
    Возвращает true, если сегодняшний день засчитан впервые. */
 function markActiveToday(){
@@ -12087,6 +12092,7 @@ function statsGridHTML(st){
     statBox("Подсказок взято", String(hints)) +
     statBox("Время за тренажёром", fmtMins(timeMs)) +
     statBox("Последнее занятие", fmtWhen(last)) +
+    statBox("Дней подряд", streakCurrentIn(st.days) + " (рекорд " + streakBestIn(st.days) + ")") +
     statBox("Бейджи", (st.badges || []).length + " из " + BADGES.length) +
     '</div>';
 }
