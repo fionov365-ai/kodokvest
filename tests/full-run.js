@@ -109,6 +109,11 @@ const BYPASS = {
   }
 };
 
+/* Эмулируем вернувшегося ученика: код уже задан на устройстве, поэтому старт
+   ведёт на карту миров, а не на экран регистрации. Ставим до того, как boot
+   (allWorldsContent().then) успеет отработать. */
+try { w.localStorage.setItem("kodokvest_code", "test-kid"); } catch(e){}
+
 const problems = [];
 const bad = m => problems.push(m);
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 12));
@@ -592,11 +597,69 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- расписание занятий: дни недели и слияние настройки --- */
+  let schedChecked = 0;
+  if (typeof g.toggleStudyDay === "function"){
+    const p0 = problems.length;
+    g.screenToday();
+    await tick();
+    const wd = new Date().getDay();
+    /* нормализуем: сегодня-день-недели должен быть не выбран перед тестом */
+    if (g.scheduleDays().indexOf(wd) >= 0) g.toggleStudyDay(wd);
+    g.toggleStudyDay(wd);                      // сделать сегодня учебным
+    if (g.scheduleDays().indexOf(wd) < 0) bad("[расписание] выбранный день не сохранился");
+    if (!g.isStudyDay(g.dayKey())) bad("[расписание] isStudyDay не видит сегодняшний учебный день");
+    g.toggleStudyDay(wd);                      // снять — вернуть как было
+    if (g.scheduleDays().indexOf(wd) >= 0) bad("[расписание] день не снялся повторным нажатием");
+    if (g.isStudyDay(g.dayKey())) bad("[расписание] isStudyDay остался true после снятия дня");
+    /* слияние: расписание — настройка, побеждает более свежее сохранение */
+    const m = g.mergeProgress({ schedule:{ days:[1] }, savedAt:1 },
+                              { schedule:{ days:[2,4] }, savedAt:2 });
+    if (!m.schedule || String(m.schedule.days || []) !== "2,4")
+      bad("[расписание] слияние не берёт свежую версию: " + JSON.stringify(m.schedule));
+    if (problems.length === p0) schedChecked++;
+    viewReset(g);
+  }
+
+  /* --- регистрация по имени --- */
+  let regChecked = 0;
+  if (typeof g.slugFromName === "function"){
+    const p0 = problems.length;
+    /* включаем сервер обратно: выше его выключали для проверки офлайн-режима */
+    w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+    const code = g.slugFromName("Аня");
+    if (!w.Cloud.validCode(code)) bad("[регистрация] код из имени невалиден: " + code);
+    if (!/^anya-/.test(code)) bad("[регистрация] код из имени не транслитерирован: " + code);
+    if (g.slugFromName("Аня") === g.slugFromName("Аня"))
+      bad("[регистрация] суффикс кода не случайный — коды двух учеников совпадут");
+    /* имя едет с прогрессом: свежее побеждает, но не теряется, если в свежем пусто */
+    const m1 = g.mergeProgress({ name:"Аня", savedAt:2 }, { name:"", savedAt:1 });
+    if (m1.name !== "Аня") bad("[регистрация] имя потерялось при слиянии (свежее): " + m1.name);
+    const m2 = g.mergeProgress({ name:"", savedAt:2 }, { name:"Боря", savedAt:1 });
+    if (m2.name !== "Боря") bad("[регистрация] имя не подхватилось из старой копии: " + m2.name);
+    /* экран регистрации рисуется */
+    g.screenRegister();
+    await tick();
+    if (!doc.getElementById("regname")) bad("[регистрация] на экране нет поля имени");
+    if (!doc.getElementById("regstart")) bad("[регистрация] нет кнопки «Начать»");
+    /* полный путь: регистрация создаёт код и сохраняет имя */
+    g.doRegister("Тест Ученик");
+    await tick(40);
+    if (!w.Cloud.myCode())
+      bad("[регистрация] после регистрации нет кода ученика (hasUrl=" + w.Cloud.hasUrl() + ")");
+    if (g.state.name !== "Тест Ученик") bad("[регистрация] имя не сохранилось: " + g.state.name);
+    if (g.needsRegister()) bad("[регистрация] после регистрации всё ещё требует регистрацию");
+    if (problems.length === p0) regChecked++;
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
+  console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
+  console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

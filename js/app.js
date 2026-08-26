@@ -36,7 +36,7 @@ var ADMIN_CODE = "kodokvest-2026";
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
           drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{},
-          days:{}, daily:{}, admin:{ unlockAll:false } };
+          days:{}, daily:{}, schedule:{ days:[] }, name:"", admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -57,6 +57,9 @@ if (!S.log || typeof S.log !== "object") S.log = {};
 if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
 if (!S.days || typeof S.days !== "object") S.days = {};
 if (!S.daily || typeof S.daily !== "object") S.daily = {};
+if (!S.schedule || typeof S.schedule !== "object") S.schedule = { days:[] };
+if (!Array.isArray(S.schedule.days)) S.schedule.days = [];
+if (typeof S.name !== "string") S.name = "";
 if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
 function saveLocal(){
   S.savedAt = Date.now();
@@ -163,6 +166,107 @@ function plural(n, one, few, many){
   return many;
 }
 
+/* ===== расписание занятий: выбранные дни недели =====
+   Хранится в S.schedule.days — массив номеров дня недели (0=Вс … 6=Сб),
+   как у JavaScript getDay(). Это настройка устройства/ученика, поэтому при
+   синхронизации побеждает более свежее сохранение (а не объединение —
+   иначе снятый день возвращался бы с другого устройства). Напоминание —
+   только внутри сайта: баннер на «Сегодня» и маячок на кнопке-огоньке. */
+var WD_SHORT = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+var WD_ORDER = [1,2,3,4,5,6,0];   /* показываем с понедельника */
+function scheduleDays(){ return (S.schedule && Array.isArray(S.schedule.days)) ? S.schedule.days : []; }
+function hasSchedule(){ return scheduleDays().length > 0; }
+function weekdayOf(key){ return new Date((key || dayKey()) + "T12:00:00").getDay(); }
+function isStudyDay(key){ return scheduleDays().indexOf(weekdayOf(key)) >= 0; }
+function toggleStudyDay(n){
+  var days = scheduleDays().slice();
+  var i = days.indexOf(n);
+  if (i >= 0) days.splice(i, 1); else days.push(n);
+  days.sort(function(a, b){ return a - b; });
+  S.schedule = S.schedule || {};
+  S.schedule.days = days;
+  save();
+  try { refreshTop(); } catch(e){}
+}
+/* сегодня учебный день, а заниматься ещё не садились */
+function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(dayKey()); }
+
+/* ================= регистрация по имени =================
+   Настоящих аккаунтов с паролями тут нет намеренно (сайт статический и
+   публичный). «Регистрация» — это дружелюбный вход: ребёнок вводит имя, сайт
+   сам делает из него код ученика и запоминает. Вход с другого устройства — по
+   этому коду или по ссылке ?kid=код. Всё держится на уже существующем механизме
+   кода ученика (js/cloud.js) и синхронизации, новый бэкенд не нужен. */
+function serverOn(){ return typeof Cloud !== "undefined" && Cloud.hasUrl(); }
+function myCode(){ return (typeof Cloud !== "undefined") ? Cloud.myCode() : ""; }
+function myName(){ return S.name || ""; }
+/* сервер настроен, но ученик ещё не выбран — значит показываем регистрацию */
+function needsRegister(){ return serverOn() && !myCode(); }
+
+var TRANSLIT = { "а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"e","ж":"zh",
+  "з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r",
+  "с":"s","т":"t","у":"u","ф":"f","х":"h","ц":"c","ч":"ch","ш":"sh","щ":"sch",
+  "ъ":"","ы":"y","ь":"","э":"e","ю":"yu","я":"ya" };
+function translit(s){
+  s = String(s || "").toLowerCase();
+  var out = "";
+  for (var i = 0; i < s.length; i++){
+    var ch = s[i];
+    out += TRANSLIT.hasOwnProperty(ch) ? TRANSLIT[ch] : ch;
+  }
+  return out;
+}
+/* код ученика из имени: латиницей, маленькими, плюс короткий случайный хвост —
+   чтобы у двух детей с одним именем коды не совпали */
+function slugFromName(name){
+  var base = translit(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 18);
+  if (base.length < 2) base = "kid";
+  var suf = (Math.random().toString(36) + "00000").slice(2, 7);   /* 5 знаков */
+  var code = (base + "-" + suf).slice(0, 32);
+  if (!/^[a-z0-9]/.test(code)) code = "k" + code.slice(1);
+  return Cloud.validCode(code) || ("kid-" + suf);
+}
+/* очистить локальный прогресс — чтобы войти в другой аккаунт начисто, а не
+   смешать двух детей на одном устройстве. Настройки устройства (admin) не трогаем. */
+function resetProgressLocal(){
+  S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
+  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.days = {}; S.daily = {};
+  S.sandbox = null; S.sandboxRuns = 0; S.name = ""; S.schedule = { days:[] };
+  save();
+}
+/* создать аккаунт по имени и уйти на карту миров */
+function doRegister(name, onErr){
+  name = String(name || "").trim();
+  if (name.length < 2){ if (onErr) onErr("Впиши имя — хотя бы две буквы."); return; }
+  resetProgressLocal();
+  S.name = name;
+  if (serverOn()){
+    Cloud.setCode(slugFromName(name));
+    save();
+    cloudPush().then(function(){ refreshTop(); screenWorlds(); },
+                     function(){ refreshTop(); screenWorlds(); });
+  } else {
+    save(); refreshTop(); screenWorlds();
+  }
+}
+/* войти по уже существующему коду (например, с другого устройства) */
+function doLogin(code, onErr){
+  var v = (typeof Cloud !== "undefined") ? Cloud.validCode(code) : null;
+  if (!v){ if (onErr) onErr("Код: 3–32 знака, маленькие латинские буквы, цифры, дефис, подчёркивание."); return; }
+  if (!serverOn()){ if (onErr) onErr("Сервер не подключён — вход по коду недоступен."); return; }
+  Cloud.setCode(v);
+  resetProgressLocal();               /* чистим, чтобы забрать чужой аккаунт начисто */
+  cloudPull().then(function(){ refreshTop(); screenWorlds(); },
+                   function(err){ if (onErr) onErr(err.message || "Не удалось войти."); });
+}
+/* выйти: забыть код на этом устройстве и очистить локальный прогресс */
+function doLogout(){
+  if (typeof Cloud !== "undefined") Cloud.forgetCode();
+  resetProgressLocal();
+  refreshTop();
+  screenRegister();
+}
+
 /* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
 function logOf(id){
   if (!S.log[id]) S.log[id] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0,
@@ -228,12 +332,22 @@ function refreshTop(){
   var bt = document.getElementById("btn-today");
   if (bt){
     var s = streakCurrent();
-    bt.textContent = s > 0 ? ("🔥 " + s) : "🔥 Сегодня";
-    /* «горит», если сегодня уже занимались — маленький визуальный маячок */
+    var due = studyDue();
+    bt.textContent = (due ? "🔔 " : "🔥 ") + (s > 0 ? s : "Сегодня");
+    /* «горит», если сегодня уже занимались; «due» — учебный день, ещё не занимались */
     bt.classList.toggle("lit", activeOn(dayKey()));
-    bt.title = s > 0
-      ? (s + " " + plural(s, "день", "дня", "дней") + " подряд — открой задачу дня")
-      : "Задача дня и дни подряд";
+    bt.classList.toggle("due", due);
+    bt.title = due
+      ? "Сегодня учебный день — не пропусти занятие"
+      : (s > 0
+          ? (s + " " + plural(s, "день", "дня", "дней") + " подряд — открой задачу дня")
+          : "Задача дня и дни подряд");
+  }
+  var bw = document.getElementById("btn-who");
+  if (bw){
+    var nm = myName();
+    bw.textContent = nm ? ("👤 " + nm) : "👤";
+    bw.title = nm ? ("Профиль: " + nm) : "Профиль";
   }
 }
 
@@ -305,6 +419,14 @@ function mergeProgress(a, b){
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
   var older = fresher === b ? a : b;
   out.sandbox = fresher.sandbox || older.sandbox || null;
+
+  /* расписание — настройка, а не результат: берём из более свежего сохранения,
+     иначе снятый на одном устройстве день возвращался бы с другого */
+  out.schedule = fresher.schedule || older.schedule || { days:[] };
+
+  /* имя ученика едет вместе с прогрессом (это подпись аккаунта, не результат) —
+     берём из более свежего сохранения, но не теряем, если в свежем оно пустое */
+  out.name = fresher.name || older.name || "";
 
   var ids = {};
   Object.keys(a.log || {}).forEach(function(k){ ids[k] = 1; });
@@ -1821,6 +1943,124 @@ function runBlocksCheck(w, ed, showMsg){
   }
 }
 
+/* ================= экран: регистрация по имени =================
+   Показывается на старте, если сервер настроен, а ученик ещё не выбран.
+   Ребёнок вводит имя → создаётся код и аккаунт. Либо входит по готовому коду.
+   ============================================================ */
+function screenRegister(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var h =
+    '<div class="reghero"><span class="regmark">🐍</span>' +
+      '<h1>Привет! Как тебя зовут?</h1>' +
+      '<p class="lede">Впиши имя — и я заведу тебе профиль. Прогресс сохранится, ' +
+      'и его можно будет открыть с другого устройства.</p></div>' +
+    '<div class="card">' +
+      '<label class="reglbl">Имя' +
+      '<input type="text" id="regname" placeholder="Например, Аня" autocomplete="off" spellcheck="false" maxlength="24"></label>' +
+      '<div class="msg" id="regmsg"></div>' +
+      '<div class="winrow"><button class="bigbtn" id="regstart">Начать 🚀</button></div>' +
+    '</div>';
+  if (serverOn()){
+    h += '<div class="card"><h3>Уже занимался раньше?</h3>' +
+      '<p class="dim">Если у тебя есть код ученика с другого устройства — впиши его, ' +
+      'чтобы открыть свой прогресс.</p>' +
+      '<label class="reglbl">Код ученика' +
+      '<input type="text" id="regcode" placeholder="например, anya-3f7a" autocomplete="off" spellcheck="false" maxlength="32"></label>' +
+      '<div class="msg" id="loginmsg"></div>' +
+      '<div class="winrow"><button class="bigbtn ghost" id="loginbtn">Войти по коду</button></div></div>';
+  } else {
+    h += '<p class="dim">Сервер не подключён — прогресс будет храниться только на этом устройстве.</p>';
+  }
+  app.innerHTML = h;
+
+  var nameInp = document.getElementById("regname");
+  function reg(){
+    doRegister(nameInp.value, function(err){
+      var m = document.getElementById("regmsg");
+      m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>";
+      nameInp.focus();
+    });
+  }
+  document.getElementById("regstart").onclick = reg;
+  nameInp.addEventListener("keydown", function(e){ if (e.key === "Enter") reg(); });
+
+  var lb = document.getElementById("loginbtn");
+  if (lb){
+    var codeInp = document.getElementById("regcode");
+    function login(){
+      doLogin(codeInp.value, function(err){
+        var m = document.getElementById("loginmsg");
+        m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>";
+      });
+    }
+    lb.onclick = login;
+    codeInp.addEventListener("keydown", function(e){ if (e.key === "Enter") login(); });
+  }
+  if (nameInp.focus) nameInp.focus();
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= экран: профиль ученика =================
+   Показывает имя, код ученика и ссылку-вход для другого устройства, даёт выйти.
+   ============================================================ */
+function copyText(text, btn){
+  var done = function(){ if (btn){ var t = btn.textContent; btn.textContent = "Скопировано ✓"; setTimeout(function(){ btn.textContent = t; }, 1500); } };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){});
+      return;
+    }
+  } catch(e){}
+  try {
+    var ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove(); done();
+  } catch(e2){}
+}
+function screenAccount(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var code = myCode(), name = myName();
+  var link = "";
+  try { link = location.origin + location.pathname + "?kid=" + encodeURIComponent(code); } catch(e){}
+  var h = '<div class="lvlhead"><div><div class="idx">твой профиль</div><h1>👤 ' +
+    (name ? esc(name) : "Профиль") + '</h1></div></div>';
+  if (serverOn() && code){
+    h += '<div class="card"><h3>Твой код ученика</h3>' +
+      '<p class="dim">По нему можно открыть свой прогресс на другом устройстве. Никому лишнему ' +
+      'не показывай: кто знает код, тот видит прогресс.</p>' +
+      '<div class="codebox"><code id="mycode">' + esc(code) + '</code>' +
+      '<button class="rbtn sec" id="copycode">Скопировать код</button></div>' +
+      '<p class="dim" style="margin-top:12px">Ссылка-вход для другого устройства:</p>' +
+      '<div class="codebox"><code id="mylink">' + esc(link) + '</code>' +
+      '<button class="rbtn sec" id="copylink">Скопировать ссылку</button></div></div>';
+  } else {
+    h += '<div class="card"><p class="lede">Сервер не подключён — прогресс хранится только ' +
+      'на этом устройстве, кода нет.</p></div>';
+  }
+  h += '<div class="card"><h3>Сменить ученика</h3>' +
+    '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
+    'Прогресс на сервере при этом не удаляется.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+
+  var cc = document.getElementById("copycode");
+  if (cc) cc.onclick = function(){ copyText(code, cc); };
+  var cl = document.getElementById("copylink");
+  if (cl) cl.onclick = function(){ copyText(link, cl); };
+  document.getElementById("logout").onclick = function(){
+    var yes = true;
+    try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
+    if (yes) doLogout();
+  };
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ================= экран: Сегодня (стрик + задача дня) =================
    Показывает, сколько дней подряд ребёнок занимался, рекорд, полоску за
    неделю и одну «задачу дня» — детерминированно выбранную по дате разминку.
@@ -1835,9 +2075,10 @@ function weekStripHTML(){
     var d = new Date(key + "T12:00:00");
     var on = activeOn(key);
     var isToday = key === today;
-    var cls = "wkcell" + (on ? " on" : "") + (isToday ? " today" : "");
+    var study = isStudyDay(key);
+    var cls = "wkcell" + (on ? " on" : "") + (isToday ? " today" : "") + (study ? " study" : "");
     cells += '<div class="' + cls + '"><span class="wkd">' + names[d.getDay()] + '</span>' +
-      '<span class="wkdot">' + (on ? "🔥" : "·") + '</span></div>';
+      '<span class="wkdot">' + (on ? "🔥" : (study ? "📌" : "·")) + '</span></div>';
   }
   return '<div class="weekstrip">' + cells + '</div>';
 }
@@ -1884,18 +2125,46 @@ function screenToday(){
     '</div>';
   }
 
+  /* напоминание по расписанию — только внутри сайта */
+  var banner = "";
+  if (hasSchedule()){
+    if (studyDue())
+      banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день.</b> Начни занятие, чтобы не пропустить.</div>';
+    else if (isStudyDay(dayKey()))
+      banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
+    else
+      banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
+  }
+
+  /* редактор дней занятий: понедельник … воскресенье */
+  var chips = WD_ORDER.map(function(n){
+    var sel = scheduleDays().indexOf(n) >= 0;
+    return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + WD_SHORT[n] + '</button>';
+  }).join("");
+  var schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
+    '<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
+    'Если не выбрано ничего — напоминаний нет.</p>' +
+    '<div class="wdrow">' + chips + '</div>' +
+    (hasSchedule() ? '<p class="dim">Учебные дни: ' +
+      scheduleDays().slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
+        .map(function(n){ return WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
+    '</div>';
+
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">заходи каждый день</div><h1>🔥 Сегодня</h1></div>' +
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    hero + taskCard +
+    banner + hero + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
 
   var dopen = document.getElementById("dopen");
   if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
   var dwarm = document.getElementById("dwarm");
   if (dwarm) dwarm.onclick = screenWarmups;
+  app.querySelectorAll("[data-wd]").forEach(function(b){
+    b.onclick = function(){ toggleStudyDay(+b.getAttribute("data-wd")); screenToday(); };
+  });
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -2359,6 +2628,7 @@ function routeHash(){
   if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
   if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
   if ((location.hash || "").toLowerCase() === "#today"){ screenToday(); return true; }
+  if ((location.hash || "").toLowerCase() === "#account"){ screenAccount(); return true; }
   if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
   return false;
 }
@@ -2771,6 +3041,7 @@ function screenAdmin(){
       Object.keys(S).forEach(function(k){ delete S[k]; });
       S.v = 2; S.xp = 0; S.stars = {}; S.badges = []; S.sandbox = null; S.sandboxRuns = 0;
       S.drawDone = {}; S.firstTry = 0; S.perfect = 0; S.log = {}; S.admin = { unlockAll:false };
+      S.days = {}; S.daily = {}; S.schedule = { days:[] }; S.name = "";
       Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
       if (!S.log || typeof S.log !== "object") S.log = {};
       if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
@@ -2789,6 +3060,7 @@ document.getElementById("logo").onclick = screenWorlds;
 document.getElementById("btn-sand").onclick = screenSandbox;
 (function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
 (function(){ var b = document.getElementById("btn-today"); if (b) b.onclick = screenToday; })();
+(function(){ var b = document.getElementById("btn-who"); if (b) b.onclick = screenAccount; })();
 (function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
 (function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
 document.getElementById("btn-focus").onclick = function(){
@@ -2820,7 +3092,10 @@ window.addEventListener("resize", function(){
 /* грузим содержание всех миров до первой отрисовки — иначе на сайте
    миры 2–5 мигают как «в работе», пока их файлы не приедут */
 allWorldsContent().then(function(){
-  if (!routeHash()) screenWorlds();
+  if (!routeHash()){
+    if (needsRegister()) screenRegister();   /* сервер настроен, ученик ещё не выбран */
+    else screenWorlds();
+  }
   /* сервер подключаем в фоне: игра должна открываться сразу и работать без сети */
   if (cloudEnabled()){
     cloudPull().then(function(changed){
@@ -2839,6 +3114,10 @@ window.__game = {
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
+  scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+  screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
+  doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
+  myCode: myCode, needsRegister: needsRegister,
   screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,

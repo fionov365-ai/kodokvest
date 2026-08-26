@@ -235,6 +235,36 @@ button{font-family:inherit}
 .dcstatus{font-size:13.5px;color:var(--soft);margin-bottom:12px}
 .dcstatus.done{color:var(--ok);font-weight:600}
 .dailycard .winrow{justify-content:flex-start}
+/* расписание занятий */
+.tbtn.streak.due{border-color:var(--acc2);color:var(--ink);animation:duepulse 1.8s ease-in-out infinite}
+@keyframes duepulse{0%,100%{box-shadow:0 0 0 0 rgba(0,224,184,.0)}50%{box-shadow:0 0 0 4px rgba(0,224,184,.22)}}
+.daybanner{border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-size:14.5px;border:1px solid var(--line)}
+.daybanner.due{background:rgba(0,224,184,.12);border-color:var(--acc2);color:var(--ink)}
+.daybanner.ok{background:rgba(61,220,132,.10);border-color:var(--ok);color:var(--ink)}
+.daybanner.rest{background:var(--panel);color:var(--soft)}
+.wkcell.study .wkdot{color:var(--acc2)}
+.wkcell.study{border-style:dashed}
+.schedcard .wdrow{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 2px}
+.wdchip{border:1px solid var(--line2);background:var(--sunken);color:var(--soft);border-radius:10px;
+  padding:8px 0;width:48px;text-align:center;font-weight:700;font-size:13.5px;cursor:pointer;transition:.15s}
+.wdchip:hover{border-color:var(--acc);color:var(--ink)}
+.wdchip.sel{background:linear-gradient(135deg,var(--acc),#a97bff);color:#fff;border-color:transparent}
+
+/* ---------- регистрация и профиль ---------- */
+.tbtn.who{max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.reghero{text-align:center;margin:14px 0 18px}
+.reghero .regmark{display:inline-grid;place-items:center;width:56px;height:56px;border-radius:16px;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));font-size:30px;margin-bottom:8px}
+.reghero h1{margin:6px 0 2px;font-size:27px}
+.reghero .lede{margin-left:auto;margin-right:auto}
+.reglbl{display:block;font-size:13px;color:var(--soft);font-weight:600;margin-bottom:6px}
+.reglbl input{display:block;width:100%;margin-top:6px;background:var(--sunken);border:1px solid var(--line2);
+  color:var(--ink);border-radius:11px;padding:11px 13px;font-size:16px;font-family:inherit}
+.reglbl input:focus{outline:none;border-color:var(--acc)}
+.codebox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sunken);
+  border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+.codebox code{background:none;border:0;padding:0;color:#b9c6ff;font-size:14px;word-break:break-all;flex:1;min-width:0}
+.mono{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--soft);word-break:break-all}
 
 /* раздел «Разминка»: угадай вывод (predict) */
 .gamecard .wtag{align-self:flex-start;margin-top:2px;font:600 10.5px/1 'Inter',sans-serif;letter-spacing:.06em;
