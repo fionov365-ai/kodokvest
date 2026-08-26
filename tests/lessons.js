@@ -55,6 +55,12 @@ function solutionSources(task){
   (task.files || []).forEach(f => { out[f.name] = f.solution !== undefined ? f.solution : f.starter; });
   return out;
 }
+/* файлы с данными: у каждого запуска своя копия */
+function dataOf(src){
+  const out = {};
+  if (src) for (const k in src) out[k] = src[k];
+  return out;
+}
 function drawingKey(segs){
   return segs.map(s => [Math.round(s.x1), Math.round(s.y1), Math.round(s.x2), Math.round(s.y2)]
     .join(",")).sort().join(";");
@@ -83,11 +89,11 @@ CURRICULUM.forEach(w => {
 
     /* 1. решение */
     const solSrc = solutionSources(task), stSrc = starterSources(task);
-    const sol = MP.run(task.solution, { turtle: new MP.Turtle(), sources: solSrc });
+    const sol = MP.run(task.solution, { turtle: new MP.Turtle(), sources: solSrc, files: dataOf(task.data) });
     if (sol.error) say(`[решение] ${l.id}: ${sol.error.kind} — ${sol.error.msg}`);
 
     /* 2. заготовка */
-    const st = MP.run(task.starter, { turtle: new MP.Turtle(), sources: stSrc });
+    const st = MP.run(task.starter, { turtle: new MP.Turtle(), sources: stSrc, files: dataOf(task.data) });
     if (!isFix){
       if (st.error) say(`[заготовка] ${l.id}: ${st.error.kind} — ${st.error.msg}`);
     } else {
@@ -112,7 +118,7 @@ CURRICULUM.forEach(w => {
     /* 3. примеры теории */
     body.theory.forEach((t, i) => {
       demos++;
-      const r = MP.run(t.demo, { turtle: new MP.Turtle(), sources: t.files || {} });
+      const r = MP.run(t.demo, { turtle: new MP.Turtle(), sources: t.files || {}, files: dataOf(t.data) });
       if (r.error && !t.err)
         say(`[пример ${i+1}] ${l.id}: ${r.error.kind} — ${r.error.msg}`);
       if (!r.error && t.err)
@@ -128,10 +134,10 @@ CURRICULUM.forEach(w => {
         let starterPasses = 0;
         task.check.calls.forEach(call => {
           const probe = "\nprint(repr(" + call + "))\n";
-          const w = MP.run(task.solution + probe, { sources: solSrc });
+          const w = MP.run(task.solution + probe, { sources: solSrc, files: dataOf(task.data) });
           if (w.error)
             say(`[tests] ${l.id}: вызов ${call} на решении падает — ${w.error.kind}: ${w.error.msg}`);
-          const g = MP.run(task.starter + probe, { sources: stSrc });
+          const g = MP.run(task.starter + probe, { sources: stSrc, files: dataOf(task.data) });
           if (!g.error && g.lines[g.lines.length - 1] === w.lines[w.lines.length - 1]) starterPasses++;
         });
         if (starterPasses === task.check.calls.length)

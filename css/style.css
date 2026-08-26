@@ -160,6 +160,13 @@ button{font-family:inherit}
   font:600 12px/1 'JetBrains Mono',ui-monospace,monospace;padding:9px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
 .ftab:hover{color:var(--soft)}
 .ftab.on{color:var(--acc2);border-bottom-color:var(--acc2)}
+/* файлы на «диске»: что лежит рядом с программой */
+.disklist{display:flex;flex-direction:column;gap:8px}
+.diskfile{border:1px solid var(--line);border-radius:10px;background:var(--sunken);padding:8px 10px}
+.diskfile b{font:600 12px/1.4 'JetBrains Mono',ui-monospace,monospace;color:var(--acc2)}
+.diskfile span{float:right;font-size:11px;color:var(--faint)}
+.diskfile pre{margin:6px 0 0;font:12px/1.5 'JetBrains Mono',ui-monospace,monospace;color:var(--soft);
+  white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}

@@ -172,6 +172,13 @@ button{font-family:inherit}
   font:600 12px/1 'JetBrains Mono',ui-monospace,monospace;padding:9px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
 .ftab:hover{color:var(--soft)}
 .ftab.on{color:var(--acc2);border-bottom-color:var(--acc2)}
+/* файлы на «диске»: что лежит рядом с программой */
+.disklist{display:flex;flex-direction:column;gap:8px}
+.diskfile{border:1px solid var(--line);border-radius:10px;background:var(--sunken);padding:8px 10px}
+.diskfile b{font:600 12px/1.4 'JetBrains Mono',ui-monospace,monospace;color:var(--acc2)}
+.diskfile span{float:right;font-size:11px;color:var(--faint)}
+.diskfile pre{margin:6px 0 0;font:12px/1.5 'JetBrains Mono',ui-monospace,monospace;color:var(--soft);
+  white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
@@ -453,7 +460,13 @@ PyType.prototype.lookup = function(name){
   return undefined;
 };
 PyType.prototype.fullName = function(){
+  if (this.module && this.name.indexOf(".") === 0) return this.name;
+  if (this.module && this.name.indexOf(this.module + ".") === 0) return this.name;
   return this.module ? this.module + "." + this.name : this.name;
+};
+PyType.prototype.shortName = function(){
+  var i = this.name.lastIndexOf(".");
+  return i < 0 ? this.name : this.name.slice(i + 1);
 };
 function isSubType(a, b){
   var t = a;
@@ -468,8 +481,110 @@ function PyObj(cls){
   this.excArgs = null;   // заполняется у исключений
 }
 
+/* ---------- генератор ----------
+   Функция с yield при вызове ничего не считает: она возвращает генератор.
+   Значения появляются по одному, когда их просят. Внутри — тот же пошаговый
+   обход тела, только шаги отладчика мы пропускаем, а питоновские yield отдаём. */
+function PyGen(name, it){
+  this.name = name; this.it = it;
+  this.done = false; this.started = false;
+}
+PyGen.prototype.next = function(sent){
+  if (this.done) return { done: true };
+  this.started = true;
+  for (;;){
+    var step = this.it.next(sent);
+    sent = undefined;
+    if (step.done){ this.done = true; return { done: true, value: null }; }
+    if (step.value && step.value.pyYield !== undefined)
+      return { done: false, value: step.value.pyYield };
+    /* шаг отладчика — просто идём дальше */
+  }
+};
+
+/* Генератор из обычной JS-функции-генератора значений — так устроены
+   ленивые вещи из itertools: count, cycle, chain и остальные. */
+function genOf(name, makeIter){
+  var wrapper = (function*(){
+    var it = makeIter();
+    for (;;){
+      var s = it.next();
+      if (s.done) return;
+      yield { pyYield: s.value };
+    }
+  })();
+  return new PyGen(name, wrapper);
+}
+
 /* ---------- модуль ---------- */
 function PyModule(name){ this.name = name; this.vars = new Map(); }
+
+/* ---------- файлы ----------
+   Настоящего диска в браузере нет. Файлы живут в памяти запуска: что урок
+   положил заранее, то и лежит; что программа записала — видно ей же.
+   Для ученика это неотличимо от работы с диском: open, чтение, запись, with. */
+function PyDisk(initial){
+  this.files = new Map();
+  if (initial) for (var k in initial) this.files.set(k, String(initial[k]));
+}
+PyDisk.prototype.has = function(name){ return this.files.has(name); };
+PyDisk.prototype.read = function(name){ return this.files.get(name); };
+PyDisk.prototype.write = function(name, text){ this.files.set(name, text); };
+PyDisk.prototype.list = function(){ return Array.from(this.files.keys()).sort(); };
+PyDisk.prototype.remove = function(name){ return this.files.delete(name); };
+
+function PyFile(disk, name, mode, line, rawNewline){
+  this.disk = disk; this.name = name; this.mode = mode;
+  this.rawNewline = !!rawNewline;
+  this.closed = false; this.pos = 0; this.buf = "";
+  if (mode.indexOf("r") >= 0){
+    if (!disk.has(name))
+      raise("FileNotFoundError", "Файла «" + name + "» нет. Есть такие: " +
+            (disk.list().length ? disk.list().join(", ") : "ни одного") + ".", line,
+            { pymsg: "[Errno 2] No such file or directory: '" + name + "'" });
+    /* Python при чтении текстового файла приводит концы строк к \n,
+       даже если в файле лежит \r\n — так делает и csv.writer.
+       Но если открыли с newline="" — оставляет как есть, и это важно для csv. */
+    var raw = disk.read(name);
+    this.buf = rawNewline ? raw : raw.replace(/\r\n/g, "\n");
+  } else if (mode.indexOf("a") >= 0){
+    this.buf = disk.has(name) ? disk.read(name) : "";
+    this.pos = this.buf.length;
+  } else {
+    this.buf = "";
+    disk.write(name, "");
+  }
+}
+PyFile.prototype.checkOpen = function(line){
+  if (this.closed)
+    raise("ValueError", "Файл «" + this.name + "» уже закрыт — читать и писать в него нельзя.", line,
+          { pymsg: "I/O operation on closed file." });
+};
+PyFile.prototype.readAll = function(){ var t = this.buf.slice(this.pos); this.pos = this.buf.length; return t; };
+PyFile.prototype.lines = function(){
+  var t = this.readAll();
+  if (!t.length) return [];
+  var parts = t.split("\n");
+  var out = [];
+  for (var i = 0; i < parts.length; i++){
+    if (i === parts.length - 1){ if (parts[i] !== "") out.push(parts[i]); }
+    else out.push(parts[i] + "\n");
+  }
+  return out;
+};
+PyFile.prototype.readLine = function(){
+  if (this.pos >= this.buf.length) return "";
+  var nl = this.buf.indexOf("\n", this.pos);
+  var end = nl < 0 ? this.buf.length : nl + 1;
+  var line = this.buf.slice(this.pos, end);
+  this.pos = end;
+  return line;
+};
+PyFile.prototype.append = function(text){ this.buf += text; this.disk.write(this.name, this.buf); };
+PyFile.prototype.close = function(){
+  if (!this.closed && this.mode.indexOf("r") < 0) this.disk.write(this.name, this.buf);
+  this.closed = true;
+};
 
 /* ---------- метод, привязанный к объекту ----------
    dog.hello — это уже не просто функция: она помнит, у кого её взяли,
@@ -510,6 +625,14 @@ defType("set", TYPES.object);
 defType("NoneType", TYPES.object);
 defType("function", TYPES.object);
 defType("module", TYPES.object);
+defType("TextIOWrapper", TYPES.object);
+defType("generator", TYPES.object);
+defType("datetime.date", TYPES.object, { module:"datetime" });
+defType("datetime.datetime", TYPES["datetime.date"], { module:"datetime" });
+defType("datetime.timedelta", TYPES.object, { module:"datetime" });
+defType("pathlib.Path", TYPES.object, { module:"pathlib" });
+defType("re.Match", TYPES.object, { module:"re" });
+defType("csvwriter", TYPES.object);
 
 /* Дерево исключений — как в настоящем Python, только короче.
    Порядок важен: except ловит и сам класс, и всех его наследников. */
@@ -531,6 +654,8 @@ defType("ImportError", TYPES.Exception);
 defType("StopIteration", TYPES.Exception);
 defType("NotImplementedError", TYPES.RuntimeError);
 defType("UnboundLocalError", TYPES.NameError);
+defType("OSError", TYPES.Exception);
+defType("FileNotFoundError", TYPES.OSError);
 defType("IndentationError", TYPES.Exception);
 defType("SyntaxError", TYPES.Exception);
 /* «Здесь так нельзя» — не питоновская ошибка, а сообщение тренажёра.
@@ -704,7 +829,7 @@ function lex(src){
 /* ============================================================
    ПАРСЕР
    ============================================================ */
-var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert"];
+var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert","yield"];
 
 function Parser(toks){ this.toks = toks; this.p = 0; }
 Parser.prototype = {
@@ -766,6 +891,7 @@ Parser.prototype = {
         case "elif": raise("SyntaxError", "«elif» без «if» выше или с неверным отступом.", tk.line);
         case "else": raise("SyntaxError", "«else» без «if», «for» или «while» выше.", tk.line);
         case "try": return this.parseTry();
+        case "with": return this.parseWith();
         case "class": return this.parseClass();
         case "import": case "from": return this.parseImport();
         case "except":
@@ -1025,6 +1151,24 @@ Parser.prototype = {
     return { type:"ImportFrom", module: mod, names: names, line: line };
   },
 
+  /* with открывает что-то и обязательно закрывает — даже если внутри ошибка.
+     Поддерживаем несколько предметов через запятую: with A as a, B as b: */
+  parseWith: function(){
+    var line = this.line;
+    this.next();
+    var items = [];
+    for (;;){
+      var expr = this.parseExpr();
+      var name = null;
+      if (this.atKw("as")){ this.next(); name = this.expectName(); }
+      items.push({ expr: expr, name: name });
+      if (this.atOp(",")){ this.next(); continue; }
+      break;
+    }
+    var body = this.parseBlock("with");
+    return { type:"With", items: items, body: body, line: line };
+  },
+
   parseTry: function(){
     var line = this.line;
     this.next();
@@ -1068,7 +1212,22 @@ Parser.prototype = {
 
   parseExpr: function(){
     if (this.atKw("lambda")) return this.parseLambda();
+    if (this.atKw("yield")) return this.parseYield();
     return this.parseTernary();
+  },
+
+  /* yield отдаёт значение наружу и замирает до следующего запроса.
+     yield from перебирает другой генератор целиком. */
+  parseYield: function(){
+    var line = this.line;
+    this.next();
+    if (this.atKw("from")){
+      this.next();
+      return { type:"YieldFrom", value: this.parseExpr(), line: line };
+    }
+    if (this.at("NEWLINE") || this.at("EOF") || this.atOp(")") || this.atOp("]") || this.atOp("}"))
+      return { type:"Yield", value: null, line: line };
+    return { type:"Yield", value: this.parseExprList(), line: line };
   },
 
   /* lambda a, b: выражение — короткая функция без имени */
@@ -1451,14 +1610,32 @@ function fmtNum(x){
   }
   return String(v);
 }
+/* repr строки, как в Python: перевод строки виден как \n, а не рвёт вывод.
+   Кавычки одинарные, но если внутри есть ' и нет " — Python берёт двойные. */
+function strRepr(v){
+  var q = (v.indexOf("'") >= 0 && v.indexOf('"') < 0) ? '"' : "'";
+  var out = "";
+  for (var i = 0; i < v.length; i++){
+    var c = v[i];
+    if (c === "\\") out += "\\\\";
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (c === q) out += "\\" + c;
+    else out += c;
+  }
+  return q + out + q;
+}
 function pyRepr(v){
   if (v === null || v === undefined) return "None";
   if (v === true) return "True";
   if (v === false) return "False";
   if (isNum(v)) return fmtNum(v);
-  if (typeof v === "string") return "'" + v.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'";
+  if (typeof v === "string") return strRepr(v);
   if (v instanceof PyType) return "<class '" + v.fullName() + "'>";
   if (v instanceof PyModule) return "<module '" + v.name + "'>";
+  if (v instanceof PyFile) return "<файл '" + v.name + "'>";
+  if (v instanceof PyGen) return "<генератор " + v.name + ">";
   if (v instanceof Bound) return "<метод " + v.fn.name + ">";
   if (v instanceof PyObj) return objRepr(v);
   if (v instanceof PySet)
@@ -1478,6 +1655,27 @@ function pyRepr(v){
 function objRepr(o){
   var r = o.cls.lookup("__repr__");
   if (r) return pyStr(callSync(new Bound(r, o), [], 0));
+  if (o.cls === TYPES["datetime.date"]){
+    var p = dtParts(o);
+    return "datetime.date(" + p.y + ", " + p.mo + ", " + p.d + ")";
+  }
+  if (o.cls === TYPES["datetime.datetime"]){
+    var q = dtParts(o);
+    return "datetime.datetime(" + q.y + ", " + q.mo + ", " + q.d +
+           (q.h || q.mi || q.s ? ", " + q.h + ", " + q.mi + (q.s ? ", " + q.s : "") : "") + ")";
+  }
+  if (o.cls === TYPES["datetime.timedelta"]){
+    var days = Math.floor(o.tdMs / 86400000), secs = Math.floor((o.tdMs % 86400000) / 1000);
+    var bits = [];
+    if (days) bits.push("days=" + days);
+    if (secs) bits.push("seconds=" + secs);
+    return "datetime.timedelta(" + (bits.length ? bits.join(", ") : "0") + ")";
+  }
+  if (o.cls === TYPES["pathlib.Path"]) return "PosixPath('" + o.fields.get("__path__") + "')";
+  if (o.cls === TYPES["re.Match"]){
+    var m = o.reMatch;
+    return "<re.Match object; span=(" + m.index + ", " + (m.index + m[0].length) + "), match=" + strRepr(m[0]) + ">";
+  }
   if (o.cls.isExc)
     return o.cls.name + "(" + (o.excArgs || []).map(pyRepr).join(", ") + ")";
   /* Настоящий Python пишет здесь адрес в памяти — его повторить нельзя.
@@ -1487,6 +1685,21 @@ function objRepr(o){
 function pyStr(v){
   if (typeof v === "string") return v;
   if (v instanceof PyObj){
+    if (v.cls === TYPES["datetime.date"]){
+      var p = dtParts(v);
+      return p.y + "-" + two(p.mo) + "-" + two(p.d);
+    }
+    if (v.cls === TYPES["datetime.datetime"]){
+      var q = dtParts(v);
+      return q.y + "-" + two(q.mo) + "-" + two(q.d) + " " + two(q.h) + ":" + two(q.mi) + ":" + two(q.s);
+    }
+    if (v.cls === TYPES["pathlib.Path"]) return v.fields.get("__path__");
+    if (v.cls === TYPES["datetime.timedelta"]){
+      var ms = v.tdMs, dd = Math.floor(ms / 86400000), rest = Math.floor((ms % 86400000) / 1000);
+      var hh = Math.floor(rest / 3600), mi2 = Math.floor((rest % 3600) / 60), ss = rest % 60;
+      var head = dd ? dd + (Math.abs(dd) === 1 ? " day, " : " days, ") : "";
+      return head + hh + ":" + two(mi2) + ":" + two(ss);
+    }
     var s = v.cls.lookup("__str__");
     if (s) return pyStr(callSync(new Bound(s, v), [], 0));
     if (v.cls.isExc && !v.cls.lookup("__repr__")) return excMessage(v);
@@ -1512,9 +1725,11 @@ function typeName(v){
   if (isTup(v)) return "tuple";
   if (Array.isArray(v)) return "list";
   if (v instanceof Map) return "dict";
-  if (v instanceof PyObj) return v.cls.name;
+  if (v instanceof PyObj) return v.cls.shortName();
   if (v instanceof PyType) return "type";
   if (v instanceof PyModule) return "module";
+  if (v instanceof PyFile) return "TextIOWrapper";
+  if (v instanceof PyGen) return "generator";
   if (v instanceof Bound) return "method";
   if (v instanceof SuperProxy) return "super";
   if (v instanceof PyFunc || typeof v === "function") return "function";
@@ -1523,6 +1738,11 @@ function typeName(v){
 function pyEq(a, b){
   if (isNum(a) && isNum(b)) return nv(a) === nv(b);
   /* У объекта может быть свой __eq__ — тогда решает он. Так работает dataclass. */
+  if (a instanceof PyObj && b instanceof PyObj && a.cls === b.cls){
+    if (a.dtMs !== undefined) return a.dtMs === b.dtMs;
+    if (a.tdMs !== undefined) return a.tdMs === b.tdMs;
+    if (a.cls === TYPES["pathlib.Path"]) return a.fields.get("__path__") === b.fields.get("__path__");
+  }
   if (a instanceof PyObj){
     var eq = a.cls.lookup("__eq__");
     if (eq) return truthy(callSync(new Bound(eq, a), [b], 0));
@@ -1604,6 +1824,23 @@ Env.prototype.set = function(name, val){
   this.vars.set(name, val);
 };
 
+/* Есть ли в теле функции yield — тогда это функция-генератор.
+   Во вложенные def не заходим: у них свой ответ на этот вопрос. */
+function hasYield(node){
+  if (!node || typeof node !== "object") return false;
+  if (Array.isArray(node)){
+    for (var i = 0; i < node.length; i++) if (hasYield(node[i])) return true;
+    return false;
+  }
+  if (node.type === "FuncDef" || node.type === "ClassDef" || node.type === "Lambda") return false;
+  if (node.type === "Yield" || node.type === "YieldFrom") return true;
+  for (var k in node){
+    if (k === "type" || k === "line") continue;
+    if (hasYield(node[k])) return true;
+  }
+  return false;
+}
+
 /* Какие имена функция считает своими: те, которым в её теле присваивают.
    Во вложенные def и class не заходим — у них своя область. */
 function localNames(body){
@@ -1660,6 +1897,7 @@ function Interp(opts){
   this.depth = 0;        // глубина вложенных вызовов — против бесконечной рекурсии
   this.curExc = null;    // исключение, которое сейчас обрабатывается в except
   this.sources = opts.sources || {};   // «файлы» урока для import
+  this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
   this.modules = {};     // уже подключённые модули
   this.global = new Env(null);
   this.installBuiltins();
@@ -1717,6 +1955,7 @@ Interp.prototype.installBuiltins = function(){
   }
   def("str", function(args){ return args.length ? pyStr(args[0]) : ""; });
   def("int", function(args, kw, line){
+    if (!args.length) return 0;
     var v = args[0];
     if (isNum(v)) return Math.trunc(nv(v));
     if (v === true) return 1;
@@ -1731,6 +1970,7 @@ Interp.prototype.installBuiltins = function(){
     raise("TypeError", "int() не работает с типом " + typeName(v) + ".", line);
   });
   def("float", function(args, kw, line){
+    if (!args.length) return mkFloat(0);
     var v = args[0];
     if (isNum(v)) return mkFloat(nv(v));
     if (typeof v === "string"){
@@ -1742,7 +1982,7 @@ Interp.prototype.installBuiltins = function(){
     }
     raise("TypeError", "float() не работает с типом " + typeName(v) + ".", line);
   });
-  def("bool", function(args){ return truthy(args[0]); });
+  def("bool", function(args){ return args.length ? truthy(args[0]) : false; });
   def("list", function(args, kw, line){ return args.length ? I.iterate(args[0], line).slice() : []; });
   def("tuple", function(args, kw, line){ return Tup(args.length ? I.iterate(args[0], line) : []); });
   def("sum", function(args, kw, line){
@@ -1911,6 +2151,36 @@ Interp.prototype.installBuiltins = function(){
   g.set("object", TYPES.object);
   EXC_NAMES.forEach(function(n){ g.set(n, TYPES[n]); });
 
+  def("next", function(args, kw, line){
+    var g = args[0];
+    if (!(g instanceof PyGen))
+      raise("TypeError", "next() работает с генератором, а не с " + typeName(g) + ".", line,
+            { pymsg: "'" + typeName(g) + "' object is not an iterator" });
+    var st = g.next();
+    if (st.done){
+      if (args.length > 1) return args[1];
+      raise("StopIteration", "У генератора «" + g.name + "» больше нет значений.", line, { pymsg: "" });
+    }
+    return st.value;
+  });
+  def("open", function(args, kw, line){
+    var name = pyStr(args[0]);
+    var mode = args.length > 1 ? pyStr(args[1]) : (kw && kw.mode !== undefined ? pyStr(kw.mode) : "r");
+    /* encoding и newline принимаем и не мешаем: в браузере кодировка всегда utf-8,
+       а переводы строк движок и так приводит к \n. Зато код урока выглядит
+       ровно так, как его надо писать на настоящем компьютере. */
+    if (kw && kw.encoding !== undefined){
+      var enc = pyStr(kw.encoding).toLowerCase().replace("-", "");
+      if (enc !== "utf8")
+        raise("ValueError", "В тренажёре файлы всегда в utf-8, другую кодировку задать нельзя.", line,
+              { pymsg: "unknown encoding: " + pyStr(kw.encoding) });
+    }
+    if (!/^[rwa]\+?b?t?$/.test(mode))
+      raise("ValueError", "Режим «" + mode + "» непонятен. Бывают: \"r\" читать, \"w\" писать с нуля, \"a\" дописывать.", line,
+            { pymsg: "invalid mode: '" + mode + "'" });
+    var rawNl = kw && kw.newline !== undefined && pyStr(kw.newline) === "";
+    return new PyFile(I.disk, name, mode, line, rawNl);
+  });
   def("isinstance", function(args, kw, line){
     var t = args[1];
     var list = Array.isArray(t) ? t : [t];
@@ -1960,6 +2230,10 @@ Interp.prototype.minmax = function(args, line, dir){
 
 Interp.prototype.cmp = function(a, b, line){
   if (isNum(a) && isNum(b)) return nv(a) - nv(b);
+  if (a instanceof PyObj && b instanceof PyObj){
+    if (a.dtMs !== undefined && b.dtMs !== undefined) return a.dtMs - b.dtMs;
+    if (a.tdMs !== undefined && b.tdMs !== undefined) return a.tdMs - b.tdMs;
+  }
   if (typeof a === "string" && typeof b === "string") return a < b ? -1 : a > b ? 1 : 0;
   if (typeof a === "boolean" && typeof b === "boolean") return (a ? 1 : 0) - (b ? 1 : 0);
   if (Array.isArray(a) && Array.isArray(b)){
@@ -1975,6 +2249,20 @@ Interp.prototype.cmp = function(a, b, line){
 /* Отдельной функцией, а не методом: этим пользуются конструкторы
    встроенных типов (list, tuple, set), которые живут вне интерпретатора. */
 function iterate(v, line){
+  if (v instanceof PyGen){
+    var out = [];
+    for (;;){
+      var st = v.next();
+      if (st.done) break;
+      out.push(st.value);
+      if (out.length > 100000)
+        raise("RuntimeError", "Генератор выдаёт значения без конца — в список его не собрать. " +
+              "Возьми первые несколько (например через islice) или перебирай циклом с break.", line,
+              { fatal: true });
+    }
+    return out;
+  }
+  if (v instanceof PyFile){ v.checkOpen(line); return v.lines(); }
   if (typeof v === "string") return v.split("");
   if (Array.isArray(v)) return v;
   if (v instanceof PySet) return v.values();
@@ -2013,8 +2301,12 @@ var _repr = pyRepr;
 pyRepr = function(v){
   if (v instanceof Map){
     var out = [];
-    v.forEach(function(pair){ out.push(_repr(pair[0]) + ": " + _repr(pair[1])); });
-    return "{" + out.join(", ") + "}";
+    v.forEach(function(pair){ out.push(pyRepr(pair[0]) + ": " + pyRepr(pair[1])); });
+    var body = "{" + out.join(", ") + "}";
+    if (v.__counter__) return "Counter(" + body + ")";
+    if (v.__factory__ !== undefined && v.__factory__ !== null)
+      return "defaultdict(" + pyRepr(v.__factory__) + ", " + body + ")";
+    return body;
   }
   return _repr(v);
 };
@@ -2081,7 +2373,25 @@ Interp.prototype.execStmt = function*(st, env){
     }
 
     case "For": {
-      var seq = this.iterate(yield* this.eval(st.iter, env), st.line);
+      var src = yield* this.eval(st.iter, env);
+      /* Генератор перебираем по одному значению: только так работают
+         бесконечные генераторы и экономия памяти, о которой весь урок. */
+      if (src instanceof PyGen){
+        for (;;){
+          this.tick(st.line);
+          var g = src.next();
+          if (g.done) break;
+          yield* this.assign(st.target, g.value, env);
+          var rg = yield* this.runBlock(st.body, env);
+          if (rg){
+            if (rg.kind === "break") return null;
+            if (rg.kind === "continue") continue;
+            return rg;
+          }
+        }
+        return null;
+      }
+      var seq = this.iterate(src, st.line);
       for (var k = 0; k < seq.length; k++){
         this.tick(st.line);
         yield* this.assign(st.target, seq[k], env);
@@ -2177,6 +2487,30 @@ Interp.prototype.execStmt = function*(st, env){
         env.set(want.as || want.name, fm.vars.get(want.name));
       }
       return null;
+    }
+
+    case "With": {
+      var opened = [];
+      var wsig = null;
+      try {
+        for (var wi = 0; wi < st.items.length; wi++){
+          var obj = yield* this.eval(st.items[wi].expr, env);
+          var enter = (obj instanceof PyObj) ? obj.cls.lookup("__enter__") : null;
+          var value = enter ? yield* this.call(new Bound(enter, obj), [], {}, st.line, "__enter__")
+                            : (obj instanceof PyFile ? obj : obj);
+          if (!enter && !(obj instanceof PyFile))
+            raise("TypeError", "После with должно стоять то, что умеет открываться и закрываться: файл или объект с __enter__.", st.line,
+                  { pymsg: "'" + typeName(obj) + "' object does not support the context manager protocol" });
+          opened.push(obj);
+          if (st.items[wi].name) env.set(st.items[wi].name, value);
+        }
+        wsig = yield* this.runBlock(st.body, env);
+      } catch (werr){
+        for (var wc = opened.length - 1; wc >= 0; wc--) yield* this.closeCtx(opened[wc], st.line);
+        throw werr;
+      }
+      for (var wc2 = opened.length - 1; wc2 >= 0; wc2--) yield* this.closeCtx(opened[wc2], st.line);
+      return wsig;
     }
 
     case "Try": {
@@ -2289,9 +2623,16 @@ Interp.prototype.loadModule = function*(name, line){
     return bm;
   }
 
-  raise("ImportError", "Модуля «" + name + "» нет. Доступны: math, random, dataclasses" +
-        (Object.keys(this.sources).length ? " и файлы этого урока" : "") + ".", line,
+  raise("ImportError", "Модуля «" + name + "» нет. Доступны: " +
+        Object.keys(BUILTIN_MODULES).sort().join(", ") +
+        (Object.keys(this.sources).length ? ", а ещё файлы этого урока" : "") + ".", line,
         { pymsg: "No module named '" + name + "'" });
+};
+
+Interp.prototype.closeCtx = function*(obj, line){
+  if (obj instanceof PyFile){ obj.close(); return; }
+  var exit = (obj instanceof PyObj) ? obj.cls.lookup("__exit__") : null;
+  if (exit) yield* this.call(new Bound(exit, obj), [null, null, null], {}, line, "__exit__");
 };
 
 Interp.prototype.runFinal = function*(st, env){
@@ -2427,6 +2768,27 @@ Interp.prototype.eval = function*(e, env){
       return num(-nv(x), isFloat(x));
     }
     case "Not": return !truthy(yield* this.eval(e.value, env));
+    case "Yield": {
+      var yv = e.value ? yield* this.eval(e.value, env) : null;
+      var sent = yield { pyYield: yv };
+      return sent === undefined ? null : sent;
+    }
+
+    case "YieldFrom": {
+      var src = yield* this.eval(e.value, env);
+      if (src instanceof PyGen){
+        for (;;){
+          var st2 = src.next();
+          if (st2.done) break;
+          yield { pyYield: st2.value };
+        }
+        return null;
+      }
+      var seq = iterate(src, e.line);
+      for (var yi = 0; yi < seq.length; yi++) yield { pyYield: seq[yi] };
+      return null;
+    }
+
     case "Lambda": {
       var lf = new PyFunc("<lambda>", e.params, e.defaults,
                           [{ type:"Return", value:e.body, line:e.line }], env);
@@ -2572,6 +2934,8 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
         raise("TypeError", "Функция «" + fn.name + "» не знает параметра «" + k2 + "».", line,
               { pymsg: fn.name + "() got an unexpected keyword argument '" + k2 + "'" });
     }
+    if (fn.isGen === undefined) fn.isGen = hasYield(fn.body);
+    if (fn.isGen) return new PyGen(fn.name, this.runBlock(fn.body, env));
     if (++this.depth > 220){
       this.depth--;
       raise("RecursionError", "Функция вызывает саму себя слишком глубоко — не хватает условия остановки.", line,
@@ -2587,6 +2951,26 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
 };
 
 Interp.prototype.binop = function(op, a, b, line){
+  /* дата плюс срок, дата минус дата, путь через дробь — как в Python */
+  if (a instanceof PyObj || b instanceof PyObj){
+    var isDate = function(x){ return x instanceof PyObj && (x.cls === TYPES["datetime.date"] || x.cls === TYPES["datetime.datetime"]); };
+    var isTd = function(x){ return x instanceof PyObj && x.cls === TYPES["datetime.timedelta"]; };
+    if (op === "+" && isDate(a) && isTd(b)) return mkDT(a.cls, a.dtMs + b.tdMs);
+    if (op === "+" && isTd(a) && isDate(b)) return mkDT(b.cls, b.dtMs + a.tdMs);
+    if (op === "-" && isDate(a) && isTd(b)) return mkDT(a.cls, a.dtMs - b.tdMs);
+    if (op === "-" && isDate(a) && isDate(b)){
+      var td = new PyObj(TYPES["datetime.timedelta"]);
+      td.tdMs = a.dtMs - b.dtMs;
+      return td;
+    }
+    if (op === "+" && isTd(a) && isTd(b)){
+      var td2 = new PyObj(TYPES["datetime.timedelta"]);
+      td2.tdMs = a.tdMs + b.tdMs;
+      return td2;
+    }
+    if (op === "/" && a instanceof PyObj && a.cls === TYPES["pathlib.Path"])
+      return mkPath(a.fields.get("__path__").replace(/\/$/, "") + "/" + pyStr(b));
+  }
   if (op === "+"){
     if (isNum(a) && isNum(b)) return num(nv(a) + nv(b), isFloat(a) || isFloat(b));
     if (typeof a === "string" && typeof b === "string") return a + b;
@@ -2599,6 +2983,32 @@ Interp.prototype.binop = function(op, a, b, line){
             { pymsg: "unsupported operand type(s) for +: '" + typeName(a) + "' and 'str'" });
     raise("TypeError", "Нельзя сложить " + typeName(a) + " и " + typeName(b) + ".", line,
           { pymsg: "unsupported operand type(s) for +: '" + typeName(a) + "' and '" + typeName(b) + "'" });
+  }
+  /* Старое форматирование: "цена: %d" % 120. В новом коде пишут f-строки,
+     но в чужом эта запись встречается постоянно — читать её надо уметь. */
+  if (op === "%" && typeof a === "string"){
+    var vals = isTup(b) ? b.slice() : [b];
+    var vi = 0;
+    return a.replace(/%(?:%|(-?)(\d*)(?:\.(\d+))?([sdif]))/g, function(all, minus, width, prec, kind){
+      if (all === "%%") return "%";
+      if (vi >= vals.length)
+        raise("TypeError", "В строке больше знаков % , чем значений справа.", line,
+              { pymsg: "not enough arguments for format string" });
+      var v = vals[vi++], out;
+      if (kind === "d" || kind === "i"){
+        if (!isNum(v)) raise("TypeError", "%d ждёт число, а получил " + typeName(v) + ".", line,
+                             { pymsg: "%d format: a real number is required, not " + typeName(v) });
+        out = String(Math.trunc(nv(v)));
+      } else if (kind === "f"){
+        out = toFixedPy(nv(v), prec === undefined ? 6 : +prec);
+      } else {
+        out = pyStr(v);
+        if (prec !== undefined) out = out.slice(0, +prec);
+      }
+      var w = width ? parseInt(width, 10) : 0;
+      if (w > out.length) out = minus ? out + " ".repeat(w - out.length) : " ".repeat(w - out.length) + out;
+      return out;
+    });
   }
   if (op === "*"){
     if (isNum(a) && isNum(b)) return num(nv(a) * nv(b), isFloat(a) || isFloat(b));
@@ -2704,7 +3114,16 @@ Interp.prototype.index = function(obj, idx, line){
     return obj[n];
   }
   if (obj instanceof Map){
-    if (!dictHas(obj, idx)) raise("KeyError", "В словаре нет ключа " + pyRepr(idx) + ".", line, { pymsg: idx });
+    if (!dictHas(obj, idx)){
+      /* у defaultdict отсутствующий ключ не ошибка: значение создаётся на месте */
+      if (obj.__factory__ !== undefined && obj.__factory__ !== null){
+        var made = callSync(obj.__factory__, [], line);
+        dictSet(obj, idx, made);
+        return made;
+      }
+      if (obj.__counter__) return 0;   /* у счётчика ненайденное — просто ноль */
+      raise("KeyError", "В словаре нет ключа " + pyRepr(idx) + ".", line, { pymsg: idx });
+    }
     return dictGet(obj, idx);
   }
   raise("TypeError", "У значения типа " + typeName(obj) + " нет доступа по индексу.", line);
@@ -2772,6 +3191,129 @@ function makeDataclass(cls, line){
     return true;
   });
   return cls;
+}
+
+/* ---------- json ----------
+   Пишем сами, а не через JSON.stringify: у Python свои пробелы после
+   двоеточия и запятой, и по умолчанию он прячет русские буквы в \uXXXX. */
+function jsonEsc(str, ensureAscii){
+  var out = '"';
+  for (var i = 0; i < str.length; i++){
+    var c = str[i], code = str.charCodeAt(i);
+    if (c === '"') out += '\\"';
+    else if (c === "\\") out += "\\\\";
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (code < 0x20) out += "\\u" + ("0000" + code.toString(16)).slice(-4);
+    else if (ensureAscii && code > 126) out += "\\u" + ("0000" + code.toString(16)).slice(-4);
+    else out += c;
+  }
+  return out + '"';
+}
+function jsonDump(v, ensureAscii, indent, depth, line){
+  var pad = indent ? "\n" + " ".repeat(indent * (depth + 1)) : "";
+  var padEnd = indent ? "\n" + " ".repeat(indent * depth) : "";
+  var comma = indent ? "," + pad : ", ";
+  if (v === null || v === undefined) return "null";
+  if (v === true) return "true";
+  if (v === false) return "false";
+  if (isNum(v)) return fmtNum(v);
+  if (typeof v === "string") return jsonEsc(v, ensureAscii);
+  if (Array.isArray(v)){
+    if (!v.length) return "[]";
+    var items = v.map(function(x){ return jsonDump(x, ensureAscii, indent, depth + 1, line); });
+    return "[" + pad + items.join(comma) + padEnd + "]";
+  }
+  if (v instanceof Map){
+    var keys = dictKeys(v);
+    if (!keys.length) return "{}";
+    var parts = keys.map(function(k){
+      if (typeof k !== "string" && !isNum(k) && k !== true && k !== false && k !== null)
+        raise("TypeError", "В JSON ключом может быть только строка или число.", line,
+              { pymsg: "keys must be str, int, float, bool or None, not " + typeName(k) });
+      var ks = typeof k === "string" ? jsonEsc(k, ensureAscii) : jsonEsc(pyStr(k), ensureAscii);
+      return ks + ": " + jsonDump(dictGet(v, k), ensureAscii, indent, depth + 1, line);
+    });
+    return "{" + pad + parts.join(comma) + padEnd + "}";
+  }
+  raise("TypeError", "Значение типа " + typeName(v) + " в JSON не превратить.", line,
+        { pymsg: "Object of type " + typeName(v) + " is not JSON serializable" });
+}
+function jsonToPy(v){
+  if (v === null) return null;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isInteger(v) ? v : mkFloat(v);
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.map(jsonToPy);
+  var d = dictNew();
+  for (var k in v) dictSet(d, k, jsonToPy(v[k]));
+  return d;
+}
+
+/* ---------- csv ---------- */
+function csvSplitLine(line){
+  var out = [], cur = "", inQ = false;
+  for (var i = 0; i < line.length; i++){
+    var c = line[i];
+    if (inQ){
+      if (c === '"' && line[i+1] === '"'){ cur += '"'; i++; continue; }
+      if (c === '"'){ inQ = false; continue; }
+      cur += c;
+      continue;
+    }
+    if (c === '"'){ inQ = true; continue; }
+    if (c === ","){ out.push(cur); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function csvCell(v){
+  var s = pyStr(v);
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function csvRows(src, line){
+  var text;
+  if (src instanceof PyFile){ src.checkOpen(line); text = src.readAll(); }
+  else text = iterate(src, line).map(pyStr).join("");
+  text = text.replace(/\r\n/g, "\n").replace(/\n$/, "");
+  if (text === "") return [];
+  return text.split("\n").map(csvSplitLine);
+}
+
+/* ---------- дата и время ----------
+   date и datetime — обычные объекты с полями, чтобы работали сравнение,
+   вычитание и strftime. Хранит внутри миллисекунды UTC: часовых поясов
+   в тренажёре нет, и это честно сказано в уроке. */
+var MONTH_NAMES = ["January","February","March","April","May","June","July",
+                   "August","September","October","November","December"];
+var DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function two(n){ return (n < 10 ? "0" : "") + n; }
+function mkDT(cls, ms){
+  var o = new PyObj(cls);
+  o.dtMs = ms;
+  return o;
+}
+function dtParts(o){
+  var d = new Date(o.dtMs);
+  return { y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(),
+           h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds(),
+           wd: (d.getUTCDay() + 6) % 7 };
+}
+function dtStrftime(o, fmt){
+  var p = dtParts(o);
+  var map = {
+    "%d": two(p.d), "%m": two(p.mo), "%Y": String(p.y), "%y": two(p.y % 100),
+    "%H": two(p.h), "%M": two(p.mi), "%S": two(p.s),
+    "%A": DAY_NAMES[p.wd], "%a": DAY_NAMES[p.wd].slice(0, 3),
+    "%B": MONTH_NAMES[p.mo - 1], "%b": MONTH_NAMES[p.mo - 1].slice(0, 3),
+    "%%": "%"
+  };
+  return String(fmt).replace(/%[a-zA-Z%]/g, function(m){
+    return map[m] !== undefined ? map[m] : m;
+  });
 }
 
 var BUILTIN_MODULES = {
@@ -2852,15 +3394,562 @@ var BUILTIN_MODULES = {
     return {
       dataclass: function(args, kw, line){ return makeDataclass(args[0], line); }
     };
+  },
+
+  json: function(I){
+    return {
+      dumps: function(args, kw, line){
+        var ensure = !(kw && kw.ensure_ascii !== undefined && !truthy(kw.ensure_ascii));
+        var indent = kw && kw.indent !== undefined && kw.indent !== null ? Math.trunc(nv(kw.indent)) : 0;
+        return jsonDump(args[0], ensure, indent, 0, line);
+      },
+      loads: function(args, kw, line){
+        var text = pyStr(args[0]);
+        var parsed;
+        try { parsed = JSON.parse(text); }
+        catch (e){
+          raise("ValueError", "Это не похоже на JSON: " + e.message, line,
+                { pymsg: "Expecting value: line 1 column 1 (char 0)" });
+        }
+        return jsonToPy(parsed);
+      },
+      dump: function(args, kw, line){
+        var f = args[1];
+        if (!(f instanceof PyFile)) raise("TypeError", "json.dump() пишет в файл.", line);
+        var ensure = !(kw && kw.ensure_ascii !== undefined && !truthy(kw.ensure_ascii));
+        var indent = kw && kw.indent !== undefined && kw.indent !== null ? Math.trunc(nv(kw.indent)) : 0;
+        f.checkOpen(line);
+        f.append(jsonDump(args[0], ensure, indent, 0, line));
+        return null;
+      },
+      load: function(args, kw, line){
+        var f = args[0];
+        if (!(f instanceof PyFile)) raise("TypeError", "json.load() читает из файла.", line);
+        f.checkOpen(line);
+        return jsonToPy(JSON.parse(f.readAll()));
+      }
+    };
+  },
+
+  csv: function(I){
+    return {
+      reader: function(args, kw, line){
+        var rows = csvRows(args[0], line);
+        return rows.map(function(r){ return r.slice(); });
+      },
+      DictReader: function(args, kw, line){
+        var rows = csvRows(args[0], line);
+        if (!rows.length) return [];
+        var head = rows[0];
+        return rows.slice(1).map(function(r){
+          var d = dictNew();
+          for (var i = 0; i < head.length; i++) dictSet(d, head[i], r[i] === undefined ? "" : r[i]);
+          return d;
+        });
+      },
+      writer: function(args, kw, line){
+        var f = args[0];
+        if (!(f instanceof PyFile)) raise("TypeError", "csv.writer() пишет в файл.", line);
+        var W = new PyObj(TYPES.csvwriter);
+        W.fields.set("__file__", f);
+        return W;
+      }
+    };
+  },
+
+  collections: function(I){
+    return {
+      Counter: function(args, kw, line){
+        var c = dictNew();
+        c.__counter__ = true;
+        if (args.length){
+          if (args[0] instanceof Map){
+            dictKeys(args[0]).forEach(function(k){ dictSet(c, k, dictGet(args[0], k)); });
+          } else {
+            iterate(args[0], line).forEach(function(x){
+              dictSet(c, x, (dictGet(c, x) || 0) + 1);
+            });
+          }
+        }
+        return c;
+      },
+      defaultdict: function(args, kw, line){
+        var d = dictNew();
+        d.__factory__ = args.length ? args[0] : null;
+        return d;
+      }
+    };
+  },
+
+  itertools: function(I){
+    return {
+      count: function(args, kw, line){
+        var start = args.length ? nv(args[0]) : 0;
+        var step = args.length > 1 ? nv(args[1]) : 1;
+        var floaty = (args.length && isFloat(args[0])) || (args.length > 1 && isFloat(args[1]));
+        return genOf("count", function*(){
+          var n = start;
+          for (;;){ yield num(n, floaty); n += step; }
+        });
+      },
+      cycle: function(args, kw, line){
+        var seq = iterate(args[0], line).slice();
+        return genOf("cycle", function*(){
+          if (!seq.length) return;
+          for (;;) for (var i = 0; i < seq.length; i++) yield seq[i];
+        });
+      },
+      repeat: function(args, kw, line){
+        var v = args[0], times = args.length > 1 ? Math.trunc(nv(args[1])) : -1;
+        return genOf("repeat", function*(){
+          if (times < 0){ for (;;) yield v; }
+          for (var i = 0; i < times; i++) yield v;
+        });
+      },
+      chain: function(args, kw, line){
+        var lists = args.map(function(a){ return iterate(a, line); });
+        return genOf("chain", function*(){
+          for (var i = 0; i < lists.length; i++)
+            for (var j = 0; j < lists[i].length; j++) yield lists[i][j];
+        });
+      },
+      islice: function(args, kw, line){
+        var src = args[0];
+        var start = 0, stop = null;
+        if (args.length === 2) stop = args[1] === null ? null : Math.trunc(nv(args[1]));
+        else if (args.length >= 3){
+          start = Math.trunc(nv(args[1]));
+          stop = args[2] === null ? null : Math.trunc(nv(args[2]));
+        }
+        return genOf("islice", function*(){
+          var i = 0;
+          if (src instanceof PyGen){
+            for (;;){
+              if (stop !== null && i >= stop) return;
+              var st = src.next();
+              if (st.done) return;
+              if (i >= start) yield st.value;
+              i++;
+            }
+          }
+          var seq = iterate(src, line);
+          for (i = start; i < seq.length && (stop === null || i < stop); i++) yield seq[i];
+        });
+      },
+      product: function(args, kw, line){
+        var lists = args.map(function(a){ return iterate(a, line); });
+        var reps = kw && kw.repeat !== undefined ? Math.trunc(nv(kw.repeat)) : 1;
+        var pools = [];
+        for (var r = 0; r < reps; r++) pools = pools.concat(lists);
+        return genOf("product", function*(){
+          if (!pools.length){ yield Tup([]); return; }
+          var idx = pools.map(function(){ return 0; });
+          for (;;){
+            yield Tup(pools.map(function(p, i){ return p[idx[i]]; }));
+            var k = pools.length - 1;
+            for (;;){
+              idx[k]++;
+              if (idx[k] < pools[k].length) break;
+              idx[k] = 0; k--;
+              if (k < 0) return;
+            }
+          }
+        });
+      },
+      permutations: function(args, kw, line){
+        var pool = iterate(args[0], line).slice();
+        var r = args.length > 1 ? Math.trunc(nv(args[1])) : pool.length;
+        return genOf("permutations", function*(){
+          if (r > pool.length) return;
+          var used = pool.map(function(){ return false; });
+          var cur = [];
+          yield* (function*walk(){
+            if (cur.length === r){ yield Tup(cur.slice()); return; }
+            for (var i = 0; i < pool.length; i++){
+              if (used[i]) continue;
+              used[i] = true; cur.push(pool[i]);
+              yield* walk();
+              cur.pop(); used[i] = false;
+            }
+          })();
+        });
+      },
+      combinations: function(args, kw, line){
+        var pool = iterate(args[0], line).slice();
+        var r = Math.trunc(nv(args[1]));
+        return genOf("combinations", function*(){
+          if (r > pool.length || r < 0) return;
+          var cur = [];
+          yield* (function*walk(start){
+            if (cur.length === r){ yield Tup(cur.slice()); return; }
+            for (var i = start; i < pool.length; i++){
+              cur.push(pool[i]);
+              yield* walk(i + 1);
+              cur.pop();
+            }
+          })(0);
+        });
+      }
+    };
+  },
+
+  datetime: function(I){
+    var dateCls = TYPES["datetime.date"], dtCls = TYPES["datetime.datetime"], tdCls = TYPES["datetime.timedelta"];
+    function mkDate(args, kw, line){
+      var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
+      if (mo < 1 || mo > 12) raise("ValueError", "Месяц бывает от 1 до 12.", line, { pymsg: "month must be in 1..12" });
+      if (d < 1 || d > 31) raise("ValueError", "Такого числа в месяце нет.", line, { pymsg: "day is out of range for month" });
+      return mkDT(dateCls, Date.UTC(y, mo - 1, d));
+    }
+    function mkDatetime(args, kw, line){
+      var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
+      var h = args.length > 3 ? Math.trunc(nv(args[3])) : 0;
+      var mi = args.length > 4 ? Math.trunc(nv(args[4])) : 0;
+      var se = args.length > 5 ? Math.trunc(nv(args[5])) : 0;
+      return mkDT(dtCls, Date.UTC(y, mo - 1, d, h, mi, se));
+    }
+    dateCls.ctor = mkDate;
+    dtCls.ctor = mkDatetime;
+    tdCls.ctor = function(args, kw, line){
+      var days = args.length ? nv(args[0]) : 0;
+      var secs = args.length > 1 ? nv(args[1]) : 0;
+      if (kw){
+        if (kw.days !== undefined) days = nv(kw.days);
+        if (kw.seconds !== undefined) secs = nv(kw.seconds);
+        if (kw.hours !== undefined) secs += nv(kw.hours) * 3600;
+        if (kw.minutes !== undefined) secs += nv(kw.minutes) * 60;
+        if (kw.weeks !== undefined) days += nv(kw.weeks) * 7;
+      }
+      var o = new PyObj(tdCls);
+      o.tdMs = days * 86400000 + secs * 1000;
+      return o;
+    };
+    dateCls.attrs.set("today", function(args, kw, line){
+      var now = new Date();
+      return mkDT(dateCls, Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    });
+    dateCls.attrs.set("fromisoformat", function(args, kw, line){
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pyStr(args[0]));
+      if (!m) raise("ValueError", "Дата должна выглядеть как 2026-08-26.", line,
+                    { pymsg: "Invalid isoformat string: '" + pyStr(args[0]) + "'" });
+      return mkDT(dateCls, Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    });
+    dtCls.attrs.set("now", function(args, kw, line){
+      var n = new Date();
+      return mkDT(dtCls, Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(),
+                                  n.getHours(), n.getMinutes(), n.getSeconds()));
+    });
+    return { date: dateCls, datetime: dtCls, timedelta: tdCls };
+  },
+
+  pathlib: function(I){
+    return { Path: TYPES["pathlib.Path"] };
+  },
+
+  re: function(I){
+    return {
+      IGNORECASE: 2, I: 2, MULTILINE: 8, M: 8, DOTALL: 16, S: 16,
+      search: function(args, kw, line){ return reFind(args, line, false); },
+      match: function(args, kw, line){ return reFind(args, line, true); },
+      fullmatch: function(args, kw, line){ return reFind(args, line, true, true); },
+      findall: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
+        var text = pyStr(args[1]);
+        var out = [], m;
+        while ((m = rx.exec(text)) !== null){
+          if (m.length === 1) out.push(m[0]);
+          else if (m.length === 2) out.push(m[1] === undefined ? "" : m[1]);
+          else out.push(Tup(m.slice(1).map(function(x){ return x === undefined ? "" : x; })));
+          if (m[0] === "") rx.lastIndex++;
+        }
+        return out;
+      },
+      sub: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[3], line, true);
+        var rep = pyStr(args[1]).replace(/\\(\d)/g, "$$$1");
+        return pyStr(args[2]).replace(rx, rep);
+      },
+      split: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
+        return pyStr(args[1]).split(rx).map(function(x){ return x === undefined ? "" : x; });
+      }
+    };
+  },
+
+  time: function(I){
+    return {
+      time: function(){ return mkFloat(Date.now() / 1000); },
+      perf_counter: function(){ return mkFloat((typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000); }
+    };
+  },
+
+  statistics: function(I){
+    return {
+      /* mean и median в Python отдают целое, если данные целые и результат
+         делится ровно: statistics.mean([4, 8, 6, 10, 2]) это 6, а не 6.0 */
+      mean: function(args, kw, line){
+        var xs = iterate(args[0], line);
+        if (!xs.length) raise("ValueError", "Среднее пустого списка не существует.", line,
+                              { pymsg: "mean requires at least one data point" });
+        var sum = 0, allInt = true;
+        xs.forEach(function(x){
+          if (!isNum(x)) raise("TypeError", "Среднее считается только по числам.", line);
+          if (isFloat(x)) allInt = false;
+          sum += nv(x);
+        });
+        var res = sum / xs.length;
+        return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+      },
+      median: function(args, kw, line){
+        var raw = iterate(args[0], line);
+        if (!raw.length) raise("ValueError", "Медианы пустого списка не существует.", line,
+                              { pymsg: "no median for empty data" });
+        var allInt = raw.every(function(x){ return !isFloat(x); });
+        var xs = raw.map(nv).slice().sort(function(a, b){ return a - b; });
+        var mid = Math.floor(xs.length / 2);
+        if (xs.length % 2) return allInt ? xs[mid] : mkFloat(xs[mid]);
+        var res = (xs[mid - 1] + xs[mid]) / 2;
+        return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+      }
+    };
   }
+};
+
+/* ---------- регулярные выражения ----------
+   Шаблон Python переводим в шаблон JavaScript: \w у нас должен понимать
+   русские буквы, а именованные группы пишутся немного иначе. */
+function toJsRegex(pattern, flagsArg, line, global){
+  var f = (global ? "gu" : "u");
+  var flags = flagsArg === undefined || flagsArg === null ? 0 : Math.trunc(nv(flagsArg));
+  if (flags & 2) f += "i";
+  if (flags & 8) f += "m";
+  if (flags & 16) f += "s";
+  var out = "", i = 0, inClass = false;
+  while (i < pattern.length){
+    var c = pattern[i];
+    if (c === "\\"){
+      var n = pattern[i+1];
+      /* внутри [...] подставлять готовый класс нельзя — только его содержимое */
+      if (n === "w"){ out += inClass ? "\\p{L}\\p{N}_" : "[\\p{L}\\p{N}_]"; i += 2; continue; }
+      if (n === "W"){ out += inClass ? "\\W" : "[^\\p{L}\\p{N}_]"; i += 2; continue; }
+      if (n === "d"){ out += inClass ? "0-9" : "[0-9]"; i += 2; continue; }
+      if (n === "D"){ out += inClass ? "\\D" : "[^0-9]"; i += 2; continue; }
+      if (n === "A" && !inClass){ out += "^"; i += 2; continue; }
+      if (n === "Z" && !inClass){ out += "$"; i += 2; continue; }
+      out += c + n; i += 2; continue;
+    }
+    if (!inClass && c === "["){ inClass = true; out += c; i++; continue; }
+    if (inClass && c === "]"){ inClass = false; out += c; i++; continue; }
+    if (pattern.substr(i, 4) === "(?P<"){ out += "(?<"; i += 4; continue; }
+    if (pattern.substr(i, 4) === "(?P="){
+      var end = pattern.indexOf(")", i);
+      out += "\\k<" + pattern.slice(i + 4, end) + ">";
+      i = end + 1; continue;
+    }
+    out += c; i++;
+  }
+  try { return new RegExp(out, f); }
+  catch (e){
+    raise("ValueError", "Непонятный шаблон: " + pattern + " (" + e.message + ")", line,
+          { pymsg: "bad pattern" });
+  }
+}
+function reFind(args, line, anchored, full){
+  var src = pyStr(args[0]);
+  if (anchored) src = "^(?:" + src + ")" + (full ? "$" : "");
+  var rx = toJsRegex(src, args[2], line, false);
+  var text = pyStr(args[1]);
+  var m = rx.exec(text);
+  if (!m) return null;
+  var o = new PyObj(TYPES["re.Match"]);
+  o.reMatch = m;
+  o.reText = text;
+  return o;
+}
+
+/* ---------- поведение объектов из модулей ----------
+   Дата, путь, совпадение регулярки и писатель csv — обычные объекты движка.
+   Их методы описаны здесь, потому что писать их на мини-Python негде. */
+function moduleMethod(I, obj, name, line){
+  var cls = obj.cls;
+
+  if (cls === TYPES["datetime.date"] || cls === TYPES["datetime.datetime"]){
+    var p = dtParts(obj);
+    if (name === "year") return p.y;
+    if (name === "month") return p.mo;
+    if (name === "day") return p.d;
+    if (name === "hour") return p.h;
+    if (name === "minute") return p.mi;
+    if (name === "second") return p.s;
+    var D = {
+      strftime: function(a){ return dtStrftime(obj, pyStr(a[0])); },
+      isoformat: function(){
+        var q = dtParts(obj);
+        var d = q.y + "-" + two(q.mo) + "-" + two(q.d);
+        return cls === TYPES["datetime.datetime"]
+          ? d + "T" + two(q.h) + ":" + two(q.mi) + ":" + two(q.s) : d;
+      },
+      weekday: function(){ return dtParts(obj).wd; },
+      date: function(){
+        var q = dtParts(obj);
+        return mkDT(TYPES["datetime.date"], Date.UTC(q.y, q.mo - 1, q.d));
+      },
+      replace: function(a, kw){
+        var q = dtParts(obj);
+        if (kw){
+          if (kw.year !== undefined) q.y = Math.trunc(nv(kw.year));
+          if (kw.month !== undefined) q.mo = Math.trunc(nv(kw.month));
+          if (kw.day !== undefined) q.d = Math.trunc(nv(kw.day));
+        }
+        return mkDT(cls, Date.UTC(q.y, q.mo - 1, q.d, q.h, q.mi, q.s));
+      }
+    };
+    if (!D[name]) return undefined;
+    return function(a, kw){ return D[name](a, kw); };
+  }
+
+  if (cls === TYPES["datetime.timedelta"]){
+    if (name === "days") return Math.floor(obj.tdMs / 86400000);
+    if (name === "seconds") return Math.floor((obj.tdMs % 86400000) / 1000);
+    if (name === "total_seconds") return function(){ return mkFloat(obj.tdMs / 1000); };
+    return undefined;
+  }
+
+  if (cls === TYPES["pathlib.Path"]){
+    var path = obj.fields.get("__path__");
+    var base = path.slice(path.lastIndexOf("/") + 1);
+    var dot = base.lastIndexOf(".");
+    if (name === "name") return base;
+    if (name === "suffix") return dot > 0 ? base.slice(dot) : "";
+    if (name === "stem") return dot > 0 ? base.slice(0, dot) : base;
+    if (name === "parent"){
+      var slash = path.lastIndexOf("/");
+      return mkPath(slash < 0 ? "." : (slash === 0 ? "/" : path.slice(0, slash)));
+    }
+    var P = {
+      exists: function(){ return I.disk.has(path); },
+      read_text: function(a, kw){
+        if (!I.disk.has(path))
+          raise("FileNotFoundError", "Файла «" + path + "» нет.", line,
+                { pymsg: "[Errno 2] No such file or directory: '" + path + "'" });
+        return I.disk.read(path);
+      },
+      write_text: function(a){
+        var text = pyStr(a[0]);
+        I.disk.write(path, text);
+        return text.length;
+      },
+      unlink: function(){ I.disk.remove(path); return null; },
+      with_suffix: function(a){
+        var sfx = pyStr(a[0]);
+        return mkPath(dot > 0 ? path.slice(0, path.length - (base.length - dot)) + sfx : path + sfx);
+      },
+      joinpath: function(a){ return mkPath(path.replace(/\/$/, "") + "/" + pyStr(a[0])); }
+    };
+    if (!P[name]) return undefined;
+    return function(a, kw){ return P[name](a, kw); };
+  }
+
+  if (cls === TYPES["re.Match"]){
+    var m = obj.reMatch;
+    var R = {
+      group: function(a){
+        var i = a.length ? a[0] : 0;
+        if (typeof i === "string"){
+          var v = m.groups ? m.groups[i] : undefined;
+          if (v === undefined)
+            raise("IndexError", "Группы «" + i + "» в шаблоне нет.", line, { pymsg: "no such group" });
+          return v;
+        }
+        var n = Math.trunc(nv(i));
+        if (n >= m.length) raise("IndexError", "Группы номер " + n + " в шаблоне нет.", line, { pymsg: "no such group" });
+        return m[n] === undefined ? null : m[n];
+      },
+      groups: function(){
+        return Tup(m.slice(1).map(function(x){ return x === undefined ? null : x; }));
+      },
+      start: function(){ return m.index; },
+      end: function(){ return m.index + m[0].length; },
+      span: function(){ return Tup([m.index, m.index + m[0].length]); }
+    };
+    if (!R[name]) return undefined;
+    return function(a){ return R[name](a); };
+  }
+
+  if (cls === TYPES.csvwriter){
+    var f = obj.fields.get("__file__");
+    var W = {
+      writerow: function(a){
+        f.checkOpen(line);
+        /* Python по умолчанию заканчивает строку так же — \r\n */
+        f.append(iterate(a[0], line).map(csvCell).join(",") + "\r\n");
+        return null;
+      },
+      writerows: function(a){
+        var rows = iterate(a[0], line);
+        for (var i = 0; i < rows.length; i++){
+          f.checkOpen(line);
+          f.append(iterate(rows[i], line).map(csvCell).join(",") + "\r\n");
+        }
+        return null;
+      }
+    };
+    if (!W[name]) return undefined;
+    return function(a){ return W[name](a); };
+  }
+
+  return undefined;
+}
+function mkPath(str){
+  var o = new PyObj(TYPES["pathlib.Path"]);
+  o.fields.set("__path__", str);
+  return o;
+}
+TYPES["pathlib.Path"].ctor = function(args, kw, line){
+  var parts = args.map(pyStr).filter(function(x){ return x !== ""; });
+  return mkPath(parts.length ? parts.join("/") : ".");
 };
 
 /* ---------- методы ---------- */
 Interp.prototype.bindMethod = function(obj, name, line){
   var I = this;
 
+  if (obj instanceof PyFile){
+    var F = {
+      read: function(){ obj.checkOpen(line); return obj.readAll(); },
+      readline: function(){ obj.checkOpen(line); return obj.readLine(); },
+      readlines: function(){ obj.checkOpen(line); return obj.lines(); },
+      write: function(a){
+        obj.checkOpen(line);
+        if (obj.mode.indexOf("r") >= 0)
+          raise("OSError", "Файл открыт только для чтения — записать в него нельзя. Нужен режим \"w\" или \"a\".", line,
+                { pymsg: "not writable" });
+        var text = pyStr(a[0]);
+        obj.append(text);
+        return text.length;
+      },
+      writelines: function(a){
+        obj.checkOpen(line);
+        var parts = iterate(a[0], line);
+        for (var i = 0; i < parts.length; i++) obj.append(pyStr(parts[i]));
+        return null;
+      },
+      close: function(){ obj.close(); return null; },
+      __enter__: function(){ return obj; },
+      __exit__: function(){ obj.close(); return null; }
+    };
+    if (name === "closed") return obj.closed;
+    if (name === "name") return obj.name;
+    if (name === "mode") return obj.mode;
+    if (!F[name]) raise("AttributeError", "У файла нет метода «" + name + "».", line,
+                        { pymsg: "'_io.TextIOWrapper' object has no attribute '" + name + "'" });
+    return function(args, kw){ return F[name](args, kw); };
+  }
+
+
   if (obj instanceof PyType){
-    if (name === "__name__") return obj.name;
+    /* __name__ — короткое имя: у datetime.date это «date», как в Python */
+    if (name === "__name__") return obj.shortName();
     var ca = obj.lookup(name);
     if (ca !== undefined) return ca;
     raise("AttributeError", "У класса «" + obj.name + "» нет «" + name + "».", line,
@@ -2881,7 +3970,16 @@ Interp.prototype.bindMethod = function(obj, name, line){
           { pymsg: "module '" + obj.name + "' has no attribute '" + name + "'" });
   }
 
+  if (obj instanceof PyFunc){
+    if (name === "__name__") return obj.name;
+    if (name === "__doc__") return null;
+    raise("AttributeError", "У функции нет «" + name + "».", line,
+          { pymsg: "'function' object has no attribute '" + name + "'" });
+  }
+
   if (obj instanceof PyObj){
+    var mm = moduleMethod(I, obj, name, line);
+    if (mm !== undefined) return mm;
     if (obj.fields.has(name)) return obj.fields.get(name);
     var m = obj.cls.lookup(name);
     if (m !== undefined) return (m instanceof PyFunc) ? new Bound(m, obj) : m;
@@ -3046,8 +4144,29 @@ Interp.prototype.bindMethod = function(obj, name, line){
         obj.forEach(function(pair){ dictSet(c, pair[0], pair[1]); });
         return c;
       },
+      most_common: function(a){
+        if (!obj.__counter__)
+          raise("AttributeError", "most_common() есть только у Counter.", line,
+                { pymsg: "'dict' object has no attribute 'most_common'" });
+        var pairs = Array.from(obj.values()).map(function(pr){ return Tup([pr[0], pr[1]]); });
+        var order = pairs.map(function(_, i){ return i; });
+        order.sort(function(x, y){ return nv(pairs[y][1]) - nv(pairs[x][1]) || x - y; });
+        var res = order.map(function(i){ return pairs[i]; });
+        return a && a.length ? res.slice(0, Math.trunc(nv(a[0]))) : res;
+      },
+      elements: function(){
+        var out = [];
+        obj.forEach(function(pr){
+          for (var i = 0; i < nv(pr[1]); i++) out.push(pr[0]);
+        });
+        return out;
+      },
       update: function(a){
         if (a[0] instanceof Map){ a[0].forEach(function(pair){ dictSet(obj, pair[0], pair[1]); }); return null; }
+        if (obj.__counter__){
+          iterate(a[0], line).forEach(function(x){ dictSet(obj, x, (dictGet(obj, x) || 0) + 1); });
+          return null;
+        }
         var seq = iterate(a[0], line);
         for (var i = 0; i < seq.length; i++){
           var pr = iterate(seq[i], line);
@@ -3235,7 +4354,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
@@ -3257,6 +4376,8 @@ function run(src, opts){
   result.output = I.out.join("");
   result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
   result.steps = I.steps;
+  result.files = {};
+  I.disk.files.forEach(function(v, k){ result.files[k] = v; });
   CUR = PREV;
   return result;
 }
@@ -3265,7 +4386,7 @@ function run(src, opts){
 function stepper(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
   CUR = I;
   var ast = parse(src);
   var it = I.runBlock(ast.body, I.global);
@@ -3302,7 +4423,7 @@ function snapshotVars(env, skip){
 }
 
 global.MiniPy = {
-  run: run, stepper: stepper, parse: parse, lex: lex,
+  run: run, stepper: stepper, parse: parse, lex: lex, PyDisk: PyDisk,
   Turtle: Turtle, pyRepr: pyRepr, pyStr: pyStr, snapshotVars: snapshotVars,
   COLORS: COLORS
 };
@@ -3482,8 +4603,8 @@ var CURRICULUM = [
 },
 {
   n: 4, key: "real", title: "Настоящий Python", icon: "⚙️",
-  desc: "Стандартная библиотека, файлы, генераторы и декораторы. С середины мира включается настоящий CPython.",
-  engine: "mixed",
+  desc: "Стандартная библиотека, файлы, генераторы, декораторы и регулярные выражения. Всё работает на встроенном движке — без загрузок и без интернета.",
+  engine: "mini",
   lessons: [
     { id:"imports",       title:"import",                sub:"чужой код в своей программе" },
     { id:"math-random",   title:"math и random",         sub:"модули стандартной библиотеки" },
@@ -3495,16 +4616,16 @@ var CURRICULUM = [
     { id:"csv",           title:"CSV и таблицы",         sub:"данные из таблиц" },
     { id:"collections",   title:"collections",           sub:"Counter и defaultdict" },
     { id:"itertools",     title:"itertools",             sub:"комбинации и цепочки" },
-    { id:"generators",    title:"Генераторы",            sub:"yield и ленивые вычисления", engine:"pyodide" },
-    { id:"decorators",    title:"Декораторы",            sub:"обёртка вокруг функции", engine:"pyodide" },
-    { id:"context",       title:"Контекстные менеджеры", sub:"свой with", engine:"pyodide" },
-    { id:"regex",         title:"Регулярные выражения",  sub:"поиск по шаблону", engine:"pyodide" },
-    { id:"typing",        title:"Подсказки типов",       sub:"код, понятный другим", engine:"pyodide" },
-    { id:"pip-venv",      title:"pip и окружения",       sub:"чужие пакеты", engine:"pyodide" },
-    { id:"read-code",     title:"Чтение чужого кода",    sub:"навык, о котором молчат", engine:"pyodide" },
-    { id:"pep8",          title:"Стиль кода",            sub:"PEP 8 и читаемость", engine:"pyodide" },
-    { id:"perf",          title:"Что тормозит",          sub:"сложность и измерения", engine:"pyodide" },
-    { id:"boss-package",  title:"Свой пакет",            sub:"собрать и оформить", boss:true, engine:"pyodide" }
+    { id:"generators",    title:"Генераторы",            sub:"yield и ленивые вычисления" },
+    { id:"decorators",    title:"Декораторы",            sub:"обёртка вокруг функции" },
+    { id:"context",       title:"Контекстные менеджеры", sub:"свой with" },
+    { id:"regex",         title:"Регулярные выражения",  sub:"поиск по шаблону" },
+    { id:"typing",        title:"Подсказки типов",       sub:"код, понятный другим" },
+    { id:"pip-venv",      title:"pip и окружения",       sub:"чужие пакеты" },
+    { id:"read-code",     title:"Чтение чужого кода",    sub:"навык, о котором молчат" },
+    { id:"pep8",          title:"Стиль кода",            sub:"PEP 8 и читаемость" },
+    { id:"perf",          title:"Что тормозит",          sub:"сложность и измерения" },
+    { id:"boss-package",  title:"Свой пакет",            sub:"собрать и оформить", boss:true }
   ]
 },
 {
@@ -5079,7 +6200,7 @@ CONTENT.world3 = {
       p:"Самая частая ошибка новичка: внутри функции стоит <code>print</code> вместо <code>return</code>. На экране всё правильно, а в переменной — <code>None</code>, и дальше считать нечем.",
       demo:'def bad(a, b):\n    print(a + b)\n\n\ndef good(a, b):\n    return a + b\n\n\nx = bad(2, 3)\ny = good(2, 3)\nprint("bad вернула:", x)\nprint("good вернула:", y)\nprint(y * 10)' },
     { h:"return выходит из функции сразу",
-      p:"Строки после сработавшего <code>return</code> не выполняются. Это удобно: проверил условие — сразу вернул ответ, без длинных <code>else</code>.",
+      p:"Строки после сработавшего <code>return</code> не выполняются. Это удобно: условие сошлось — сразу отдаём ответ, без длинных <code>else</code>.",
       demo:'def rank(score):\n    if score >= 90:\n        return "отлично"\n    if score >= 60:\n        return "нормально"\n    return "надо повторить"\n\n\nfor s in [95, 70, 20]:\n    print(s, "->", rank(s))' }
   ],
   task:{
@@ -5218,8 +6339,8 @@ CONTENT.world3 = {
   lede: "Иногда заранее неизвестно, сколько аргументов будет. Для этого есть звёздочка: <code>*args</code> собирает лишние по порядку, <code>**kwargs</code> — лишние по имени.",
   theory: [
     { h:"Пустое — это ложь",
-      p:"Пригодится через минуту. В условии пустой список, пустой кортеж, пустая строка и ноль считаются ложью, а любое непустое значение — правдой. Поэтому <code>if not items</code> читается как «если ничего нет».",
-      demo:'for value in [[], [1], "", "а", 0, 7, {}]:\n    print(repr(value), "->", bool(value), "| not:", not value)' },
+      p:"Пригодится через минуту. В условии пустой список, пустой кортеж, пустой словарь, пустая строка и ноль считаются ложью, а всё непустое — правдой. Проверить можно функцией <code>bool</code>: она показывает, чем значение окажется в условии. Поэтому <code>if not nums</code> читается как «если ничего не передали».",
+      demo:'print(bool([]), bool([1]))\nprint(bool(""), bool("а"))\nprint(bool(()), bool((1,)))\nprint(bool({}), bool({"а": 1}))\nprint(bool(0), bool(7))\n\nnums = []\nif not nums:\n    print("ничего не передали")' },
     { h:"*args — сколько угодно значений",
       p:"Звёздочка перед именем параметра означает «всё остальное сюда». Внутри функции это обычный кортеж, по нему можно пройти циклом. Имя <code>args</code> — просто договорённость, можно любое.",
       demo:'def total(*nums):\n    return sum(nums)\n\n\nprint(total())\nprint(total(5))\nprint(total(1, 2, 3, 4))\n\n\ndef show(*nums):\n    print(nums, type(nums), len(nums))\n\n\nshow(1, 2, 3)' },
@@ -5239,16 +6360,16 @@ CONTENT.world3 = {
     list:[
       "stats без аргументов возвращает строку «нет данных»",
       "stats с числами возвращает «N шт, сумма S, максимум M» — например «3 шт, сумма 12, максимум 7»",
-      "tag возвращает «имя: ключ=значение, ключ=значение», ключи по алфавиту",
-      "tag без именованных аргументов возвращает просто «имя»",
+      "tag возвращает «имя [ключ:значение; ключ:значение]», ключи по алфавиту",
+      "tag без именованных аргументов возвращает просто «имя», без скобок",
       "Вызовы в заготовке менять не нужно"
     ],
     starter:'def stats(*nums):\n    return "нет данных"\n\n\ndef tag(name, **props):\n    return name\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
-    solution:'def stats(*nums):\n    if not nums:\n        return "нет данных"\n    return f"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}"\n\n\ndef tag(name, **props):\n    if not props:\n        return name\n    parts = [f"{k}={props[k]}" for k in sorted(props)]\n    return name + ": " + ", ".join(parts)\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
+    solution:'def stats(*nums):\n    if not nums:\n        return "нет данных"\n    return f"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}"\n\n\ndef tag(name, **props):\n    if not props:\n        return name\n    parts = [f"{k}:{props[k]}" for k in sorted(props)]\n    return name + " [" + "; ".join(parts) + "]"\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
     hints:[
       "Про пустоту было в теории: if not nums значит «ничего не передали»",
       "len(nums), sum(nums), max(nums) — всё, что нужно для строки. Собери её f-строкой",
-      "Для tag: sorted(props) даёт ключи по алфавиту, а склеить пары поможет \", \".join([...])"
+      "Для tag: sorted(props) даёт ключи по алфавиту, пары собираются включением, а склеивает их \"; \".join([...])"
     ],
     check:{ kind:"output" }
   }
@@ -5306,7 +6427,7 @@ CONTENT.world3 = {
       demo:'def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n\n\nops = {"+": add, "-": sub}\nfor sign in ["+", "-"]:\n    print(sign, "->", ops[sign](10, 4))' },
     { h:"lambda — та же функция, короче",
       p:"<code>lambda</code> из Мира 2 — это просто функция без имени. В словарь её кладут так же, как обычную. Годится, когда тело — одно выражение.",
-      demo:'ops = {\n    "+": lambda a, b: a + b,\n    "*": lambda a, b: a * b,\n    "max": max,\n}\nfor name in ["+", "*", "max"]:\n    print(name, "->", ops[name](6, 7))' }
+      demo:'formulas = {\n    "площадь": lambda a, b: a * b,\n    "периметр": lambda a, b: 2 * (a + b),\n    "сторона побольше": max,\n}\nfor name in ["площадь", "периметр", "сторона побольше"]:\n    print(name, "->", formulas[name](6, 7))' }
   ],
   task:{
     type:"code",
@@ -5342,8 +6463,8 @@ CONTENT.world3 = {
       demo:'import tools\n\nprint(tools.clean("  ДА  "))\nprint(tools.shout("подъём"))\nprint(tools.PREFIX + "и переменные тоже")' },
     { h:"from ... import берёт по имени",
       p:"Если нужна одна функция, её забирают отдельно — тогда точка не нужна. Так короче, но по коду труднее понять, откуда взялось имя.",
-      files:{ "tools.py": 'def clean(text):\n    return text.strip().lower()\n\n\ndef shout(text):\n    return text.upper() + "!"\n' },
-      demo:'from tools import clean, shout\n\nprint(clean("  Тише  "))\nprint(shout("громче"))' },
+      files:{ "tools.py": 'def trim(text):\n    return text.strip()\n\n\ndef repeat(text, times):\n    return text * times\n' },
+      demo:'from tools import trim, repeat\n\nprint(trim("   тише   ") + "|")\nprint(repeat("ха", 3))' },
     { h:"В модуль попадает всё, что объявлено в файле",
       p:"Функции, переменные, классы — всё, что записано в файле на верхнем уровне. Поэтому модуль стоит держать «чистым»: только определения, без лишних <code>print</code>.",
       files:{ "tools.py": 'print("этот print сработает при import — так делать не надо")\n\n\ndef hello():\n    return "привет"\n' },
@@ -5430,7 +6551,7 @@ CONTENT.world3 = {
       p:"<code>ValueError</code> — значение не годится. <code>TypeError</code> — не тот тип. <code>KeyError</code> — нет такого ключа. Тип ошибки — это половина сообщения.",
       demo:'def repeat(text, times):\n    if type(text) is not str:\n        raise TypeError("первым аргументом нужна строка")\n    if times < 1:\n        raise ValueError("повторить нужно хотя бы один раз")\n    return text * times\n\n\nfor args in [("ха", 3), (5, 3), ("ха", 0)]:\n    try:\n        print(repeat(args[0], args[1]))\n    except (TypeError, ValueError) as e:\n        print(type(e).__name__, "->", e)' },
     { h:"Своя ошибка — свой класс",
-      p:"Когда встроенные типы не подходят по смыслу, объявляют свой: одна строка, наследник <code>Exception</code>. Дальше он работает как остальные. Слово <code>class</code> здесь забегает вперёд — классы разбираются в уроках 14–20 этого мира. Пока достаточно запомнить эти две строки как готовый приём.",
+      p:"Когда встроенные типы не подходят по смыслу, объявляют свой: одна строка, наследник <code>Exception</code>. Дальше он работает как остальные. Слово <code>class</code> здесь забегает вперёд — классы разбираются в уроках 14–19 этого мира. Пока достаточно запомнить эти две строки как готовый приём.",
       demo:'class TooLoud(Exception):\n    pass\n\n\ndef say(text):\n    if text.isupper():\n        raise TooLoud("не кричи: " + text)\n    return text\n\n\nfor phrase in ["привет", "АААА"]:\n    try:\n        print(say(phrase))\n    except TooLoud as e:\n        print("поймали свою ошибку:", e)' }
   ],
   task:{
@@ -5455,17 +6576,17 @@ CONTENT.world3 = {
 },
 
 "debug": {
-  lede: "Баг — это не «программа сломалась». Это «программа делает не то, что я думал». Искать причину нужно приёмами, а не наугад.",
+  lede: "Баг — это не «программа сломалась». Это «программа делает не то, что задумано». Искать причину нужно приёмами, а не наугад.",
   theory: [
     { h:"Шаг первый: что ожидал и что получил",
-      p:"Пока не сформулируешь оба ответа точно, искать нечего. «Не работает» — не описание. «Ждал 28, получил 10» — уже описание, и оно почти показывает, где смотреть.",
-      demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\nprint("ждал 28, получил", total)' },
+      p:"Пока оба ответа не названы точно, искать нечего. «Не работает» — не описание. «Надо 28, вышло 10» — уже описание, и оно почти показывает, где смотреть.",
+      demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\nprint("надо 28, вышло", total)' },
     { h:"Шаг второй: печатать промежуточное",
       p:"Самый быстрый способ — вставить <code>print</code> внутрь цикла и посмотреть, что там на каждом шаге. Не гадай: смотри.",
       demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\n    print("  шаг: n =", n, "total =", total)\nprint("итог:", total)' },
     { h:"Шаг третий: сузить участок",
       p:"Если программа длинная, отрежь половину. Работает — виновата вторая половина. Не работает — первая. Пять таких делений хватает почти всегда. В примере пригодится <code>repr</code>: он печатает строку с кавычками, и тогда видно пробелы и пустоту.",
-      demo:'def clean(text):\n    text = text.strip()\n    text = text.lower()\n    text = text.replace("ё", "е")\n    return text\n\n\n# проверяем по одному шагу, а не всю цепочку сразу\nprint(repr("  Ёлка ".strip()))\nprint(repr("  Ёлка ".strip().lower()))\nprint(repr(clean("  Ёлка ")))' },
+      demo:'def tidy(line):\n    line = line.strip()\n    line = line.replace(",", "")\n    line = line.replace("  ", " ")\n    return line\n\n\n# проверяем по одному шагу, а не всю цепочку сразу\nprint(repr("  раз, два  ".strip()))\nprint(repr("  раз, два  ".strip().replace(",", "")))\nprint(repr(tidy("  раз,  два  ")))' },
     { h:"Частые причины",
       p:"Перепутаны <code>=</code> и <code>==</code>. Промах на единицу в <code>range</code>. Присваивание вместо накопления, как в примерах выше. Изменение списка прямо в цикле по нему. Сравнение строки с числом: <code>\"5\" == 5</code> — это ложь.",
       demo:'print("5" == 5)\nprint(int("5") == 5)\nprint(list(range(1, 5)))\nprint(list(range(1, 6)))\n\nitems = [1, 2, 3, 4]\nfor x in items[:]:\n    if x % 2 == 0:\n        items.remove(x)\nprint("копия спасла:", items)' }
@@ -5504,7 +6625,7 @@ CONTENT.world3 = {
       p:"Несколько <code>assert</code> внизу файла — простейший тест. Меняешь функцию, запускаешь файл: молчит — значит ничего не сломано. Так работают и настоящие тесты, только их запускает отдельная программа.",
       demo:'def clamp(value, low, high):\n    if value < low:\n        return low\n    if value > high:\n        return high\n    return value\n\n\nassert clamp(5, 1, 10) == 5\nassert clamp(-3, 1, 10) == 1\nassert clamp(99, 1, 10) == 10\nassert clamp(1, 1, 10) == 1\nprint("4 проверки прошли")' },
     { h:"Что проверять",
-      p:"Обычный случай, край и пустоту. Хорошее правило: на каждую строчку условия в функции — одна проверка. И ещё: <code>assert</code> нужен для проверки себя, а не данных от пользователя — для них есть <code>raise</code> из прошлого урока.",
+      p:"Обычный случай, край и пустоту. Хорошее правило: на каждую строчку условия в функции — одна проверка. И ещё: <code>assert</code> нужен для проверки себя, а не данных от пользователя — для них есть <code>raise</code> из урока про свои исключения.",
       demo:'def rank(score):\n    if score >= 90:\n        return "отлично"\n    if score >= 60:\n        return "нормально"\n    return "надо повторить"\n\n\nassert rank(100) == "отлично"\nassert rank(90) == "отлично"\nassert rank(89) == "нормально"\nassert rank(60) == "нормально"\nassert rank(59) == "надо повторить"\nassert rank(0) == "надо повторить"\nprint("границы проверены")' }
   ],
   task:{
@@ -5540,9 +6661,9 @@ CONTENT.world3 = {
     { h:"Свои проверки — до чужих",
       p:"Пока тесты скрыты, напиши свои. Если <code>assert</code> молчит — всё сходится. Если ругается — ошибка нашлась сама, ещё до проверки.",
       demo:'def short(text):\n    if len(text) <= 8:\n        return text\n    return text[:7] + "…"\n\n\nassert short("привет") == "привет"\nassert short("") == ""\nassert short("двенадцать") == "двенадц…"\nassert len(short("очень длинное название")) == 8\nprint("свои проверки прошли")' },
-    { h:"Где такая функция ломается",
-      p:"У функции выше есть дыра: пустая строка. <code>split()</code> вернёт пустой список, включение даст пустую строку — и это как раз нужный ответ. А вот если написать <code>name[0]</code> напрямую, программа упадёт.",
-      demo:'def initials(name):\n    return name[0].upper() + "."\n\n\nprint(initials("иван петров"))\nprint(initials(""))',
+    { h:"Где такие функции ломаются",
+      p:"Почти всегда — на пустом входе. Если брать первый знак напрямую, у пустой строки его нет, и программа падает. Такие места и надо искать заранее: пустая строка, ноль, один элемент вместо двух.",
+      demo:'def first_letter(text):\n    return text[0].upper()\n\n\nprint(first_letter("аня"))\nprint(first_letter(""))',
       err:true }
   ],
   task:{
@@ -5579,7 +6700,7 @@ CONTENT.world3 = {
       p:"<code>class</code> описывает, что это за вещь. Чтобы получить саму вещь, класс вызывают как функцию: <code>Hero()</code>. Так можно сделать сколько угодно объектов по одной заготовке.",
       demo:'class Hero:\n    pass\n\n\na = Hero()\nb = Hero()\nprint(type(a))\nprint(a is b)' },
     { h:"У объекта свои поля",
-      p:"Поле дописывается через точку. У каждого объекта поля свои: изменил у одного — второй не тронут. У словаря то же самое, но у объекта есть класс: по <code>type(a)</code> сразу видно, что это <code>Hero</code>, а не «какой-то словарь».",
+      p:"Поле дописывается через точку. У каждого объекта поля свои: изменение у одного не задевает второго. У словаря то же самое, но у объекта есть класс: по <code>type(a)</code> сразу видно, что это <code>Hero</code>, а не «какой-то словарь».",
       demo:'class Hero:\n    pass\n\n\nanya = Hero()\nanya.name = "Аня"\nanya.hp = 10\n\nborya = Hero()\nborya.name = "Боря"\nborya.hp = 7\n\nprint(anya.name, anya.hp)\nprint(borya.name, borya.hp)' },
     { h:"Поле класса — общее значение",
       p:"Записанное прямо в классе достаётся всем объектам сразу. Пока объект не завёл своё поле с тем же именем, он видит общее.",
@@ -5628,7 +6749,7 @@ CONTENT.world3 = {
   ],
   task:{
     type:"code",
-    goal:"Опиши класс <code>Purse</code> — копилку с двумя методами.",
+    goal:"Опиши класс <code>Purse</code> — ту же копилку, что была в уроке про область видимости, но теперь на классе. Сравни, где удобнее.",
     list:[
       "Общее поле coins со значением 0",
       "add(self, amount) прибавляет к копилке и возвращает новую сумму",
@@ -5656,10 +6777,10 @@ CONTENT.world3 = {
       p:"Обычные правила из урока про значения по умолчанию: необязательные параметры идут последними. И та же ловушка со списком — поэтому список создают внутри, а не в объявлении.",
       demo:'class Hero:\n    def __init__(self, name, hp=10, items=None):\n        self.name = name\n        self.hp = hp\n        self.items = items if items is not None else []\n\n\na = Hero("Аня")\nb = Hero("Боря", 7)\na.items.append("меч")\nprint(a.name, a.hp, a.items)\nprint(b.name, b.hp, b.items)' },
     { h:"__repr__ — как объект выглядит",
-      p:"Без него печать объекта показывает служебную запись, из которой ничего не понять. <code>__repr__</code> обязан вернуть строку — и её видно и при <code>print</code>, и внутри списка.",
+      p:"Без него печать объекта показывает служебную запись, из которой ничего не понять. <code>__repr__</code> обязан вернуть строку — и её видно и при <code>print</code>, и внутри списка. Запись <code>{self.name!r}</code> в f-строке означает «покажи со кавычками, как в repr» — так сразу видно, что это текст.",
       demo:'class Hero:\n    def __init__(self, name, hp=10):\n        self.name = name\n        self.hp = hp\n\n    def __repr__(self):\n        return f"Hero({self.name!r}, hp={self.hp})"\n\n\nteam = [Hero("Аня"), Hero("Боря", 7)]\nprint(team[0])\nprint(team)' },
     { h:"Проверки прямо в __init__",
-      p:"Хорошее место для <code>raise</code> из прошлых уроков: объект не должен рождаться с негодными данными. Проверил на входе — дальше можно доверять полям.",
+      p:"Хорошее место для <code>raise</code> из прошлых уроков: объект не должен рождаться с негодными данными. Проверка на входе — и дальше полям можно доверять.",
       demo:'class Hero:\n    def __init__(self, name, hp=10):\n        if len(name) < 2:\n            raise ValueError("имя слишком короткое")\n        if hp < 1:\n            raise ValueError("здоровье должно быть больше нуля")\n        self.name = name\n        self.hp = hp\n\n    def __repr__(self):\n        return f"Hero({self.name!r}, hp={self.hp})"\n\n\nprint(Hero("Аня"))\ntry:\n    Hero("Я")\nexcept ValueError as e:\n    print("отказ:", e)' }
   ],
   task:{
@@ -5694,7 +6815,7 @@ CONTENT.world3 = {
       demo:'class Hero:\n    def hit(self):\n        return 1\n\n\nclass Mage(Hero):\n    def hit(self):\n        return 3\n\n\nclass Warrior(Hero):\n    def hit(self):\n        return 2\n\n\nfor who in [Hero(), Mage(), Warrior()]:\n    print(type(who).__name__, "->", who.hit())' },
     { h:"super() — позвать родителя",
       p:"Часто нужно не заменить родительский метод, а дополнить: сделай как раньше, а потом ещё вот это. <code>super()</code> и означает «тот же метод у родителя».",
-      demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp} hp"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n        self.mana = 5\n\n    def card(self):\n        return super().card() + f", мана {self.mana}"\n\n\nprint(Hero("Боря", 12).card())\nprint(Mage("Аня").card())' },
+      demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp} hp"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n        self.mana = 5\n\n    def card(self):\n        return "маг " + super().card()\n\n\nprint(Hero("Боря", 12).card())\nprint(Mage("Аня").card())' },
     { h:"Зачем это нужно",
       p:"Один список — разные объекты, а код один. Каждый отвечает за себя сам: цикл не спрашивает, кто перед ним, просто зовёт метод. Это главная выгода наследования.",
       demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def hit(self):\n        return 1\n\n    def __repr__(self):\n        return f"{type(self).__name__}({self.name})"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n\n    def hit(self):\n        return 3\n\n\nclass Warrior(Hero):\n    def __init__(self, name):\n        super().__init__(name, 15)\n\n    def hit(self):\n        return 2\n\n\nteam = [Mage("Аня"), Warrior("Боря"), Hero("Витя", 10)]\nprint(team)\nfor who in team:\n    print(who.name, "бьёт на", who.hit())\nprint("всего урона:", sum([w.hit() for w in team]))' }
@@ -5769,12 +6890,15 @@ CONTENT.world3 = {
     { h:"Кто здесь есть",
       p:"Базовый боец умеет держать удар и бить. Потомки отличаются только числами и названием — остальное достаётся по наследству.",
       demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\na = Fighter("Аня", 20, 5)\na.take(7)\nprint(a, a.alive())' },
-    { h:"Ход боя",
-      p:"Один шаг — один удар. Пока оба живы, ходят по очереди. Никакой случайности: одинаковый бой каждый раз, и это удобно — результат можно проверить.",
-      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} бьёт {b.name} на {a.damage}, у {b.name} {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nwinner = fight(Fighter("Аня", 20, 6), Fighter("Боря", 18, 5))\nprint("победил:", winner.name)' },
+    { h:"Один удар",
+      p:"Начинать надо с самого мелкого действия: один боец бьёт другого. Функция меняет здоровье и возвращает строку для журнала боя. Никакой случайности — значит бой всегда одинаковый, и результат можно проверить.",
+      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\ndef strike(a, b):\n    b.take(a.damage)\n    return f"{a.name} -> {b.name}: -{a.damage}, осталось {b.hp}"\n\n\nanya = Fighter("Аня", 20, 6)\nborya = Fighter("Боря", 18, 5)\nprint(strike(anya, borya))\nprint(strike(borya, anya))\nprint(anya.hp, borya.hp)' },
+    { h:"Ходят по очереди",
+      p:"Бой — это удары, пока оба живы. Обмен местами одной строкой <code>a, b = b, a</code> избавляет от «а теперь наоборот»: бьёт всегда тот, кто в <code>a</code>. Считать шаги и решать, кто победил, — уже твоя задача в этом уроке.",
+      demo:'class Runner:\n    def __init__(self, name, steps):\n        self.name = name\n        self.steps = steps\n\n\ndef swap_demo(a, b):\n    for i in range(4):\n        print(i + 1, "ход:", a.name)\n        a, b = b, a\n\n\nswap_demo(Runner("Аня", 0), Runner("Боря", 0))' },
     { h:"Особенность потомка",
-      p:"Броня — это изменение того, как боец получает удар. Меняем один метод, всё остальное остаётся общим.",
-      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\nk = Knight("Рыцарь", 20, 4)\nk.take(5)\nprint(k.hp)\nk.take(2)\nprint(k.hp)' }
+      p:"Отличие бойца — это изменение одного метода, всё остальное достаётся по наследству. Целитель после каждого удара залечивает единицу — но только пока жив.",
+      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\nclass Healer(Fighter):\n    def take(self, amount):\n        super().take(amount)\n        if self.hp > 0:\n            self.hp = self.hp + 1\n\n\nh = Healer("Целитель", 10, 4)\nh.take(3)\nprint(h.hp)\nh.take(8)\nprint(h.hp)' }
   ],
   task:{
     type:"code",
@@ -5782,15 +6906,15 @@ CONTENT.world3 = {
     list:[
       "Knight — потомок Fighter, переопределяет take: урон уменьшается на 3, но не меньше 1",
       "fight(a, b) проводит бой по шагам, пока оба живы, и возвращает победителя",
-      "На каждом шаге печатать: «1: Аня бьёт Рыцарь на 6, у Рыцарь 19»",
+      "На каждом шаге печатать: «1: Аня -> Рыцарь: -6, осталось 19»",
       "Первым бьёт тот, кто передан первым аргументом",
       "Строки в конце менять не нужно"
     ],
     starter:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    pass\n\n\ndef fight(a, b):\n    return a\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
-    solution:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} бьёт {b.name} на {a.damage}, у {b.name} {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
+    solution:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} -> {b.name}: -{a.damage}, осталось {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
     hints:[
       "У Knight хватит одного метода: def take(self, amount): super().take(max(1, amount - 3))",
-      "В fight цикл while a.alive() and b.alive(): бьём, печатаем, меняем местами",
+      "В fight цикл while a.alive() and b.alive(): наносим удар, печатаем строку журнала, меняем бойцов местами",
       "Поменять бойцов местами можно одной строкой: a, b = b, a",
       "Осторожно с концовкой: после последнего обмена в a может лежать проигравший. Поэтому вернуть надо того, кто жив: return a if a.alive() else b"
     ],
@@ -5815,7 +6939,7 @@ CONTENT.world3 = {
       demo:'colors = ["синий", "красный", "синий"]\ncounts = {}\nfor c in colors:\n    counts[c] = counts.get(c, 0) + 1\nprint(counts)\nprint(counts.get("зелёный", 0))' },
     { h:"Сортировка по двум условиям сразу",
       p:"Ключом может быть кортеж: сравниваться будет сначала первое значение, потом второе. Минус перед числом переворачивает порядок — так «сначала самые частые, потом по алфавиту» пишется в одну строку.",
-      demo:'counts = {"синий": 2, "красный": 1, "белый": 2}\npairs = sorted(counts.items(), key=lambda p: (-p[1], p[0]))\nprint(pairs)\nprint(pairs[0][0])' }
+      demo:'heroes = {"аня": 7, "боря": 9, "витя": 7}\npairs = sorted(heroes.items(), key=lambda p: (-p[1], p[0]))\nprint(pairs)\nprint("сильнее всех:", pairs[0][0])' }
   ],
   task:{
     type:"code",
@@ -5838,7 +6962,7 @@ CONTENT.world3 = {
     hints:[
       "clean — три метода подряд: text.strip().lower().replace(\"ё\", \"е\")",
       "words — вызови свою же clean, а потом split(): пробелы он разберёт сам",
-      "top_word: словарь-счётчик, потом sorted(counts.items(), key=lambda p: (-p[1], p[0])) и взять pairs[0][0]"
+      "top_word: сначала словарь-счётчик по словам, потом сортировка пар по двум условиям — сначала по количеству в обратную сторону, потом по слову, как в теории. Ответ — первое слово первой пары"
     ],
     check:{ kind:"tests", calls:[
       'textkit.clean("  Ёлка Растёт  ")',
@@ -5853,6 +6977,875 @@ CONTENT.world3 = {
   }
 },
 
+
+};
+
+</script>
+
+<script>
+/* ============================================================
+   Мир 4 «Настоящий Python» — содержание уроков.
+   Ключ объекта = id из curriculum.js. Менять ключи нельзя.
+   Схема урока описана в content/world1.js, новое — в README.
+
+   Что появилось в этом мире:
+     - файлы с данными: task.data и theory[i].data — {"имя.txt": "текст"}
+       Файлы живут в памяти запуска, ученик видит их в панели «файлы на диске».
+     - модули стандартной библиотеки: math, random, json, csv, datetime,
+       collections, itertools, re, pathlib, statistics, time.
+
+   Правило этого мира: ничего, что зависит от текущего времени
+   (date.today(), datetime.now(), time.time()), в примерах и решениях
+   не печатаем — иначе сверка с настоящим python3 невозможна.
+   ============================================================ */
+window.CONTENT = window.CONTENT || {};
+CONTENT.world4 = {
+
+"imports": {
+  lede: "Свои модули в Мире 3 уже были. Теперь то же самое, но с чужими: <b>стандартная библиотека</b> — это готовый код, который лежит в Python с самого начала.",
+  theory: [
+    { h:"import берёт готовое",
+      p:"Никто не пишет квадратный корень руками. Модуль <code>math</code> уже есть: подключил — пользуйся. Точно так же, как со своим <code>tools.py</code> из Мира 3, только файл лежит не рядом, а внутри Python.",
+      demo:'import math\n\nprint(math.sqrt(144))\nprint(math.floor(3.7), math.ceil(3.2))\nprint(math.pi)' },
+    { h:"Три способа записи",
+      p:"<code>import math</code> — весь модуль, обращаться через точку. <code>from math import sqrt</code> — только нужное имя. <code>import math as m</code> — короткое имя. Первый способ понятнее: по коду сразу видно, откуда команда.",
+      demo:'import math\nfrom math import sqrt, floor\nimport math as m\n\nprint(math.sqrt(16))\nprint(sqrt(16))\nprint(m.sqrt(16))\nprint(floor(2.9))' },
+    { h:"Имя модуля — не переменная",
+      p:"Модуль подключается один раз в начале файла. Если написать <code>math = 5</code>, имя займётся числом, и <code>math.sqrt</code> перестанет работать. Поэтому свои переменные так не называют.",
+      demo:'import math\n\nmath = 5\nprint(math.sqrt(9))',
+      err:true },
+    { h:"Чего нет — того нет",
+      p:"Если модуля не существует, Python скажет об этом сразу при импорте. В тренажёре доступны не все модули настоящего Python — только те, что нужны для уроков. Если модуль не найдётся и ошибку не поймать, в красной карточке будет список доступных.",
+      demo:'try:\n    import telepathy\nexcept ImportError as e:\n    print("не нашлось:", e)\n\nimport math\nprint("а math на месте:", math.floor(9.9))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Посчитай длину гипотенузы и площадь круга, пользуясь модулем <code>math</code>.",
+    list:[
+      "Подключи math через import",
+      "hypot(a, b) — длина гипотенузы прямоугольного треугольника по теореме Пифагора",
+      "circle(r) — площадь круга, округлённая до двух знаков",
+      "В math уже есть готовый hypot — но сейчас собери его сам, из корня",
+      "Строки с print менять не нужно"
+    ],
+    starter:'def hypot(a, b):\n    return 0\n\n\ndef circle(r):\n    return 0\n\n\nprint(hypot(3, 4))\nprint(hypot(5, 12))\nprint(circle(1))\nprint(circle(2.5))\n',
+    solution:'import math\n\n\ndef hypot(a, b):\n    return math.sqrt(a * a + b * b)\n\n\ndef circle(r):\n    return round(math.pi * r * r, 2)\n\n\nprint(hypot(3, 4))\nprint(hypot(5, 12))\nprint(circle(1))\nprint(circle(2.5))\n',
+    hints:[
+      "Строка import math идёт в самом начале файла, до функций",
+      "Теорема Пифагора: квадрат гипотенузы равен сумме квадратов катетов. Значит нужен корень из суммы квадратов",
+      "Площадь круга — π на радиус в квадрате. Число π лежит в math.pi, а округляет round из Мира 1"
+    ],
+    check:{ kind:"output", needCode:["import"],
+            needMsg:"Условие задания: считать нужно через модуль math, а не своими формулами." }
+  }
+},
+
+"math-random": {
+  lede: "Два самых частых модуля разом: <code>math</code> для точных вычислений и <code>random</code> для случайности. Заодно разберёмся, почему случайность в программе — управляемая.",
+  theory: [
+    { h:"math: что там есть",
+      p:"Корень, факториал, наибольший общий делитель, числа π и e, модуль числа. Всё это уже написано и проверено — своё писать незачем.",
+      demo:'import math\n\nprint(math.sqrt(2))\nprint(math.factorial(6))\nprint(math.gcd(24, 36))\nprint(round(math.pi, 3), round(math.e, 3))\nprint(math.fabs(-7))' },
+    { h:"floor, ceil, round и trunc — разные вещи",
+      p:"<code>floor</code> всегда вниз, <code>ceil</code> всегда вверх, <code>trunc</code> отбрасывает дробь, <code>round</code> округляет к ближайшему. У <code>round</code> есть особенность: половинки идут к чётному, поэтому <code>round(2.5)</code> это 2.",
+      demo:'import math\n\nfor x in [2.5, 3.5, -2.5, 2.4, 2.6]:\n    print(x, "->", math.floor(x), math.ceil(x), math.trunc(x), round(x))' },
+    { h:"random: случайность из модуля",
+      p:"В Мире 2 <code>randint</code> и <code>choice</code> работали сразу — это было упрощение тренажёра. В настоящем Python их надо подключать: <code>import random</code>. Дальше всё как раньше.",
+      demo:'import random\n\nrandom.seed(1)\nprint(random.randint(1, 6))\nprint(random.choice(["меч", "щит", "лук"]))\nnums = [1, 2, 3, 4, 5]\nrandom.shuffle(nums)\nprint(len(nums), sorted(nums))' },
+    { h:"seed делает случайность повторяемой",
+      p:"<code>random.seed(число)</code> задаёт начало последовательности. С одинаковым seed программа выдаёт одинаковые «случайные» числа — это нужно, чтобы искать ошибки и проверять решения. Без seed каждый запуск разный.",
+      demo:'import random\n\nrandom.seed(42)\nfirst = [random.randint(1, 100) for i in range(5)]\nrandom.seed(42)\nsecond = [random.randint(1, 100) for i in range(5)]\nprint(first == second)\nprint(len(first), min(first) >= 1, max(first) <= 100)' },
+    { h:"statistics: среднее и медиана",
+      p:"Рядом стоит ещё один модуль — <code>statistics</code>. Среднее можно считать через <code>sum</code> и <code>len</code>, но медиану руками писать долго — а она уже есть. И обрати внимание: у целых чисел <code>mean</code> отдаёт целое, а не «6.0».",
+      demo:'import statistics\n\nscores = [4, 8, 6, 10, 2]\nprint(statistics.mean(scores))\nprint(statistics.median(scores))\nprint(statistics.median([1, 2, 3, 4]))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Собери отчёт по оценкам: среднее, медиана и разброс.",
+    list:[
+      "Подключи модуль statistics",
+      "report(scores) возвращает строку «среднее 6, медиана 6, разброс 8»",
+      "Среднее — через statistics.mean, округлить до одного знака. У целых чисел с целым средним mean отдаёт целое, поэтому в первой строке будет 6, а не 6.0",
+      "Разброс — максимум минус минимум",
+      "Строки с print менять не нужно"
+    ],
+    starter:'def report(scores):\n    return ""\n\n\nprint(report([4, 8, 6, 10, 2]))\nprint(report([5, 5, 5]))\nprint(report([1, 100]))\n',
+    solution:'import statistics\n\n\ndef report(scores):\n    avg = round(statistics.mean(scores), 1)\n    mid = statistics.median(scores)\n    spread = max(scores) - min(scores)\n    return f"среднее {avg}, медиана {mid}, разброс {spread}"\n\n\nprint(report([4, 8, 6, 10, 2]))\nprint(report([5, 5, 5]))\nprint(report([1, 100]))\n',
+    hints:[
+      "statistics.mean(scores) даёт среднее, statistics.median(scores) — медиану",
+      "Среднее округляем: round(statistics.mean(scores), 1)",
+      "Собери строку f-строкой: f\"среднее {avg}, медиана {mid}, разброс {spread}\""
+    ],
+    check:{ kind:"output", needCode:["statistics"],
+            needMsg:"По условию среднее и медиану берём из модуля statistics." }
+  }
+},
+
+"datetime": {
+  lede: "Дата — не строка. Если хранить «26.08.2026» текстом, к ней нельзя прибавить десять дней и нельзя сравнить с другой датой. Для этого есть модуль <code>datetime</code>.",
+  theory: [
+    { h:"date — просто дата",
+      p:"Создаётся тремя числами: год, месяц, день. Печатается как <code>2026-08-26</code> — это международный стандарт ISO 8601, от большего к меньшему. У даты есть поля <code>year</code>, <code>month</code>, <code>day</code>, а метод <code>weekday()</code> отдаёт номер дня недели, считая с нуля: понедельник это 0, среда — 2.",
+      demo:'from datetime import date\n\nd = date(2026, 8, 26)\nprint(d)\nprint(d.year, d.month, d.day)\nprint(d.weekday())' },
+    { h:"strftime — своя запись",
+      p:"Формат задаётся значками: <code>%d</code> день, <code>%m</code> месяц, <code>%Y</code> год, <code>%H</code> часы, <code>%M</code> минуты. Названия месяцев и дней Python пишет по-английски — так он устроен без дополнительной настройки. А <code>isoformat()</code> даёт ту самую стандартную запись <code>2026-08-26</code>.",
+      demo:'from datetime import date\n\nd = date(2026, 8, 26)\nprint(d.strftime("%d.%m.%Y"))\nprint(d.strftime("%d/%m/%y"))\nprint(d.strftime("%A"))\nprint(d.strftime("%d %B %Y"))\nprint(d.isoformat())' },
+    { h:"timedelta — срок",
+      p:"Разница между датами и то, что можно к дате прибавить. Дни, часы, минуты, недели. Вычитание двух дат даёт как раз <code>timedelta</code>, у него есть поле <code>days</code>.",
+      demo:'from datetime import date, timedelta\n\nstart = date(2026, 9, 1)\nend = date(2026, 9, 30)\nprint(end - start)\nprint((end - start).days)\nprint(start + timedelta(days=7))\nprint(start - timedelta(days=1))\nprint(start + timedelta(weeks=2))' },
+    { h:"Даты сравниваются",
+      p:"Больше, меньше, равно — всё работает. Значит даты можно сортировать обычным <code>sorted</code>, и не нужно ничего придумывать.",
+      demo:'from datetime import date\n\nbirthdays = [date(2011, 5, 17), date(2010, 12, 1), date(2011, 1, 3)]\nprint(sorted(birthdays))\nprint(min(birthdays), max(birthdays))\nprint(date(2026, 1, 1) < date(2026, 2, 1))' },
+    { h:"datetime — дата и время вместе",
+      p:"То же самое, но с часами, минутами и секундами. Метод <code>date()</code> отрезает время. Про <code>datetime.now()</code>: он даёт текущий момент, поэтому в примерах его не печатают — вывод был бы каждый раз разный.",
+      demo:'from datetime import datetime\n\nwhen = datetime(2026, 8, 26, 14, 30)\nprint(when)\nprint(when.hour, when.minute)\nprint(when.strftime("%H:%M %d.%m.%Y"))\nprint(when.date())\n\nnow = datetime.now()\nprint("сейчас известно:", now.year >= 2024)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Посчитай, сколько дней осталось до каждого дня рождения в 2026 году, считая от 1 сентября.",
+    list:[
+      "days_left(start, when) возвращает число дней между двумя датами",
+      "line(name, start, when) возвращает строку «аня: 15.09.2026, дней осталось: 14»",
+      "Дату в строке печатать через strftime(\"%d.%m.%Y\")",
+      "Если день рождения уже прошёл, число будет отрицательным — так и надо",
+      "Цикл внизу менять не нужно"
+    ],
+    starter:'from datetime import date\n\n\ndef days_left(start, when):\n    return 0\n\n\ndef line(name, start, when):\n    return name\n\n\nstart = date(2026, 9, 1)\npeople = [("аня", date(2026, 9, 15)), ("боря", date(2026, 12, 31)), ("витя", date(2026, 8, 20))]\nfor name, when in people:\n    print(line(name, start, when))\n',
+    solution:'from datetime import date\n\n\ndef days_left(start, when):\n    return (when - start).days\n\n\ndef line(name, start, when):\n    return f"{name}: {when.strftime(\'%d.%m.%Y\')}, дней осталось: {days_left(start, when)}"\n\n\nstart = date(2026, 9, 1)\npeople = [("аня", date(2026, 9, 15)), ("боря", date(2026, 12, 31)), ("витя", date(2026, 8, 20))]\nfor name, when in people:\n    print(line(name, start, when))\n',
+    hints:[
+      "Вычитание двух дат даёт timedelta, а у него есть поле days: (when - start).days",
+      "В f-строке кавычки внутри должны быть другими: f\"{when.strftime('%d.%m.%Y')}\"",
+      "В строку по порядку идут: имя, отформатированная дата, потом вызов days_left"
+    ],
+    check:{ kind:"output", needCode:["strftime"],
+            needMsg:"По условию дату нужно печатать через strftime, а не собирать из полей вручную." }
+  }
+},
+
+"files-read": {
+  lede: "Программа перестаёт быть игрушкой, когда работает с настоящими данными. Данные лежат в файлах — научимся их читать.",
+  theory: [
+    { h:"Файлы урока видно справа",
+      p:"В панели «файлы на диске» лежит <code>герои.txt</code>. Это настоящий файл для программы: его можно открыть, прочитать и разобрать. В тренажёре он живёт в памяти, но код точно такой же, как на компьютере.",
+      data:{ "герои.txt": "аня 7 маг\nборя 9 воин\nвитя 5 лучник\n" },
+      demo:'f = open("герои.txt")\nprint(f.read())\nf.close()' },
+    { h:"with закрывает файл сам",
+      p:"Открытый файл надо закрывать. Забыть легко, поэтому пишут <code>with</code>: он закроет файл сам, даже если внутри случится ошибка. Способ по умолчанию — других причин писать иначе почти не бывает. И ещё одна привычка: указывать <code>encoding=\"utf-8\"</code>. В тренажёре кодировка и так эта, а вот на Windows без указания русский текст может прочитаться мусором.",
+      data:{ "герои.txt": "аня 7 маг\nборя 9 воин\nвитя 5 лучник\n" },
+      demo:'with open("герои.txt", encoding="utf-8") as f:\n    text = f.read()\n\nprint(len(text), "знаков")\nprint(repr(text[:12]))\nprint(f.closed)' },
+    { h:"По файлу можно идти циклом",
+      p:"Это самый частый способ: строка за строкой, не загружая весь файл в память. Осторожно: у каждой строки на конце остаётся <code>\\n</code>, поэтому почти всегда пишут <code>strip()</code>.",
+      data:{ "герои.txt": "аня 7 маг\nборя 9 воин\nвитя 5 лучник\n" },
+      demo:'with open("герои.txt") as f:\n    for line in f:\n        print(repr(line))\n\nprint("--- и без лишнего ---")\nwith open("герои.txt") as f:\n    for line in f:\n        print(line.strip())' },
+    { h:"Разбор строки",
+      p:"Прочитали строку — разобрали на части знакомым <code>split()</code>. Числа приходят текстом, поэтому <code>int</code> обязателен: <code>\"7\" * 2</code> даст «77», а не 14.",
+      data:{ "герои.txt": "аня 7 маг\nборя 9 воин\nвитя 5 лучник\n" },
+      demo:'total = 0\nwith open("герои.txt") as f:\n    for line in f:\n        name, power, kind = line.split()\n        total += int(power)\n        print(f"{name:8} {kind:8} {power}")\nprint("всего силы:", total)' },
+    { h:"Файла может не быть",
+      p:"Обращение к несуществующему файлу — ошибка <code>FileNotFoundError</code>. Это как раз тот случай, когда пригодится <code>try</code> из Мира 3: программа не должна падать из-за отсутствующего файла.",
+      data:{ "герои.txt": "аня 7 маг\n" },
+      demo:'try:\n    with open("нет-такого.txt") as f:\n        print(f.read())\nexcept FileNotFoundError:\n    print("файла нет, работаю без него")\n\nwith open("герои.txt") as f:\n    print("а этот есть:", f.read().strip())' }
+  ],
+  task:{
+    type:"code",
+    goal:"Прочитай <code>оценки.txt</code> и посчитай средний балл каждого ученика.",
+    list:[
+      "В файле строки вида «аня 5 4 5 3»: имя и оценки через пробел",
+      "Для каждой строки напечатать «аня: средний 4.25»",
+      "Средний балл округлить до двух знаков",
+      "В конце напечатать «лучший: имя» — у кого средний больше всех",
+      "Открытие файла в заготовке уже есть: оценки надо превратить в числа и посчитать"
+    ],
+    data:{ "оценки.txt": "аня 5 4 5 3\nборя 3 3 4\nвитя 5 5 5 4 5\n" },
+    starter:'best_name = ""\nbest_avg = 0\n\nwith open("оценки.txt") as f:\n    for line in f:\n        parts = line.split()\n        name = parts[0]\n        marks = parts[1:]\n        print(name, marks)\n\nprint("лучший:", best_name)\n',
+    solution:'best_name = ""\nbest_avg = 0\n\nwith open("оценки.txt") as f:\n    for line in f:\n        parts = line.split()\n        name = parts[0]\n        marks = [int(m) for m in parts[1:]]\n        avg = round(sum(marks) / len(marks), 2)\n        print(f"{name}: средний {avg}")\n        if avg > best_avg:\n            best_avg = avg\n            best_name = name\n\nprint("лучший:", best_name)\n',
+    hints:[
+      "parts[1:] — это срез: все оценки без имени. Но они строки, их надо превратить в числа",
+      "Включением это одна строка: marks = [int(m) for m in parts[1:]]",
+      "Средний балл: round(sum(marks) / len(marks), 2). Лучшего запоминай в двух переменных сверху"
+    ],
+    check:{ kind:"output", needCode:["open"],
+            needMsg:"Оценки нужно прочитать из файла через open, а не вписать в код." }
+  }
+},
+
+"files-write": {
+  lede: "Программа, которая только читает, — половина дела. Теперь научимся сохранять результат так, чтобы он остался после закрытия программы.",
+  theory: [
+    { h:"Режим «w» — писать с нуля",
+      p:"Второй аргумент <code>open</code> — режим. <code>\"w\"</code> означает «писать»: если файла нет, он появится, а если есть — <b>его содержимое стирается сразу</b>. Это самая частая потеря данных у новичков.",
+      demo:'with open("отчёт.txt", "w") as f:\n    f.write("первая строка\\n")\n    f.write("вторая строка\\n")\n\nwith open("отчёт.txt") as f:\n    print(f.read())' },
+    { h:"write не добавляет перевод строки",
+      p:"<code>print</code> сам переводит строку, а <code>write</code> — нет. Забудешь <code>\\n</code> — всё склеится в одну строку. Ещё <code>write</code> возвращает число записанных знаков, это иногда удобно.",
+      demo:'with open("склейка.txt", "w") as f:\n    f.write("раз")\n    f.write("два")\n    n = f.write("три")\n\nprint("записали знаков:", n)\nwith open("склейка.txt") as f:\n    print(repr(f.read()))' },
+    { h:"Режим «a» — дописать в конец",
+      p:"<code>\"a\"</code> от слова append: старое остаётся, новое добавляется в конец. Так ведут журналы: каждый запуск дописывает свою строку.",
+      demo:'with open("журнал.txt", "w") as f:\n    f.write("начало\\n")\n\nfor i in range(3):\n    with open("журнал.txt", "a") as f:\n        f.write(f"шаг {i}\\n")\n\nwith open("журнал.txt") as f:\n    print(f.read())' },
+    { h:"Сразу список строк",
+      p:"<code>writelines</code> пишет список целиком — но переводы строк всё равно твоя забота. Часто удобнее собрать текст через <code>join</code> и записать одним <code>write</code>.",
+      demo:'rows = ["аня,5\\n", "боря,4\\n"]\nwith open("таблица.txt", "w") as f:\n    f.writelines(rows)\n\nlines = ["первая", "вторая", "третья"]\nwith open("текст.txt", "w") as f:\n    f.write("\\n".join(lines) + "\\n")\n\nwith open("текст.txt") as f:\n    print(f.read())' }
+  ],
+  task:{
+    type:"fix",
+    goal:"Программа должна вести журнал: записать заголовок, а потом дописать три шага. В журнале должно оказаться четыре строки.",
+    symptom:"В журнале остаётся только одна строка — «шаг 2». Заголовок и первые два шага куда-то пропадают.",
+    list:[
+      "Найди и исправь одну ошибку, не переписывая программу",
+      "Строки с print и цикл трогать не нужно",
+      "Подумай, чем отличаются режимы \"w\" и \"a\""
+    ],
+    starter:'with open("журнал.txt", "w") as f:\n    f.write("журнал работ\\n")\n\nfor i in range(3):\n    with open("журнал.txt", "w") as f:\n        f.write(f"шаг {i}\\n")\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
+    solution:'with open("журнал.txt", "w") as f:\n    f.write("журнал работ\\n")\n\nfor i in range(3):\n    with open("журнал.txt", "a") as f:\n        f.write(f"шаг {i}\\n")\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
+    hints:[
+      "Открой файл в панели справа после запуска и посмотри, что в нём осталось",
+      "Режим \"w\" стирает содержимое при каждом открытии — а открываем мы его в цикле",
+      "Дописывать в конец умеет режим \"a\": with open(\"журнал.txt\", \"a\") as f"
+    ],
+    check:{ kind:"output", fixBudget:2 }
+  }
+},
+
+"pathlib": {
+  lede: "Путь к файлу — это не просто строка. Склеивать пути руками через <code>+</code> — источник ошибок, поэтому в Python есть <code>pathlib</code>.",
+  theory: [
+    { h:"Path вместо строки",
+      p:"<code>Path</code> знает, что он путь. Части соединяются знаком дробной черты: в коде всегда пишут <code>/</code>, а печатается путь так, как принято в системе — на Windows будет обратная черта.",
+      demo:'from pathlib import Path\n\np = Path("данные") / "герои.txt"\nprint(p)\nprint(Path("папка") / "вложенная" / "файл.txt")' },
+    { h:"Разбор имени",
+      p:"У пути есть готовые части: <code>name</code> — имя с расширением, <code>stem</code> — без расширения, <code>suffix</code> — только расширение, <code>parent</code> — папка. Руками через <code>split(\".\")</code> это делать больше не нужно.",
+      demo:'from pathlib import Path\n\np = Path("данные") / "отчёт.2026.txt"\nprint("name:", p.name)\nprint("stem:", p.stem)\nprint("suffix:", p.suffix)\nprint("parent:", p.parent)\nprint(Path("readme").suffix == "")' },
+    { h:"Чтение и запись одной строкой",
+      p:"Для маленьких файлов <code>read_text</code> и <code>write_text</code> короче, чем <code>open</code> с <code>with</code>: файл открывается и закрывается сам. На настоящем компьютере им тоже передают <code>encoding=\"utf-8\"</code>.",
+      data:{ "письмо.txt": "привет\nэто письмо\n" },
+      demo:'from pathlib import Path\n\np = Path("письмо.txt")\nprint(p.exists())\nprint(p.read_text())\n\nnew = Path("ответ.txt")\nnew.write_text("получил, спасибо\\n")\nprint(new.read_text())\nprint(new.exists(), Path("нет-такого.txt").exists())' },
+    { h:"Замена расширения",
+      p:"<code>with_suffix</code> делает новый путь с другим расширением — обычная задача, когда из <code>.txt</code> получается <code>.csv</code>, а из <code>фото.png</code> — <code>фото.jpg</code>.",
+      demo:'from pathlib import Path\n\np = Path("таблица.txt")\nprint(p.with_suffix(".csv"))\nprint(Path("данные/отчёт.txt").with_suffix(".json"))\nprint(p.with_suffix(".csv").name)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Разбери список путей и собери из них отчёт.",
+    list:[
+      "describe(path) возвращает строку «отчёт.txt: имя отчёт, тип txt, папка данные»",
+      "Если у файла нет расширения, тип пишем «нет»",
+      "Если файл лежит без папки, папка получится «.» — так решает сам pathlib",
+      "Пользуйся Path, а не split по точкам и косым чертам",
+      "Цикл внизу менять не нужно"
+    ],
+    starter:'from pathlib import Path\n\n\ndef describe(path):\n    return str(path)\n\n\nfor raw in ["данные/отчёт.txt", "readme", "img/лого.png", "заметки.md"]:\n    print(describe(Path(raw)))\n',
+    solution:'from pathlib import Path\n\n\ndef describe(path):\n    kind = path.suffix[1:] if path.suffix else "нет"\n    return f"{path.name}: имя {path.stem}, тип {kind}, папка {path.parent}"\n\n\nfor raw in ["данные/отчёт.txt", "readme", "img/лого.png", "заметки.md"]:\n    print(describe(Path(raw)))\n',
+    hints:[
+      "path.suffix даёт расширение вместе с точкой: «.txt». Убрать точку поможет срез [1:]",
+      "Пустая строка — ложь, поэтому короткий if: path.suffix[1:] if path.suffix else \"нет\"",
+      "Остальное собирается f-строкой из path.name, path.stem и path.parent"
+    ],
+    check:{ kind:"output", needCode:["suffix"],
+            needMsg:"Разбирать путь нужно средствами Path (name, stem, suffix, parent), а не split." }
+  }
+},
+
+"json": {
+  lede: "JSON — то, на чём разговаривают программы в интернете. Внутри это знакомые словари и списки, только записанные текстом.",
+  theory: [
+    { h:"dumps: из Python в текст",
+      p:"<code>json.dumps</code> превращает словарь в строку. По умолчанию русские буквы прячутся в коды вида <code>\\u0430</code> — так безопаснее для старых систем. Чтобы читалось глазами, добавляют <code>ensure_ascii=False</code>.",
+      demo:'import json\n\nhero = {"имя": "аня", "сила": 7, "жив": True, "оружие": None}\nprint(json.dumps(hero))\nprint(json.dumps(hero, ensure_ascii=False))' },
+    { h:"Отступы для человека",
+      p:"<code>indent=2</code> раскладывает JSON по строкам. Так его читают люди; программам отступы не нужны, и для передачи по сети их не ставят — лишние байты.",
+      demo:'import json\n\ndata = {"герои": [{"имя": "аня", "сила": 7}, {"имя": "боря", "сила": 9}], "мир": 1}\nprint(json.dumps(data, ensure_ascii=False, indent=2))' },
+    { h:"loads: из текста в Python",
+      p:"Обратное превращение. Важно, что получается: <code>true</code> становится <code>True</code>, <code>null</code> — <code>None</code>, объект — словарём, массив — списком. Дальше это обычные данные Python.",
+      demo:'import json\n\ntext = \'{"имя": "боря", "сила": 9, "жив": true, "оружие": null, "теги": ["воин", "север"]}\'\nhero = json.loads(text)\nprint(hero)\nprint(hero["имя"], hero["сила"] * 2)\nprint(hero["жив"], hero["оружие"])\nprint(type(hero).__name__, type(hero["теги"]).__name__)' },
+    { h:"JSON в файл и обратно",
+      p:"Читать и писать можно сразу файлом: <code>json.dump</code> и <code>json.load</code> — без буквы s на конце. Так хранят настройки, сохранения игр и всё, что должно пережить закрытие программы.",
+      demo:'import json\n\nsave = {"уровень": 3, "герой": {"имя": "аня", "hp": 18}, "вещи": ["меч", "зелье"]}\nwith open("сейв.json", "w") as f:\n    json.dump(save, f, ensure_ascii=False, indent=2)\n\nwith open("сейв.json") as f:\n    loaded = json.load(f)\n\nprint(loaded == save)\nprint(loaded["герой"]["hp"], loaded["вещи"][0])' },
+    { h:"Не всё превращается в JSON",
+      p:"JSON знает только числа, строки, логические значения, списки, словари и <code>None</code>. Множество или свой объект он записать не умеет — придётся сначала превратить их в список или словарь.",
+      demo:'import json\n\nprint(json.dumps({"числа": [1, 2, 3]}))\nprint(json.dumps({"набор": {1, 2, 3}}))',
+      err:true }
+  ],
+  task:{
+    type:"code",
+    goal:"Прочитай сохранение игры из JSON, измени его и запиши обратно.",
+    list:[
+      "Прочитать сейв.json в переменную",
+      "Прибавить герою 5 к hp и добавить в вещи «щит»",
+      "Увеличить уровень на единицу",
+      "Записать обратно в сейв.json с ensure_ascii=False и indent=2",
+      "Отладочную печать print(save) из заготовки убрать: в выводе должен остаться только текст файла",
+      "Чтение и запись в заготовке уже написаны"
+    ],
+    data:{ "сейв.json": '{\n  "уровень": 3,\n  "герой": {\n    "имя": "аня",\n    "hp": 18\n  },\n  "вещи": [\n    "меч",\n    "зелье"\n  ]\n}' },
+    starter:'import json\n\nwith open("сейв.json") as f:\n    save = json.load(f)\n\nprint(save)\n\nwith open("сейв.json", "w") as f:\n    json.dump(save, f, ensure_ascii=False, indent=2)\n\nwith open("сейв.json") as f:\n    print(f.read())\n',
+    solution:'import json\n\nwith open("сейв.json") as f:\n    save = json.load(f)\n\nsave["герой"]["hp"] += 5\nsave["вещи"].append("щит")\nsave["уровень"] += 1\n\nwith open("сейв.json", "w") as f:\n    json.dump(save, f, ensure_ascii=False, indent=2)\n\nwith open("сейв.json") as f:\n    print(f.read())\n',
+    hints:[
+      "После json.load это обычный словарь: save[\"герой\"][\"hp\"] += 5",
+      "Вещи — список, у него есть append. Уровень — обычное число",
+      "Порядок важен: сначала все изменения, потом запись, и только потом чтение"
+    ],
+    check:{ kind:"output", needCode:["json"],
+            needMsg:"Работать нужно через модуль json, а не собирать текст руками." }
+  }
+},
+
+"csv": {
+  lede: "CSV — таблица в виде текста: строки таблицы, значения через запятую. Так отдают данные Excel, банки и почти любой сайт со статистикой.",
+  theory: [
+    { h:"Как это выглядит внутри",
+      p:"Первая строка — обычно заголовки столбцов, дальше данные. Разделитель — запятая. Читать можно и обычным <code>split(\",\")</code>, но у CSV есть подвох: запятая внутри значения. Поэтому есть модуль.",
+      data:{ "герои.csv": "имя,сила,класс\nаня,7,маг\nборя,9,воин\n" },
+      demo:'with open("герои.csv") as f:\n    print(f.read())' },
+    { h:"csv.reader — строки как списки",
+      p:"Каждая строка превращается в список значений. Все значения — строки, числа надо превращать самому. Первую строку с заголовками обычно пропускают.",
+      data:{ "герои.csv": "имя,сила,класс\nаня,7,маг\nборя,9,воин\n" },
+      demo:'import csv\n\nwith open("герои.csv") as f:\n    rows = csv.reader(f)\n    for row in rows:\n        print(row)\n\nwith open("герои.csv") as f:\n    rows = list(csv.reader(f))\n\nhead = rows[0]\nprint("столбцы:", head)\nfor row in rows[1:]:\n    print(row[0], int(row[1]) * 2)' },
+    { h:"DictReader — строки как словари",
+      p:"Удобнее: заголовки становятся ключами, и в коде видно, что берёшь. Если столбцы в файле поменяются местами, такой код не сломается — в отличие от <code>row[1]</code>.",
+      data:{ "герои.csv": "имя,сила,класс\nаня,7,маг\nборя,9,воин\n" },
+      demo:'import csv\n\nwith open("герои.csv") as f:\n    for item in csv.DictReader(f):\n        print(item)\n        print(item["имя"], "->", item["класс"], int(item["сила"]))' },
+    { h:"Запись таблицы",
+      p:"<code>csv.writer</code> и его <code>writerow</code>; список строк сразу — <code>writerows</code>. Значение с запятой внутри модуль сам возьмёт в кавычки — вот зачем он нужен вместо ручной склейки. И два обязательных аргумента у <code>open</code>: <code>newline=\"\"</code>, иначе на Windows между строками появятся пустые, и <code>encoding=\"utf-8\"</code> для русского текста.",
+      demo:'import csv\n\nwith open("вывод.csv", "w", encoding="utf-8", newline="") as f:\n    w = csv.writer(f)\n    w.writerow(["товар", "цена"])\n    w.writerows([["карандаш", 15], ["ручка, синяя", 30]])\n\nwith open("вывод.csv", encoding="utf-8", newline="") as f:\n    print(f.read())\n\nwith open("вывод.csv", encoding="utf-8", newline="") as f:\n    for row in csv.reader(f):\n        print(row)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Посчитай итоги по таблице покупок и сохрани отчёт в новый CSV.",
+    list:[
+      "Прочитать покупки.csv через csv.DictReader",
+      "Для каждой строки посчитать сумму: количество × цена",
+      "Записать итог.csv со столбцами товар,сумма и строкой на каждый товар",
+      "Последняя строка итога: «всего» и общая сумма",
+      "Открытие файлов, заголовок и чтение в конце в заготовке уже есть"
+    ],
+    data:{ "покупки.csv": "товар,количество,цена\nкарандаш,3,15\nтетрадь,5,30\nластик,2,10\n" },
+    starter:'import csv\n\nrows = []\ntotal = 0\n\nwith open("покупки.csv") as f:\n    for item in csv.DictReader(f):\n        print(item["товар"], item["количество"], item["цена"])\n\nwith open("итог.csv", "w") as f:\n    w = csv.writer(f)\n    w.writerow(["товар", "сумма"])\n\nwith open("итог.csv") as f:\n    for row in csv.reader(f):\n        print(row)\n',
+    solution:'import csv\n\nrows = []\ntotal = 0\n\nwith open("покупки.csv") as f:\n    for item in csv.DictReader(f):\n        cost = int(item["количество"]) * int(item["цена"])\n        total += cost\n        rows.append([item["товар"], cost])\n\nrows.append(["всего", total])\n\nwith open("итог.csv", "w") as f:\n    w = csv.writer(f)\n    w.writerow(["товар", "сумма"])\n    w.writerows(rows)\n\nwith open("итог.csv") as f:\n    for row in csv.reader(f):\n        print(row)\n',
+    hints:[
+      "Значения из DictReader — строки: int(item[\"количество\"]) * int(item[\"цена\"])",
+      "Складывай пары [товар, сумма] в список rows, а в конце добавь [\"всего\", total]",
+      "Записать сразу все строки: w.writerows(rows)"
+    ],
+    check:{ kind:"output", needCode:["csv"],
+            needMsg:"Читать и писать таблицу нужно через модуль csv." }
+  }
+},
+
+"collections": {
+  lede: "Два инструмента, которые заменяют самый частый скучный код: <code>Counter</code> считает повторы, <code>defaultdict</code> избавляет от проверки «а есть ли уже такой ключ».",
+  theory: [
+    { h:"Counter считает сам",
+      p:"В Мире 2 словарь-счётчик приходилось собирать руками. <code>Counter</code> делает это одной строкой — и печатается сразу по убыванию количества.",
+      demo:'from collections import Counter\n\nwords = ["да", "нет", "да", "может", "да", "нет"]\nc = Counter(words)\nprint(c)\nprint(c["да"], c["нет"], c["чего-то нет"])\nprint(len(c))' },
+    { h:"most_common — готовый топ",
+      p:"Отдаёт пары «значение, сколько раз» по убыванию. Число в скобках — сколько первых взять. Раньше для этого нужна была сортировка с ключом.",
+      demo:'from collections import Counter\n\ntext = "мама мыла раму а рама мыла маму"\nc = Counter(text.split())\nprint(c.most_common())\nprint(c.most_common(2))\nletters = Counter(text.replace(" ", ""))\nprint(letters.most_common(3))' },
+    { h:"defaultdict: ключ появляется сам",
+      p:"Обычный словарь ругается на несуществующий ключ. <code>defaultdict(list)</code> при первом обращении создаёт пустой список, <code>defaultdict(int)</code> — ноль. Проверять больше не надо. Обёртка <code>dict(...)</code> в примере нужна только для печати: обычный словарь печатается короче.",
+      demo:'from collections import defaultdict\n\nheroes = [("маг", "аня"), ("воин", "боря"), ("маг", "витя")]\n\ngroups = defaultdict(list)\nfor kind, name in heroes:\n    groups[kind].append(name)\nprint(dict(groups))\n\nscore = defaultdict(int)\nfor ch in "абракадабра":\n    score[ch] += 1\nprint(sorted(score.items()))' },
+    { h:"update добавляет сразу много",
+      p:"У <code>Counter</code> есть <code>update</code>: он не заменяет значения, как у обычного словаря, а <b>прибавляет</b>. Удобно, когда данные приходят порциями — например по строке за раз.",
+      demo:'from collections import Counter\n\nc = Counter()\nc.update(["да", "нет"])\nc.update(["да", "да"])\nprint(c)\n\nplain = {"да": 1}\nplain.update({"да": 5})\nprint("у обычного словаря замена:", plain)' },
+    { h:"Как это выглядело раньше",
+      p:"Тот же результат обычным словарём — четыре строки вместо одной. Уметь так тоже надо: <code>get</code> с значением по умолчанию работает в любом словаре.",
+      demo:'words = ["да", "нет", "да"]\n\ncounts = {}\nfor w in words:\n    counts[w] = counts.get(w, 0) + 1\nprint(counts)\n\ngroups = {}\nfor w in words:\n    if len(w) not in groups:\n        groups[len(w)] = []\n    groups[len(w)].append(w)\nprint(groups)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Разбери файл <code>чат.txt</code>: кто сколько написал и какие слова встречаются чаще всего.",
+    list:[
+      "В файле строки вида «аня: привет всем»",
+      "Файл чат.txt: строки вида «аня: привет всем»",
+      "Сначала напечатать «сообщений: имя N» для каждого автора, по убыванию количества",
+      "Потом «слов всего: N» — сколько слов во всех сообщениях",
+      "Потом три самых частых слова парами: «привет 5»",
+      "Считать через Counter, порядок вывода — как в требованиях"
+    ],
+    data:{ "чат.txt": "аня: привет всем\nборя: привет\nаня: как дела\nвитя: привет привет привет\nаня: всем пока\n" },
+    starter:'from collections import Counter\n\nauthors = Counter()\nwords = Counter()\n\nwith open("чат.txt", encoding="utf-8") as f:\n    for line in f:\n        name, text = line.split(":")\n        print(name, "|", text.strip())\n',
+    solution:'from collections import Counter\n\nauthors = Counter()\nwords = Counter()\n\nwith open("чат.txt", encoding="utf-8") as f:\n    for line in f:\n        name, text = line.split(":")\n        authors[name] += 1\n        words.update(text.split())\n\nfor name, n in authors.most_common():\n    print("сообщений:", name, n)\n\nprint("слов всего:", sum(words.values()))\n\nfor word, n in words.most_common(3):\n    print(word, n)\n',
+    hints:[
+      "Counter можно наполнять по одному: authors[name] += 1 — проверки не нужны",
+      "Слова добавляются порцией — тем самым update из теории",
+      "Для вывода: most_common() без числа даёт всех, most_common(3) — первых трёх. Общее число слов — sum(words.values())"
+    ],
+    check:{ kind:"output", needCode:["Counter"],
+            needMsg:"По условию считать нужно через Counter из collections." }
+  }
+},
+
+"itertools": {
+  lede: "Модуль про перебор: все пары, все комбинации, бесконечные последовательности. Код, который иначе занимает несколько вложенных циклов.",
+  theory: [
+    { h:"product — все сочетания",
+      p:"Вместо цикла в цикле. Даёт кортежи: каждый элемент первого списка с каждым элементом второго. Порядок такой же, как у вложенных циклов.",
+      demo:'import itertools\n\ncolors = ["красный", "синий"]\nsizes = ["S", "M", "L"]\n\nfor pair in itertools.product(colors, sizes):\n    print(pair)\n\nprint(len(list(itertools.product(colors, sizes))))\nprint(list(itertools.product("аб", repeat=2)))' },
+    { h:"combinations и permutations",
+      p:"<code>combinations</code> — сочетания, где порядок не важен: «аня и боря» это то же, что «боря и аня». <code>permutations</code> — где важен. Это ровно то, чем отличаются «выбрать двоих в команду» и «выбрать первого и второго».",
+      demo:'import itertools\n\nteam = ["аня", "боря", "витя"]\nprint("пары в команду:")\nfor pair in itertools.combinations(team, 2):\n    print(" ", pair)\nprint("призовые места:")\nfor pair in itertools.permutations(team, 2):\n    print(" ", pair)\nprint(len(list(itertools.combinations(team, 2))), len(list(itertools.permutations(team, 2))))' },
+    { h:"chain — склеить последовательности",
+      p:"Проходит по нескольким наборам подряд, как по одному. Новый список при этом не создаётся — значения выдаются по очереди. Работает и со строками, и с кортежами.",
+      demo:'import itertools\n\nfirst = [1, 2]\nsecond = (3, 4)\nfor x in itertools.chain(first, second, "аб"):\n    print(x)\nprint(list(itertools.chain([1], [2, 3], [])))' },
+    { h:"count и cycle — бесконечные",
+      p:"<code>count</code> считает без остановки, <code>cycle</code> ходит по кругу. Целиком их в список не превратить: настоящий Python съест всю память и упадёт, а тренажёр остановит программу сам. Поэтому берут первые несколько через <code>islice</code> или выходят из цикла через <code>break</code>.",
+      demo:'import itertools\n\nprint(list(itertools.islice(itertools.count(), 5)))\nprint(list(itertools.islice(itertools.count(10, 5), 4)))\nprint(list(itertools.islice(itertools.cycle("абв"), 7)))\n\nfor n in itertools.count(1):\n    if n * n > 50:\n        print("первый квадрат больше 50 у числа", n)\n        break' },
+    { h:"islice — взять кусок",
+      p:"Срез для того, что не список: файла, бесконечной последовательности. Как <code>[2:6]</code>, только работает по ходу перебора, не собирая всё заранее.",
+      demo:'import itertools\n\nnums = itertools.count(1)\nprint(list(itertools.islice(nums, 3)))\nprint(list(itertools.islice(itertools.count(1), 2, 6)))\nprint(list(itertools.islice("абвгде", 1, 4)))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Собери турнирную сетку и найди первое подходящее число.",
+    list:[
+      "pairs(team) возвращает список всех пар для матчей — порядок внутри пары не важен",
+      "menu(dishes, drinks) возвращает список всех сочетаний «блюдо, напиток»",
+      "first_over(limit) возвращает первое число, у которого куб больше limit",
+      "Все три функции пишутся через itertools, без вложенных циклов",
+      "Строки с print менять не нужно"
+    ],
+    starter:'import itertools\n\n\ndef pairs(team):\n    return []\n\n\ndef menu(dishes, drinks):\n    return []\n\n\ndef first_over(limit):\n    return 0\n\n\nprint(pairs(["аня", "боря", "витя"]))\nprint(len(pairs(["а", "б", "в", "г"])))\nprint(menu(["суп", "плов"], ["чай", "сок"]))\nprint(first_over(100), first_over(1000))\n',
+    solution:'import itertools\n\n\ndef pairs(team):\n    return list(itertools.combinations(team, 2))\n\n\ndef menu(dishes, drinks):\n    return list(itertools.product(dishes, drinks))\n\n\ndef first_over(limit):\n    for n in itertools.count(1):\n        if n ** 3 > limit:\n            return n\n\n\nprint(pairs(["аня", "боря", "витя"]))\nprint(len(pairs(["а", "б", "в", "г"])))\nprint(menu(["суп", "плов"], ["чай", "сок"]))\nprint(first_over(100), first_over(1000))\n',
+    hints:[
+      "Разница простая: в матче «аня против бори» и «боря против ани» — одно и то же, а в меню «суп с чаем» и «чай с супом» — тоже, но перебирать надо каждое блюдо с каждым напитком. Значит нужны два разных инструмента",
+      "Первый — combinations, второй — product. Оба должны вернуть список, поэтому list(...)",
+      "В first_over иди по бесконечному счётчику и делай return, как только куб больше limit"
+    ],
+    check:{ kind:"output", needCode:["combinations","product","count"],
+            needMsg:"По условию нужны именно готовые инструменты: combinations, product и count из itertools." }
+  }
+},
+
+"generators": {
+  lede: "Обычная функция считает всё и отдаёт список. Генератор отдаёт по одному значению и ждёт. Это позволяет работать с данными, которые в память не влезают — или вообще бесконечны.",
+  theory: [
+    { h:"yield вместо return",
+      p:"Функция с <code>yield</code> при вызове ничего не считает — она возвращает генератор. Значения появляются, когда их просят: через <code>next</code> или циклом.",
+      demo:'def three():\n    yield "раз"\n    yield "два"\n    yield "три"\n\n\ng = three()\nprint(type(g).__name__)\nprint(next(g))\nprint(next(g))\nprint(next(g))' },
+    { h:"Когда значения кончились",
+      p:"Генератор одноразовый: прошёл до конца — больше ничего не отдаст. Попытка взять ещё даёт <code>StopIteration</code>. Цикл <code>for</code> ловит это сам, поэтому в жизни пишут именно цикл.",
+      demo:'def two():\n    yield 1\n    yield 2\n\n\ng = two()\nfor x in g:\n    print("получили", x)\n\nprint("второй проход:", list(g))\n\ng2 = two()\nprint(next(g2))\nprint(next(g2))\ntry:\n    next(g2)\nexcept StopIteration:\n    print("всё, значения кончились")' },
+    { h:"Экономия памяти",
+      p:"Список из миллиона чисел занимает память целиком. Генератор — только текущее значение. Когда данные нужны по одному разу и по порядку, генератор почти всегда лучше. Почти: у него нет длины, нет номеров элементов и он одноразовый — если нужно пройти дважды, придётся собирать список.",
+      demo:'def squares(limit):\n    n = 1\n    while n <= limit:\n        yield n * n\n        n += 1\n\n\ntotal = 0\nfor sq in squares(5000):\n    total += sq\nprint("сумма квадратов до 5000:", total)\nprint("а в памяти лежало по одному числу за раз")' },
+    { h:"Бесконечный генератор",
+      p:"<code>while True</code> внутри генератора — не ошибка, а обычное дело: значения кончатся тогда, когда перестанут спрашивать. Главное — не пытаться превратить такой генератор в список.",
+      demo:'def evens():\n    n = 0\n    while True:\n        yield n\n        n += 2\n\n\ng = evens()\nprint(next(g), next(g), next(g))\n\nfound = []\nfor n in evens():\n    if n > 12:\n        break\n    found.append(n)\nprint(found)' },
+    { h:"Пустой return останавливает генератор",
+      p:"Внутри генератора <code>return</code> без значения означает «всё, больше значений не будет» — как естественный конец функции. Вернуть значение через <code>return</code> в генераторе нельзя: значения отдаёт только <code>yield</code>.",
+      demo:'def up_to(limit):\n    n = 1\n    while True:\n        if n > limit:\n            return\n        yield n\n        n += 1\n\n\nprint(list(up_to(4)))\nprint(list(up_to(0)))' },
+    { h:"yield from — передать дальше",
+      p:"Когда генератор должен отдать всё из другого набора, пишут <code>yield from</code> вместо цикла с <code>yield</code>. Так собирают один поток данных из нескольких источников.",
+      demo:'def letters(word):\n    yield from word\n\n\ndef both(a, b):\n    yield from a\n    yield from b\n\n\nprint(list(letters("абв")))\nprint(list(both([1, 2], "хз")))\nprint(list(both(letters("ой"), [9])))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Напиши три генератора для работы с большим файлом построчно.",
+    list:[
+      "lines(name) отдаёт строки файла по одной, уже без \\n на конце",
+      "long_lines(name, n) отдаёт только строки длиннее n знаков",
+      "first(gen, k) отдаёт первые k значений любого генератора",
+      "Все три должны быть генераторами: внутри yield, а не список",
+      "Строки с print менять не нужно"
+    ],
+    data:{ "письмо.txt": "привет\nэто довольно длинная строка письма\nкороткая\nещё одна очень длинная строка для проверки\nпока\n" },
+    starter:'def lines(name):\n    return []\n\n\ndef long_lines(name, n):\n    return []\n\n\ndef first(gen, k):\n    return []\n\n\nprint(list(lines("письмо.txt")))\nprint(list(long_lines("письмо.txt", 10)))\nprint(list(first(lines("письмо.txt"), 2)))\nprint(list(first(long_lines("письмо.txt", 10), 1)))\n',
+    solution:'def lines(name):\n    with open(name) as f:\n        for line in f:\n            yield line.strip()\n\n\ndef long_lines(name, n):\n    for line in lines(name):\n        if len(line) > n:\n            yield line\n\n\ndef first(gen, k):\n    taken = 0\n    for value in gen:\n        if taken >= k:\n            return\n        yield value\n        taken += 1\n\n\nprint(list(lines("письмо.txt")))\nprint(list(long_lines("письмо.txt", 10)))\nprint(list(first(lines("письмо.txt"), 2)))\nprint(list(first(long_lines("письмо.txt", 10), 1)))\n',
+    hints:[
+      "Функция с yield — уже генератор: список собирать не надо, значения отдаются по одному",
+      "long_lines может ходить по твоему же генератору: for line in lines(name), а отдавать только подходящие",
+      "В first считай отданные значения и останови генератор пустым return, когда хватит"
+    ],
+    check:{ kind:"output", needCode:["yield"], noCode:["islice","append"],
+            needMsg:"По условию все три функции должны быть генераторами — внутри нужен yield.",
+            noMsg:"Смысл урока — отдавать значения по одному через yield, а не собирать список через append и не брать готовый islice." }
+  }
+},
+
+"decorators": {
+  lede: "Декоратор — функция, которая берёт другую функцию и возвращает новую, с добавкой. Знак <code>@</code> из урока про dataclass наконец объясняется полностью.",
+  theory: [
+    { h:"Функция внутри функции",
+      p:"Основа декоратора — вложенная функция и то, что функцию можно вернуть. Внутренняя помнит, что было снаружи: это называется замыканием.",
+      demo:'def multiplier(k):\n    def inner(x):\n        return x * k\n    return inner\n\n\ndouble = multiplier(2)\ntriple = multiplier(3)\nprint(double(5), triple(5))\nprint(multiplier(10)(7))' },
+    { h:"Обёртка вокруг чужой функции",
+      p:"Декоратор принимает функцию, делает свою, которая вызывает первую и добавляет что-то своё, и возвращает эту новую. Внутри пишут <code>*args, **kwargs</code>, чтобы обёртка подошла к любой функции.",
+      demo:'def announced(fn):\n    def inner(*args, **kwargs):\n        print("  вызываю", fn.__name__)\n        result = fn(*args, **kwargs)\n        print("  получилось", result)\n        return result\n    return inner\n\n\ndef add(a, b):\n    return a + b\n\n\nadd = announced(add)\nprint(add(2, 3))' },
+    { h:"@ — это то же самое, но короче",
+      p:"Строка <code>@announced</code> над функцией означает ровно <code>add = announced(add)</code>. Никакой магии, просто короткая запись. Именно так работал <code>@dataclass</code>.",
+      demo:'def announced(fn):\n    def inner(*args, **kwargs):\n        result = fn(*args, **kwargs)\n        print(f"  {fn.__name__}{args} = {result}")\n        return result\n    return inner\n\n\n@announced\ndef add(a, b):\n    return a + b\n\n\n@announced\ndef power(a, b):\n    return a ** b\n\n\nprint(add(2, 3))\nprint(power(2, 10))' },
+    { h:"Зачем это нужно",
+      p:"Чтобы добавить одно и то же многим функциям, не копируя код: запись в журнал, проверку прав, подсчёт вызовов, запоминание результата. Обёртка одна, функций много.",
+      demo:'calls = {}\n\n\ndef counted(fn):\n    def inner(*args, **kwargs):\n        calls[fn.__name__] = calls.get(fn.__name__, 0) + 1\n        return fn(*args, **kwargs)\n    return inner\n\n\n@counted\ndef hit():\n    return "удар"\n\n\n@counted\ndef heal():\n    return "лечение"\n\n\nhit()\nhit()\nheal()\nhit()\nprint(sorted(calls.items()))' },
+    { h:"Осторожно: имя подменяется",
+      p:"После декорирования <code>add</code> — это уже <code>inner</code>. Если обёртка не позаботится, настоящее имя функции потеряется. В настоящем Python это лечат декоратором <code>functools.wraps</code>, но принцип важнее названия.",
+      demo:'def plain(fn):\n    def inner(*a, **k):\n        return fn(*a, **k)\n    return inner\n\n\n@plain\ndef greet():\n    return "привет"\n\n\nprint(greet())\nprint(greet.__name__)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Напиши декоратор <code>remembers</code>, который запоминает уже посчитанные ответы.",
+    list:[
+      "remembers(fn) возвращает обёртку, которая хранит результаты в словаре",
+      "Если такой аргумент уже считали — вернуть готовый ответ, не вызывая функцию",
+      "Каждый настоящий вызов увеличивает calls[\"было\"] на единицу",
+      "Декоратор ставится над функцией через @",
+      "Строки с print менять не нужно"
+    ],
+    starter:'calls = {"было": 0}\n\n\ndef remembers(fn):\n    return fn\n\n\n@remembers\ndef slow_square(n):\n    return n * n\n\n\nprint(slow_square(4))\nprint(slow_square(4))\nprint(slow_square(5))\nprint(slow_square(4))\nprint("настоящих вызовов:", calls["было"])\n',
+    solution:'calls = {"было": 0}\n\n\ndef remembers(fn):\n    known = {}\n\n    def inner(n):\n        if n in known:\n            return known[n]\n        calls["было"] += 1\n        known[n] = fn(n)\n        return known[n]\n    return inner\n\n\n@remembers\ndef slow_square(n):\n    return n * n\n\n\nprint(slow_square(4))\nprint(slow_square(4))\nprint(slow_square(5))\nprint(slow_square(4))\nprint("настоящих вызовов:", calls["было"])\n',
+    hints:[
+      "Словарь known создаётся в remembers, до inner — тогда он общий для всех вызовов обёртки",
+      "Внутри inner: сначала проверь if n in known, и только потом считай",
+      "Не забудь вернуть саму обёртку: return inner в конце remembers"
+    ],
+    check:{ kind:"output", needCode:["def inner","return inner"],
+            needMsg:"Нужен настоящий декоратор: внутренняя функция inner и возврат её из remembers." }
+  }
+},
+
+"context": {
+  lede: "<code>with</code> уже встречался — в уроках про файлы. Теперь напишем свой объект, который умеет открываться и закрываться, и увидим, что там внутри.",
+  theory: [
+    { h:"Два особых метода",
+      p:"<code>__enter__</code> срабатывает на входе в <code>with</code> и возвращает то, что попадёт после <code>as</code>. <code>__exit__</code> — на выходе, всегда. Больше ничего не нужно.",
+      demo:'class Doors:\n    def __init__(self, name):\n        self.name = name\n\n    def __enter__(self):\n        print("открыли", self.name)\n        return self\n\n    def __exit__(self, a, b, c):\n        print("закрыли", self.name)\n\n    def look(self):\n        return "внутри " + self.name\n\n\nwith Doors("склад") as d:\n    print(d.look())' },
+    { h:"__exit__ выполняется даже при ошибке",
+      p:"В этом весь смысл. Что бы ни случилось внутри, закрытие произойдёт. Именно поэтому файлы открывают через <code>with</code>: забыть закрыть невозможно.",
+      demo:'class Doors:\n    def __enter__(self):\n        print("открыли")\n        return self\n\n    def __exit__(self, a, b, c):\n        print("закрыли — несмотря ни на что")\n\n\ntry:\n    with Doors():\n        print("работаем")\n        raise ValueError("что-то сломалось")\nexcept ValueError as e:\n    print("ошибку поймали снаружи:", e)' },
+    { h:"Зачем это в жизни",
+      p:"Всё, что нужно освободить: файл, соединение с базой, замок, запись в журнале «начал — закончил». Пара «открыть — закрыть» просто не может разойтись.",
+      demo:'class Section:\n    def __init__(self, title):\n        self.title = title\n\n    def __enter__(self):\n        print("=== " + self.title + " ===")\n        return self\n\n    def __exit__(self, a, b, c):\n        print("=== конец: " + self.title + " ===")\n\n\nwith Section("расчёты"):\n    print("2 + 2 =", 2 + 2)\nwith Section("итоги"):\n    print("всё сошлось")' },
+    { h:"Несколько предметов сразу",
+      p:"Можно перечислить через запятую — закроются в обратном порядке, от последнего к первому. Так копируют данные из одного файла в другой.",
+      data:{ "вход.txt": "раз\nдва\nтри\n" },
+      demo:'with open("вход.txt") as src, open("выход.txt", "w") as dst:\n    for line in src:\n        dst.write(line.upper())\n\nwith open("выход.txt") as f:\n    print(f.read())' }
+  ],
+  task:{
+    type:"code",
+    goal:"Напиши класс <code>Journal</code>, который сам пишет в файл начало и конец работы.",
+    list:[
+      "Journal(имя, путь) при входе дописывает в файл строку «начали: сборка»",
+      "Метод write(текст) дописывает эту строку с двумя пробелами впереди",
+      "При выходе дописывает «закончили: сборка» — даже если внутри случилась ошибка",
+      "Файл открывать через open(..., \"a\") внутри самих методов",
+      "Строки внизу менять не нужно"
+    ],
+    starter:'class Journal:\n    def __init__(self, name, path):\n        self.name = name\n        self.path = path\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, a, b, c):\n        pass\n\n    def write(self, text):\n        pass\n\n\nwith Journal("сборка", "журнал.txt") as j:\n    j.write("шаг один")\n    j.write("шаг два")\n\ntry:\n    with Journal("проверка", "журнал.txt") as j:\n        j.write("начал проверять")\n        raise ValueError("не сошлось")\nexcept ValueError:\n    pass\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
+    data:{ "журнал.txt": "" },
+    solution:'class Journal:\n    def __init__(self, name, path):\n        self.name = name\n        self.path = path\n\n    def __enter__(self):\n        with open(self.path, "a") as f:\n            f.write(f"начали: {self.name}\\n")\n        return self\n\n    def __exit__(self, a, b, c):\n        with open(self.path, "a") as f:\n            f.write(f"закончили: {self.name}\\n")\n\n    def write(self, text):\n        with open(self.path, "a") as f:\n            f.write(f"  {text}\\n")\n\n\nwith Journal("сборка", "журнал.txt") as j:\n    j.write("шаг один")\n    j.write("шаг два")\n\ntry:\n    with Journal("проверка", "журнал.txt") as j:\n        j.write("начал проверять")\n        raise ValueError("не сошлось")\nexcept ValueError:\n    pass\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
+    hints:[
+      "Открывать файл нужно в режиме дописывания. Если взять \"w\", каждая запись сотрёт предыдущие — и в журнале останется одна строка",
+      "Вторая половина задания проверяется блоком try внизу: __exit__ обязан сработать и тогда, когда внутри with случилась ошибка",
+      "В каждом методе своя короткая запись: with open(self.path, \"a\", encoding=\"utf-8\") as f, и не забудь \\n в конце строки"
+    ],
+    check:{ kind:"output", needCode:["__enter__","__exit__"],
+            needMsg:"Нужны оба особых метода: __enter__ и __exit__." }
+  }
+},
+
+"regex": {
+  lede: "Регулярное выражение — шаблон для поиска в тексте. Выглядит страшно, но состоит из десятка значков, и половину задач закрывают три из них.",
+  theory: [
+    { h:"Буква r перед кавычками",
+      p:"Шаблоны пишут так: <code>r\"\\d+\"</code>. Буква <code>r</code> означает «сырая строка»: обратный слеш остаётся слешем, а не превращается в спецсимвол. Без неё <code>\"\\d\"</code> Python попробует понять по-своему, и шаблон сломается. Правило простое: шаблон всегда с <code>r</code>.",
+      demo:'print(len(r"\\d"), len("\\n"))\nprint(repr(r"\\d+"))\nprint(repr(r"путь\\новый"))\nprint(repr("путь\\новый"))' },
+    { h:"Основные значки",
+      p:"<code>\\d</code> цифра, <code>\\w</code> буква или цифра, <code>\\s</code> пробел. <code>+</code> «один или больше», <code>*</code> «сколько угодно, можно ноль», <code>?</code> «ноль или один», <code>{3}</code> «ровно три», <code>{2,4}</code> «от двух до четырёх». Точка — любой знак.",
+      demo:'import re\n\ntext = "аня 7, боря 12, витя 5"\nprint(re.findall(r"\\d+", text))\nprint(re.findall(r"\\w+", text))\nprint(re.findall(r"\\d", text))\nprint(re.findall(r"\\d{2}", text))\nprint(re.findall(r"б.ря", text))' },
+    { h:"Свой набор знаков в квадратных скобках",
+      p:"<code>[абв]</code> — любой из этих знаков. Через дефис задают диапазон: <code>[а-я]</code> русская буква, <code>[a-z]</code> латинская маленькая, <code>[0-9]</code> цифра. Со значком количества это читается как «три латинские буквы»: <code>[a-z]{3}</code>.",
+      demo:'import re\n\ncodes = "abc-1234 хзч-99 xyz-0007"\nprint(re.findall(r"[a-z]{3}", codes))\nprint(re.findall(r"[а-я]{3}", codes))\nprint(re.findall(r"[a-z]{3}-[0-9]{4}", codes))\nprint(re.findall(r"[;,]", "а;б,в"))' },
+    { h:"search находит первое совпадение",
+      p:"Возвращает объект совпадения или <code>None</code>, если ничего нет. Поэтому результат всегда проверяют. <code>group(0)</code> — что нашлось целиком.",
+      demo:'import re\n\ntext = "заказ 4512 от 26.08.2026"\nm = re.search(r"\\d+", text)\nprint(m.group(0), m.start(), m.end())\n\nnothing = re.search(r"[а-я]{20}", text)\nprint(nothing)\nif nothing is None:\n    print("такого тут нет")' },
+    { h:"Группы в скобках",
+      p:"Круглые скобки выделяют части шаблона. <code>group(1)</code> — первая часть, <code>group(2)</code> — вторая. Так из строки достают именно то, что нужно, а не всё подряд.",
+      demo:'import re\n\nm = re.search(r"(\\d+)\\.(\\d+)\\.(\\d+)", "дата 26.08.2026 точно")\nprint(m.group(0))\nprint(m.group(1), m.group(2), m.group(3))\nprint(m.groups())\n\nfor name, power in re.findall(r"(\\w+) (\\d+)", "аня 7, боря 12"):\n    print(name, "->", int(power) * 2)' },
+    { h:"sub заменяет, split разрезает",
+      p:"<code>sub</code> — замена по шаблону: удобно вычищать мусор. <code>split</code> — разрез по шаблону, а не по одному знаку, как у строк.",
+      demo:'import re\n\nprint(re.sub(r"\\d+", "N", "аня 7, боря 12"))\nprint(re.sub(r"\\s+", " ", "много    пробелов   тут"))\nprint(re.split(r",\\s*", "аня, боря,витя"))\nprint(re.split(r"[;,]", "а;б,в"))' },
+    { h:"Начало, конец и точное совпадение",
+      p:"<code>^</code> значит «начало строки», <code>$</code> — «конец». <code>match</code> проверяет только начало, <code>fullmatch</code> — строку целиком. Так проверяют, годится ли введённое значение.",
+      demo:'import re\n\nprint(re.findall(r"^аня", "аня и боря"))\nprint(re.findall(r"^боря", "аня и боря"))\nprint(re.findall(r"боря$", "аня и боря"))\n\n\ndef looks_like_code(text):\n    return re.fullmatch(r"[a-z]{3}-\\d{4}", text) is not None\n\n\nfor value in ["abc-1234", "ab-1234", "abc-1234x", "xyz-0007"]:\n    print(value, "->", looks_like_code(value))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Разбери журнал сервера: вытащи из него даты и коды заказов, а потом очисти текст.",
+    list:[
+      "dates(text) возвращает список всех дат вида 26.08.2026",
+      "codes(text) возвращает список всех кодов вида abc-1234 (три маленькие латинские буквы, дефис, четыре цифры)",
+      "clean(text) заменяет все числа на «N» и лишние пробелы на один",
+      "Все три — через модуль re",
+      "Строки с print менять не нужно"
+    ],
+    starter:'import re\n\ntext = "26.08.2026 заказ abc-1234 ошибка 500;  27.08.2026 заказ xyz-0007 ошибка   404"\n\n\ndef dates(t):\n    return []\n\n\ndef codes(t):\n    return []\n\n\ndef clean(t):\n    return t\n\n\nprint(dates(text))\nprint(codes(text))\nprint(clean(text))\n',
+    solution:'import re\n\ntext = "26.08.2026 заказ abc-1234 ошибка 500;  27.08.2026 заказ xyz-0007 ошибка   404"\n\n\ndef dates(t):\n    return re.findall(r"\\d{2}\\.\\d{2}\\.\\d{4}", t)\n\n\ndef codes(t):\n    return re.findall(r"[a-z]{3}-\\d{4}", t)\n\n\ndef clean(t):\n    return re.sub(r"\\s+", " ", re.sub(r"\\d+", "N", t))\n\n\nprint(dates(text))\nprint(codes(text))\nprint(clean(text))\n',
+    hints:[
+      "Точное количество знаков задаётся фигурными скобками: \\d{2} это ровно две цифры",
+      "Точка в шаблоне значит «любой знак», поэтому настоящую точку пишут как \\.",
+      "В clean замены можно вложить одну в другую: сначала числа, потом пробелы"
+    ],
+    check:{ kind:"output", needCode:["findall"],
+            needMsg:"По условию искать нужно через re.findall, а не разбирать строку руками." }
+  }
+},
+
+"typing": {
+  lede: "Подсказки типов — записки для человека и для программ-проверялок. Python их не проверяет, но код с ними понятнее, а ошибки находятся до запуска.",
+  theory: [
+    { h:"Как это выглядит",
+      p:"После имени параметра — двоеточие и тип. После скобок — стрелка и тип результата. Python эти записи читает и не мешает: они ничего не меняют при работе.",
+      demo:'def total(price: int, count: int) -> int:\n    return price * count\n\n\ndef greet(name: str) -> str:\n    return "привет, " + name\n\n\nprint(total(120, 3))\nprint(greet("аня"))' },
+    { h:"Python всё равно не проверяет",
+      p:"Это важно понимать честно: подсказка — не защита. Передашь строку вместо числа — программа спокойно попробует работать. Проверяют отдельные программы вроде mypy, а в жизни — ещё и тесты.",
+      demo:'def double(n: int) -> int:\n    return n * 2\n\n\nprint(double(5))\nprint(double("ха"))\nprint(double([1, 2]))' },
+    { h:"Зачем тогда писать",
+      p:"Через месяц этого не помнит никто, включая автора: что функция принимает и что отдаёт. Подсказка отвечает быстрее, чем чтение кода. А редактор по ним подсказывает методы и находит опечатки.",
+      demo:'def first_word(text: str) -> str:\n    return text.split()[0]\n\n\ndef sum_all(numbers: list) -> int:\n    return sum(numbers)\n\n\ndef ratio(a: int, b: int) -> float:\n    return a / b\n\n\nprint(first_word("два слова"))\nprint(sum_all([1, 2, 3]))\nprint(ratio(1, 4))' },
+    { h:"Строка документации",
+      p:"Ещё одна записка для человека — текст в тройных кавычках сразу после <code>def</code>. Там пишут, что функция делает, что принимает и что возвращает. Вместе с подсказками типов это и есть «понятный код».",
+      demo:'def clamp(value: int, low: int, high: int) -> int:\n    """Возвращает value, но не меньше low и не больше high."""\n    if value < low:\n        return low\n    if value > high:\n        return high\n    return value\n\n\nprint(clamp(5, 1, 10), clamp(-3, 1, 10), clamp(99, 1, 10))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Допиши функции и снабди их подсказками типов и строкой документации.",
+    list:[
+      "initials(name: str) -> str: «иван петров» → «И.П.»",
+      "average(marks: list) -> float: среднее, округлённое до двух знаков",
+      "У обеих функций должны быть подсказки типов для параметров и для результата",
+      "У обеих — строка документации в тройных кавычках первой строкой",
+      "Строки с print менять не нужно"
+    ],
+    starter:'def initials(name):\n    return ""\n\n\ndef average(marks):\n    return 0\n\n\nprint(initials("иван петров"))\nprint(initials("Пётр"))\nprint(average([5, 4, 5, 3]))\nprint(average([3]))\n',
+    solution:'def initials(name: str) -> str:\n    """Первые буквы слов заглавными, каждая с точкой."""\n    parts = name.split()\n    return "".join([w[0].upper() + "." for w in parts])\n\n\ndef average(marks: list) -> float:\n    """Среднее значение списка, округлённое до двух знаков."""\n    return round(sum(marks) / len(marks), 2)\n\n\nprint(initials("иван петров"))\nprint(initials("Пётр"))\nprint(average([5, 4, 5, 3]))\nprint(average([3]))\n',
+    hints:[
+      "Подсказка пишется так: def initials(name: str) -> str:",
+      "Строка документации — первая строка тела, в тройных кавычках",
+      "Такие функции в курсе уже были: split и join для инициалов, sum и len для среднего"
+    ],
+    check:{ kind:"output", needText:["-> str", "-> float", '"""'],
+            needMsg:"По условию нужны и подсказки типов со стрелкой, и строка документации в тройных кавычках." }
+  }
+},
+
+"pip-venv": {
+  lede: "Стандартной библиотеки хватает не всегда. Чужие библиотеки ставят программой <code>pip</code>, а чтобы они не мешали друг другу — держат в отдельном окружении.",
+  theory: [
+    { h:"pip ставит библиотеки",
+      p:"В настоящем Python на компьютере это команда в терминале. Она скачивает библиотеку из хранилища PyPI и кладёт в папку того Python, которым запущена. Писать лучше <code>python -m pip install</code>, а не просто <code>pip install</code>: так точно понятно, какому Python достанется библиотека — а их на компьютере обычно несколько.",
+      demo:'# Так это выглядит в терминале, а не в Python:\n#   python -m pip install requests\n#   python -m pip list\n#   python -m pip uninstall requests\n\nprint("pip — отдельная программа, её запускают в терминале")\nprint("а в коде потом просто: import requests")' },
+    { h:"Окружение — своя папка библиотек",
+      p:"У каждого проекта свои библиотеки и свои версии. Чтобы они не путались, создают <b>виртуальное окружение</b>: <code>python -m venv .venv</code>. Внутри — отдельный Python со своим набором.",
+      demo:'# python -m venv .venv                 создать окружение\n# source .venv/bin/activate            включить на macOS и Linux\n# .venv\\\\Scripts\\\\activate.bat          включить в cmd на Windows\n# .venv\\\\Scripts\\\\Activate.ps1         включить в PowerShell на Windows\n# deactivate                           выключить\n\nprint("окружение — просто папка, её можно удалить и создать заново")\nprint("в PowerShell может понадобиться разрешить запуск скриптов")' },
+    { h:"requirements.txt — список нужного",
+      p:"Файл со списком библиотек и версий. По нему любой человек одной командой поставит ровно то же самое: <code>python -m pip install -r requirements.txt</code>. Версия после двух равно — «именно эта». А сам файл обычно не пишут руками, а получают командой <code>python -m pip freeze &gt; requirements.txt</code>: она выписывает всё, что стоит в окружении сейчас.",
+      data:{ "requirements.txt": "requests==2.31.0\npandas==2.2.0\nflask\npytest==8.0.1\n" },
+      demo:'with open("requirements.txt") as f:\n    print(f.read())' },
+    { h:"Зачем фиксировать версию",
+      p:"Библиотеки меняются. Программа, написанная под старую версию, на новой может сломаться. Записанная версия означает «у меня работало именно так» — и через год, скорее всего, соберётся так же. Гарантии нет: версию могут снять с PyPI, а новый Python может не подойти старой библиотеке. Но ты хотя бы будешь знать, с чего начинать разбираться.",
+      demo:'print("requests==2.31.0 — только эта версия")\nprint("requests>=2.31   — эта или новее")\nprint("requests         — любая, какая поставится")\nprint()\nprint("В работе почти всегда пишут точную версию.")' }
+  ],
+  task:{
+    type:"code",
+    goal:"Разбери <code>requirements.txt</code> и напечатай отчёт по зависимостям.",
+    list:[
+      "Прочитать файл и разобрать каждую строку",
+      "Если версия указана через ==, напечатать «requests: версия 2.31.0»",
+      "Если версия не указана, напечатать «flask: любая версия»",
+      "В конце напечатать «всего: 4, с точной версией: 3»",
+      "Пустые строки в файле пропускать"
+    ],
+    data:{ "requirements.txt": "requests==2.31.0\npandas==2.2.0\n\nflask\npytest==8.0.1\n" },
+    starter:'total = 0\npinned = 0\n\nwith open("requirements.txt") as f:\n    for line in f:\n        line = line.strip()\n        print(repr(line))\n\nprint(f"всего: {total}, с точной версией: {pinned}")\n',
+    solution:'total = 0\npinned = 0\n\nwith open("requirements.txt") as f:\n    for line in f:\n        line = line.strip()\n        if not line:\n            continue\n        total += 1\n        if "==" in line:\n            name, version = line.split("==")\n            pinned += 1\n            print(f"{name}: версия {version}")\n        else:\n            print(f"{line}: любая версия")\n\nprint(f"всего: {total}, с точной версией: {pinned}")\n',
+    hints:[
+      "Пустую строку пропускают так: if not line: continue",
+      "Проверка «есть ли версия» — знакомый оператор in: if \"==\" in line",
+      "Разделить на имя и версию поможет split(\"==\") — он даёт два куска"
+    ],
+    check:{ kind:"output" }
+  }
+},
+
+"read-code": {
+  lede: "Половина работы программиста — читать чужой код. Навык отдельный: понять, что делает незнакомая функция, не спрашивая автора.",
+  theory: [
+    { h:"Порядок чтения: снаружи внутрь",
+      p:"Сначала имена: как называется функция и что она принимает. Потом — что она вернёт в самом простом случае: на пустом списке, на одном элементе. Только потом середина. Читать сверху вниз построчно — самый медленный способ.",
+      files:{ "sekret.py": 'def f(xs):\n    r = {}\n    for x in xs:\n        k = x[0]\n        if k not in r:\n            r[k] = []\n        r[k].append(x)\n    return r\n' },
+      demo:'import sekret\n\n# имя ни о чём не говорит — значит смотрим, что оно делает\nprint(sekret.f(["аня", "боря", "алла", "вова"]))\nprint(sekret.f([]))\nprint(sekret.f(["один"]))' },
+    { h:"Пробовать на маленьких данных",
+      p:"Лучший способ понять код — запустить его на трёх примерах: пустом, самом простом и обычном. Так становится видно и назначение, и края.",
+      files:{ "sekret.py": 'def g(text, n):\n    out = []\n    for i in range(0, len(text), n):\n        out.append(text[i:i + n])\n    return out\n' },
+      demo:'import sekret\n\nprint(sekret.g("абвгде", 2))\nprint(sekret.g("абвгде", 4))\nprint(sekret.g("", 3))\nprint(sekret.g("аб", 5))' },
+    { h:"Переименовать про себя",
+      p:"Когда стало понятно — дай нормальные имена. <code>f</code> из первого примера это «сгруппировать по первой букве», <code>g</code> — «разрезать на куски». Понятное имя и есть результат чтения.",
+      files:{ "sekret.py": 'def group_by_first_letter(words):\n    groups = {}\n    for word in words:\n        letter = word[0]\n        if letter not in groups:\n            groups[letter] = []\n        groups[letter].append(word)\n    return groups\n' },
+      demo:'import sekret\n\nprint(sekret.group_by_first_letter(["аня", "боря", "алла"]))' },
+    { h:"Искать края",
+      p:"Чужой код почти всегда где-то ломается. Проверь пустой ввод, ноль, отрицательное число, один элемент. Найденный край — либо ошибка, либо то, что автор считал невозможным.",
+      files:{ "sekret.py": 'def middle(items):\n    return items[len(items) // 2]\n' },
+      demo:'import sekret\n\nprint(sekret.middle([1, 2, 3]))\nprint(sekret.middle(["один"]))\nprint(sekret.middle([]))',
+      err:true }
+  ],
+  task:{
+    type:"code",
+    goal:"В файле <code>zagadka.py</code> три функции с бессмысленными именами. Разберись, что они делают, и подбери такие аргументы, чтобы получился нужный вывод.",
+    list:[
+      "Файл zagadka.py менять не нужно — только читать",
+      "Программа должна напечатать ровно три строки: 15, затем АНЯ, затем [1, 3, 5]",
+      "Аргументы подбери сам: что подать каждой функции, чтобы вышло именно это",
+      "Первой функции можно давать любой список, лишь бы ответ сошёлся",
+      "Способ разобраться один: читать код и пробовать на маленьких значениях"
+    ],
+    mainName:"main.py",
+    files:[
+      { name:"zagadka.py",
+        starter:'def a(xs):\n    t = 0\n    for x in xs:\n        t = t + x\n    return t\n\n\ndef b(s):\n    return s.upper()\n\n\ndef c(xs):\n    out = []\n    for i in range(len(xs)):\n        if i % 2 == 0:\n            out.append(xs[i])\n    return out\n' }
+    ],
+    starter:'import zagadka\n\nprint(zagadka.a([]))\nprint(zagadka.b(""))\nprint(zagadka.c([]))\n',
+    solution:'import zagadka\n\nprint(zagadka.a([1, 2, 3, 4, 5]))\nprint(zagadka.b("аня"))\nprint(zagadka.c([1, 2, 3, 4, 5, 6]))\n',
+    hints:[
+      "Начни с того, что каждая функция возвращает на пустом списке и на одном элементе — это быстрее, чем читать построчно",
+      "Первая складывает, вторая меняет регистр. Значит для первой подойдёт любой список с нужной суммой",
+      "Третья берёт элементы с чётными номерами: 0, 2, 4. Чтобы получить [1, 3, 5], подай подряд идущие числа"
+    ],
+    check:{ kind:"output", lines:["15","АНЯ","[1, 3, 5]"] }
+  }
+},
+
+"pep8": {
+  lede: "PEP 8 — соглашение о том, как выглядит код на Python. Оно не про красоту: одинаковый вид кода означает, что чужой файл читается как свой.",
+  theory: [
+    { h:"Имена",
+      p:"Переменные и функции — маленькими буквами через подчёркивание: <code>read_file</code>, <code>item_count</code>. Классы — с большой без подчёркиваний: <code>SpellCard</code>. Постоянные значения — заглавными: <code>MAX_LEVEL</code>. Отдельно PEP 8 запрещает имена <code>l</code>, <code>O</code> и <code>I</code>: их путают с единицей и нулём. А то, что однобуквенные имена вообще стоит держать для счётчиков, — не правило, а общая привычка.",
+      demo:'MAX_LEVEL = 50\n\n\ndef next_level(level):\n    return min(level + 1, MAX_LEVEL)\n\n\nclass SpellCard:\n    def __init__(self, spell_name):\n        self.spell_name = spell_name\n\n\nprint(next_level(7), next_level(50), SpellCard("огонь").spell_name)' },
+    { h:"Пробелы",
+      p:"По умолчанию вокруг знаков действия ставят пробел: <code>a + b</code>, а не <code>a+b</code>. После запятой пробел, перед — нет. Внутри скобок пробелов нет. Отступ — ровно четыре пробела. Есть и исключение: когда в строке действия разного старшинства, PEP 8 разрешает прижать более сильное — <code>x*2 - 1</code>.",
+      demo:'nums = [1, 2, 3]\ntotal = sum(nums) + len(nums)\ntext = f"оценка: {total}"\nprint(total, text)\nprint({"а": 1, "б": 2})\nprint([n * 2 for n in nums])' },
+    { h:"Пустые строки",
+      p:"Между функциями — две пустые строки, между методами внутри класса — одна. Внутри функции пустой строкой отделяют смысловые части. Так глаз находит границы без чтения.",
+      demo:'def first():\n    return 1\n\n\ndef second():\n    value = first()\n\n    doubled = value * 2\n    return doubled\n\n\nprint(second())' },
+    { h:"Длина строки и комментарии",
+      p:"PEP 8 просит строку не длиннее 79 знаков, а комментарии и описания — не длиннее 72: так текст читается на узком экране и в сравнении версий. А вот правило «комментарий объясняет <b>зачем</b>, а не <b>что</b>» — это не PEP 8, а общая привычка: «# складываем a и b» бесполезен, «# скидка только для постоянных» полезен.",
+      demo:'PRICE = 120\nCOUNT = 3\nLOYAL_DISCOUNT = 10  # процент для постоянных покупателей\n\n# скидку даём только при заказе от трёх штук\nif COUNT >= 3:\n    total = PRICE * COUNT * (100 - LOYAL_DISCOUNT) / 100\nelse:\n    total = PRICE * COUNT\n\nprint(round(total, 2))' }
+  ],
+  task:{
+    type:"code",
+    goal:"Перепиши код по PEP 8, ничего не меняя в его работе. Проверка смотрит и на вывод, и на сам код.",
+    list:[
+      "Имена переменных и функций — маленькими через подчёркивание",
+      "Класс — с большой буквы",
+      "Число 100 встречается дважды: вынеси его в постоянную MAX_HP заглавными",
+      "Пробелы вокруг знаков действия, после запятых и вокруг «=» вне скобок",
+      "Две пустые строки между функциями и классом, одна — между методами",
+      "Вывод должен остаться точно таким же: 360 и «аня: 18/100»"
+    ],
+    starter:'def calcTotal(a,b):\n    return a*b\n\nclass heroCard:\n    def __init__(self,n,hp=100):\n        self.n=n\n        self.hp=hp\n    def card(self):\n        return self.n+": "+str(self.hp)+"/"+str(100)\n\nprint(calcTotal(120,3))\nh=heroCard("аня",18)\nprint(h.card())\n',
+    solution:'MAX_HP = 100\n\n\ndef calc_total(price, count):\n    return price * count\n\n\nclass HeroCard:\n    def __init__(self, name, hp=MAX_HP):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp}/{MAX_HP}"\n\n\nprint(calc_total(120, 3))\nhero = HeroCard("аня", 18)\nprint(hero.card())\n',
+    hints:[
+      "Начни с имён: в них ошибка видна сразу. Потом пробелы, потом пустые строки",
+      "Однобуквенные n и h тоже переименуй — по ним не понять, что внутри",
+      "Склейку через + и str() удобнее заменить f-строкой — так короче и читается лучше"
+    ],
+    check:{ kind:"custom", fn:"pep8style" }
+  }
+},
+
+"perf": {
+  lede: "Программа может работать правильно и всё равно быть непригодной — если ждать приходится минуту. Разберёмся, отчего это зависит, и научимся считать шаги.",
+  theory: [
+    { h:"Считаем шаги, а не секунды",
+      p:"Секунды зависят от компьютера, а число шагов — только от кода. Поэтому скорость обсуждают в шагах: сколько раз программа что-то сравнила или сложила.",
+      demo:'names = ["аня", "боря", "витя", "галя", "дима"]\n\nsteps = 0\nfor name in names:\n    steps += 1\n    if name == "дима":\n        break\nprint("нашли за шагов:", steps)\n\nsteps = 0\nfor name in names:\n    steps += 1\n    if name == "аня":\n        break\nprint("а этого за шагов:", steps)' },
+    { h:"Цикл в цикле — это умножение",
+      p:"Один цикл по списку из 100 элементов — 100 шагов. Цикл внутри цикла — уже 10 000. Вырастет список в десять раз — шагов станет в сто раз больше. Отсюда правило: вложенных циклов по большим данным стоит избегать.",
+      demo:'nums = list(range(1, 21))\n\nsteps = 0\nfor a in nums:\n    steps += 1\nprint("один цикл:", steps)\n\nsteps = 0\nfor a in nums:\n    for b in nums:\n        steps += 1\nprint("цикл в цикле:", steps)' },
+    { h:"Список ищет перебором, множество — сразу",
+      p:"Проверка <code>x in список</code> идёт по элементам подряд. У множества и словаря так не работает: они находят значение сразу, не перебирая. Замена списка на множество — самое частое ускорение в жизни.",
+      demo:'known_list = ["аня", "боря", "витя"]\nknown_set = {"аня", "боря", "витя"}\n\nsteps = 0\nfor name in known_list:\n    steps += 1\n    if name == "витя":\n        break\nprint("в списке шагов:", steps)\nprint("во множестве: один, сколько бы элементов ни было")\nprint("витя" in known_set, "гриша" in known_set)' },
+    { h:"Запоминание вместо пересчёта",
+      p:"Если функция считает одно и то же по многу раз, ответ можно запомнить — как в уроке про декораторы. Это превращает долгие вычисления в мгновенные, но занимает память: обмен одного на другое.",
+      demo:'calls = {"было": 0}\nknown = {}\n\n\ndef square(n):\n    if n in known:\n        return known[n]\n    calls["было"] += 1\n    known[n] = n * n\n    return known[n]\n\n\nfor n in [4, 4, 5, 4, 5, 6]:\n    square(n)\nprint("запросов: 6, настоящих вычислений:", calls["было"])' }
+  ],
+  task:{
+    type:"code",
+    goal:"Найди повторяющиеся числа двумя способами и сравни число шагов.",
+    list:[
+      "slow(nums) ищет повторы циклом в цикле и возвращает (список повторов, число шагов)",
+      "fast(nums) делает то же за один проход, считая встреченные числа",
+      "Повторы в обоих случаях возвращать через sorted(...)",
+      "Шаг — это одно сравнение в slow и один элемент в fast",
+      "Строки с print менять не нужно"
+    ],
+    starter:'def slow(nums):\n    return [], 0\n\n\ndef fast(nums):\n    return [], 0\n\n\ndata = [3, 7, 1, 7, 9, 3, 4, 8, 3]\nprint(slow(data))\nprint(fast(data))\nprint(slow(list(range(50))))\nprint(fast(list(range(50))))\n',
+    solution:'def slow(nums):\n    steps = 0\n    found = set()\n    for i in range(len(nums)):\n        for j in range(i + 1, len(nums)):\n            steps += 1\n            if nums[i] == nums[j]:\n                found.add(nums[i])\n    return sorted(found), steps\n\n\ndef fast(nums):\n    steps = 0\n    seen = set()\n    found = set()\n    for n in nums:\n        steps += 1\n        if n in seen:\n            found.add(n)\n        seen.add(n)\n    return sorted(found), steps\n\n\ndata = [3, 7, 1, 7, 9, 3, 4, 8, 3]\nprint(slow(data))\nprint(fast(data))\nprint(slow(list(range(50))))\nprint(fast(list(range(50))))\n',
+    hints:[
+      "В slow два цикла по номерам: for i in range(len(nums)) и for j in range(i + 1, len(nums))",
+      "Повторы удобно собирать в множество — оно само выбросит дубликаты, а sorted сделает список",
+      "В fast храни уже встреченные в множестве seen: если число там есть, значит это повтор"
+    ],
+    check:{ kind:"output" }
+  }
+},
+
+"boss-package": {
+  lede: "Босс мира. Соберём настоящий модуль: функции по спецификации, файл с данными и программа, которая всем этим пользуется. Проверю скрытыми тестами — их ты не увидишь.",
+  theory: [
+    { h:"Что такое пакет по-человечески",
+      p:"Строго говоря, пакет в Python — это папка с модулями, а один файл называется модулем. Сегодня собираем именно модуль, но по правилам пакета: понятное имя, понятные функции, описанное поведение. Настоящую папку из нескольких модулей соберём в Мире 5.",
+      files:{ "stats.py": 'def total(nums):\n    return sum(nums)\n' },
+      demo:'import stats\n\nprint(stats.total([1, 2, 3]))' },
+    { h:"Разные задачи — разные функции",
+      p:"Одна функция — одно дело. Читать файл, считать среднее и печатать отчёт — три разных дела. Тогда каждую можно проверить отдельно и переиспользовать.",
+      files:{ "stats.py": 'def first_number(path):\n    with open(path, encoding="utf-8") as f:\n        return int(f.readline())\n\n\ndef spread(nums):\n    return max(nums) - min(nums)\n' },
+      data:{ "числа.txt": "4\n8\n6\n" },
+      demo:'import stats\n\nprint(stats.first_number("числа.txt"))\nprint(stats.spread([4, 8, 6]))' },
+    { h:"Пустой ввод — часть договора",
+      p:"Что делает функция подсчёта среднего на пустом списке? Деление на ноль. Значит выбор надо сделать заранее: либо возвращать ноль, либо возбуждать понятную ошибку. Главное, чтобы это было написано в спецификации, а не оставлено на удачу — иначе тот, кто берёт твой модуль, узнает ответ падением программы.",
+      demo:'def longest(words):\n    if not words:\n        raise ValueError("список слов пустой")\n    return max(words, key=len)\n\n\nprint(longest(["раз", "полтора"]))\ntry:\n    longest([])\nexcept ValueError as e:\n    print("отказ:", e)' },
+    { h:"Модуль не печатает",
+      p:"Печать — дело того, кто пользуется модулем. Если модуль печатает сам, его нельзя вставить в другую программу: он будет мусорить в вывод. Правило: модуль возвращает, программа печатает.",
+      files:{ "stats.py": 'def report(nums):\n    return f"{len(nums)} чисел, сумма {sum(nums)}"\n' },
+      demo:'import stats\n\nline = stats.report([1, 2, 3])\nprint(line)\nprint(len(line) > 0)' }
+  ],
+  task:{
+    type:"code",
+    goal:"Собери пакет <code>marks.py</code> из четырёх функций по спецификации. Файл <code>main.py</code> его показывает, менять его не нужно.",
+    list:[
+      "read_marks(path): прочитать файл строк вида «аня 5 4 3» и вернуть словарь {имя: [оценки числами]}",
+      "average(nums): среднее, округлённое до двух знаков. Для пустого списка — 0",
+      "best(data): имя с самым высоким средним. При равенстве — первое по алфавиту. Для пустого словаря — пустая строка",
+      "report(data): список строк вида «аня: 4.0», отсортированных по имени",
+      "Модуль ничего не печатает — только возвращает",
+      "Файл читать с encoding=\"utf-8\"",
+      "Тесты скрыты, в том числе на пустых данных"
+    ],
+    mainName:"main.py",
+    data:{ "оценки.txt": "аня 5 4 3\nборя 3 3 4\nвитя 5 5 5\n" },
+    files:[
+      { name:"marks.py",
+        starter:'def read_marks(path):\n    return {}\n\n\ndef average(nums):\n    return 0\n\n\ndef best(data):\n    return ""\n\n\ndef report(data):\n    return []\n',
+        solution:'def read_marks(path):\n    data = {}\n    with open(path, encoding="utf-8") as f:\n        for line in f:\n            parts = line.split()\n            if not parts:\n                continue\n            data[parts[0]] = [int(x) for x in parts[1:]]\n    return data\n\n\ndef average(nums):\n    if not nums:\n        return 0\n    return round(sum(nums) / len(nums), 2)\n\n\ndef best(data):\n    if not data:\n        return ""\n    names = sorted(data.keys())\n    return max(names, key=lambda name: average(data[name]))\n\n\ndef report(data):\n    return [f"{name}: {average(data[name])}" for name in sorted(data.keys())]\n' }
+    ],
+    starter:'import marks\n\ndata = marks.read_marks("оценки.txt")\nprint(data)\nfor line in marks.report(data):\n    print(line)\nprint("лучший:", marks.best(data))\n',
+    solution:'import marks\n\ndata = marks.read_marks("оценки.txt")\nprint(data)\nfor line in marks.report(data):\n    print(line)\nprint("лучший:", marks.best(data))\n',
+    hints:[
+      "В read_marks первое слово строки — имя, остальные превращай в числа: [int(x) for x in parts[1:]]",
+      "В best отсортируй имена по алфавиту, а потом возьми max с ключом по среднему — тогда при равенстве победит первое по алфавиту",
+      "report — одно включение по sorted(data.keys()) с f-строкой внутри"
+    ],
+    check:{ kind:"tests", calls:[
+      'marks.read_marks("оценки.txt")',
+      'marks.average([5, 4, 3])',
+      'marks.average([4])',
+      'marks.average([])',
+      'marks.best(marks.read_marks("оценки.txt"))',
+      'marks.best({"аня": [5], "боря": [5]})',
+      'marks.best({})',
+      'marks.report(marks.read_marks("оценки.txt"))',
+      'marks.report({})'
+    ] }
+  }
+}
 
 };
 
@@ -6366,18 +8359,38 @@ function makeStudio(cfg){
   conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>';
   var varsPane = document.createElement("div"); varsPane.className = "pane"; varsPane.style.display = "none";
   varsPane.innerHTML = '<div class="ph">переменные сейчас</div><div class="pb"><div class="varlist"></div></div>';
+  /* Урокам про файлы нужно видеть, что лежит «на диске» до и после запуска. */
+  var hasData = cfg.data && Object.keys(cfg.data).length;
+  var diskPane = document.createElement("div"); diskPane.className = "pane";
+  diskPane.style.display = hasData ? "" : "none";
+  diskPane.innerHTML = '<div class="ph">файлы на диске</div><div class="pb"><div class="disklist"></div></div>';
 
   var left = document.createElement("div");
   left.appendChild(ed);
   var msg = document.createElement("div"); msg.className = "msg";
   left.appendChild(msg);
 
-  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); wrap.appendChild(left); wrap.appendChild(side); }
-  else { left.appendChild(conPane); left.appendChild(varsPane); wrap.appendChild(left); }
+  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
+  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(diskPane); wrap.appendChild(left); }
 
   var con = conPane.querySelector(".console");
   var stepper = null;
 
+  function showDisk(files){
+    if (!files || !Object.keys(files).length){
+      if (!hasData) return;
+      files = dataFiles(cfg.data);
+    }
+    diskPane.style.display = "";
+    var names = Object.keys(files).sort();
+    diskPane.querySelector(".disklist").innerHTML = names.map(function(n){
+      var text = files[n];
+      var short = text.length > 400 ? text.slice(0, 400) + "\n…" : text;
+      return '<div class="diskfile"><b>' + esc(n) + '</b><span>' +
+             (text.length ? text.split("\n").length + " строк, " + text.length + " знаков" : "пусто") +
+             '</span><pre>' + esc(short) + '</pre></div>';
+    }).join("");
+  }
   function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
   function hideMsg(){ msg.className = "msg"; }
   function setConsole(text){
@@ -6387,8 +8400,9 @@ function makeStudio(cfg){
   function doRun(){
     hideMsg(); ed.setError(0); stepper = null; varsPane.style.display = "none";
     var t = eng.newTurtle ? eng.newTurtle() : null;
-    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources() });
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) });
     setConsole(res.output);
+    if (res.files) showDisk(res.files);
     if (canvas) animateTurtle(canvas, res.turtle || t);
     if (res.error){
       ed.setError(res.error.line);
@@ -6405,7 +8419,7 @@ function makeStudio(cfg){
     if (!stepper){
       try {
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources() }), t: t };
+        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) }), t: t };
       } catch(e){
         if (!e.pyKind) throw e;
         ed.setError(e.pyLine);
@@ -6450,6 +8464,7 @@ function makeStudio(cfg){
     else if (r === "check") cfg.check(ed, showMsg, canvas);
   });
 
+  if (hasData) showDisk(null);
   wrap.editor = ed; wrap.showMsg = showMsg; wrap.canvas = canvas; wrap.engine = eng;
   if (canvas && eng.newTurtle) setTimeout(function(){ drawTurtle(canvas, eng.newTurtle()); }, 30);
   return wrap;
@@ -6537,6 +8552,47 @@ var CUSTOM = {
       return "Цифр в пароле " + digits + ", а написано " + m2[1] + ". Считай их по самому паролю, а не заранее.";
     return null;
   },
+  /* Урок про PEP 8 нельзя проверить по выводу: вывод и так правильный.
+     Поэтому смотрим на сам код — но только то, что можно проверить надёжно. */
+  pep8style: function(res, code){
+    /* сначала вывод должен остаться прежним, потом смотрим на стиль */
+    var want = ["360", "аня: 18/100"];
+    if (res.lines.length !== want.length || res.lines[0] !== want[0] || res.lines[1] !== want[1])
+      return diffBlock(want, res.lines);
+    /* camelCase ищем только у имён с маленькой буквы: HeroCard — это класс, так и надо */
+    if (/\b[a-z][A-Za-z0-9_]*[A-Z]/.test(String(code).replace(/#.*$/gm, "")))
+      return "В коде остались имена вида calcTotal или heroCard — по PEP 8 их пишут через подчёркивание, а класс с большой буквы.";
+    if (String(code).indexOf("MAX_HP") < 0)
+      return "Число 100 встречается дважды — по условию его надо вынести в постоянную MAX_HP.";
+    return CUSTOM.pep8(res, code);
+  },
+  pep8: function(res, code){
+    var lines = String(code || "").split("\n");
+    var inString = /(['"]).*\1/;
+    for (var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var line = raw.replace(/#.*$/, "");
+      if (inString.test(line)) line = line.replace(/(['"]).*?\1/g, "STR");
+      var no = i + 1;
+      if (/,\S/.test(line))
+        return "Строка " + no + ": после запятой нужен пробел.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      if (/[A-Za-zА-Яа-я0-9_)\]]\s*(\*|\+|-|\/)\s*[A-Za-zА-Яа-я0-9_(\[]/.test(line)){
+        var m = /([A-Za-zА-Яа-я0-9_)\]])(\*|\+|-|\/)([A-Za-zА-Яа-я0-9_(\[])/.exec(line);
+        if (m)
+          return "Строка " + no + ": вокруг знака «" + m[2] + "» нужны пробелы.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      }
+      if (/^\s*(def|class)\s/.test(raw) && /=[^\s=]/.test(line) === false && /\S=\S/.test(line.replace(/\(.*\)/, "")))
+        return "Строка " + no + ": вокруг «=» нужны пробелы (кроме значений по умолчанию в скобках).";
+      if (/[^\s,(=]=[^\s=]/.test(line) && !/^\s*(def|class)\s/.test(raw) && line.indexOf("(") < 0)
+        return "Строка " + no + ": вокруг «=» нужны пробелы.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      if (raw.length > 79)
+        return "Строка " + no + " длиннее 79 знаков — PEP 8 просит короче.";
+      var indent = (raw.match(/^ */) || [""])[0].length;
+      if (raw.trim() && indent % 4 !== 0)
+        return "Строка " + no + ": отступ " + indent + " пробелов, а PEP 8 требует кратный четырём.";
+    }
+    return null;
+  },
   card: function(res){
     var L = res.lines;
     if (L.length < 3) return "Нужно три строки, а получилось " + L.length + ". Каждая строка — отдельная команда print.";
@@ -6545,6 +8601,14 @@ var CUSTOM = {
     return null;
   }
 };
+/* Файлы с данными: у каждого запуска своя копия, чтобы прошлый запуск
+   не влиял на следующий. Ученик их видит в панели «файлы на диске». */
+function dataFiles(src){
+  var out = {};
+  if (src) for (var k in src) out[k] = src[k];
+  return out;
+}
+
 /* Файлы урока для эталонного решения: {"tools.py": "…"} */
 function solutionSources(body){
   var out = {};
@@ -6556,12 +8620,12 @@ function solutionSources(body){
    Ученик пишет функции по описанию и не видит проверок — как на работе.
    Каждый вызов из chk.calls дописывается к его коду отдельной программой,
    результат сравнивается с тем же вызовом на эталонном решении. */
-function runHiddenTests(eng, calls, code, srcs, solution, refSrcs){
+function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data){
   for (var i = 0; i < calls.length; i++){
     var call = calls[i];
     var probe = "\nprint(repr(" + call + "))\n";
-    var want = eng.run(solution + probe, { sources: refSrcs });
-    var got = eng.run(code + probe, { sources: srcs });
+    var want = eng.run(solution + probe, { sources: refSrcs, files: data });
+    var got = eng.run(code + probe, { sources: srcs, files: data });
     if (got.error)
       return "Проверка вызвала <code>" + esc(call) + "</code> — и программа упала: " +
              (KIND_RU[got.error.kind] || got.error.kind) + ", " + esc(got.error.msg);
@@ -6749,7 +8813,7 @@ function openLesson(id){
       : null;
 
     var studio = makeStudio({
-      engine: l.engine, draw: body.draw, code: body.task.starter,
+      engine: l.engine, draw: body.draw, code: body.task.starter, data: body.task.data,
       label: isFix ? "сломанный код — почини его" : "твой код",
       files: taskFiles,
       restore: isFix ? body.task.starter : null,
@@ -6765,7 +8829,7 @@ function openLesson(id){
       d.querySelector("[data-run]").onclick = function(){
         var eng = studio.engine;
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {} });
+        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {}, files: dataFiles(body.theory[i].data) });
         res.className = "res show";
         res.textContent = r.error
           ? ("⚠ " + (KIND_RU[r.error.kind] || r.error.kind) + (r.error.line ? " (строка " + r.error.line + ")" : "") + ": " + r.error.msg)
@@ -6827,6 +8891,16 @@ function runCheck(l, body, ed, showMsg, canvas){
       }
     }
   }
+  /* needText — проверка по подстроке: нужна там, где искать «по словам»
+     нельзя, например для «-> str» или для тройных кавычек. */
+  if (chk.needText){
+    for (var t2 = 0; t2 < chk.needText.length; t2++){
+      if (code.indexOf(chk.needText[t2]) < 0){
+        showMsg("warn", "<b>Почти</b>" + chk.needMsg);
+        return;
+      }
+    }
+  }
   /* Запрещённые конструкции: например урок про рекурсию должен решаться
      рекурсией, а не циклом — иначе смысл урока теряется. */
   if (chk.noCode){
@@ -6841,22 +8915,22 @@ function runCheck(l, body, ed, showMsg, canvas){
   var srcs = ed.getSources ? ed.getSources() : {};
   var refSrcs = solutionSources(body);
   var t = eng.newTurtle ? eng.newTurtle() : null;
-  var res = eng.run(code, { turtle:t, sources: srcs });
+  var res = eng.run(code, { turtle:t, sources: srcs, files: dataFiles(body.task.data) });
   if (canvas) animateTurtle(canvas, t);
   if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
 
   var problem = null;
   if (chk.kind === "custom"){
-    problem = (CUSTOM[chk.fn] || function(){ return null; })(res);
+    problem = (CUSTOM[chk.fn] || function(){ return null; })(res, code);
   } else if (chk.kind === "tests"){
-    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs);
+    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs, dataFiles(body.task.data));
   } else if (chk.kind === "output"){
-    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs }).lines;
+    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs, files: dataFiles(body.task.data) }).lines;
     var got = res.lines;
     if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; })))
       problem = diffBlock(exp, got);
   } else if (chk.kind === "turtle"){
-    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs }).turtle;
+    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs, files: dataFiles(body.task.data) }).turtle;
     if (!sameDrawing(t.segs, ref.segs)){
       problem = t.segs.length === 0
         ? "Черепашка не нарисовала ни одной линии. Проверь, что вызываешь forward(...) — и что карандаш опущен."

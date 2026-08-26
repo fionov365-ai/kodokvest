@@ -505,18 +505,38 @@ function makeStudio(cfg){
   conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>';
   var varsPane = document.createElement("div"); varsPane.className = "pane"; varsPane.style.display = "none";
   varsPane.innerHTML = '<div class="ph">переменные сейчас</div><div class="pb"><div class="varlist"></div></div>';
+  /* Урокам про файлы нужно видеть, что лежит «на диске» до и после запуска. */
+  var hasData = cfg.data && Object.keys(cfg.data).length;
+  var diskPane = document.createElement("div"); diskPane.className = "pane";
+  diskPane.style.display = hasData ? "" : "none";
+  diskPane.innerHTML = '<div class="ph">файлы на диске</div><div class="pb"><div class="disklist"></div></div>';
 
   var left = document.createElement("div");
   left.appendChild(ed);
   var msg = document.createElement("div"); msg.className = "msg";
   left.appendChild(msg);
 
-  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); wrap.appendChild(left); wrap.appendChild(side); }
-  else { left.appendChild(conPane); left.appendChild(varsPane); wrap.appendChild(left); }
+  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
+  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(diskPane); wrap.appendChild(left); }
 
   var con = conPane.querySelector(".console");
   var stepper = null;
 
+  function showDisk(files){
+    if (!files || !Object.keys(files).length){
+      if (!hasData) return;
+      files = dataFiles(cfg.data);
+    }
+    diskPane.style.display = "";
+    var names = Object.keys(files).sort();
+    diskPane.querySelector(".disklist").innerHTML = names.map(function(n){
+      var text = files[n];
+      var short = text.length > 400 ? text.slice(0, 400) + "\n…" : text;
+      return '<div class="diskfile"><b>' + esc(n) + '</b><span>' +
+             (text.length ? text.split("\n").length + " строк, " + text.length + " знаков" : "пусто") +
+             '</span><pre>' + esc(short) + '</pre></div>';
+    }).join("");
+  }
   function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
   function hideMsg(){ msg.className = "msg"; }
   function setConsole(text){
@@ -526,8 +546,9 @@ function makeStudio(cfg){
   function doRun(){
     hideMsg(); ed.setError(0); stepper = null; varsPane.style.display = "none";
     var t = eng.newTurtle ? eng.newTurtle() : null;
-    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources() });
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) });
     setConsole(res.output);
+    if (res.files) showDisk(res.files);
     if (canvas) animateTurtle(canvas, res.turtle || t);
     if (res.error){
       ed.setError(res.error.line);
@@ -544,7 +565,7 @@ function makeStudio(cfg){
     if (!stepper){
       try {
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources() }), t: t };
+        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) }), t: t };
       } catch(e){
         if (!e.pyKind) throw e;
         ed.setError(e.pyLine);
@@ -589,6 +610,7 @@ function makeStudio(cfg){
     else if (r === "check") cfg.check(ed, showMsg, canvas);
   });
 
+  if (hasData) showDisk(null);
   wrap.editor = ed; wrap.showMsg = showMsg; wrap.canvas = canvas; wrap.engine = eng;
   if (canvas && eng.newTurtle) setTimeout(function(){ drawTurtle(canvas, eng.newTurtle()); }, 30);
   return wrap;
@@ -676,6 +698,47 @@ var CUSTOM = {
       return "Цифр в пароле " + digits + ", а написано " + m2[1] + ". Считай их по самому паролю, а не заранее.";
     return null;
   },
+  /* Урок про PEP 8 нельзя проверить по выводу: вывод и так правильный.
+     Поэтому смотрим на сам код — но только то, что можно проверить надёжно. */
+  pep8style: function(res, code){
+    /* сначала вывод должен остаться прежним, потом смотрим на стиль */
+    var want = ["360", "аня: 18/100"];
+    if (res.lines.length !== want.length || res.lines[0] !== want[0] || res.lines[1] !== want[1])
+      return diffBlock(want, res.lines);
+    /* camelCase ищем только у имён с маленькой буквы: HeroCard — это класс, так и надо */
+    if (/\b[a-z][A-Za-z0-9_]*[A-Z]/.test(String(code).replace(/#.*$/gm, "")))
+      return "В коде остались имена вида calcTotal или heroCard — по PEP 8 их пишут через подчёркивание, а класс с большой буквы.";
+    if (String(code).indexOf("MAX_HP") < 0)
+      return "Число 100 встречается дважды — по условию его надо вынести в постоянную MAX_HP.";
+    return CUSTOM.pep8(res, code);
+  },
+  pep8: function(res, code){
+    var lines = String(code || "").split("\n");
+    var inString = /(['"]).*\1/;
+    for (var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var line = raw.replace(/#.*$/, "");
+      if (inString.test(line)) line = line.replace(/(['"]).*?\1/g, "STR");
+      var no = i + 1;
+      if (/,\S/.test(line))
+        return "Строка " + no + ": после запятой нужен пробел.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      if (/[A-Za-zА-Яа-я0-9_)\]]\s*(\*|\+|-|\/)\s*[A-Za-zА-Яа-я0-9_(\[]/.test(line)){
+        var m = /([A-Za-zА-Яа-я0-9_)\]])(\*|\+|-|\/)([A-Za-zА-Яа-я0-9_(\[])/.exec(line);
+        if (m)
+          return "Строка " + no + ": вокруг знака «" + m[2] + "» нужны пробелы.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      }
+      if (/^\s*(def|class)\s/.test(raw) && /=[^\s=]/.test(line) === false && /\S=\S/.test(line.replace(/\(.*\)/, "")))
+        return "Строка " + no + ": вокруг «=» нужны пробелы (кроме значений по умолчанию в скобках).";
+      if (/[^\s,(=]=[^\s=]/.test(line) && !/^\s*(def|class)\s/.test(raw) && line.indexOf("(") < 0)
+        return "Строка " + no + ": вокруг «=» нужны пробелы.<div class=\"cmp\"><div><u>строка " + no + "</u>" + esc(raw.trim()) + "</div></div>";
+      if (raw.length > 79)
+        return "Строка " + no + " длиннее 79 знаков — PEP 8 просит короче.";
+      var indent = (raw.match(/^ */) || [""])[0].length;
+      if (raw.trim() && indent % 4 !== 0)
+        return "Строка " + no + ": отступ " + indent + " пробелов, а PEP 8 требует кратный четырём.";
+    }
+    return null;
+  },
   card: function(res){
     var L = res.lines;
     if (L.length < 3) return "Нужно три строки, а получилось " + L.length + ". Каждая строка — отдельная команда print.";
@@ -684,6 +747,14 @@ var CUSTOM = {
     return null;
   }
 };
+/* Файлы с данными: у каждого запуска своя копия, чтобы прошлый запуск
+   не влиял на следующий. Ученик их видит в панели «файлы на диске». */
+function dataFiles(src){
+  var out = {};
+  if (src) for (var k in src) out[k] = src[k];
+  return out;
+}
+
 /* Файлы урока для эталонного решения: {"tools.py": "…"} */
 function solutionSources(body){
   var out = {};
@@ -695,12 +766,12 @@ function solutionSources(body){
    Ученик пишет функции по описанию и не видит проверок — как на работе.
    Каждый вызов из chk.calls дописывается к его коду отдельной программой,
    результат сравнивается с тем же вызовом на эталонном решении. */
-function runHiddenTests(eng, calls, code, srcs, solution, refSrcs){
+function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data){
   for (var i = 0; i < calls.length; i++){
     var call = calls[i];
     var probe = "\nprint(repr(" + call + "))\n";
-    var want = eng.run(solution + probe, { sources: refSrcs });
-    var got = eng.run(code + probe, { sources: srcs });
+    var want = eng.run(solution + probe, { sources: refSrcs, files: data });
+    var got = eng.run(code + probe, { sources: srcs, files: data });
     if (got.error)
       return "Проверка вызвала <code>" + esc(call) + "</code> — и программа упала: " +
              (KIND_RU[got.error.kind] || got.error.kind) + ", " + esc(got.error.msg);
@@ -888,7 +959,7 @@ function openLesson(id){
       : null;
 
     var studio = makeStudio({
-      engine: l.engine, draw: body.draw, code: body.task.starter,
+      engine: l.engine, draw: body.draw, code: body.task.starter, data: body.task.data,
       label: isFix ? "сломанный код — почини его" : "твой код",
       files: taskFiles,
       restore: isFix ? body.task.starter : null,
@@ -904,7 +975,7 @@ function openLesson(id){
       d.querySelector("[data-run]").onclick = function(){
         var eng = studio.engine;
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {} });
+        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {}, files: dataFiles(body.theory[i].data) });
         res.className = "res show";
         res.textContent = r.error
           ? ("⚠ " + (KIND_RU[r.error.kind] || r.error.kind) + (r.error.line ? " (строка " + r.error.line + ")" : "") + ": " + r.error.msg)
@@ -966,6 +1037,16 @@ function runCheck(l, body, ed, showMsg, canvas){
       }
     }
   }
+  /* needText — проверка по подстроке: нужна там, где искать «по словам»
+     нельзя, например для «-> str» или для тройных кавычек. */
+  if (chk.needText){
+    for (var t2 = 0; t2 < chk.needText.length; t2++){
+      if (code.indexOf(chk.needText[t2]) < 0){
+        showMsg("warn", "<b>Почти</b>" + chk.needMsg);
+        return;
+      }
+    }
+  }
   /* Запрещённые конструкции: например урок про рекурсию должен решаться
      рекурсией, а не циклом — иначе смысл урока теряется. */
   if (chk.noCode){
@@ -980,22 +1061,22 @@ function runCheck(l, body, ed, showMsg, canvas){
   var srcs = ed.getSources ? ed.getSources() : {};
   var refSrcs = solutionSources(body);
   var t = eng.newTurtle ? eng.newTurtle() : null;
-  var res = eng.run(code, { turtle:t, sources: srcs });
+  var res = eng.run(code, { turtle:t, sources: srcs, files: dataFiles(body.task.data) });
   if (canvas) animateTurtle(canvas, t);
   if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
 
   var problem = null;
   if (chk.kind === "custom"){
-    problem = (CUSTOM[chk.fn] || function(){ return null; })(res);
+    problem = (CUSTOM[chk.fn] || function(){ return null; })(res, code);
   } else if (chk.kind === "tests"){
-    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs);
+    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs, dataFiles(body.task.data));
   } else if (chk.kind === "output"){
-    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs }).lines;
+    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs, files: dataFiles(body.task.data) }).lines;
     var got = res.lines;
     if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; })))
       problem = diffBlock(exp, got);
   } else if (chk.kind === "turtle"){
-    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs }).turtle;
+    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs, files: dataFiles(body.task.data) }).turtle;
     if (!sameDrawing(t.segs, ref.segs)){
       problem = t.segs.length === 0
         ? "Черепашка не нарисовала ни одной линии. Проверь, что вызываешь forward(...) — и что карандаш опущен."

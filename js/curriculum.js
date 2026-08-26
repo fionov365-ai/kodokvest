@@ -88,8 +88,8 @@ var CURRICULUM = [
 },
 {
   n: 4, key: "real", title: "Настоящий Python", icon: "⚙️",
-  desc: "Стандартная библиотека, файлы, генераторы и декораторы. С середины мира включается настоящий CPython.",
-  engine: "mixed",
+  desc: "Стандартная библиотека, файлы, генераторы, декораторы и регулярные выражения. Всё работает на встроенном движке — без загрузок и без интернета.",
+  engine: "mini",
   lessons: [
     { id:"imports",       title:"import",                sub:"чужой код в своей программе" },
     { id:"math-random",   title:"math и random",         sub:"модули стандартной библиотеки" },
@@ -101,16 +101,16 @@ var CURRICULUM = [
     { id:"csv",           title:"CSV и таблицы",         sub:"данные из таблиц" },
     { id:"collections",   title:"collections",           sub:"Counter и defaultdict" },
     { id:"itertools",     title:"itertools",             sub:"комбинации и цепочки" },
-    { id:"generators",    title:"Генераторы",            sub:"yield и ленивые вычисления", engine:"pyodide" },
-    { id:"decorators",    title:"Декораторы",            sub:"обёртка вокруг функции", engine:"pyodide" },
-    { id:"context",       title:"Контекстные менеджеры", sub:"свой with", engine:"pyodide" },
-    { id:"regex",         title:"Регулярные выражения",  sub:"поиск по шаблону", engine:"pyodide" },
-    { id:"typing",        title:"Подсказки типов",       sub:"код, понятный другим", engine:"pyodide" },
-    { id:"pip-venv",      title:"pip и окружения",       sub:"чужие пакеты", engine:"pyodide" },
-    { id:"read-code",     title:"Чтение чужого кода",    sub:"навык, о котором молчат", engine:"pyodide" },
-    { id:"pep8",          title:"Стиль кода",            sub:"PEP 8 и читаемость", engine:"pyodide" },
-    { id:"perf",          title:"Что тормозит",          sub:"сложность и измерения", engine:"pyodide" },
-    { id:"boss-package",  title:"Свой пакет",            sub:"собрать и оформить", boss:true, engine:"pyodide" }
+    { id:"generators",    title:"Генераторы",            sub:"yield и ленивые вычисления" },
+    { id:"decorators",    title:"Декораторы",            sub:"обёртка вокруг функции" },
+    { id:"context",       title:"Контекстные менеджеры", sub:"свой with" },
+    { id:"regex",         title:"Регулярные выражения",  sub:"поиск по шаблону" },
+    { id:"typing",        title:"Подсказки типов",       sub:"код, понятный другим" },
+    { id:"pip-venv",      title:"pip и окружения",       sub:"чужие пакеты" },
+    { id:"read-code",     title:"Чтение чужого кода",    sub:"навык, о котором молчат" },
+    { id:"pep8",          title:"Стиль кода",            sub:"PEP 8 и читаемость" },
+    { id:"perf",          title:"Что тормозит",          sub:"сложность и измерения" },
+    { id:"boss-package",  title:"Свой пакет",            sub:"собрать и оформить", boss:true }
   ]
 },
 {

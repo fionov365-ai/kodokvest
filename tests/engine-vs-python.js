@@ -20,15 +20,19 @@ cases.forEach(c => c.code = c.code.join('\n').replace(/\n+$/, '') + '\n');
 
 let pass = 0, fail = 0;
 for (const c of cases) {
+  for (const n of fs.readdirSync(TMP))
+    try { fs.rmSync(path.join(TMP, n), { recursive: true, force: true }); } catch(e){}
   const f = path.join(TMP, 't_' + c.name + '.py');
   fs.writeFileSync(f, c.code);
   let expected;
   try {
-    expected = execFileSync('python3', [f], { encoding: 'utf8' });
+    /* cwd — временная папка: программы, которые создают файлы, не мусорят в проекте */
+    expected = execFileSync('python3', [f], { encoding: 'utf8', cwd: TMP });
   } catch (e) {
     expected = '<<PYTHON ERROR>>' + (e.stderr || '');
   }
   const r = MiniPy.run(c.code);
+  /* файлы, созданные программой, живут только внутри своего запуска */
   const got = r.error ? '<<ERR ' + r.error.kind + ': ' + r.error.msg + ' (строка ' + r.error.line + ')>>' : r.output;
   if (got === expected) { pass++; }
   else {

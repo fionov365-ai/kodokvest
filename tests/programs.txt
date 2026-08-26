@@ -838,3 +838,351 @@ print(round(2.675, 2), round(1.005, 2), round(2.345, 2))
 print(round(7), round(7.4), round(7.6))
 print(round(3.14159, 3), round(10 / 3, 4))
 print(f"{2.5:.0f}", f"{3.5:.0f}", f"{-2.5:.0f}")
+### repr_escapes
+print(repr("а\nб"))
+print(repr("таб\tтаб"))
+print(repr("это 'кавычки'"))
+print(repr('он сказал "да"'))
+print(repr("и 'то' и \"то\""))
+print(repr("обратный \\ слеш"))
+print(["а\nб", "в"])
+print({"ключ\n": "знач\t"})
+print(repr(""), repr(" "))
+### gen_basic
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+
+
+g = countdown(3)
+print(type(g).__name__)
+print(next(g), next(g), next(g))
+try:
+    next(g)
+except StopIteration:
+    print("значения закончились")
+for x in countdown(4):
+    print("шаг", x)
+print(list(countdown(5)))
+print(sum(countdown(10)), max(countdown(4)), min(countdown(4)))
+### gen_endless
+def endless():
+    n = 0
+    while True:
+        yield n
+        n += 1
+
+
+e = endless()
+print(next(e), next(e), next(e))
+got = []
+for v in endless():
+    if v > 4:
+        break
+    got.append(v)
+print(got)
+### gen_from
+def squares(nums):
+    for n in nums:
+        yield n * n
+
+
+def chain_two(a, b):
+    yield from a
+    yield from b
+
+
+print(list(squares([1, 2, 3])))
+print([v for v in squares([2, 3])])
+print(list(chain_two([1, 2], "аб")))
+print(sorted(squares([3, 1, 2])))
+### gen_send_none
+def echo():
+    got = yield 1
+    print("получил:", got)
+    yield 2
+
+
+g = echo()
+print(next(g))
+print(next(g))
+### closures_decorator
+def logged(fn):
+    def inner(*args, **kwargs):
+        result = fn(*args, **kwargs)
+        print("  " + fn.__name__ + " ->", result)
+        return result
+    return inner
+
+
+@logged
+def add(a, b):
+    return a + b
+
+
+@logged
+def mul(a, b):
+    return a * b
+
+
+print(add(2, 3))
+print(mul(4, 5))
+print(add.__name__)
+
+
+def multiplier(k):
+    def inner(x):
+        return x * k
+    return inner
+
+
+double = multiplier(2)
+triple = multiplier(3)
+print(double(5), triple(5))
+### with_class
+class Timer:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        print("открыли", self.name)
+        return self
+
+    def __exit__(self, a, b, c):
+        print("закрыли", self.name)
+        return False
+
+    def work(self):
+        return self.name.upper()
+
+
+with Timer("замер") as t:
+    print(t.work())
+
+try:
+    with Timer("падение") as t:
+        raise ValueError("ой")
+except ValueError as e:
+    print("поймали снаружи:", e)
+### files_write_read
+with open("данные.txt", "w") as f:
+    f.write("аня 7\n")
+    f.write("боря 9\n")
+
+with open("данные.txt") as f:
+    print(repr(f.read()))
+
+with open("данные.txt") as f:
+    for line in f:
+        name, power = line.split()
+        print(name, "->", int(power) * 2)
+
+with open("данные.txt") as f:
+    rows = f.readlines()
+print(len(rows), repr(rows[0]), repr(rows[-1]))
+### files_append
+with open("log.txt", "w") as f:
+    f.write("первая\n")
+with open("log.txt", "a") as f:
+    f.write("вторая\n")
+    f.write("третья\n")
+with open("log.txt") as f:
+    lines = f.read().strip().split("\n")
+print(len(lines), lines)
+### files_closed
+f = open("x.txt", "w")
+f.write("привет")
+print(f.closed)
+f.close()
+print(f.closed)
+try:
+    f.read()
+except ValueError as e:
+    print("ошибка:", e)
+try:
+    open("нет-такого-файла.txt")
+except FileNotFoundError as e:
+    print("нет файла:", type(e).__name__)
+### files_lines_no_newline
+with open("t.txt", "w") as f:
+    f.write("одна\nдве\nтри")
+with open("t.txt") as f:
+    print(f.readlines())
+with open("t.txt") as f:
+    print([line.strip() for line in f])
+with open("t.txt") as f:
+    print(repr(f.readline()), repr(f.readline()), repr(f.readline()), repr(f.readline()))
+### files_writelines
+rows = ["раз\n", "два\n", "три\n"]
+with open("out.txt", "w") as f:
+    f.writelines(rows)
+with open("out.txt") as f:
+    print(f.read().count("\n"), repr(f.read()))
+with open("out.txt") as f:
+    print(len(f.readlines()))
+### json_module
+import json
+
+data = {"имя": "аня", "сила": 7, "теги": ["маг", "юг"], "жив": True, "мана": None}
+print(json.dumps(data, ensure_ascii=False))
+print(json.dumps({"a": 1, "b": [1, 2]}))
+print(json.dumps(data["теги"]))
+print(json.dumps(data, ensure_ascii=False, indent=2))
+back = json.loads('{"a": 1, "b": [1, 2.5], "c": null, "d": true}')
+print(back)
+print(type(back["a"]).__name__, type(back["b"][1]).__name__, back["c"], back["d"])
+### collections_module
+from collections import Counter, defaultdict
+
+words = ["да", "нет", "да", "может", "да"]
+c = Counter(words)
+print(c)
+print(c["да"], c["нету"])
+print(c.most_common(2))
+print(sorted(c.elements()))
+
+groups = defaultdict(list)
+for w in words:
+    groups[len(w)].append(w)
+print(sorted(groups.items()))
+print(dict(groups))
+
+counts = defaultdict(int)
+for ch in "абракадабра":
+    counts[ch] += 1
+print(sorted(counts.items()))
+### collections_repr
+from collections import Counter, defaultdict
+
+c = Counter(["да", "нет", "да"])
+print(c)
+print(repr(c))
+d = defaultdict(list)
+d["а"].append(1)
+print(d)
+print(dict(d))
+i = defaultdict(int)
+i["х"] += 2
+print(i)
+print(len(c), "да" in c, "нет такого" in c)
+c2 = Counter("абракадабра")
+print(c2.most_common(3))
+print(sorted(c2.items())[:3])
+### itertools_module
+import itertools
+
+print(list(itertools.islice(itertools.count(), 5)))
+print(list(itertools.islice(itertools.count(10, 5), 4)))
+print(list(itertools.islice(itertools.cycle("аб"), 5)))
+print(list(itertools.repeat("х", 3)))
+print(list(itertools.chain([1, 2], "аб", (3,))))
+print(list(itertools.product("аб", [1, 2])))
+print(list(itertools.permutations("абв", 2)))
+print(list(itertools.combinations([1, 2, 3, 4], 2)))
+print(list(itertools.islice(itertools.count(), 2, 6)))
+### datetime_module
+from datetime import date, datetime, timedelta
+
+d = date(2026, 8, 26)
+print(d)
+print(repr(d))
+print(d.year, d.month, d.day, d.weekday())
+print(d.strftime("%d.%m.%Y"))
+print(d.strftime("%A, %d %B %Y"))
+print(d.isoformat())
+
+later = d + timedelta(days=10)
+print(later, later.strftime("%d.%m"))
+print(later - d)
+print((later - d).days)
+print(d < later, d == date(2026, 8, 26), d > later)
+
+dt = datetime(2026, 8, 26, 14, 30, 5)
+print(dt)
+print(repr(dt))
+print(dt.hour, dt.minute, dt.second)
+print(dt.strftime("%H:%M"))
+print(dt.date(), type(dt.date()).__name__)
+
+week = timedelta(weeks=2)
+print(week.days, week.total_seconds())
+print(date.fromisoformat("2026-01-01").strftime("%d %b %Y"))
+print(sorted([date(2026, 5, 1), date(2025, 12, 31), date(2026, 1, 1)]))
+### csv_module
+import csv
+
+with open("heroes.csv", "w") as f:
+    w = csv.writer(f)
+    w.writerow(["имя", "сила", "класс"])
+    w.writerows([["аня", 7, "маг"], ["боря", 9, "воин"]])
+
+with open("heroes.csv") as f:
+    print(repr(f.read()))
+
+with open("heroes.csv") as f:
+    rows = csv.reader(f)
+    for row in rows:
+        print(row)
+
+with open("heroes.csv") as f:
+    for item in csv.DictReader(f):
+        print(item["имя"], "->", item["сила"])
+
+with open("q.csv", "w") as f:
+    csv.writer(f).writerow(["с, запятой", 'с "кавычкой"'])
+with open("q.csv") as f:
+    print(repr(f.read()))
+### re_module
+import re
+
+text = "аня 7, боря 9, витя 12"
+m = re.search(r"(\w+) (\d+)", text)
+print(m.group(0), "|", m.group(1), "|", m.group(2))
+print(m.groups(), m.start(), m.end())
+print(re.findall(r"\d+", text))
+print(re.findall(r"(\w+) (\d+)", text))
+print(re.sub(r"\d+", "N", text))
+print(re.split(r",\s*", text))
+print(re.match(r"аня", text) is not None, re.match(r"боря", text) is None)
+print(re.search(r"АНЯ", text, re.IGNORECASE).group(0))
+print(re.fullmatch(r"[а-я ,\d]+", text) is not None)
+### pathlib_module
+from pathlib import Path
+
+p = Path("герои.txt")
+print(p)
+print(p.name, p.suffix, p.stem)
+print(p.parent, Path("данные") / "герои.txt")
+print(p.exists())
+p.write_text("аня\nборя\n")
+print(p.exists(), repr(p.read_text()))
+print(p.with_suffix(".csv"))
+print(Path("a.txt") == Path("a.txt"))
+### csv_newline_modes
+import csv
+
+with open("t.csv", "w", encoding="utf-8", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["имя", "сила"])
+    w.writerows([["аня", 7], ["ручка, синяя", 30]])
+
+with open("t.csv", encoding="utf-8", newline="") as f:
+    print(repr(f.read()))
+
+with open("t.csv", encoding="utf-8") as f:
+    print(repr(f.read()))
+
+with open("t.csv", encoding="utf-8", newline="") as f:
+    for row in csv.reader(f):
+        print(row)
+
+with open("t.csv", encoding="utf-8") as f:
+    print(len(list(csv.DictReader(f))))
+### percent_format
+print("оценка: %d" % 5)
+print("%s и %s" % ("аня", "боря"))
+print("%.2f" % 3.14159)
+print("%5d|%-5d|" % (42, 42))
+print("%d%%" % 80)
+print("итого: %s" % [1, 2])

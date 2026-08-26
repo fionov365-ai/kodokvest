@@ -91,7 +91,13 @@ PyType.prototype.lookup = function(name){
   return undefined;
 };
 PyType.prototype.fullName = function(){
+  if (this.module && this.name.indexOf(".") === 0) return this.name;
+  if (this.module && this.name.indexOf(this.module + ".") === 0) return this.name;
   return this.module ? this.module + "." + this.name : this.name;
+};
+PyType.prototype.shortName = function(){
+  var i = this.name.lastIndexOf(".");
+  return i < 0 ? this.name : this.name.slice(i + 1);
 };
 function isSubType(a, b){
   var t = a;
@@ -106,8 +112,110 @@ function PyObj(cls){
   this.excArgs = null;   // заполняется у исключений
 }
 
+/* ---------- генератор ----------
+   Функция с yield при вызове ничего не считает: она возвращает генератор.
+   Значения появляются по одному, когда их просят. Внутри — тот же пошаговый
+   обход тела, только шаги отладчика мы пропускаем, а питоновские yield отдаём. */
+function PyGen(name, it){
+  this.name = name; this.it = it;
+  this.done = false; this.started = false;
+}
+PyGen.prototype.next = function(sent){
+  if (this.done) return { done: true };
+  this.started = true;
+  for (;;){
+    var step = this.it.next(sent);
+    sent = undefined;
+    if (step.done){ this.done = true; return { done: true, value: null }; }
+    if (step.value && step.value.pyYield !== undefined)
+      return { done: false, value: step.value.pyYield };
+    /* шаг отладчика — просто идём дальше */
+  }
+};
+
+/* Генератор из обычной JS-функции-генератора значений — так устроены
+   ленивые вещи из itertools: count, cycle, chain и остальные. */
+function genOf(name, makeIter){
+  var wrapper = (function*(){
+    var it = makeIter();
+    for (;;){
+      var s = it.next();
+      if (s.done) return;
+      yield { pyYield: s.value };
+    }
+  })();
+  return new PyGen(name, wrapper);
+}
+
 /* ---------- модуль ---------- */
 function PyModule(name){ this.name = name; this.vars = new Map(); }
+
+/* ---------- файлы ----------
+   Настоящего диска в браузере нет. Файлы живут в памяти запуска: что урок
+   положил заранее, то и лежит; что программа записала — видно ей же.
+   Для ученика это неотличимо от работы с диском: open, чтение, запись, with. */
+function PyDisk(initial){
+  this.files = new Map();
+  if (initial) for (var k in initial) this.files.set(k, String(initial[k]));
+}
+PyDisk.prototype.has = function(name){ return this.files.has(name); };
+PyDisk.prototype.read = function(name){ return this.files.get(name); };
+PyDisk.prototype.write = function(name, text){ this.files.set(name, text); };
+PyDisk.prototype.list = function(){ return Array.from(this.files.keys()).sort(); };
+PyDisk.prototype.remove = function(name){ return this.files.delete(name); };
+
+function PyFile(disk, name, mode, line, rawNewline){
+  this.disk = disk; this.name = name; this.mode = mode;
+  this.rawNewline = !!rawNewline;
+  this.closed = false; this.pos = 0; this.buf = "";
+  if (mode.indexOf("r") >= 0){
+    if (!disk.has(name))
+      raise("FileNotFoundError", "Файла «" + name + "» нет. Есть такие: " +
+            (disk.list().length ? disk.list().join(", ") : "ни одного") + ".", line,
+            { pymsg: "[Errno 2] No such file or directory: '" + name + "'" });
+    /* Python при чтении текстового файла приводит концы строк к \n,
+       даже если в файле лежит \r\n — так делает и csv.writer.
+       Но если открыли с newline="" — оставляет как есть, и это важно для csv. */
+    var raw = disk.read(name);
+    this.buf = rawNewline ? raw : raw.replace(/\r\n/g, "\n");
+  } else if (mode.indexOf("a") >= 0){
+    this.buf = disk.has(name) ? disk.read(name) : "";
+    this.pos = this.buf.length;
+  } else {
+    this.buf = "";
+    disk.write(name, "");
+  }
+}
+PyFile.prototype.checkOpen = function(line){
+  if (this.closed)
+    raise("ValueError", "Файл «" + this.name + "» уже закрыт — читать и писать в него нельзя.", line,
+          { pymsg: "I/O operation on closed file." });
+};
+PyFile.prototype.readAll = function(){ var t = this.buf.slice(this.pos); this.pos = this.buf.length; return t; };
+PyFile.prototype.lines = function(){
+  var t = this.readAll();
+  if (!t.length) return [];
+  var parts = t.split("\n");
+  var out = [];
+  for (var i = 0; i < parts.length; i++){
+    if (i === parts.length - 1){ if (parts[i] !== "") out.push(parts[i]); }
+    else out.push(parts[i] + "\n");
+  }
+  return out;
+};
+PyFile.prototype.readLine = function(){
+  if (this.pos >= this.buf.length) return "";
+  var nl = this.buf.indexOf("\n", this.pos);
+  var end = nl < 0 ? this.buf.length : nl + 1;
+  var line = this.buf.slice(this.pos, end);
+  this.pos = end;
+  return line;
+};
+PyFile.prototype.append = function(text){ this.buf += text; this.disk.write(this.name, this.buf); };
+PyFile.prototype.close = function(){
+  if (!this.closed && this.mode.indexOf("r") < 0) this.disk.write(this.name, this.buf);
+  this.closed = true;
+};
 
 /* ---------- метод, привязанный к объекту ----------
    dog.hello — это уже не просто функция: она помнит, у кого её взяли,
@@ -148,6 +256,14 @@ defType("set", TYPES.object);
 defType("NoneType", TYPES.object);
 defType("function", TYPES.object);
 defType("module", TYPES.object);
+defType("TextIOWrapper", TYPES.object);
+defType("generator", TYPES.object);
+defType("datetime.date", TYPES.object, { module:"datetime" });
+defType("datetime.datetime", TYPES["datetime.date"], { module:"datetime" });
+defType("datetime.timedelta", TYPES.object, { module:"datetime" });
+defType("pathlib.Path", TYPES.object, { module:"pathlib" });
+defType("re.Match", TYPES.object, { module:"re" });
+defType("csvwriter", TYPES.object);
 
 /* Дерево исключений — как в настоящем Python, только короче.
    Порядок важен: except ловит и сам класс, и всех его наследников. */
@@ -169,6 +285,8 @@ defType("ImportError", TYPES.Exception);
 defType("StopIteration", TYPES.Exception);
 defType("NotImplementedError", TYPES.RuntimeError);
 defType("UnboundLocalError", TYPES.NameError);
+defType("OSError", TYPES.Exception);
+defType("FileNotFoundError", TYPES.OSError);
 defType("IndentationError", TYPES.Exception);
 defType("SyntaxError", TYPES.Exception);
 /* «Здесь так нельзя» — не питоновская ошибка, а сообщение тренажёра.
@@ -342,7 +460,7 @@ function lex(src){
 /* ============================================================
    ПАРСЕР
    ============================================================ */
-var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert"];
+var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert","yield"];
 
 function Parser(toks){ this.toks = toks; this.p = 0; }
 Parser.prototype = {
@@ -404,6 +522,7 @@ Parser.prototype = {
         case "elif": raise("SyntaxError", "«elif» без «if» выше или с неверным отступом.", tk.line);
         case "else": raise("SyntaxError", "«else» без «if», «for» или «while» выше.", tk.line);
         case "try": return this.parseTry();
+        case "with": return this.parseWith();
         case "class": return this.parseClass();
         case "import": case "from": return this.parseImport();
         case "except":
@@ -663,6 +782,24 @@ Parser.prototype = {
     return { type:"ImportFrom", module: mod, names: names, line: line };
   },
 
+  /* with открывает что-то и обязательно закрывает — даже если внутри ошибка.
+     Поддерживаем несколько предметов через запятую: with A as a, B as b: */
+  parseWith: function(){
+    var line = this.line;
+    this.next();
+    var items = [];
+    for (;;){
+      var expr = this.parseExpr();
+      var name = null;
+      if (this.atKw("as")){ this.next(); name = this.expectName(); }
+      items.push({ expr: expr, name: name });
+      if (this.atOp(",")){ this.next(); continue; }
+      break;
+    }
+    var body = this.parseBlock("with");
+    return { type:"With", items: items, body: body, line: line };
+  },
+
   parseTry: function(){
     var line = this.line;
     this.next();
@@ -706,7 +843,22 @@ Parser.prototype = {
 
   parseExpr: function(){
     if (this.atKw("lambda")) return this.parseLambda();
+    if (this.atKw("yield")) return this.parseYield();
     return this.parseTernary();
+  },
+
+  /* yield отдаёт значение наружу и замирает до следующего запроса.
+     yield from перебирает другой генератор целиком. */
+  parseYield: function(){
+    var line = this.line;
+    this.next();
+    if (this.atKw("from")){
+      this.next();
+      return { type:"YieldFrom", value: this.parseExpr(), line: line };
+    }
+    if (this.at("NEWLINE") || this.at("EOF") || this.atOp(")") || this.atOp("]") || this.atOp("}"))
+      return { type:"Yield", value: null, line: line };
+    return { type:"Yield", value: this.parseExprList(), line: line };
   },
 
   /* lambda a, b: выражение — короткая функция без имени */
@@ -1089,14 +1241,32 @@ function fmtNum(x){
   }
   return String(v);
 }
+/* repr строки, как в Python: перевод строки виден как \n, а не рвёт вывод.
+   Кавычки одинарные, но если внутри есть ' и нет " — Python берёт двойные. */
+function strRepr(v){
+  var q = (v.indexOf("'") >= 0 && v.indexOf('"') < 0) ? '"' : "'";
+  var out = "";
+  for (var i = 0; i < v.length; i++){
+    var c = v[i];
+    if (c === "\\") out += "\\\\";
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (c === q) out += "\\" + c;
+    else out += c;
+  }
+  return q + out + q;
+}
 function pyRepr(v){
   if (v === null || v === undefined) return "None";
   if (v === true) return "True";
   if (v === false) return "False";
   if (isNum(v)) return fmtNum(v);
-  if (typeof v === "string") return "'" + v.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'";
+  if (typeof v === "string") return strRepr(v);
   if (v instanceof PyType) return "<class '" + v.fullName() + "'>";
   if (v instanceof PyModule) return "<module '" + v.name + "'>";
+  if (v instanceof PyFile) return "<файл '" + v.name + "'>";
+  if (v instanceof PyGen) return "<генератор " + v.name + ">";
   if (v instanceof Bound) return "<метод " + v.fn.name + ">";
   if (v instanceof PyObj) return objRepr(v);
   if (v instanceof PySet)
@@ -1116,6 +1286,27 @@ function pyRepr(v){
 function objRepr(o){
   var r = o.cls.lookup("__repr__");
   if (r) return pyStr(callSync(new Bound(r, o), [], 0));
+  if (o.cls === TYPES["datetime.date"]){
+    var p = dtParts(o);
+    return "datetime.date(" + p.y + ", " + p.mo + ", " + p.d + ")";
+  }
+  if (o.cls === TYPES["datetime.datetime"]){
+    var q = dtParts(o);
+    return "datetime.datetime(" + q.y + ", " + q.mo + ", " + q.d +
+           (q.h || q.mi || q.s ? ", " + q.h + ", " + q.mi + (q.s ? ", " + q.s : "") : "") + ")";
+  }
+  if (o.cls === TYPES["datetime.timedelta"]){
+    var days = Math.floor(o.tdMs / 86400000), secs = Math.floor((o.tdMs % 86400000) / 1000);
+    var bits = [];
+    if (days) bits.push("days=" + days);
+    if (secs) bits.push("seconds=" + secs);
+    return "datetime.timedelta(" + (bits.length ? bits.join(", ") : "0") + ")";
+  }
+  if (o.cls === TYPES["pathlib.Path"]) return "PosixPath('" + o.fields.get("__path__") + "')";
+  if (o.cls === TYPES["re.Match"]){
+    var m = o.reMatch;
+    return "<re.Match object; span=(" + m.index + ", " + (m.index + m[0].length) + "), match=" + strRepr(m[0]) + ">";
+  }
   if (o.cls.isExc)
     return o.cls.name + "(" + (o.excArgs || []).map(pyRepr).join(", ") + ")";
   /* Настоящий Python пишет здесь адрес в памяти — его повторить нельзя.
@@ -1125,6 +1316,21 @@ function objRepr(o){
 function pyStr(v){
   if (typeof v === "string") return v;
   if (v instanceof PyObj){
+    if (v.cls === TYPES["datetime.date"]){
+      var p = dtParts(v);
+      return p.y + "-" + two(p.mo) + "-" + two(p.d);
+    }
+    if (v.cls === TYPES["datetime.datetime"]){
+      var q = dtParts(v);
+      return q.y + "-" + two(q.mo) + "-" + two(q.d) + " " + two(q.h) + ":" + two(q.mi) + ":" + two(q.s);
+    }
+    if (v.cls === TYPES["pathlib.Path"]) return v.fields.get("__path__");
+    if (v.cls === TYPES["datetime.timedelta"]){
+      var ms = v.tdMs, dd = Math.floor(ms / 86400000), rest = Math.floor((ms % 86400000) / 1000);
+      var hh = Math.floor(rest / 3600), mi2 = Math.floor((rest % 3600) / 60), ss = rest % 60;
+      var head = dd ? dd + (Math.abs(dd) === 1 ? " day, " : " days, ") : "";
+      return head + hh + ":" + two(mi2) + ":" + two(ss);
+    }
     var s = v.cls.lookup("__str__");
     if (s) return pyStr(callSync(new Bound(s, v), [], 0));
     if (v.cls.isExc && !v.cls.lookup("__repr__")) return excMessage(v);
@@ -1150,9 +1356,11 @@ function typeName(v){
   if (isTup(v)) return "tuple";
   if (Array.isArray(v)) return "list";
   if (v instanceof Map) return "dict";
-  if (v instanceof PyObj) return v.cls.name;
+  if (v instanceof PyObj) return v.cls.shortName();
   if (v instanceof PyType) return "type";
   if (v instanceof PyModule) return "module";
+  if (v instanceof PyFile) return "TextIOWrapper";
+  if (v instanceof PyGen) return "generator";
   if (v instanceof Bound) return "method";
   if (v instanceof SuperProxy) return "super";
   if (v instanceof PyFunc || typeof v === "function") return "function";
@@ -1161,6 +1369,11 @@ function typeName(v){
 function pyEq(a, b){
   if (isNum(a) && isNum(b)) return nv(a) === nv(b);
   /* У объекта может быть свой __eq__ — тогда решает он. Так работает dataclass. */
+  if (a instanceof PyObj && b instanceof PyObj && a.cls === b.cls){
+    if (a.dtMs !== undefined) return a.dtMs === b.dtMs;
+    if (a.tdMs !== undefined) return a.tdMs === b.tdMs;
+    if (a.cls === TYPES["pathlib.Path"]) return a.fields.get("__path__") === b.fields.get("__path__");
+  }
   if (a instanceof PyObj){
     var eq = a.cls.lookup("__eq__");
     if (eq) return truthy(callSync(new Bound(eq, a), [b], 0));
@@ -1242,6 +1455,23 @@ Env.prototype.set = function(name, val){
   this.vars.set(name, val);
 };
 
+/* Есть ли в теле функции yield — тогда это функция-генератор.
+   Во вложенные def не заходим: у них свой ответ на этот вопрос. */
+function hasYield(node){
+  if (!node || typeof node !== "object") return false;
+  if (Array.isArray(node)){
+    for (var i = 0; i < node.length; i++) if (hasYield(node[i])) return true;
+    return false;
+  }
+  if (node.type === "FuncDef" || node.type === "ClassDef" || node.type === "Lambda") return false;
+  if (node.type === "Yield" || node.type === "YieldFrom") return true;
+  for (var k in node){
+    if (k === "type" || k === "line") continue;
+    if (hasYield(node[k])) return true;
+  }
+  return false;
+}
+
 /* Какие имена функция считает своими: те, которым в её теле присваивают.
    Во вложенные def и class не заходим — у них своя область. */
 function localNames(body){
@@ -1298,6 +1528,7 @@ function Interp(opts){
   this.depth = 0;        // глубина вложенных вызовов — против бесконечной рекурсии
   this.curExc = null;    // исключение, которое сейчас обрабатывается в except
   this.sources = opts.sources || {};   // «файлы» урока для import
+  this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
   this.modules = {};     // уже подключённые модули
   this.global = new Env(null);
   this.installBuiltins();
@@ -1355,6 +1586,7 @@ Interp.prototype.installBuiltins = function(){
   }
   def("str", function(args){ return args.length ? pyStr(args[0]) : ""; });
   def("int", function(args, kw, line){
+    if (!args.length) return 0;
     var v = args[0];
     if (isNum(v)) return Math.trunc(nv(v));
     if (v === true) return 1;
@@ -1369,6 +1601,7 @@ Interp.prototype.installBuiltins = function(){
     raise("TypeError", "int() не работает с типом " + typeName(v) + ".", line);
   });
   def("float", function(args, kw, line){
+    if (!args.length) return mkFloat(0);
     var v = args[0];
     if (isNum(v)) return mkFloat(nv(v));
     if (typeof v === "string"){
@@ -1380,7 +1613,7 @@ Interp.prototype.installBuiltins = function(){
     }
     raise("TypeError", "float() не работает с типом " + typeName(v) + ".", line);
   });
-  def("bool", function(args){ return truthy(args[0]); });
+  def("bool", function(args){ return args.length ? truthy(args[0]) : false; });
   def("list", function(args, kw, line){ return args.length ? I.iterate(args[0], line).slice() : []; });
   def("tuple", function(args, kw, line){ return Tup(args.length ? I.iterate(args[0], line) : []); });
   def("sum", function(args, kw, line){
@@ -1549,6 +1782,36 @@ Interp.prototype.installBuiltins = function(){
   g.set("object", TYPES.object);
   EXC_NAMES.forEach(function(n){ g.set(n, TYPES[n]); });
 
+  def("next", function(args, kw, line){
+    var g = args[0];
+    if (!(g instanceof PyGen))
+      raise("TypeError", "next() работает с генератором, а не с " + typeName(g) + ".", line,
+            { pymsg: "'" + typeName(g) + "' object is not an iterator" });
+    var st = g.next();
+    if (st.done){
+      if (args.length > 1) return args[1];
+      raise("StopIteration", "У генератора «" + g.name + "» больше нет значений.", line, { pymsg: "" });
+    }
+    return st.value;
+  });
+  def("open", function(args, kw, line){
+    var name = pyStr(args[0]);
+    var mode = args.length > 1 ? pyStr(args[1]) : (kw && kw.mode !== undefined ? pyStr(kw.mode) : "r");
+    /* encoding и newline принимаем и не мешаем: в браузере кодировка всегда utf-8,
+       а переводы строк движок и так приводит к \n. Зато код урока выглядит
+       ровно так, как его надо писать на настоящем компьютере. */
+    if (kw && kw.encoding !== undefined){
+      var enc = pyStr(kw.encoding).toLowerCase().replace("-", "");
+      if (enc !== "utf8")
+        raise("ValueError", "В тренажёре файлы всегда в utf-8, другую кодировку задать нельзя.", line,
+              { pymsg: "unknown encoding: " + pyStr(kw.encoding) });
+    }
+    if (!/^[rwa]\+?b?t?$/.test(mode))
+      raise("ValueError", "Режим «" + mode + "» непонятен. Бывают: \"r\" читать, \"w\" писать с нуля, \"a\" дописывать.", line,
+            { pymsg: "invalid mode: '" + mode + "'" });
+    var rawNl = kw && kw.newline !== undefined && pyStr(kw.newline) === "";
+    return new PyFile(I.disk, name, mode, line, rawNl);
+  });
   def("isinstance", function(args, kw, line){
     var t = args[1];
     var list = Array.isArray(t) ? t : [t];
@@ -1598,6 +1861,10 @@ Interp.prototype.minmax = function(args, line, dir){
 
 Interp.prototype.cmp = function(a, b, line){
   if (isNum(a) && isNum(b)) return nv(a) - nv(b);
+  if (a instanceof PyObj && b instanceof PyObj){
+    if (a.dtMs !== undefined && b.dtMs !== undefined) return a.dtMs - b.dtMs;
+    if (a.tdMs !== undefined && b.tdMs !== undefined) return a.tdMs - b.tdMs;
+  }
   if (typeof a === "string" && typeof b === "string") return a < b ? -1 : a > b ? 1 : 0;
   if (typeof a === "boolean" && typeof b === "boolean") return (a ? 1 : 0) - (b ? 1 : 0);
   if (Array.isArray(a) && Array.isArray(b)){
@@ -1613,6 +1880,20 @@ Interp.prototype.cmp = function(a, b, line){
 /* Отдельной функцией, а не методом: этим пользуются конструкторы
    встроенных типов (list, tuple, set), которые живут вне интерпретатора. */
 function iterate(v, line){
+  if (v instanceof PyGen){
+    var out = [];
+    for (;;){
+      var st = v.next();
+      if (st.done) break;
+      out.push(st.value);
+      if (out.length > 100000)
+        raise("RuntimeError", "Генератор выдаёт значения без конца — в список его не собрать. " +
+              "Возьми первые несколько (например через islice) или перебирай циклом с break.", line,
+              { fatal: true });
+    }
+    return out;
+  }
+  if (v instanceof PyFile){ v.checkOpen(line); return v.lines(); }
   if (typeof v === "string") return v.split("");
   if (Array.isArray(v)) return v;
   if (v instanceof PySet) return v.values();
@@ -1651,8 +1932,12 @@ var _repr = pyRepr;
 pyRepr = function(v){
   if (v instanceof Map){
     var out = [];
-    v.forEach(function(pair){ out.push(_repr(pair[0]) + ": " + _repr(pair[1])); });
-    return "{" + out.join(", ") + "}";
+    v.forEach(function(pair){ out.push(pyRepr(pair[0]) + ": " + pyRepr(pair[1])); });
+    var body = "{" + out.join(", ") + "}";
+    if (v.__counter__) return "Counter(" + body + ")";
+    if (v.__factory__ !== undefined && v.__factory__ !== null)
+      return "defaultdict(" + pyRepr(v.__factory__) + ", " + body + ")";
+    return body;
   }
   return _repr(v);
 };
@@ -1719,7 +2004,25 @@ Interp.prototype.execStmt = function*(st, env){
     }
 
     case "For": {
-      var seq = this.iterate(yield* this.eval(st.iter, env), st.line);
+      var src = yield* this.eval(st.iter, env);
+      /* Генератор перебираем по одному значению: только так работают
+         бесконечные генераторы и экономия памяти, о которой весь урок. */
+      if (src instanceof PyGen){
+        for (;;){
+          this.tick(st.line);
+          var g = src.next();
+          if (g.done) break;
+          yield* this.assign(st.target, g.value, env);
+          var rg = yield* this.runBlock(st.body, env);
+          if (rg){
+            if (rg.kind === "break") return null;
+            if (rg.kind === "continue") continue;
+            return rg;
+          }
+        }
+        return null;
+      }
+      var seq = this.iterate(src, st.line);
       for (var k = 0; k < seq.length; k++){
         this.tick(st.line);
         yield* this.assign(st.target, seq[k], env);
@@ -1815,6 +2118,30 @@ Interp.prototype.execStmt = function*(st, env){
         env.set(want.as || want.name, fm.vars.get(want.name));
       }
       return null;
+    }
+
+    case "With": {
+      var opened = [];
+      var wsig = null;
+      try {
+        for (var wi = 0; wi < st.items.length; wi++){
+          var obj = yield* this.eval(st.items[wi].expr, env);
+          var enter = (obj instanceof PyObj) ? obj.cls.lookup("__enter__") : null;
+          var value = enter ? yield* this.call(new Bound(enter, obj), [], {}, st.line, "__enter__")
+                            : (obj instanceof PyFile ? obj : obj);
+          if (!enter && !(obj instanceof PyFile))
+            raise("TypeError", "После with должно стоять то, что умеет открываться и закрываться: файл или объект с __enter__.", st.line,
+                  { pymsg: "'" + typeName(obj) + "' object does not support the context manager protocol" });
+          opened.push(obj);
+          if (st.items[wi].name) env.set(st.items[wi].name, value);
+        }
+        wsig = yield* this.runBlock(st.body, env);
+      } catch (werr){
+        for (var wc = opened.length - 1; wc >= 0; wc--) yield* this.closeCtx(opened[wc], st.line);
+        throw werr;
+      }
+      for (var wc2 = opened.length - 1; wc2 >= 0; wc2--) yield* this.closeCtx(opened[wc2], st.line);
+      return wsig;
     }
 
     case "Try": {
@@ -1927,9 +2254,16 @@ Interp.prototype.loadModule = function*(name, line){
     return bm;
   }
 
-  raise("ImportError", "Модуля «" + name + "» нет. Доступны: math, random, dataclasses" +
-        (Object.keys(this.sources).length ? " и файлы этого урока" : "") + ".", line,
+  raise("ImportError", "Модуля «" + name + "» нет. Доступны: " +
+        Object.keys(BUILTIN_MODULES).sort().join(", ") +
+        (Object.keys(this.sources).length ? ", а ещё файлы этого урока" : "") + ".", line,
         { pymsg: "No module named '" + name + "'" });
+};
+
+Interp.prototype.closeCtx = function*(obj, line){
+  if (obj instanceof PyFile){ obj.close(); return; }
+  var exit = (obj instanceof PyObj) ? obj.cls.lookup("__exit__") : null;
+  if (exit) yield* this.call(new Bound(exit, obj), [null, null, null], {}, line, "__exit__");
 };
 
 Interp.prototype.runFinal = function*(st, env){
@@ -2065,6 +2399,27 @@ Interp.prototype.eval = function*(e, env){
       return num(-nv(x), isFloat(x));
     }
     case "Not": return !truthy(yield* this.eval(e.value, env));
+    case "Yield": {
+      var yv = e.value ? yield* this.eval(e.value, env) : null;
+      var sent = yield { pyYield: yv };
+      return sent === undefined ? null : sent;
+    }
+
+    case "YieldFrom": {
+      var src = yield* this.eval(e.value, env);
+      if (src instanceof PyGen){
+        for (;;){
+          var st2 = src.next();
+          if (st2.done) break;
+          yield { pyYield: st2.value };
+        }
+        return null;
+      }
+      var seq = iterate(src, e.line);
+      for (var yi = 0; yi < seq.length; yi++) yield { pyYield: seq[yi] };
+      return null;
+    }
+
     case "Lambda": {
       var lf = new PyFunc("<lambda>", e.params, e.defaults,
                           [{ type:"Return", value:e.body, line:e.line }], env);
@@ -2210,6 +2565,8 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
         raise("TypeError", "Функция «" + fn.name + "» не знает параметра «" + k2 + "».", line,
               { pymsg: fn.name + "() got an unexpected keyword argument '" + k2 + "'" });
     }
+    if (fn.isGen === undefined) fn.isGen = hasYield(fn.body);
+    if (fn.isGen) return new PyGen(fn.name, this.runBlock(fn.body, env));
     if (++this.depth > 220){
       this.depth--;
       raise("RecursionError", "Функция вызывает саму себя слишком глубоко — не хватает условия остановки.", line,
@@ -2225,6 +2582,26 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
 };
 
 Interp.prototype.binop = function(op, a, b, line){
+  /* дата плюс срок, дата минус дата, путь через дробь — как в Python */
+  if (a instanceof PyObj || b instanceof PyObj){
+    var isDate = function(x){ return x instanceof PyObj && (x.cls === TYPES["datetime.date"] || x.cls === TYPES["datetime.datetime"]); };
+    var isTd = function(x){ return x instanceof PyObj && x.cls === TYPES["datetime.timedelta"]; };
+    if (op === "+" && isDate(a) && isTd(b)) return mkDT(a.cls, a.dtMs + b.tdMs);
+    if (op === "+" && isTd(a) && isDate(b)) return mkDT(b.cls, b.dtMs + a.tdMs);
+    if (op === "-" && isDate(a) && isTd(b)) return mkDT(a.cls, a.dtMs - b.tdMs);
+    if (op === "-" && isDate(a) && isDate(b)){
+      var td = new PyObj(TYPES["datetime.timedelta"]);
+      td.tdMs = a.dtMs - b.dtMs;
+      return td;
+    }
+    if (op === "+" && isTd(a) && isTd(b)){
+      var td2 = new PyObj(TYPES["datetime.timedelta"]);
+      td2.tdMs = a.tdMs + b.tdMs;
+      return td2;
+    }
+    if (op === "/" && a instanceof PyObj && a.cls === TYPES["pathlib.Path"])
+      return mkPath(a.fields.get("__path__").replace(/\/$/, "") + "/" + pyStr(b));
+  }
   if (op === "+"){
     if (isNum(a) && isNum(b)) return num(nv(a) + nv(b), isFloat(a) || isFloat(b));
     if (typeof a === "string" && typeof b === "string") return a + b;
@@ -2237,6 +2614,32 @@ Interp.prototype.binop = function(op, a, b, line){
             { pymsg: "unsupported operand type(s) for +: '" + typeName(a) + "' and 'str'" });
     raise("TypeError", "Нельзя сложить " + typeName(a) + " и " + typeName(b) + ".", line,
           { pymsg: "unsupported operand type(s) for +: '" + typeName(a) + "' and '" + typeName(b) + "'" });
+  }
+  /* Старое форматирование: "цена: %d" % 120. В новом коде пишут f-строки,
+     но в чужом эта запись встречается постоянно — читать её надо уметь. */
+  if (op === "%" && typeof a === "string"){
+    var vals = isTup(b) ? b.slice() : [b];
+    var vi = 0;
+    return a.replace(/%(?:%|(-?)(\d*)(?:\.(\d+))?([sdif]))/g, function(all, minus, width, prec, kind){
+      if (all === "%%") return "%";
+      if (vi >= vals.length)
+        raise("TypeError", "В строке больше знаков % , чем значений справа.", line,
+              { pymsg: "not enough arguments for format string" });
+      var v = vals[vi++], out;
+      if (kind === "d" || kind === "i"){
+        if (!isNum(v)) raise("TypeError", "%d ждёт число, а получил " + typeName(v) + ".", line,
+                             { pymsg: "%d format: a real number is required, not " + typeName(v) });
+        out = String(Math.trunc(nv(v)));
+      } else if (kind === "f"){
+        out = toFixedPy(nv(v), prec === undefined ? 6 : +prec);
+      } else {
+        out = pyStr(v);
+        if (prec !== undefined) out = out.slice(0, +prec);
+      }
+      var w = width ? parseInt(width, 10) : 0;
+      if (w > out.length) out = minus ? out + " ".repeat(w - out.length) : " ".repeat(w - out.length) + out;
+      return out;
+    });
   }
   if (op === "*"){
     if (isNum(a) && isNum(b)) return num(nv(a) * nv(b), isFloat(a) || isFloat(b));
@@ -2342,7 +2745,16 @@ Interp.prototype.index = function(obj, idx, line){
     return obj[n];
   }
   if (obj instanceof Map){
-    if (!dictHas(obj, idx)) raise("KeyError", "В словаре нет ключа " + pyRepr(idx) + ".", line, { pymsg: idx });
+    if (!dictHas(obj, idx)){
+      /* у defaultdict отсутствующий ключ не ошибка: значение создаётся на месте */
+      if (obj.__factory__ !== undefined && obj.__factory__ !== null){
+        var made = callSync(obj.__factory__, [], line);
+        dictSet(obj, idx, made);
+        return made;
+      }
+      if (obj.__counter__) return 0;   /* у счётчика ненайденное — просто ноль */
+      raise("KeyError", "В словаре нет ключа " + pyRepr(idx) + ".", line, { pymsg: idx });
+    }
     return dictGet(obj, idx);
   }
   raise("TypeError", "У значения типа " + typeName(obj) + " нет доступа по индексу.", line);
@@ -2410,6 +2822,129 @@ function makeDataclass(cls, line){
     return true;
   });
   return cls;
+}
+
+/* ---------- json ----------
+   Пишем сами, а не через JSON.stringify: у Python свои пробелы после
+   двоеточия и запятой, и по умолчанию он прячет русские буквы в \uXXXX. */
+function jsonEsc(str, ensureAscii){
+  var out = '"';
+  for (var i = 0; i < str.length; i++){
+    var c = str[i], code = str.charCodeAt(i);
+    if (c === '"') out += '\\"';
+    else if (c === "\\") out += "\\\\";
+    else if (c === "\n") out += "\\n";
+    else if (c === "\r") out += "\\r";
+    else if (c === "\t") out += "\\t";
+    else if (code < 0x20) out += "\\u" + ("0000" + code.toString(16)).slice(-4);
+    else if (ensureAscii && code > 126) out += "\\u" + ("0000" + code.toString(16)).slice(-4);
+    else out += c;
+  }
+  return out + '"';
+}
+function jsonDump(v, ensureAscii, indent, depth, line){
+  var pad = indent ? "\n" + " ".repeat(indent * (depth + 1)) : "";
+  var padEnd = indent ? "\n" + " ".repeat(indent * depth) : "";
+  var comma = indent ? "," + pad : ", ";
+  if (v === null || v === undefined) return "null";
+  if (v === true) return "true";
+  if (v === false) return "false";
+  if (isNum(v)) return fmtNum(v);
+  if (typeof v === "string") return jsonEsc(v, ensureAscii);
+  if (Array.isArray(v)){
+    if (!v.length) return "[]";
+    var items = v.map(function(x){ return jsonDump(x, ensureAscii, indent, depth + 1, line); });
+    return "[" + pad + items.join(comma) + padEnd + "]";
+  }
+  if (v instanceof Map){
+    var keys = dictKeys(v);
+    if (!keys.length) return "{}";
+    var parts = keys.map(function(k){
+      if (typeof k !== "string" && !isNum(k) && k !== true && k !== false && k !== null)
+        raise("TypeError", "В JSON ключом может быть только строка или число.", line,
+              { pymsg: "keys must be str, int, float, bool or None, not " + typeName(k) });
+      var ks = typeof k === "string" ? jsonEsc(k, ensureAscii) : jsonEsc(pyStr(k), ensureAscii);
+      return ks + ": " + jsonDump(dictGet(v, k), ensureAscii, indent, depth + 1, line);
+    });
+    return "{" + pad + parts.join(comma) + padEnd + "}";
+  }
+  raise("TypeError", "Значение типа " + typeName(v) + " в JSON не превратить.", line,
+        { pymsg: "Object of type " + typeName(v) + " is not JSON serializable" });
+}
+function jsonToPy(v){
+  if (v === null) return null;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isInteger(v) ? v : mkFloat(v);
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.map(jsonToPy);
+  var d = dictNew();
+  for (var k in v) dictSet(d, k, jsonToPy(v[k]));
+  return d;
+}
+
+/* ---------- csv ---------- */
+function csvSplitLine(line){
+  var out = [], cur = "", inQ = false;
+  for (var i = 0; i < line.length; i++){
+    var c = line[i];
+    if (inQ){
+      if (c === '"' && line[i+1] === '"'){ cur += '"'; i++; continue; }
+      if (c === '"'){ inQ = false; continue; }
+      cur += c;
+      continue;
+    }
+    if (c === '"'){ inQ = true; continue; }
+    if (c === ","){ out.push(cur); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function csvCell(v){
+  var s = pyStr(v);
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function csvRows(src, line){
+  var text;
+  if (src instanceof PyFile){ src.checkOpen(line); text = src.readAll(); }
+  else text = iterate(src, line).map(pyStr).join("");
+  text = text.replace(/\r\n/g, "\n").replace(/\n$/, "");
+  if (text === "") return [];
+  return text.split("\n").map(csvSplitLine);
+}
+
+/* ---------- дата и время ----------
+   date и datetime — обычные объекты с полями, чтобы работали сравнение,
+   вычитание и strftime. Хранит внутри миллисекунды UTC: часовых поясов
+   в тренажёре нет, и это честно сказано в уроке. */
+var MONTH_NAMES = ["January","February","March","April","May","June","July",
+                   "August","September","October","November","December"];
+var DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function two(n){ return (n < 10 ? "0" : "") + n; }
+function mkDT(cls, ms){
+  var o = new PyObj(cls);
+  o.dtMs = ms;
+  return o;
+}
+function dtParts(o){
+  var d = new Date(o.dtMs);
+  return { y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(),
+           h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds(),
+           wd: (d.getUTCDay() + 6) % 7 };
+}
+function dtStrftime(o, fmt){
+  var p = dtParts(o);
+  var map = {
+    "%d": two(p.d), "%m": two(p.mo), "%Y": String(p.y), "%y": two(p.y % 100),
+    "%H": two(p.h), "%M": two(p.mi), "%S": two(p.s),
+    "%A": DAY_NAMES[p.wd], "%a": DAY_NAMES[p.wd].slice(0, 3),
+    "%B": MONTH_NAMES[p.mo - 1], "%b": MONTH_NAMES[p.mo - 1].slice(0, 3),
+    "%%": "%"
+  };
+  return String(fmt).replace(/%[a-zA-Z%]/g, function(m){
+    return map[m] !== undefined ? map[m] : m;
+  });
 }
 
 var BUILTIN_MODULES = {
@@ -2490,15 +3025,562 @@ var BUILTIN_MODULES = {
     return {
       dataclass: function(args, kw, line){ return makeDataclass(args[0], line); }
     };
+  },
+
+  json: function(I){
+    return {
+      dumps: function(args, kw, line){
+        var ensure = !(kw && kw.ensure_ascii !== undefined && !truthy(kw.ensure_ascii));
+        var indent = kw && kw.indent !== undefined && kw.indent !== null ? Math.trunc(nv(kw.indent)) : 0;
+        return jsonDump(args[0], ensure, indent, 0, line);
+      },
+      loads: function(args, kw, line){
+        var text = pyStr(args[0]);
+        var parsed;
+        try { parsed = JSON.parse(text); }
+        catch (e){
+          raise("ValueError", "Это не похоже на JSON: " + e.message, line,
+                { pymsg: "Expecting value: line 1 column 1 (char 0)" });
+        }
+        return jsonToPy(parsed);
+      },
+      dump: function(args, kw, line){
+        var f = args[1];
+        if (!(f instanceof PyFile)) raise("TypeError", "json.dump() пишет в файл.", line);
+        var ensure = !(kw && kw.ensure_ascii !== undefined && !truthy(kw.ensure_ascii));
+        var indent = kw && kw.indent !== undefined && kw.indent !== null ? Math.trunc(nv(kw.indent)) : 0;
+        f.checkOpen(line);
+        f.append(jsonDump(args[0], ensure, indent, 0, line));
+        return null;
+      },
+      load: function(args, kw, line){
+        var f = args[0];
+        if (!(f instanceof PyFile)) raise("TypeError", "json.load() читает из файла.", line);
+        f.checkOpen(line);
+        return jsonToPy(JSON.parse(f.readAll()));
+      }
+    };
+  },
+
+  csv: function(I){
+    return {
+      reader: function(args, kw, line){
+        var rows = csvRows(args[0], line);
+        return rows.map(function(r){ return r.slice(); });
+      },
+      DictReader: function(args, kw, line){
+        var rows = csvRows(args[0], line);
+        if (!rows.length) return [];
+        var head = rows[0];
+        return rows.slice(1).map(function(r){
+          var d = dictNew();
+          for (var i = 0; i < head.length; i++) dictSet(d, head[i], r[i] === undefined ? "" : r[i]);
+          return d;
+        });
+      },
+      writer: function(args, kw, line){
+        var f = args[0];
+        if (!(f instanceof PyFile)) raise("TypeError", "csv.writer() пишет в файл.", line);
+        var W = new PyObj(TYPES.csvwriter);
+        W.fields.set("__file__", f);
+        return W;
+      }
+    };
+  },
+
+  collections: function(I){
+    return {
+      Counter: function(args, kw, line){
+        var c = dictNew();
+        c.__counter__ = true;
+        if (args.length){
+          if (args[0] instanceof Map){
+            dictKeys(args[0]).forEach(function(k){ dictSet(c, k, dictGet(args[0], k)); });
+          } else {
+            iterate(args[0], line).forEach(function(x){
+              dictSet(c, x, (dictGet(c, x) || 0) + 1);
+            });
+          }
+        }
+        return c;
+      },
+      defaultdict: function(args, kw, line){
+        var d = dictNew();
+        d.__factory__ = args.length ? args[0] : null;
+        return d;
+      }
+    };
+  },
+
+  itertools: function(I){
+    return {
+      count: function(args, kw, line){
+        var start = args.length ? nv(args[0]) : 0;
+        var step = args.length > 1 ? nv(args[1]) : 1;
+        var floaty = (args.length && isFloat(args[0])) || (args.length > 1 && isFloat(args[1]));
+        return genOf("count", function*(){
+          var n = start;
+          for (;;){ yield num(n, floaty); n += step; }
+        });
+      },
+      cycle: function(args, kw, line){
+        var seq = iterate(args[0], line).slice();
+        return genOf("cycle", function*(){
+          if (!seq.length) return;
+          for (;;) for (var i = 0; i < seq.length; i++) yield seq[i];
+        });
+      },
+      repeat: function(args, kw, line){
+        var v = args[0], times = args.length > 1 ? Math.trunc(nv(args[1])) : -1;
+        return genOf("repeat", function*(){
+          if (times < 0){ for (;;) yield v; }
+          for (var i = 0; i < times; i++) yield v;
+        });
+      },
+      chain: function(args, kw, line){
+        var lists = args.map(function(a){ return iterate(a, line); });
+        return genOf("chain", function*(){
+          for (var i = 0; i < lists.length; i++)
+            for (var j = 0; j < lists[i].length; j++) yield lists[i][j];
+        });
+      },
+      islice: function(args, kw, line){
+        var src = args[0];
+        var start = 0, stop = null;
+        if (args.length === 2) stop = args[1] === null ? null : Math.trunc(nv(args[1]));
+        else if (args.length >= 3){
+          start = Math.trunc(nv(args[1]));
+          stop = args[2] === null ? null : Math.trunc(nv(args[2]));
+        }
+        return genOf("islice", function*(){
+          var i = 0;
+          if (src instanceof PyGen){
+            for (;;){
+              if (stop !== null && i >= stop) return;
+              var st = src.next();
+              if (st.done) return;
+              if (i >= start) yield st.value;
+              i++;
+            }
+          }
+          var seq = iterate(src, line);
+          for (i = start; i < seq.length && (stop === null || i < stop); i++) yield seq[i];
+        });
+      },
+      product: function(args, kw, line){
+        var lists = args.map(function(a){ return iterate(a, line); });
+        var reps = kw && kw.repeat !== undefined ? Math.trunc(nv(kw.repeat)) : 1;
+        var pools = [];
+        for (var r = 0; r < reps; r++) pools = pools.concat(lists);
+        return genOf("product", function*(){
+          if (!pools.length){ yield Tup([]); return; }
+          var idx = pools.map(function(){ return 0; });
+          for (;;){
+            yield Tup(pools.map(function(p, i){ return p[idx[i]]; }));
+            var k = pools.length - 1;
+            for (;;){
+              idx[k]++;
+              if (idx[k] < pools[k].length) break;
+              idx[k] = 0; k--;
+              if (k < 0) return;
+            }
+          }
+        });
+      },
+      permutations: function(args, kw, line){
+        var pool = iterate(args[0], line).slice();
+        var r = args.length > 1 ? Math.trunc(nv(args[1])) : pool.length;
+        return genOf("permutations", function*(){
+          if (r > pool.length) return;
+          var used = pool.map(function(){ return false; });
+          var cur = [];
+          yield* (function*walk(){
+            if (cur.length === r){ yield Tup(cur.slice()); return; }
+            for (var i = 0; i < pool.length; i++){
+              if (used[i]) continue;
+              used[i] = true; cur.push(pool[i]);
+              yield* walk();
+              cur.pop(); used[i] = false;
+            }
+          })();
+        });
+      },
+      combinations: function(args, kw, line){
+        var pool = iterate(args[0], line).slice();
+        var r = Math.trunc(nv(args[1]));
+        return genOf("combinations", function*(){
+          if (r > pool.length || r < 0) return;
+          var cur = [];
+          yield* (function*walk(start){
+            if (cur.length === r){ yield Tup(cur.slice()); return; }
+            for (var i = start; i < pool.length; i++){
+              cur.push(pool[i]);
+              yield* walk(i + 1);
+              cur.pop();
+            }
+          })(0);
+        });
+      }
+    };
+  },
+
+  datetime: function(I){
+    var dateCls = TYPES["datetime.date"], dtCls = TYPES["datetime.datetime"], tdCls = TYPES["datetime.timedelta"];
+    function mkDate(args, kw, line){
+      var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
+      if (mo < 1 || mo > 12) raise("ValueError", "Месяц бывает от 1 до 12.", line, { pymsg: "month must be in 1..12" });
+      if (d < 1 || d > 31) raise("ValueError", "Такого числа в месяце нет.", line, { pymsg: "day is out of range for month" });
+      return mkDT(dateCls, Date.UTC(y, mo - 1, d));
+    }
+    function mkDatetime(args, kw, line){
+      var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
+      var h = args.length > 3 ? Math.trunc(nv(args[3])) : 0;
+      var mi = args.length > 4 ? Math.trunc(nv(args[4])) : 0;
+      var se = args.length > 5 ? Math.trunc(nv(args[5])) : 0;
+      return mkDT(dtCls, Date.UTC(y, mo - 1, d, h, mi, se));
+    }
+    dateCls.ctor = mkDate;
+    dtCls.ctor = mkDatetime;
+    tdCls.ctor = function(args, kw, line){
+      var days = args.length ? nv(args[0]) : 0;
+      var secs = args.length > 1 ? nv(args[1]) : 0;
+      if (kw){
+        if (kw.days !== undefined) days = nv(kw.days);
+        if (kw.seconds !== undefined) secs = nv(kw.seconds);
+        if (kw.hours !== undefined) secs += nv(kw.hours) * 3600;
+        if (kw.minutes !== undefined) secs += nv(kw.minutes) * 60;
+        if (kw.weeks !== undefined) days += nv(kw.weeks) * 7;
+      }
+      var o = new PyObj(tdCls);
+      o.tdMs = days * 86400000 + secs * 1000;
+      return o;
+    };
+    dateCls.attrs.set("today", function(args, kw, line){
+      var now = new Date();
+      return mkDT(dateCls, Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    });
+    dateCls.attrs.set("fromisoformat", function(args, kw, line){
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pyStr(args[0]));
+      if (!m) raise("ValueError", "Дата должна выглядеть как 2026-08-26.", line,
+                    { pymsg: "Invalid isoformat string: '" + pyStr(args[0]) + "'" });
+      return mkDT(dateCls, Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    });
+    dtCls.attrs.set("now", function(args, kw, line){
+      var n = new Date();
+      return mkDT(dtCls, Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(),
+                                  n.getHours(), n.getMinutes(), n.getSeconds()));
+    });
+    return { date: dateCls, datetime: dtCls, timedelta: tdCls };
+  },
+
+  pathlib: function(I){
+    return { Path: TYPES["pathlib.Path"] };
+  },
+
+  re: function(I){
+    return {
+      IGNORECASE: 2, I: 2, MULTILINE: 8, M: 8, DOTALL: 16, S: 16,
+      search: function(args, kw, line){ return reFind(args, line, false); },
+      match: function(args, kw, line){ return reFind(args, line, true); },
+      fullmatch: function(args, kw, line){ return reFind(args, line, true, true); },
+      findall: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
+        var text = pyStr(args[1]);
+        var out = [], m;
+        while ((m = rx.exec(text)) !== null){
+          if (m.length === 1) out.push(m[0]);
+          else if (m.length === 2) out.push(m[1] === undefined ? "" : m[1]);
+          else out.push(Tup(m.slice(1).map(function(x){ return x === undefined ? "" : x; })));
+          if (m[0] === "") rx.lastIndex++;
+        }
+        return out;
+      },
+      sub: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[3], line, true);
+        var rep = pyStr(args[1]).replace(/\\(\d)/g, "$$$1");
+        return pyStr(args[2]).replace(rx, rep);
+      },
+      split: function(args, kw, line){
+        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
+        return pyStr(args[1]).split(rx).map(function(x){ return x === undefined ? "" : x; });
+      }
+    };
+  },
+
+  time: function(I){
+    return {
+      time: function(){ return mkFloat(Date.now() / 1000); },
+      perf_counter: function(){ return mkFloat((typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000); }
+    };
+  },
+
+  statistics: function(I){
+    return {
+      /* mean и median в Python отдают целое, если данные целые и результат
+         делится ровно: statistics.mean([4, 8, 6, 10, 2]) это 6, а не 6.0 */
+      mean: function(args, kw, line){
+        var xs = iterate(args[0], line);
+        if (!xs.length) raise("ValueError", "Среднее пустого списка не существует.", line,
+                              { pymsg: "mean requires at least one data point" });
+        var sum = 0, allInt = true;
+        xs.forEach(function(x){
+          if (!isNum(x)) raise("TypeError", "Среднее считается только по числам.", line);
+          if (isFloat(x)) allInt = false;
+          sum += nv(x);
+        });
+        var res = sum / xs.length;
+        return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+      },
+      median: function(args, kw, line){
+        var raw = iterate(args[0], line);
+        if (!raw.length) raise("ValueError", "Медианы пустого списка не существует.", line,
+                              { pymsg: "no median for empty data" });
+        var allInt = raw.every(function(x){ return !isFloat(x); });
+        var xs = raw.map(nv).slice().sort(function(a, b){ return a - b; });
+        var mid = Math.floor(xs.length / 2);
+        if (xs.length % 2) return allInt ? xs[mid] : mkFloat(xs[mid]);
+        var res = (xs[mid - 1] + xs[mid]) / 2;
+        return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+      }
+    };
   }
+};
+
+/* ---------- регулярные выражения ----------
+   Шаблон Python переводим в шаблон JavaScript: \w у нас должен понимать
+   русские буквы, а именованные группы пишутся немного иначе. */
+function toJsRegex(pattern, flagsArg, line, global){
+  var f = (global ? "gu" : "u");
+  var flags = flagsArg === undefined || flagsArg === null ? 0 : Math.trunc(nv(flagsArg));
+  if (flags & 2) f += "i";
+  if (flags & 8) f += "m";
+  if (flags & 16) f += "s";
+  var out = "", i = 0, inClass = false;
+  while (i < pattern.length){
+    var c = pattern[i];
+    if (c === "\\"){
+      var n = pattern[i+1];
+      /* внутри [...] подставлять готовый класс нельзя — только его содержимое */
+      if (n === "w"){ out += inClass ? "\\p{L}\\p{N}_" : "[\\p{L}\\p{N}_]"; i += 2; continue; }
+      if (n === "W"){ out += inClass ? "\\W" : "[^\\p{L}\\p{N}_]"; i += 2; continue; }
+      if (n === "d"){ out += inClass ? "0-9" : "[0-9]"; i += 2; continue; }
+      if (n === "D"){ out += inClass ? "\\D" : "[^0-9]"; i += 2; continue; }
+      if (n === "A" && !inClass){ out += "^"; i += 2; continue; }
+      if (n === "Z" && !inClass){ out += "$"; i += 2; continue; }
+      out += c + n; i += 2; continue;
+    }
+    if (!inClass && c === "["){ inClass = true; out += c; i++; continue; }
+    if (inClass && c === "]"){ inClass = false; out += c; i++; continue; }
+    if (pattern.substr(i, 4) === "(?P<"){ out += "(?<"; i += 4; continue; }
+    if (pattern.substr(i, 4) === "(?P="){
+      var end = pattern.indexOf(")", i);
+      out += "\\k<" + pattern.slice(i + 4, end) + ">";
+      i = end + 1; continue;
+    }
+    out += c; i++;
+  }
+  try { return new RegExp(out, f); }
+  catch (e){
+    raise("ValueError", "Непонятный шаблон: " + pattern + " (" + e.message + ")", line,
+          { pymsg: "bad pattern" });
+  }
+}
+function reFind(args, line, anchored, full){
+  var src = pyStr(args[0]);
+  if (anchored) src = "^(?:" + src + ")" + (full ? "$" : "");
+  var rx = toJsRegex(src, args[2], line, false);
+  var text = pyStr(args[1]);
+  var m = rx.exec(text);
+  if (!m) return null;
+  var o = new PyObj(TYPES["re.Match"]);
+  o.reMatch = m;
+  o.reText = text;
+  return o;
+}
+
+/* ---------- поведение объектов из модулей ----------
+   Дата, путь, совпадение регулярки и писатель csv — обычные объекты движка.
+   Их методы описаны здесь, потому что писать их на мини-Python негде. */
+function moduleMethod(I, obj, name, line){
+  var cls = obj.cls;
+
+  if (cls === TYPES["datetime.date"] || cls === TYPES["datetime.datetime"]){
+    var p = dtParts(obj);
+    if (name === "year") return p.y;
+    if (name === "month") return p.mo;
+    if (name === "day") return p.d;
+    if (name === "hour") return p.h;
+    if (name === "minute") return p.mi;
+    if (name === "second") return p.s;
+    var D = {
+      strftime: function(a){ return dtStrftime(obj, pyStr(a[0])); },
+      isoformat: function(){
+        var q = dtParts(obj);
+        var d = q.y + "-" + two(q.mo) + "-" + two(q.d);
+        return cls === TYPES["datetime.datetime"]
+          ? d + "T" + two(q.h) + ":" + two(q.mi) + ":" + two(q.s) : d;
+      },
+      weekday: function(){ return dtParts(obj).wd; },
+      date: function(){
+        var q = dtParts(obj);
+        return mkDT(TYPES["datetime.date"], Date.UTC(q.y, q.mo - 1, q.d));
+      },
+      replace: function(a, kw){
+        var q = dtParts(obj);
+        if (kw){
+          if (kw.year !== undefined) q.y = Math.trunc(nv(kw.year));
+          if (kw.month !== undefined) q.mo = Math.trunc(nv(kw.month));
+          if (kw.day !== undefined) q.d = Math.trunc(nv(kw.day));
+        }
+        return mkDT(cls, Date.UTC(q.y, q.mo - 1, q.d, q.h, q.mi, q.s));
+      }
+    };
+    if (!D[name]) return undefined;
+    return function(a, kw){ return D[name](a, kw); };
+  }
+
+  if (cls === TYPES["datetime.timedelta"]){
+    if (name === "days") return Math.floor(obj.tdMs / 86400000);
+    if (name === "seconds") return Math.floor((obj.tdMs % 86400000) / 1000);
+    if (name === "total_seconds") return function(){ return mkFloat(obj.tdMs / 1000); };
+    return undefined;
+  }
+
+  if (cls === TYPES["pathlib.Path"]){
+    var path = obj.fields.get("__path__");
+    var base = path.slice(path.lastIndexOf("/") + 1);
+    var dot = base.lastIndexOf(".");
+    if (name === "name") return base;
+    if (name === "suffix") return dot > 0 ? base.slice(dot) : "";
+    if (name === "stem") return dot > 0 ? base.slice(0, dot) : base;
+    if (name === "parent"){
+      var slash = path.lastIndexOf("/");
+      return mkPath(slash < 0 ? "." : (slash === 0 ? "/" : path.slice(0, slash)));
+    }
+    var P = {
+      exists: function(){ return I.disk.has(path); },
+      read_text: function(a, kw){
+        if (!I.disk.has(path))
+          raise("FileNotFoundError", "Файла «" + path + "» нет.", line,
+                { pymsg: "[Errno 2] No such file or directory: '" + path + "'" });
+        return I.disk.read(path);
+      },
+      write_text: function(a){
+        var text = pyStr(a[0]);
+        I.disk.write(path, text);
+        return text.length;
+      },
+      unlink: function(){ I.disk.remove(path); return null; },
+      with_suffix: function(a){
+        var sfx = pyStr(a[0]);
+        return mkPath(dot > 0 ? path.slice(0, path.length - (base.length - dot)) + sfx : path + sfx);
+      },
+      joinpath: function(a){ return mkPath(path.replace(/\/$/, "") + "/" + pyStr(a[0])); }
+    };
+    if (!P[name]) return undefined;
+    return function(a, kw){ return P[name](a, kw); };
+  }
+
+  if (cls === TYPES["re.Match"]){
+    var m = obj.reMatch;
+    var R = {
+      group: function(a){
+        var i = a.length ? a[0] : 0;
+        if (typeof i === "string"){
+          var v = m.groups ? m.groups[i] : undefined;
+          if (v === undefined)
+            raise("IndexError", "Группы «" + i + "» в шаблоне нет.", line, { pymsg: "no such group" });
+          return v;
+        }
+        var n = Math.trunc(nv(i));
+        if (n >= m.length) raise("IndexError", "Группы номер " + n + " в шаблоне нет.", line, { pymsg: "no such group" });
+        return m[n] === undefined ? null : m[n];
+      },
+      groups: function(){
+        return Tup(m.slice(1).map(function(x){ return x === undefined ? null : x; }));
+      },
+      start: function(){ return m.index; },
+      end: function(){ return m.index + m[0].length; },
+      span: function(){ return Tup([m.index, m.index + m[0].length]); }
+    };
+    if (!R[name]) return undefined;
+    return function(a){ return R[name](a); };
+  }
+
+  if (cls === TYPES.csvwriter){
+    var f = obj.fields.get("__file__");
+    var W = {
+      writerow: function(a){
+        f.checkOpen(line);
+        /* Python по умолчанию заканчивает строку так же — \r\n */
+        f.append(iterate(a[0], line).map(csvCell).join(",") + "\r\n");
+        return null;
+      },
+      writerows: function(a){
+        var rows = iterate(a[0], line);
+        for (var i = 0; i < rows.length; i++){
+          f.checkOpen(line);
+          f.append(iterate(rows[i], line).map(csvCell).join(",") + "\r\n");
+        }
+        return null;
+      }
+    };
+    if (!W[name]) return undefined;
+    return function(a){ return W[name](a); };
+  }
+
+  return undefined;
+}
+function mkPath(str){
+  var o = new PyObj(TYPES["pathlib.Path"]);
+  o.fields.set("__path__", str);
+  return o;
+}
+TYPES["pathlib.Path"].ctor = function(args, kw, line){
+  var parts = args.map(pyStr).filter(function(x){ return x !== ""; });
+  return mkPath(parts.length ? parts.join("/") : ".");
 };
 
 /* ---------- методы ---------- */
 Interp.prototype.bindMethod = function(obj, name, line){
   var I = this;
 
+  if (obj instanceof PyFile){
+    var F = {
+      read: function(){ obj.checkOpen(line); return obj.readAll(); },
+      readline: function(){ obj.checkOpen(line); return obj.readLine(); },
+      readlines: function(){ obj.checkOpen(line); return obj.lines(); },
+      write: function(a){
+        obj.checkOpen(line);
+        if (obj.mode.indexOf("r") >= 0)
+          raise("OSError", "Файл открыт только для чтения — записать в него нельзя. Нужен режим \"w\" или \"a\".", line,
+                { pymsg: "not writable" });
+        var text = pyStr(a[0]);
+        obj.append(text);
+        return text.length;
+      },
+      writelines: function(a){
+        obj.checkOpen(line);
+        var parts = iterate(a[0], line);
+        for (var i = 0; i < parts.length; i++) obj.append(pyStr(parts[i]));
+        return null;
+      },
+      close: function(){ obj.close(); return null; },
+      __enter__: function(){ return obj; },
+      __exit__: function(){ obj.close(); return null; }
+    };
+    if (name === "closed") return obj.closed;
+    if (name === "name") return obj.name;
+    if (name === "mode") return obj.mode;
+    if (!F[name]) raise("AttributeError", "У файла нет метода «" + name + "».", line,
+                        { pymsg: "'_io.TextIOWrapper' object has no attribute '" + name + "'" });
+    return function(args, kw){ return F[name](args, kw); };
+  }
+
+
   if (obj instanceof PyType){
-    if (name === "__name__") return obj.name;
+    /* __name__ — короткое имя: у datetime.date это «date», как в Python */
+    if (name === "__name__") return obj.shortName();
     var ca = obj.lookup(name);
     if (ca !== undefined) return ca;
     raise("AttributeError", "У класса «" + obj.name + "» нет «" + name + "».", line,
@@ -2519,7 +3601,16 @@ Interp.prototype.bindMethod = function(obj, name, line){
           { pymsg: "module '" + obj.name + "' has no attribute '" + name + "'" });
   }
 
+  if (obj instanceof PyFunc){
+    if (name === "__name__") return obj.name;
+    if (name === "__doc__") return null;
+    raise("AttributeError", "У функции нет «" + name + "».", line,
+          { pymsg: "'function' object has no attribute '" + name + "'" });
+  }
+
   if (obj instanceof PyObj){
+    var mm = moduleMethod(I, obj, name, line);
+    if (mm !== undefined) return mm;
     if (obj.fields.has(name)) return obj.fields.get(name);
     var m = obj.cls.lookup(name);
     if (m !== undefined) return (m instanceof PyFunc) ? new Bound(m, obj) : m;
@@ -2684,8 +3775,29 @@ Interp.prototype.bindMethod = function(obj, name, line){
         obj.forEach(function(pair){ dictSet(c, pair[0], pair[1]); });
         return c;
       },
+      most_common: function(a){
+        if (!obj.__counter__)
+          raise("AttributeError", "most_common() есть только у Counter.", line,
+                { pymsg: "'dict' object has no attribute 'most_common'" });
+        var pairs = Array.from(obj.values()).map(function(pr){ return Tup([pr[0], pr[1]]); });
+        var order = pairs.map(function(_, i){ return i; });
+        order.sort(function(x, y){ return nv(pairs[y][1]) - nv(pairs[x][1]) || x - y; });
+        var res = order.map(function(i){ return pairs[i]; });
+        return a && a.length ? res.slice(0, Math.trunc(nv(a[0]))) : res;
+      },
+      elements: function(){
+        var out = [];
+        obj.forEach(function(pr){
+          for (var i = 0; i < nv(pr[1]); i++) out.push(pr[0]);
+        });
+        return out;
+      },
       update: function(a){
         if (a[0] instanceof Map){ a[0].forEach(function(pair){ dictSet(obj, pair[0], pair[1]); }); return null; }
+        if (obj.__counter__){
+          iterate(a[0], line).forEach(function(x){ dictSet(obj, x, (dictGet(obj, x) || 0) + 1); });
+          return null;
+        }
         var seq = iterate(a[0], line);
         for (var i = 0; i < seq.length; i++){
           var pr = iterate(seq[i], line);
@@ -2873,7 +3985,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
@@ -2895,6 +4007,8 @@ function run(src, opts){
   result.output = I.out.join("");
   result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
   result.steps = I.steps;
+  result.files = {};
+  I.disk.files.forEach(function(v, k){ result.files[k] = v; });
   CUR = PREV;
   return result;
 }
@@ -2903,7 +4017,7 @@ function run(src, opts){
 function stepper(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
   CUR = I;
   var ast = parse(src);
   var it = I.runBlock(ast.body, I.global);
@@ -2940,7 +4054,7 @@ function snapshotVars(env, skip){
 }
 
 global.MiniPy = {
-  run: run, stepper: stepper, parse: parse, lex: lex,
+  run: run, stepper: stepper, parse: parse, lex: lex, PyDisk: PyDisk,
   Turtle: Turtle, pyRepr: pyRepr, pyStr: pyStr, snapshotVars: snapshotVars,
   COLORS: COLORS
 };

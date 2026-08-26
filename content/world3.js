@@ -24,7 +24,7 @@ CONTENT.world3 = {
       p:"Самая частая ошибка новичка: внутри функции стоит <code>print</code> вместо <code>return</code>. На экране всё правильно, а в переменной — <code>None</code>, и дальше считать нечем.",
       demo:'def bad(a, b):\n    print(a + b)\n\n\ndef good(a, b):\n    return a + b\n\n\nx = bad(2, 3)\ny = good(2, 3)\nprint("bad вернула:", x)\nprint("good вернула:", y)\nprint(y * 10)' },
     { h:"return выходит из функции сразу",
-      p:"Строки после сработавшего <code>return</code> не выполняются. Это удобно: проверил условие — сразу вернул ответ, без длинных <code>else</code>.",
+      p:"Строки после сработавшего <code>return</code> не выполняются. Это удобно: условие сошлось — сразу отдаём ответ, без длинных <code>else</code>.",
       demo:'def rank(score):\n    if score >= 90:\n        return "отлично"\n    if score >= 60:\n        return "нормально"\n    return "надо повторить"\n\n\nfor s in [95, 70, 20]:\n    print(s, "->", rank(s))' }
   ],
   task:{
@@ -163,8 +163,8 @@ CONTENT.world3 = {
   lede: "Иногда заранее неизвестно, сколько аргументов будет. Для этого есть звёздочка: <code>*args</code> собирает лишние по порядку, <code>**kwargs</code> — лишние по имени.",
   theory: [
     { h:"Пустое — это ложь",
-      p:"Пригодится через минуту. В условии пустой список, пустой кортеж, пустая строка и ноль считаются ложью, а любое непустое значение — правдой. Поэтому <code>if not items</code> читается как «если ничего нет».",
-      demo:'for value in [[], [1], "", "а", 0, 7, {}]:\n    print(repr(value), "->", bool(value), "| not:", not value)' },
+      p:"Пригодится через минуту. В условии пустой список, пустой кортеж, пустой словарь, пустая строка и ноль считаются ложью, а всё непустое — правдой. Проверить можно функцией <code>bool</code>: она показывает, чем значение окажется в условии. Поэтому <code>if not nums</code> читается как «если ничего не передали».",
+      demo:'print(bool([]), bool([1]))\nprint(bool(""), bool("а"))\nprint(bool(()), bool((1,)))\nprint(bool({}), bool({"а": 1}))\nprint(bool(0), bool(7))\n\nnums = []\nif not nums:\n    print("ничего не передали")' },
     { h:"*args — сколько угодно значений",
       p:"Звёздочка перед именем параметра означает «всё остальное сюда». Внутри функции это обычный кортеж, по нему можно пройти циклом. Имя <code>args</code> — просто договорённость, можно любое.",
       demo:'def total(*nums):\n    return sum(nums)\n\n\nprint(total())\nprint(total(5))\nprint(total(1, 2, 3, 4))\n\n\ndef show(*nums):\n    print(nums, type(nums), len(nums))\n\n\nshow(1, 2, 3)' },
@@ -184,16 +184,16 @@ CONTENT.world3 = {
     list:[
       "stats без аргументов возвращает строку «нет данных»",
       "stats с числами возвращает «N шт, сумма S, максимум M» — например «3 шт, сумма 12, максимум 7»",
-      "tag возвращает «имя: ключ=значение, ключ=значение», ключи по алфавиту",
-      "tag без именованных аргументов возвращает просто «имя»",
+      "tag возвращает «имя [ключ:значение; ключ:значение]», ключи по алфавиту",
+      "tag без именованных аргументов возвращает просто «имя», без скобок",
       "Вызовы в заготовке менять не нужно"
     ],
     starter:'def stats(*nums):\n    return "нет данных"\n\n\ndef tag(name, **props):\n    return name\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
-    solution:'def stats(*nums):\n    if not nums:\n        return "нет данных"\n    return f"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}"\n\n\ndef tag(name, **props):\n    if not props:\n        return name\n    parts = [f"{k}={props[k]}" for k in sorted(props)]\n    return name + ": " + ", ".join(parts)\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
+    solution:'def stats(*nums):\n    if not nums:\n        return "нет данных"\n    return f"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}"\n\n\ndef tag(name, **props):\n    if not props:\n        return name\n    parts = [f"{k}:{props[k]}" for k in sorted(props)]\n    return name + " [" + "; ".join(parts) + "]"\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
     hints:[
       "Про пустоту было в теории: if not nums значит «ничего не передали»",
       "len(nums), sum(nums), max(nums) — всё, что нужно для строки. Собери её f-строкой",
-      "Для tag: sorted(props) даёт ключи по алфавиту, а склеить пары поможет \", \".join([...])"
+      "Для tag: sorted(props) даёт ключи по алфавиту, пары собираются включением, а склеивает их \"; \".join([...])"
     ],
     check:{ kind:"output" }
   }
@@ -251,7 +251,7 @@ CONTENT.world3 = {
       demo:'def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n\n\nops = {"+": add, "-": sub}\nfor sign in ["+", "-"]:\n    print(sign, "->", ops[sign](10, 4))' },
     { h:"lambda — та же функция, короче",
       p:"<code>lambda</code> из Мира 2 — это просто функция без имени. В словарь её кладут так же, как обычную. Годится, когда тело — одно выражение.",
-      demo:'ops = {\n    "+": lambda a, b: a + b,\n    "*": lambda a, b: a * b,\n    "max": max,\n}\nfor name in ["+", "*", "max"]:\n    print(name, "->", ops[name](6, 7))' }
+      demo:'formulas = {\n    "площадь": lambda a, b: a * b,\n    "периметр": lambda a, b: 2 * (a + b),\n    "сторона побольше": max,\n}\nfor name in ["площадь", "периметр", "сторона побольше"]:\n    print(name, "->", formulas[name](6, 7))' }
   ],
   task:{
     type:"code",
@@ -287,8 +287,8 @@ CONTENT.world3 = {
       demo:'import tools\n\nprint(tools.clean("  ДА  "))\nprint(tools.shout("подъём"))\nprint(tools.PREFIX + "и переменные тоже")' },
     { h:"from ... import берёт по имени",
       p:"Если нужна одна функция, её забирают отдельно — тогда точка не нужна. Так короче, но по коду труднее понять, откуда взялось имя.",
-      files:{ "tools.py": 'def clean(text):\n    return text.strip().lower()\n\n\ndef shout(text):\n    return text.upper() + "!"\n' },
-      demo:'from tools import clean, shout\n\nprint(clean("  Тише  "))\nprint(shout("громче"))' },
+      files:{ "tools.py": 'def trim(text):\n    return text.strip()\n\n\ndef repeat(text, times):\n    return text * times\n' },
+      demo:'from tools import trim, repeat\n\nprint(trim("   тише   ") + "|")\nprint(repeat("ха", 3))' },
     { h:"В модуль попадает всё, что объявлено в файле",
       p:"Функции, переменные, классы — всё, что записано в файле на верхнем уровне. Поэтому модуль стоит держать «чистым»: только определения, без лишних <code>print</code>.",
       files:{ "tools.py": 'print("этот print сработает при import — так делать не надо")\n\n\ndef hello():\n    return "привет"\n' },
@@ -375,7 +375,7 @@ CONTENT.world3 = {
       p:"<code>ValueError</code> — значение не годится. <code>TypeError</code> — не тот тип. <code>KeyError</code> — нет такого ключа. Тип ошибки — это половина сообщения.",
       demo:'def repeat(text, times):\n    if type(text) is not str:\n        raise TypeError("первым аргументом нужна строка")\n    if times < 1:\n        raise ValueError("повторить нужно хотя бы один раз")\n    return text * times\n\n\nfor args in [("ха", 3), (5, 3), ("ха", 0)]:\n    try:\n        print(repeat(args[0], args[1]))\n    except (TypeError, ValueError) as e:\n        print(type(e).__name__, "->", e)' },
     { h:"Своя ошибка — свой класс",
-      p:"Когда встроенные типы не подходят по смыслу, объявляют свой: одна строка, наследник <code>Exception</code>. Дальше он работает как остальные. Слово <code>class</code> здесь забегает вперёд — классы разбираются в уроках 14–20 этого мира. Пока достаточно запомнить эти две строки как готовый приём.",
+      p:"Когда встроенные типы не подходят по смыслу, объявляют свой: одна строка, наследник <code>Exception</code>. Дальше он работает как остальные. Слово <code>class</code> здесь забегает вперёд — классы разбираются в уроках 14–19 этого мира. Пока достаточно запомнить эти две строки как готовый приём.",
       demo:'class TooLoud(Exception):\n    pass\n\n\ndef say(text):\n    if text.isupper():\n        raise TooLoud("не кричи: " + text)\n    return text\n\n\nfor phrase in ["привет", "АААА"]:\n    try:\n        print(say(phrase))\n    except TooLoud as e:\n        print("поймали свою ошибку:", e)' }
   ],
   task:{
@@ -400,17 +400,17 @@ CONTENT.world3 = {
 },
 
 "debug": {
-  lede: "Баг — это не «программа сломалась». Это «программа делает не то, что я думал». Искать причину нужно приёмами, а не наугад.",
+  lede: "Баг — это не «программа сломалась». Это «программа делает не то, что задумано». Искать причину нужно приёмами, а не наугад.",
   theory: [
     { h:"Шаг первый: что ожидал и что получил",
-      p:"Пока не сформулируешь оба ответа точно, искать нечего. «Не работает» — не описание. «Ждал 28, получил 10» — уже описание, и оно почти показывает, где смотреть.",
-      demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\nprint("ждал 28, получил", total)' },
+      p:"Пока оба ответа не названы точно, искать нечего. «Не работает» — не описание. «Надо 28, вышло 10» — уже описание, и оно почти показывает, где смотреть.",
+      demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\nprint("надо 28, вышло", total)' },
     { h:"Шаг второй: печатать промежуточное",
       p:"Самый быстрый способ — вставить <code>print</code> внутрь цикла и посмотреть, что там на каждом шаге. Не гадай: смотри.",
       demo:'nums = [4, 8, 6, 10]\ntotal = 0\nfor n in nums:\n    total = n\n    print("  шаг: n =", n, "total =", total)\nprint("итог:", total)' },
     { h:"Шаг третий: сузить участок",
       p:"Если программа длинная, отрежь половину. Работает — виновата вторая половина. Не работает — первая. Пять таких делений хватает почти всегда. В примере пригодится <code>repr</code>: он печатает строку с кавычками, и тогда видно пробелы и пустоту.",
-      demo:'def clean(text):\n    text = text.strip()\n    text = text.lower()\n    text = text.replace("ё", "е")\n    return text\n\n\n# проверяем по одному шагу, а не всю цепочку сразу\nprint(repr("  Ёлка ".strip()))\nprint(repr("  Ёлка ".strip().lower()))\nprint(repr(clean("  Ёлка ")))' },
+      demo:'def tidy(line):\n    line = line.strip()\n    line = line.replace(",", "")\n    line = line.replace("  ", " ")\n    return line\n\n\n# проверяем по одному шагу, а не всю цепочку сразу\nprint(repr("  раз, два  ".strip()))\nprint(repr("  раз, два  ".strip().replace(",", "")))\nprint(repr(tidy("  раз,  два  ")))' },
     { h:"Частые причины",
       p:"Перепутаны <code>=</code> и <code>==</code>. Промах на единицу в <code>range</code>. Присваивание вместо накопления, как в примерах выше. Изменение списка прямо в цикле по нему. Сравнение строки с числом: <code>\"5\" == 5</code> — это ложь.",
       demo:'print("5" == 5)\nprint(int("5") == 5)\nprint(list(range(1, 5)))\nprint(list(range(1, 6)))\n\nitems = [1, 2, 3, 4]\nfor x in items[:]:\n    if x % 2 == 0:\n        items.remove(x)\nprint("копия спасла:", items)' }
@@ -449,7 +449,7 @@ CONTENT.world3 = {
       p:"Несколько <code>assert</code> внизу файла — простейший тест. Меняешь функцию, запускаешь файл: молчит — значит ничего не сломано. Так работают и настоящие тесты, только их запускает отдельная программа.",
       demo:'def clamp(value, low, high):\n    if value < low:\n        return low\n    if value > high:\n        return high\n    return value\n\n\nassert clamp(5, 1, 10) == 5\nassert clamp(-3, 1, 10) == 1\nassert clamp(99, 1, 10) == 10\nassert clamp(1, 1, 10) == 1\nprint("4 проверки прошли")' },
     { h:"Что проверять",
-      p:"Обычный случай, край и пустоту. Хорошее правило: на каждую строчку условия в функции — одна проверка. И ещё: <code>assert</code> нужен для проверки себя, а не данных от пользователя — для них есть <code>raise</code> из прошлого урока.",
+      p:"Обычный случай, край и пустоту. Хорошее правило: на каждую строчку условия в функции — одна проверка. И ещё: <code>assert</code> нужен для проверки себя, а не данных от пользователя — для них есть <code>raise</code> из урока про свои исключения.",
       demo:'def rank(score):\n    if score >= 90:\n        return "отлично"\n    if score >= 60:\n        return "нормально"\n    return "надо повторить"\n\n\nassert rank(100) == "отлично"\nassert rank(90) == "отлично"\nassert rank(89) == "нормально"\nassert rank(60) == "нормально"\nassert rank(59) == "надо повторить"\nassert rank(0) == "надо повторить"\nprint("границы проверены")' }
   ],
   task:{
@@ -485,9 +485,9 @@ CONTENT.world3 = {
     { h:"Свои проверки — до чужих",
       p:"Пока тесты скрыты, напиши свои. Если <code>assert</code> молчит — всё сходится. Если ругается — ошибка нашлась сама, ещё до проверки.",
       demo:'def short(text):\n    if len(text) <= 8:\n        return text\n    return text[:7] + "…"\n\n\nassert short("привет") == "привет"\nassert short("") == ""\nassert short("двенадцать") == "двенадц…"\nassert len(short("очень длинное название")) == 8\nprint("свои проверки прошли")' },
-    { h:"Где такая функция ломается",
-      p:"У функции выше есть дыра: пустая строка. <code>split()</code> вернёт пустой список, включение даст пустую строку — и это как раз нужный ответ. А вот если написать <code>name[0]</code> напрямую, программа упадёт.",
-      demo:'def initials(name):\n    return name[0].upper() + "."\n\n\nprint(initials("иван петров"))\nprint(initials(""))',
+    { h:"Где такие функции ломаются",
+      p:"Почти всегда — на пустом входе. Если брать первый знак напрямую, у пустой строки его нет, и программа падает. Такие места и надо искать заранее: пустая строка, ноль, один элемент вместо двух.",
+      demo:'def first_letter(text):\n    return text[0].upper()\n\n\nprint(first_letter("аня"))\nprint(first_letter(""))',
       err:true }
   ],
   task:{
@@ -524,7 +524,7 @@ CONTENT.world3 = {
       p:"<code>class</code> описывает, что это за вещь. Чтобы получить саму вещь, класс вызывают как функцию: <code>Hero()</code>. Так можно сделать сколько угодно объектов по одной заготовке.",
       demo:'class Hero:\n    pass\n\n\na = Hero()\nb = Hero()\nprint(type(a))\nprint(a is b)' },
     { h:"У объекта свои поля",
-      p:"Поле дописывается через точку. У каждого объекта поля свои: изменил у одного — второй не тронут. У словаря то же самое, но у объекта есть класс: по <code>type(a)</code> сразу видно, что это <code>Hero</code>, а не «какой-то словарь».",
+      p:"Поле дописывается через точку. У каждого объекта поля свои: изменение у одного не задевает второго. У словаря то же самое, но у объекта есть класс: по <code>type(a)</code> сразу видно, что это <code>Hero</code>, а не «какой-то словарь».",
       demo:'class Hero:\n    pass\n\n\nanya = Hero()\nanya.name = "Аня"\nanya.hp = 10\n\nborya = Hero()\nborya.name = "Боря"\nborya.hp = 7\n\nprint(anya.name, anya.hp)\nprint(borya.name, borya.hp)' },
     { h:"Поле класса — общее значение",
       p:"Записанное прямо в классе достаётся всем объектам сразу. Пока объект не завёл своё поле с тем же именем, он видит общее.",
@@ -573,7 +573,7 @@ CONTENT.world3 = {
   ],
   task:{
     type:"code",
-    goal:"Опиши класс <code>Purse</code> — копилку с двумя методами.",
+    goal:"Опиши класс <code>Purse</code> — ту же копилку, что была в уроке про область видимости, но теперь на классе. Сравни, где удобнее.",
     list:[
       "Общее поле coins со значением 0",
       "add(self, amount) прибавляет к копилке и возвращает новую сумму",
@@ -601,10 +601,10 @@ CONTENT.world3 = {
       p:"Обычные правила из урока про значения по умолчанию: необязательные параметры идут последними. И та же ловушка со списком — поэтому список создают внутри, а не в объявлении.",
       demo:'class Hero:\n    def __init__(self, name, hp=10, items=None):\n        self.name = name\n        self.hp = hp\n        self.items = items if items is not None else []\n\n\na = Hero("Аня")\nb = Hero("Боря", 7)\na.items.append("меч")\nprint(a.name, a.hp, a.items)\nprint(b.name, b.hp, b.items)' },
     { h:"__repr__ — как объект выглядит",
-      p:"Без него печать объекта показывает служебную запись, из которой ничего не понять. <code>__repr__</code> обязан вернуть строку — и её видно и при <code>print</code>, и внутри списка.",
+      p:"Без него печать объекта показывает служебную запись, из которой ничего не понять. <code>__repr__</code> обязан вернуть строку — и её видно и при <code>print</code>, и внутри списка. Запись <code>{self.name!r}</code> в f-строке означает «покажи со кавычками, как в repr» — так сразу видно, что это текст.",
       demo:'class Hero:\n    def __init__(self, name, hp=10):\n        self.name = name\n        self.hp = hp\n\n    def __repr__(self):\n        return f"Hero({self.name!r}, hp={self.hp})"\n\n\nteam = [Hero("Аня"), Hero("Боря", 7)]\nprint(team[0])\nprint(team)' },
     { h:"Проверки прямо в __init__",
-      p:"Хорошее место для <code>raise</code> из прошлых уроков: объект не должен рождаться с негодными данными. Проверил на входе — дальше можно доверять полям.",
+      p:"Хорошее место для <code>raise</code> из прошлых уроков: объект не должен рождаться с негодными данными. Проверка на входе — и дальше полям можно доверять.",
       demo:'class Hero:\n    def __init__(self, name, hp=10):\n        if len(name) < 2:\n            raise ValueError("имя слишком короткое")\n        if hp < 1:\n            raise ValueError("здоровье должно быть больше нуля")\n        self.name = name\n        self.hp = hp\n\n    def __repr__(self):\n        return f"Hero({self.name!r}, hp={self.hp})"\n\n\nprint(Hero("Аня"))\ntry:\n    Hero("Я")\nexcept ValueError as e:\n    print("отказ:", e)' }
   ],
   task:{
@@ -639,7 +639,7 @@ CONTENT.world3 = {
       demo:'class Hero:\n    def hit(self):\n        return 1\n\n\nclass Mage(Hero):\n    def hit(self):\n        return 3\n\n\nclass Warrior(Hero):\n    def hit(self):\n        return 2\n\n\nfor who in [Hero(), Mage(), Warrior()]:\n    print(type(who).__name__, "->", who.hit())' },
     { h:"super() — позвать родителя",
       p:"Часто нужно не заменить родительский метод, а дополнить: сделай как раньше, а потом ещё вот это. <code>super()</code> и означает «тот же метод у родителя».",
-      demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp} hp"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n        self.mana = 5\n\n    def card(self):\n        return super().card() + f", мана {self.mana}"\n\n\nprint(Hero("Боря", 12).card())\nprint(Mage("Аня").card())' },
+      demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp} hp"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n        self.mana = 5\n\n    def card(self):\n        return "маг " + super().card()\n\n\nprint(Hero("Боря", 12).card())\nprint(Mage("Аня").card())' },
     { h:"Зачем это нужно",
       p:"Один список — разные объекты, а код один. Каждый отвечает за себя сам: цикл не спрашивает, кто перед ним, просто зовёт метод. Это главная выгода наследования.",
       demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def hit(self):\n        return 1\n\n    def __repr__(self):\n        return f"{type(self).__name__}({self.name})"\n\n\nclass Mage(Hero):\n    def __init__(self, name):\n        super().__init__(name, 8)\n\n    def hit(self):\n        return 3\n\n\nclass Warrior(Hero):\n    def __init__(self, name):\n        super().__init__(name, 15)\n\n    def hit(self):\n        return 2\n\n\nteam = [Mage("Аня"), Warrior("Боря"), Hero("Витя", 10)]\nprint(team)\nfor who in team:\n    print(who.name, "бьёт на", who.hit())\nprint("всего урона:", sum([w.hit() for w in team]))' }
@@ -714,12 +714,15 @@ CONTENT.world3 = {
     { h:"Кто здесь есть",
       p:"Базовый боец умеет держать удар и бить. Потомки отличаются только числами и названием — остальное достаётся по наследству.",
       demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\na = Fighter("Аня", 20, 5)\na.take(7)\nprint(a, a.alive())' },
-    { h:"Ход боя",
-      p:"Один шаг — один удар. Пока оба живы, ходят по очереди. Никакой случайности: одинаковый бой каждый раз, и это удобно — результат можно проверить.",
-      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} бьёт {b.name} на {a.damage}, у {b.name} {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nwinner = fight(Fighter("Аня", 20, 6), Fighter("Боря", 18, 5))\nprint("победил:", winner.name)' },
+    { h:"Один удар",
+      p:"Начинать надо с самого мелкого действия: один боец бьёт другого. Функция меняет здоровье и возвращает строку для журнала боя. Никакой случайности — значит бой всегда одинаковый, и результат можно проверить.",
+      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\ndef strike(a, b):\n    b.take(a.damage)\n    return f"{a.name} -> {b.name}: -{a.damage}, осталось {b.hp}"\n\n\nanya = Fighter("Аня", 20, 6)\nborya = Fighter("Боря", 18, 5)\nprint(strike(anya, borya))\nprint(strike(borya, anya))\nprint(anya.hp, borya.hp)' },
+    { h:"Ходят по очереди",
+      p:"Бой — это удары, пока оба живы. Обмен местами одной строкой <code>a, b = b, a</code> избавляет от «а теперь наоборот»: бьёт всегда тот, кто в <code>a</code>. Считать шаги и решать, кто победил, — уже твоя задача в этом уроке.",
+      demo:'class Runner:\n    def __init__(self, name, steps):\n        self.name = name\n        self.steps = steps\n\n\ndef swap_demo(a, b):\n    for i in range(4):\n        print(i + 1, "ход:", a.name)\n        a, b = b, a\n\n\nswap_demo(Runner("Аня", 0), Runner("Боря", 0))' },
     { h:"Особенность потомка",
-      p:"Броня — это изменение того, как боец получает удар. Меняем один метод, всё остальное остаётся общим.",
-      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\nk = Knight("Рыцарь", 20, 4)\nk.take(5)\nprint(k.hp)\nk.take(2)\nprint(k.hp)' }
+      p:"Отличие бойца — это изменение одного метода, всё остальное достаётся по наследству. Целитель после каждого удара залечивает единицу — но только пока жив.",
+      demo:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n\nclass Healer(Fighter):\n    def take(self, amount):\n        super().take(amount)\n        if self.hp > 0:\n            self.hp = self.hp + 1\n\n\nh = Healer("Целитель", 10, 4)\nh.take(3)\nprint(h.hp)\nh.take(8)\nprint(h.hp)' }
   ],
   task:{
     type:"code",
@@ -727,15 +730,15 @@ CONTENT.world3 = {
     list:[
       "Knight — потомок Fighter, переопределяет take: урон уменьшается на 3, но не меньше 1",
       "fight(a, b) проводит бой по шагам, пока оба живы, и возвращает победителя",
-      "На каждом шаге печатать: «1: Аня бьёт Рыцарь на 6, у Рыцарь 19»",
+      "На каждом шаге печатать: «1: Аня -> Рыцарь: -6, осталось 19»",
       "Первым бьёт тот, кто передан первым аргументом",
       "Строки в конце менять не нужно"
     ],
     starter:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    pass\n\n\ndef fight(a, b):\n    return a\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
-    solution:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} бьёт {b.name} на {a.damage}, у {b.name} {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
+    solution:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} -> {b.name}: -{a.damage}, осталось {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
     hints:[
       "У Knight хватит одного метода: def take(self, amount): super().take(max(1, amount - 3))",
-      "В fight цикл while a.alive() and b.alive(): бьём, печатаем, меняем местами",
+      "В fight цикл while a.alive() and b.alive(): наносим удар, печатаем строку журнала, меняем бойцов местами",
       "Поменять бойцов местами можно одной строкой: a, b = b, a",
       "Осторожно с концовкой: после последнего обмена в a может лежать проигравший. Поэтому вернуть надо того, кто жив: return a if a.alive() else b"
     ],
@@ -760,7 +763,7 @@ CONTENT.world3 = {
       demo:'colors = ["синий", "красный", "синий"]\ncounts = {}\nfor c in colors:\n    counts[c] = counts.get(c, 0) + 1\nprint(counts)\nprint(counts.get("зелёный", 0))' },
     { h:"Сортировка по двум условиям сразу",
       p:"Ключом может быть кортеж: сравниваться будет сначала первое значение, потом второе. Минус перед числом переворачивает порядок — так «сначала самые частые, потом по алфавиту» пишется в одну строку.",
-      demo:'counts = {"синий": 2, "красный": 1, "белый": 2}\npairs = sorted(counts.items(), key=lambda p: (-p[1], p[0]))\nprint(pairs)\nprint(pairs[0][0])' }
+      demo:'heroes = {"аня": 7, "боря": 9, "витя": 7}\npairs = sorted(heroes.items(), key=lambda p: (-p[1], p[0]))\nprint(pairs)\nprint("сильнее всех:", pairs[0][0])' }
   ],
   task:{
     type:"code",
@@ -783,7 +786,7 @@ CONTENT.world3 = {
     hints:[
       "clean — три метода подряд: text.strip().lower().replace(\"ё\", \"е\")",
       "words — вызови свою же clean, а потом split(): пробелы он разберёт сам",
-      "top_word: словарь-счётчик, потом sorted(counts.items(), key=lambda p: (-p[1], p[0])) и взять pairs[0][0]"
+      "top_word: сначала словарь-счётчик по словам, потом сортировка пар по двум условиям — сначала по количеству в обратную сторону, потом по слову, как в теории. Ответ — первое слово первой пары"
     ],
     check:{ kind:"tests", calls:[
       'textkit.clean("  Ёлка Растёт  ")',
