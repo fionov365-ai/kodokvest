@@ -2630,10 +2630,10 @@ function screenAdmin(){
     }
     else if (act === "resetall"){
       var yes = true;
-      try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи и статистику? Отменить будет нельзя."); } catch(e2){}
+      try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи, статистику и серию дней? Отменить будет нельзя."); } catch(e2){}
       if (!yes) return;
       S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-      S.firstTry = 0; S.perfect = 0;
+      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {};
       save(); refreshTop(); screenAdmin();
     }
     else if (act === "go"){ openLesson(id); }
