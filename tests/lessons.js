@@ -29,6 +29,7 @@ const MP = globalThis.MiniPy;
 global.window = global;
 global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -210,6 +211,37 @@ CURRICULUM.forEach(w => {
   });
 });
 
-console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}`);
+/* ===== разминки «угадай вывод» (predict) =====
+   Правильный ответ ребёнку — это вывод программы, поэтому программа
+   обязана запускаться без ошибок и что-то печатать. Плюс проверяем,
+   что заполнены поля, без которых карточка развалится. */
+let warmups = 0;
+const seenIds = {};
+(global.WARMUPS || []).forEach(w => {
+  warmups++;
+  const id = w.id || "(без id)";
+  if (!w.id) say(`[разминка] у разминки нет id`);
+  else if (seenIds[w.id]) say(`[разминка] ${id}: повтор id`);
+  seenIds[w.id] = 1;
+  if (w.type !== "predict" && w.type !== "blocks")
+    say(`[разминка] ${id}: type должен быть "predict" или "blocks", а он «${w.type}»`);
+  ["title", "emoji", "tag", "intro", "brief", "code", "note"].forEach(f => {
+    if (!w[f] || !String(w[f]).trim()) say(`[разминка] ${id}: пустое поле «${f}»`);
+  });
+  if (!Array.isArray(w.hints) || !w.hints.length)
+    say(`[разминка] ${id}: нет подсказок (hints)`);
+  const r = MP.run(w.code || "", { stdin: [] });
+  if (r.error) say(`[разминка] ${id}: программа падает — ${r.error.kind}: ${r.error.msg}`);
+  else if (!r.output || !r.output.trim())
+    say(`[разминка] ${id}: программа ничего не печатает — предсказывать нечего`);
+  /* «собери из блоков»: из одной-двух строк собирать нечего */
+  if (w.type === "blocks"){
+    const lines = String(w.code || "").split("\n").filter(s => s.trim() !== "");
+    if (lines.length < 3)
+      say(`[разминка] ${id}: в blocks всего ${lines.length} строк — собирать нечего, нужно ≥3`);
+  }
+});
+
+console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);

@@ -1627,6 +1627,12 @@ function Interp(opts){
   this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
   this.stdin = (opts.stdin || []).map(String);  // заранее записанные ответы для input()
   this.stdinPos = 0;
+  /* Интерактивный режим (игры): когда ответы кончились, программа не падает,
+     а «замирает» на input() — раннер снаружи покажет поле ввода и запустит
+     программу заново с добавленным ответом. seed фиксирует random, чтобы
+     такой перезапуск давал ровно ту же игру. */
+  this.interactive = !!opts.interactive;
+  if (opts.seed !== undefined && opts.seed !== null) this._seed = Math.trunc(opts.seed);
   this.modules = {};     // уже подключённые модули
   this.global = new Env(null);
   this.installBuiltins();
@@ -1794,7 +1800,10 @@ Interp.prototype.installBuiltins = function(){
   def("sorted", sortedFn);
   def("reversed", function(args, kw, line){ return I.iterate(args[0], line).slice().reverse(); });
   def("enumerate", function(args, kw, line){
-    var arr = I.iterate(args[0], line), st = args.length > 1 ? Math.trunc(nv(args[1])) : 0;
+    var arr = I.iterate(args[0], line);
+    /* start можно задать и позиционно, и по имени: enumerate(xs, start=1) */
+    var st = (kw && kw.start !== undefined) ? Math.trunc(nv(kw.start))
+           : args.length > 1 ? Math.trunc(nv(args[1])) : 0;
     return arr.map(function(v, i){ return Tup([i + st, v]); });
   });
   def("zip", function(args, kw, line){
@@ -1817,10 +1826,18 @@ Interp.prototype.installBuiltins = function(){
       raise("TypeError", "input() принимает не больше одного приглашения.", line,
             { pymsg: "input expected at most 1 argument, got " + args.length });
     if (args.length === 1) I.write(pyStr(args[0]));
-    if (I.stdinPos >= I.stdin.length)
+    if (I.stdinPos >= I.stdin.length){
+      if (I.interactive)
+        raise("__AwaitInput__", "жду ввод игрока", line, { fatal: true });
+      // сюда попадаем только в неинтерактивном режиме
       raise("EOFError", "Ответы закончились: программа спросила больше, чем ей заготовили. Добавь строку в список ответов.", line,
             { pymsg: "EOF when reading a line" });
-    return I.stdin[I.stdinPos++];
+    }
+    var ответ = I.stdin[I.stdinPos++];
+    /* в игре показываем, что набрал игрок: труба этого не делает, но человеку
+       за экраном нужно видеть свой ввод — печатаем его как эхо с переводом строки */
+    if (I.interactive) I.write(ответ + "\n");
+    return ответ;
   });
 
   // математика
@@ -4264,7 +4281,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
@@ -4281,7 +4298,10 @@ function run(src, opts){
     while (!step.done) step = it.next();
   } catch (e){
     if (!e.pyKind) throw e;
-    result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+    /* программа дошла до input() без готового ответа — это не ошибка,
+       а сигнал «жду ввод»: раннер добавит ответ и перезапустит */
+    if (e.pyKind === "__AwaitInput__") result.awaitingInput = true;
+    else result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
   }
   result.output = I.out.join("");
   result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
@@ -4296,7 +4316,7 @@ function run(src, opts){
 function stepper(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
   CUR = I;
   var ast = parse(src);
   var it = I.runBlock(ast.body, I.global);
@@ -4333,10 +4353,66 @@ function snapshotVars(env, skip){
   return out;
 }
 
+/* ---------- снимок «кучи» для визуализатора ----------
+   Возвращает неизменяемое дерево состояния для одного шага:
+     vars    — [{name, cell}] видимые переменные (локальные + внешние);
+     objects — {id: {kind, items|pairs}} все списки/кортежи/множества/словари.
+   cell — это либо {t:"val", type, text} (скаляр или объект без раскладки),
+   либо {t:"ref", id} — ссылка на объект в objects.
+
+   Идентичность объектов держит idMap (Map: объект → id), общий на весь прогон:
+   если две переменные ссылаются на ОДИН список, id совпадёт — так видно
+   алиасинг (b = a) и рисуются стрелки к одной коробке. Содержимое при этом
+   каждый раз сериализуется заново (копией), поэтому позднейшие изменения
+   не портят уже снятые кадры. */
+function heapSnapshot(env, idMap, skip){
+  var objects = {};
+  function cell(v){
+    if (v === null || v === undefined) return { t:"val", type:"NoneType", text:"None" };
+    if (v === true || v === false || isNum(v) || typeof v === "string")
+      return { t:"val", type: typeName(v), text: pyRepr(v) };
+    var tuple = isTup(v);
+    var list = Array.isArray(v) && !tuple;
+    var set = v instanceof PySet;
+    var dict = v instanceof Map;
+    if (list || tuple || set || dict){
+      var id = idMap.get(v);
+      if (id === undefined){ idMap._n = (idMap._n || 0) + 1; id = "o" + idMap._n; idMap.set(v, id); }
+      if (!objects[id]){
+        var node = { kind: list ? "list" : tuple ? "tuple" : set ? "set" : "dict", id: id };
+        objects[id] = node;                     // ставим заранее — защита от циклов
+        if (dict){
+          node.pairs = [];
+          v.forEach(function(val, k){ node.pairs.push({ key: pyRepr(k), val: cell(val) }); });
+        } else {
+          var arr = set ? v.values() : v;
+          node.items = arr.map(function(x){ return cell(x); });
+        }
+      }
+      return { t:"ref", id: id };
+    }
+    /* классы, объекты, функции-генераторы и прочее — как значение с текстом repr */
+    return { t:"val", type: typeName(v), text: pyRepr(v) };
+  }
+  var seen = {}, vars = [], e = env;
+  while (e){
+    e.vars.forEach(function(v, k){
+      if (seen[k]) return;
+      if (typeof v === "function" || v instanceof PyFunc) return;   // функции — не данные
+      if (k.indexOf("__") === 0) return;                            // служебные имена
+      if (skip && skip.indexOf(k) >= 0) return;
+      seen[k] = 1;
+      vars.push({ name: k, cell: cell(v) });
+    });
+    e = e.parent;
+  }
+  return { vars: vars, objects: objects };
+}
+
 global.MiniPy = {
   run: run, stepper: stepper, parse: parse, lex: lex, PyDisk: PyDisk,
   Turtle: Turtle, pyRepr: pyRepr, pyStr: pyStr, snapshotVars: snapshotVars,
-  COLORS: COLORS
+  heapSnapshot: heapSnapshot, COLORS: COLORS
 };
 
 })(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кодоквест</title>
+<script>
+/* GitHub Pages отдаёт этот файл на любой неизвестный адрес.
+   Задача: .../kodokvest/admin (без #) открывает панель наставника,
+   всё остальное — просто возвращает на главную. */
+(function(){
+  var p = location.pathname;
+  var m = p.match(/^(.*\/)admin\/?$/i);
+  if (m){ location.replace(m[1] + "?admin" + (location.hash || "")); return; }
+  location.replace(p.replace(/[^\/]*$/, ""));   // на корень раздела
+})();
+</script>
+</head>
+<body>
+<p style="font-family:sans-serif;padding:24px">Страница не найдена. <a href="./">Вернуться на главную</a>.</p>
+</body>
+</html>

@@ -35,7 +35,7 @@ var ADMIN_CODE = "kodokvest-2026";
 /* ================= сохранение ================= */
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0, log:{}, admin:{ unlockAll:false } };
+          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{}, admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -53,6 +53,7 @@ try {
   }
 } catch(e){}
 if (!S.log || typeof S.log !== "object") S.log = {};
+if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
 if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
 function saveLocal(){
   S.savedAt = Date.now();
@@ -168,6 +169,13 @@ function mergeProgress(a, b){
   out.perfect = maxN(a.perfect, b.perfect);
   out.sandboxRuns = maxN(a.sandboxRuns, b.sandboxRuns);
 
+  /* разгаданные разминки: объединяем — разгаданное на любом устройстве
+     остаётся разгаданным. Это не звёзды и не входит в сотню уроков. */
+  out.warmups = {};
+  [a.warmups || {}, b.warmups || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.warmups[k] = 1; });
+  });
+
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
   var older = fresher === b ? a : b;
@@ -271,6 +279,12 @@ function worldContent(n){
 function lessonBody(l){
   var c = CONTENT["world" + l.world];
   return c ? c[l.id] : null;
+}
+/* Подгрузить содержание всех миров. На сайте (index.html) миры грузятся
+   по отдельным файлам, и без этого экран миров на первой отрисовке показывал
+   миры 2–5 как «в работе», пока их контент ещё не приехал. */
+function allWorldsContent(){
+  return Promise.all(CURRICULUM.map(function(w){ return worldContent(w.n); }));
 }
 function worldReadyLessons(w){
   var c = CONTENT["world" + w.n] || {};
@@ -487,8 +501,8 @@ function makeStudio(cfg){
 
   var ed = makeEditor(cfg.code || "", cfg.label, cfg.files);
   ed.querySelector(".runbar").innerHTML =
-    '<button class="rbtn" data-role="run">▶ Запустить</button>' +
-    (eng.supportsStep ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
+    '<button class="rbtn" data-role="run">' + (cfg.play ? "▶ Новая игра" : "▶ Запустить") + '</button>' +
+    (eng.supportsStep && !cfg.play ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
     '<button class="rbtn sec" data-role="reset">↺ Сброс</button>' +
     (cfg.restore ? '<button class="rbtn sec" data-role="restore">↩ Вернуть как было</button>' : "") +
     (cfg.check ? '<button class="rbtn check" data-role="check">✓ Проверить</button>' : "") +
@@ -528,8 +542,22 @@ function makeStudio(cfg){
   var msg = document.createElement("div"); msg.className = "msg";
   left.appendChild(msg);
 
-  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(stdinPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
-  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(stdinPane); left.appendChild(diskPane); wrap.appendChild(left); }
+  /* Игровое поле ввода: появляется, когда игра ждёт хода игрока.
+     Игры устроены на перезапуске (replay) — движок гоняет программу заново
+     с накопленными ходами и фиксированным seed, поэтому «замысел» не плывёт. */
+  var playPane = null, playInput = null;
+  if (cfg.play){
+    playPane = document.createElement("div"); playPane.className = "playbar";
+    playPane.style.display = "none";
+    playPane.innerHTML =
+      '<span class="playq"></span>' +
+      '<input class="playin" type="text" autocomplete="off" spellcheck="false" placeholder="твой ход и Enter">' +
+      '<button class="rbtn play" data-role="move">Ход ↵</button>';
+    playInput = playPane.querySelector(".playin");
+  }
+
+  if (canvas){ side.appendChild(conPane); if (playPane) side.appendChild(playPane); side.appendChild(varsPane); side.appendChild(stdinPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
+  else { left.appendChild(conPane); if (playPane) left.appendChild(playPane); left.appendChild(varsPane); left.appendChild(stdinPane); left.appendChild(diskPane); wrap.appendChild(left); }
 
   /* Что сейчас в панели ответов. Пустой хвост убираем: перевод строки в конце
      текста — это не лишний пустой ответ, ровно как при вводе с клавиатуры. */
@@ -614,14 +642,66 @@ function makeStudio(cfg){
   function doReset(){
     stepper = null; ed.setLine(0); hideMsg();
     varsPane.style.display = "none";
+    if (playPane) playPane.style.display = "none";
     con.innerHTML = '<span class="empty">пока пусто — нажми «Запустить»</span>';
     if (canvas && eng.newTurtle) drawTurtle(canvas, eng.newTurtle());
+  }
+
+  /* ===== игровой режим: партия через перезапуск с накопленными ходами ===== */
+  var playAnswers = [], playSeed = 0;
+
+  function playRender(){
+    hideMsg(); ed.setError(0);
+    var t = eng.newTurtle ? eng.newTurtle() : null;
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(),
+      files: dataFiles(cfg.data), stdin: playAnswers, interactive: true, seed: playSeed });
+    setConsole(res.output);
+    if (res.files) showDisk(res.files);
+    if (canvas) animateTurtle(canvas, res.turtle || t);
+    award("first");
+    if (res.error){
+      ed.setError(res.error.line);
+      showMsg("bad", errHTML(res.error));
+      playPane.style.display = "none";
+      return;
+    }
+    if (res.awaitingInput){
+      /* последняя строка вывода — это приглашение input(); показываем его у поля */
+      var lines = res.output.split("\n");
+      var q = lines[lines.length - 1] || "твой ход:";
+      playPane.querySelector(".playq").textContent = q;
+      playPane.style.display = "";
+      playInput.value = "";
+      setTimeout(function(){ playInput.focus(); }, 0);
+    } else {
+      playPane.style.display = "none";
+      showMsg("ok", "<b>Игра окончена</b>Нажми «Новая игра», чтобы сыграть ещё раз, или поменяй код — и играй свою версию.");
+    }
+    if (cfg.onRun) cfg.onRun(res);
+  }
+  function playStart(){
+    playAnswers = [];
+    playSeed = Math.floor(Math.random() * 2000000000) + 1;
+    con.innerHTML = "";
+    playRender();
+  }
+  function playMove(){
+    if (!playPane || playPane.style.display === "none") return;
+    playAnswers.push(playInput.value);
+    playRender();
+  }
+  if (playPane){
+    playPane.querySelector('[data-role="move"]').onclick = playMove;
+    playInput.addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); playMove(); }
+    });
   }
 
   ed.querySelector(".runbar").addEventListener("click", function(e){
     var b = e.target.closest("button"); if (!b) return;
     var r = b.getAttribute("data-role");
-    if (r === "run") doRun();
+    if (r === "run") cfg.play ? playStart() : doRun();
+    else if (r === "move") playMove();
     else if (r === "step") doStep();
     else if (r === "reset") doReset();
     else if (r === "restore"){
@@ -829,6 +909,14 @@ function diffBlock(exp, got){
 /* ================= экран: миры ================= */
 function screenWorlds(){
   stopTimer(); clearAdminHash();
+  /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
+     только на сайте с раздельными файлами), догружаем всё и перерисовываем —
+     иначе готовые миры показались бы как «в работе». */
+  if (!window.__SINGLE_FILE__ && CURRICULUM.some(function(w){ return !CONTENT["world" + w.n]; })){
+    allWorldsContent().then(function(){
+      if (document.querySelector(".worlds")) screenWorlds();
+    });
+  }
   var doneTotal = Object.keys(S.stars).length;
   var h = '<div class="hero">' +
     '<h1>Кодоквест</h1>' +
@@ -1264,6 +1352,479 @@ function screenSandbox(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ================= экран: игры =================
+   Готовые маленькие игры. Код виден и его можно менять прямо здесь:
+   поправил — нажал «Новая игра» — играешь свою версию. Изменения
+   сохраняются между заходами, а кнопка «Вернуть оригинал» их сбрасывает. */
+function gamesList(){ return (window.GAMES || []); }
+function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
+
+function screenGames(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var gs = gamesList();
+  var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
+    '<p class="lede">Настоящие маленькие игры на Python. В каждой виден код — меняй его и смотри, что получится: сделай подсказку добрее, добавь свой вопрос в викторину, поменяй ответы дракона. Это самый быстрый способ понять, как код превращается в игру.</p>' +
+    '<div class="gamegrid">';
+  gs.forEach(function(g){
+    var edited = !!(S.games && S.games[g.id]);
+    h += '<button class="gamecard" data-id="' + g.id + '">' +
+      '<span class="gemoji">' + g.emoji + '</span>' +
+      '<b>' + esc(g.title) + (edited ? ' <span class="edittag">твоя версия</span>' : '') + '</b>' +
+      '<span>' + esc(g.desc) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openGame(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openGame(id){
+  var g = gamesList().filter(function(x){ return x.id === id; })[0];
+  if (!g) return screenGames();
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
+    '<p class="lede">' + esc(g.desc) + '</p>' +
+    '<div class="note"><b>Как играть</b>Нажми «Новая игра», потом пиши ходы в поле снизу и жми Enter. Хочешь изменить игру — правь код слева и снова жми «Новая игра».</div>';
+  app.innerHTML = head + '<div id="studio"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="games">← Ко всем играм</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="greset">↩ Вернуть оригинал</button></div>';
+
+  var studio = makeStudio({
+    engine: "mini", draw: !!g.draw, play: true, code: gameCode(g), label: g.title,
+    onRun: function(){
+      S.games = S.games || {};
+      S.games[g.id] = studio.editor.getCode();
+      S.gamesPlayed = S.gamesPlayed || {};
+      S.gamesPlayed[g.id] = 1;
+      save();
+    }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  document.getElementById("greset").onclick = function(){
+    if (S.games) delete S.games[g.id];
+    save();
+    openGame(id);
+  };
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ screenGames(); };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= экран: разминка (predict) =================
+   Отдельный раздел рядом с «Играми». Ребёнок читает готовую программу
+   и ДО запуска пишет, что она напечатает. Потом сверка.
+   Прогресс хранится в S.warmups и не влияет на звёзды и сотню уроков.
+   ============================================================ */
+function warmupsList(){ return (window.WARMUPS || []); }
+function warmupDone(id){ return !!(S.warmups && S.warmups[id]); }
+
+/* Сравнение предсказания с настоящим выводом. Хвостовые пробелы в каждой
+   строке и пустые строки в конце не считаем — их ребёнок мог не набрать,
+   а на смысл они не влияют. Внутренние пустые строки важны и остаются. */
+function normPred(s){
+  return String(s == null ? "" : s)
+    .replace(/\r/g, "")
+    .split("\n")
+    .map(function(x){ return x.replace(/[ \t]+$/, ""); })
+    .join("\n")
+    .replace(/\n+$/, "");
+}
+
+/* Где вывод впервые разошёлся с ожидаемым. Подписи колонок можно задать:
+   для «угадай вывод» это «на самом деле / ты предсказал», для «собери из
+   блоков» — «нужный вывод / твой вывод». */
+function predictDiff(want, got, wantLabel, gotLabel){
+  wantLabel = wantLabel || "на самом деле";
+  gotLabel = gotLabel || "ты предсказал";
+  var W = normPred(want).split("\n"), G = normPred(got).split("\n");
+  var n = Math.max(W.length, G.length), bad = -1;
+  for (var i = 0; i < n; i++) if ((W[i] || "") !== (G[i] || "")){ bad = i; break; }
+  var head = bad < 0
+    ? "Строк должно быть " + W.length + ", а получилось " + G.length + "."
+    : "Первое расхождение в строке " + (bad + 1) + ".";
+  return head + '<div class="cmp"><div><u>' + wantLabel + '</u>' +
+    esc(W.slice(0, 10).join("\n") || "(пусто)") + (W.length > 10 ? "\n…" : "") +
+    '</div><div><u>' + gotLabel + '</u>' +
+    esc(G.slice(0, 10).join("\n") || "(пусто)") + (G.length > 10 ? "\n…" : "") +
+    '</div></div>';
+}
+
+/* Рабочая станция разминки: слева программа только для чтения, снизу
+   поле для предсказания. Устроена так, чтобы сквозной тест мог с ней
+   работать теми же ручками, что и с обычным редактором: editor.setCode /
+   editor.getCode задают и читают предсказание, а кнопка «Проверить»
+   помечена data-role="check". */
+function makePredictStudio(cfg){
+  cfg = cfg || {};
+  var wrap = document.createElement("div");
+  wrap.className = "predict";
+
+  var codeBox = document.createElement("div");
+  codeBox.className = "pcode";
+  codeBox.innerHTML = '<div class="ehead"><span class="dot"></span><span class="dot"></span>' +
+    '<span class="dot"></span><span class="lbl">программа — только читаем</span></div>' +
+    '<pre><code>' + hl(cfg.code || "") + '</code></pre>';
+
+  var ansBox = document.createElement("div");
+  ansBox.className = "pane pans";
+  ansBox.innerHTML = '<div class="ph">что напечатает программа?</div><div class="pb">' +
+    '<textarea class="stdinbox predin" spellcheck="false" autocapitalize="off" autocorrect="off" rows="6" ' +
+    'placeholder="Запиши вывод по строкам — так, как его напечатает программа"></textarea>' +
+    '<div class="stdinhint">По строке на каждый print. Потом нажми «Проверить».</div></div>';
+  var ta = ansBox.querySelector("textarea");
+
+  var runbar = document.createElement("div");
+  runbar.className = "runbar";
+  runbar.innerHTML = '<button class="rbtn check" data-role="check">✓ Проверить</button>' +
+    '<button class="rbtn sec" data-role="clear">↺ Очистить</button>' +
+    '<span class="sp"></span><span class="tip">сначала подумай, потом проверь</span>';
+
+  var msg = document.createElement("div"); msg.className = "msg";
+
+  var outPane = document.createElement("div"); outPane.className = "pane pout"; outPane.style.display = "none";
+  outPane.innerHTML = '<div class="ph">настоящий вывод программы</div><div class="console"></div>';
+  var con = outPane.querySelector(".console");
+
+  wrap.appendChild(codeBox);
+  wrap.appendChild(ansBox);
+  wrap.appendChild(runbar);
+  wrap.appendChild(msg);
+  wrap.appendChild(outPane);
+
+  function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
+  function hideMsg(){ msg.className = "msg"; }
+
+  wrap.editor = {
+    getCode: function(){ return ta.value; },
+    setCode: function(v){ ta.value = v; },
+    focusEditor: function(){ ta.focus(); }
+  };
+  wrap.showMsg = showMsg;
+  wrap.reveal = function(text){
+    outPane.style.display = "";
+    con.innerHTML = text ? esc(text) : '<span class="empty">программа ничего не печатает</span>';
+  };
+  wrap.hideOut = function(){ outPane.style.display = "none"; };
+
+  runbar.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    var r = b.getAttribute("data-role");
+    if (r === "check") cfg.check(wrap.editor, showMsg);
+    else if (r === "clear"){ ta.value = ""; hideMsg(); wrap.hideOut(); ta.focus(); }
+  });
+  ta.addEventListener("keydown", function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); cfg.check(wrap.editor, showMsg); }
+  });
+
+  return wrap;
+}
+
+/* Рабочая станция «собери из блоков»: перемешанные строки, которые
+   переставляют перетаскиванием или кнопками ▲▼. Как и у predict,
+   editor.setCode / editor.getCode работают со сборкой (нужны тесту):
+   getCode возвращает собранную программу, setCode раскладывает блоки
+   в порядок переданного текста. */
+function makeBlocksStudio(cfg){
+  cfg = cfg || {};
+  var wrap = document.createElement("div");
+  wrap.className = "predict blocks";
+
+  /* строки-блоки: без пустых, отступы сохраняем — они и есть подсказка о вложенности */
+  var blocks = String(cfg.code || "").replace(/\r/g, "").split("\n")
+    .filter(function(l){ return l.trim() !== ""; });
+
+  /* стартовый порядок — перемешанный и заведомо не равный правильному */
+  var order = blocks.map(function(_, i){ return i; });
+  (function shuffle(){
+    for (var i = order.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = order[i]; order[i] = order[j]; order[j] = t;
+    }
+    var same = order.every(function(v, i){ return v === i; });
+    if (same && order.length > 1) order.push(order.shift());
+  })();
+
+  var head = document.createElement("div");
+  head.className = "ehead";
+  head.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
+    '<span class="lbl">переставь строки по порядку — тяни за ⠿ или жми ▲ ▼</span>';
+
+  var list = document.createElement("div");
+  list.className = "blocklist";
+
+  function render(){
+    list.innerHTML = order.map(function(bi, pos){
+      return '<div class="block" draggable="true" data-pos="' + pos + '">' +
+        '<span class="bgrip" title="перетащи">⠿</span>' +
+        '<pre class="bcode"><code>' + hl(blocks[bi]) + '</code></pre>' +
+        '<span class="bmove"><button class="bbtn" data-up title="выше">▲</button>' +
+        '<button class="bbtn" data-down title="ниже">▼</button></span>' +
+        '</div>';
+    }).join("");
+  }
+  render();
+
+  function move(from, to){
+    if (to < 0 || to >= order.length || from === to) return;
+    var v = order.splice(from, 1)[0];
+    order.splice(to, 0, v);
+    render();
+  }
+
+  /* кнопки ▲ ▼ — работают и на телефоне, где перетаскивать неудобно */
+  list.addEventListener("click", function(e){
+    var b = e.target.closest("button.bbtn"); if (!b) return;
+    var row = b.closest(".block"); if (!row) return;
+    var pos = +row.getAttribute("data-pos");
+    move(pos, b.hasAttribute("data-up") ? pos - 1 : pos + 1);
+  });
+
+  /* перетаскивание мышью */
+  var dragFrom = -1;
+  list.addEventListener("dragstart", function(e){
+    var row = e.target.closest(".block"); if (!row) return;
+    dragFrom = +row.getAttribute("data-pos");
+    row.classList.add("dragging");
+    if (e.dataTransfer){ e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", ""); } catch(_){} }
+  });
+  list.addEventListener("dragover", function(e){
+    e.preventDefault();
+    var row = e.target.closest(".block"); if (!row) return;
+    list.querySelectorAll(".block.over").forEach(function(x){ x.classList.remove("over"); });
+    row.classList.add("over");
+  });
+  list.addEventListener("drop", function(e){
+    e.preventDefault();
+    var row = e.target.closest(".block"); if (!row || dragFrom < 0) return;
+    move(dragFrom, +row.getAttribute("data-pos"));
+    dragFrom = -1;
+  });
+  list.addEventListener("dragend", function(){
+    dragFrom = -1;
+    list.querySelectorAll(".dragging,.over").forEach(function(x){ x.classList.remove("dragging","over"); });
+  });
+
+  var runbar = document.createElement("div");
+  runbar.className = "runbar";
+  runbar.innerHTML = '<button class="rbtn check" data-role="check">✓ Проверить</button>' +
+    '<button class="rbtn sec" data-role="shuffle">🔀 Перемешать заново</button>' +
+    '<span class="sp"></span><span class="tip">строки читаются сверху вниз</span>';
+
+  var msg = document.createElement("div"); msg.className = "msg";
+
+  var outPane = document.createElement("div"); outPane.className = "pane pout"; outPane.style.display = "none";
+  outPane.innerHTML = '<div class="ph">что напечатала твоя сборка</div><div class="console"></div>';
+  var con = outPane.querySelector(".console");
+
+  wrap.appendChild(head);
+  wrap.appendChild(list);
+  wrap.appendChild(runbar);
+  wrap.appendChild(msg);
+  wrap.appendChild(outPane);
+
+  function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
+
+  wrap.editor = {
+    getCode: function(){ return order.map(function(bi){ return blocks[bi]; }).join("\n"); },
+    setCode: function(text){
+      var target = String(text || "").replace(/\r/g, "").split("\n")
+        .filter(function(l){ return l.trim() !== ""; });
+      var used = {}, newOrder = [];
+      target.forEach(function(line){
+        for (var i = 0; i < blocks.length; i++){
+          if (!used[i] && blocks[i] === line){ used[i] = 1; newOrder.push(i); break; }
+        }
+      });
+      for (var i = 0; i < blocks.length; i++) if (!used[i]) newOrder.push(i);
+      order = newOrder; render();
+    },
+    focusEditor: function(){}
+  };
+  wrap.showMsg = showMsg;
+  wrap.reveal = function(text){
+    outPane.style.display = "";
+    con.innerHTML = text ? esc(text) : '<span class="empty">программа ничего не напечатала</span>';
+  };
+  wrap.hideOut = function(){ outPane.style.display = "none"; };
+
+  runbar.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    var r = b.getAttribute("data-role");
+    if (r === "check") cfg.check(wrap.editor, showMsg);
+    else if (r === "shuffle"){
+      msg.className = "msg"; wrap.hideOut();
+      for (var i = order.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = order[i]; order[i] = order[j]; order[j] = t;
+      }
+      render();
+    }
+  });
+
+  return wrap;
+}
+
+function runBlocksCheck(w, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini");
+  var got = eng.run(ed.getCode(), {});
+  if (got.error){
+    session.studio.hideOut();
+    showMsg("bad", "<b>Пока не запускается</b>" + errHTML(got.error) +
+      "<br>Скорее всего, какая-то строка стоит не на своём месте или не на своём отступе. Переставь и попробуй снова.");
+    return;
+  }
+  var ref = eng.run(w.code, {});
+  session.studio.reveal(got.output);
+  if (got.output === ref.output){
+    winWarmup(w);
+  } else {
+    showMsg("bad", "<b>Запускается, но вывод не тот</b>" +
+      predictDiff(ref.output, got.output, "нужный вывод", "твой вывод") +
+      "Порядок строк меняет и вывод — переставь и попробуй снова.");
+  }
+}
+
+function screenWarmups(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var ws = warmupsList();
+  var done = ws.filter(function(w){ return warmupDone(w.id); }).length;
+  var h = '<div class="lvlhead"><div><div class="idx">думай, потом проверяй</div><h1>🔮 Разминка</h1></div>' +
+    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + ws.length + '</span></div></div>' +
+    '<p class="lede">Короткие загадки «угадай вывод». Прочитай программу и запиши, что она напечатает, — до запуска. ' +
+    'Это тренирует главное умение программиста: держать ход программы в голове. Звёзды тут не начисляются, ошибаться можно сколько угодно.</p>' +
+    '<div class="gamegrid">';
+  ws.forEach(function(w){
+    h += '<button class="gamecard" data-id="' + w.id + '">' +
+      '<span class="gemoji">' + w.emoji + '</span>' +
+      '<b>' + esc(w.title) + (warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
+      '<span>' + esc(w.intro) + '</span>' +
+      '<span class="wtag">' + esc(w.tag) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openWarmup(id){
+  var ws = warmupsList();
+  var w = ws.filter(function(x){ return x.id === id; })[0];
+  if (!w) return screenWarmups();
+  stopTimer(); clearAdminHash();
+  session = { id:id, attempts:0, hints:0, shown:false };
+  var pos = ws.indexOf(w);
+  var next = pos < ws.length - 1 ? ws[pos+1] : null;
+  var prev = pos > 0 ? ws[pos-1] : null;
+
+  var isBlocks = w.type === "blocks";
+  var head = '<div class="crumbs"><span data-go="warmups">Разминка</span> › ' + w.emoji + ' ' + esc(w.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + (isBlocks ? "собери из блоков" : "угадай вывод") + '</div><h1>' + w.emoji + ' ' + esc(w.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + esc(w.tag) + '</span></div></div>' +
+    '<p class="lede">' + esc(w.intro) + '</p>' +
+    '<div class="goal"><h3>🎯 Твоя задача</h3><p>' + esc(w.brief) + '</p></div>';
+
+  var hints = '<div class="hintbox">' +
+    '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    '<span class="tip">подсказки не отнимают ничего — это разминка</span></div>' +
+    '<div class="hintout" id="hintout"></div>';
+
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="warmups">← Ко всем разминкам</button><span class="sp"></span>' +
+    (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
+    (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
+
+  app.innerHTML = head + '<div id="studio"></div>' + hints + pager;
+
+  var studio = isBlocks
+    ? makeBlocksStudio({ code: w.code, check: function(ed, showMsg){ runBlocksCheck(w, ed, showMsg); } })
+    : makePredictStudio({ code: w.code, check: function(ed, showMsg){ runPredictCheck(w, ed, showMsg); } });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+
+  document.getElementById("hintbtn").onclick = function(){
+    var hs = w.hints || [];
+    if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
+    if (session.hints >= hs.length) return;
+    session.hints++;
+    var out = document.getElementById("hintout");
+    out.className = "hintout show";
+    out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
+      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
+    }).join("");
+    if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
+  };
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ screenWarmups(); };
+  });
+  app.querySelectorAll("[data-next]").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-next")); };
+  });
+  app.querySelectorAll("[data-prev]").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-prev")); };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function runPredictCheck(w, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini");
+  var res = eng.run(w.code, {});
+  if (res.error){ showMsg("bad", errHTML(res.error)); return; }
+  var want = res.output, got = ed.getCode();
+  if (normPred(want) === normPred(got)){
+    session.studio.reveal(res.output);
+    winWarmup(w);
+  } else {
+    session.studio.reveal(res.output);
+    showMsg("bad", "<b>Ещё не совпало</b>" + predictDiff(want, got) +
+      "Смотри на настоящий вывод справа, найди, где разошлось, и попробуй снова.");
+  }
+}
+
+function winWarmup(w){
+  S.warmups = S.warmups || {};
+  S.warmups[w.id] = 1; save();
+  var ws = warmupsList(), pos = ws.indexOf(w);
+  var next = pos >= 0 && pos < ws.length - 1 ? ws[pos+1] : null;
+  var firstTry = session.attempts === 1 && session.hints === 0;
+  var isBlocks = w.type === "blocks";
+  var big = firstTry ? "🎯" : (isBlocks ? "🧩" : "🔮");
+  var h2 = firstTry
+    ? (isBlocks ? "Собрал с первой попытки!" : "Точно, с первой попытки!")
+    : (isBlocks ? "Собрал!" : "Угадал!");
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + big + '</div>' +
+    '<h2>' + h2 + '</h2>' +
+    '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>' +
+    '<div class="winrow">' +
+      (next ? '<button class="bigbtn" id="wnext">Следующая →</button>'
+            : '<button class="bigbtn" id="wlist">Ко всем разминкам</button>') +
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(2);
+  var wn = document.getElementById("wnext");
+  if (wn) wn.onclick = function(){ closeWin(); openWarmup(next.id); };
+  var wl = document.getElementById("wlist");
+  if (wl) wl.onclick = function(){ closeWin(); screenWarmups(); };
+  document.getElementById("wstay").onclick = closeWin;
+}
+
 /* ================= экран: панель наставника =================
    Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
    с #admin на конце. Показывает прогресс, позволяет открывать и
@@ -1272,8 +1833,15 @@ function screenSandbox(){
    ============================================================ */
 function clearAdminHash(){
   try {
-    if ((location.hash || "").toLowerCase() === "#admin" && history.replaceState)
-      history.replaceState(null, "", location.pathname + location.search);
+    if (!history.replaceState) return;
+    var hash = (location.hash || "").toLowerCase() === "#admin" ? "" : location.hash;
+    /* убираем admin из ?query, остальные параметры (например ?kid=) сохраняем */
+    var search = (location.search || "").replace(/([?&])admin(=[^&]*)?(&|$)/i, function(m, p1, v, tail){
+      return tail === "&" ? p1 : (p1 === "?" ? "" : "");
+    });
+    if (search === "?") search = "";
+    if (hash !== location.hash || search !== location.search)
+      history.replaceState(null, "", location.pathname + search + hash);
   } catch(e){}
 }
 function adminUnlocked(){
@@ -1287,8 +1855,18 @@ function adminLock(){
   window.__adminOk = false;
   try { sessionStorage.removeItem("kodokvest_admin"); } catch(e){}
 }
+/* Панель наставника открывается любым из способов:
+   .../kodokvest/#admin, .../kodokvest/?admin и просто .../kodokvest/admin
+   (последнее ловит 404.html и превращает в ?admin). */
+function wantsAdmin(){
+  var h = (location.hash || "").toLowerCase();
+  var q = (location.search || "").toLowerCase();
+  return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
+}
 function routeHash(){
-  if ((location.hash || "").toLowerCase() === "#admin"){ screenAdmin(); return true; }
+  if (wantsAdmin()){ screenAdmin(); return true; }
+  if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
+  if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
   return false;
 }
 function fmtMins(ms){
@@ -1715,6 +2293,8 @@ function screenAdmin(){
 document.getElementById("btn-map").onclick = screenWorlds;
 document.getElementById("logo").onclick = screenWorlds;
 document.getElementById("btn-sand").onclick = screenSandbox;
+(function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
+(function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
 document.getElementById("btn-focus").onclick = function(){
   document.body.classList.toggle("focus");
   this.classList.toggle("on");
@@ -1741,7 +2321,9 @@ window.addEventListener("resize", function(){
   } catch(e){}
 })();
 
-worldContent(1).then(function(){
+/* грузим содержание всех миров до первой отрисовки — иначе на сайте
+   миры 2–5 мигают как «в работе», пока их файлы не приедут */
+allWorldsContent().then(function(){
   if (!routeHash()) screenWorlds();
   /* сервер подключаем в фоне: игра должна открываться сразу и работать без сети */
   if (cloudEnabled()){
@@ -1757,7 +2339,8 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
-  screenSandbox: screenSandbox, screenAdmin: screenAdmin, state: S, save: save,
+  screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
+  openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

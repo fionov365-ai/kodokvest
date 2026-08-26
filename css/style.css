@@ -175,6 +175,59 @@ button{font-family:inherit}
   font:13px/1.6 'JetBrains Mono',ui-monospace,monospace}
 .stdinbox:focus{outline:none;border-color:var(--acc2)}
 .stdinhint{margin-top:6px;font-size:11.5px;color:var(--faint);line-height:1.5}
+
+/* игровое поле ввода (раздел «Игры») */
+.playbar{display:flex;gap:8px;align-items:center;margin-top:10px;padding:10px 12px;
+  border:1px solid var(--acc2);border-radius:12px;background:rgba(0,224,184,.06);flex-wrap:wrap}
+.playbar .playq{font:13px/1.4 'JetBrains Mono',ui-monospace,monospace;color:var(--acc2);flex:1 1 140px;min-width:0}
+.playbar .playin{flex:1 1 160px;min-width:0;box-sizing:border-box;border:1px solid var(--line);
+  border-radius:8px;background:var(--sunken);color:var(--soft);padding:8px 10px;
+  font:14px/1.4 'JetBrains Mono',ui-monospace,monospace}
+.playbar .playin:focus{outline:none;border-color:var(--acc2)}
+.rbtn.play{background:var(--acc2);color:#04231e}
+
+/* карточки игр */
+.gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.gamecard{display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
+  border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px 16px 18px;
+  transition:.15s;color:inherit}
+.gamecard:hover{border-color:var(--acc2);transform:translateY(-2px)}
+.gamecard .gemoji{font-size:34px;line-height:1}
+.gamecard b{font-size:16px}
+.gamecard span{font-size:13px;color:var(--soft);line-height:1.5}
+.edittag,.gamecard .edittag{font:600 10px/1 sans-serif;color:var(--acc2);border:1px solid var(--acc2);
+  border-radius:6px;padding:2px 5px;vertical-align:middle}
+.edittag.done{color:var(--acc2);border-color:var(--acc2)}
+
+/* раздел «Разминка»: угадай вывод (predict) */
+.gamecard .wtag{align-self:flex-start;margin-top:2px;font:600 10.5px/1 'Inter',sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:6px;padding:3px 7px}
+.predict{display:flex;flex-direction:column;gap:12px}
+.predict .pcode{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--code);box-shadow:var(--sh)}
+.predict .pcode pre{margin:0;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.62}
+.predict .pcode code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.predict .pans .predin{min-height:120px}
+.predict .runbar{border:1px solid var(--line);border-radius:var(--r)}
+.predict .msg{margin-top:0}
+
+/* «собери из блоков»: перетаскиваемые строки */
+.blocks .ehead{border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0}
+.blocklist{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 var(--r) var(--r);background:var(--code);padding:12px}
+.block{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);
+  border-radius:10px;padding:6px 10px;cursor:grab;transition:border-color .15s,transform .05s,box-shadow .15s}
+.block:hover{border-color:var(--acc)}
+.block.dragging{opacity:.55;cursor:grabbing}
+.block.over{border-color:var(--acc2);box-shadow:0 0 0 2px rgba(0,224,184,.35)}
+.block .bgrip{flex:none;color:var(--faint);font-size:16px;line-height:1;user-select:none;letter-spacing:-1px}
+.block .bcode{flex:1;min-width:0;margin:0;overflow-x:auto;white-space:pre;
+  font-size:13.5px;line-height:1.5;padding:2px 0}
+.block .bcode code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.block .bmove{flex:none;display:flex;flex-direction:column;gap:2px}
+.block .bbtn{border:1px solid var(--line2);background:var(--panel2);color:var(--soft);border-radius:6px;
+  width:26px;height:18px;line-height:1;font-size:10px;cursor:pointer;padding:0;transition:.15s}
+.block .bbtn:hover{color:var(--ink);border-color:var(--acc2)}
+
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}

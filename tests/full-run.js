@@ -407,7 +407,113 @@ function checkEncoding(){
   g.stopTimer();
   await tick();
 
+  /* --- игры: каждая открывается, начинает партию и играется до конца --- */
+  let gamesChecked = 0;
+  const GAMES = w.GAMES || [];
+  if (!GAMES.length) bad("[игры] список игр пуст — js/games.js не подключён");
+  /* заранее заготовленные ходы, чтобы довести каждую игру до конца */
+  const MOVES = {
+    guess: ["50","75","88","94","97","99","100","1","2","3","4","5","6","7","8","9","10",
+            "20","30","40","60","70","80","90","95","98"],
+    rps: Array(30).fill("камень"),
+    ttt: ["1","2","3","4","5","6","7","8","9"],
+    quiz: ["1","1","1","1","1","1"],
+    adventure: ["1","1","2","2","1","2"]
+  };
+  for (const game of GAMES){
+    g.openGame(game.id);
+    await tick();
+    const st = studioOf();
+    if (!st){ bad(`[игры] ${game.id}: экран игры не открылся`); continue; }
+    const runBtn = st.querySelector('[data-role="run"]');
+    if (!runBtn){ bad(`[игры] ${game.id}: нет кнопки «Новая игра»`); continue; }
+    runBtn.click();               // начать партию
+    await tick();
+    const input = st.querySelector(".playin");
+    const moveBtn = st.querySelector('[data-role="move"]');
+    if (!input || !moveBtn){ bad(`[игры] ${game.id}: нет поля хода`); continue; }
+    const playbar = st.querySelector(".playbar");
+    const con = st.querySelector(".console");
+    if (game.id === "guess"){
+      /* «угадай число»: секрет случаен, поэтому играем как человек —
+         бинарным поиском, читая подсказки «больше/меньше» из консоли */
+      let lo = 1, hi = 100, guard = 0;
+      while (playbar && playbar.style.display !== "none" && guard++ < 20){
+        const mid = Math.floor((lo + hi) / 2);
+        input.value = String(mid);
+        moveBtn.click();
+        await tick();
+        /* последняя строка — приглашение следующего ввода; подсказка идёт перед ним */
+        const lines = (con.textContent || "").toLowerCase().split("\n").filter(Boolean);
+        const tail = lines.slice(-2).join(" ");
+        if (/больше/.test(tail)) lo = mid + 1;
+        else if (/меньше/.test(tail)) hi = mid - 1;
+      }
+      if (playbar && playbar.style.display !== "none")
+        bad(`[игры] guess: не угадал за 20 ходов бинарным поиском`);
+      else gamesChecked++;
+    } else {
+      const moves = MOVES[game.id] || Array(30).fill("1");
+      let guard = 0;
+      while (playbar && playbar.style.display !== "none" && guard < moves.length){
+        input.value = moves[guard++];
+        moveBtn.click();
+        await tick();
+      }
+      if (playbar && playbar.style.display !== "none")
+        bad(`[игры] ${game.id}: партия не завершилась за ${moves.length} ходов`);
+      else gamesChecked++;
+    }
+  }
+
+  /* --- разминки «угадай вывод»: правильное предсказание засчитывается,
+         неправильное — нет --- */
+  let warmupsChecked = 0;
+  const WARMUPS = w.WARMUPS || [];
+  if (!WARMUPS.length) bad("[разминки] список пуст — js/warmups.js не подключён");
+  const normPred = s => String(s == null ? "" : s).replace(/\r/g, "")
+    .split("\n").map(x => x.replace(/[ \t]+$/, "")).join("\n").replace(/\n+$/, "");
+  async function attemptWarmup(id, text){
+    w.__game.openWarmup(id);
+    await tick();
+    const st = studioOf();
+    if (!st) return { ok:false, why:"разминка не открылась" };
+    if (st.querySelector('[data-role="restore"]'))
+      bad(`[разминки] ${id}: лишняя кнопка «Вернуть как было»`);
+    st.editor.setCode(text);
+    const btn = st.querySelector('[data-role="check"]');
+    if (!btn) return { ok:false, why:"нет кнопки «Проверить»" };
+    btn.click();
+    await tick();
+    const res = { ok: won(), why: msgText() };
+    if (res.ok) closeWin();
+    return res;
+  }
+  const codeLinesOf = c => String(c).replace(/\r/g, "").split("\n").filter(l => l.trim() !== "");
+  for (const wm of WARMUPS){
+    let good, wr;
+    if (wm.type === "blocks"){
+      /* верно = разложить блоки в порядке code; неверно = порядок наоборот */
+      good = await attemptWarmup(wm.id, wm.code);
+      if (!good.ok) bad(`[разминки] ${wm.id}: верно собранная программа не засчитана — ${good.why}`);
+      const reversed = codeLinesOf(wm.code).reverse().join("\n");
+      wr = await attemptWarmup(wm.id, reversed);
+      if (wr.ok) bad(`[разминки] ${wm.id}: перевёрнутый порядок засчитан как верный`);
+    } else {
+      /* predict: верно = вывод программы; неверно = вывод плюс лишняя строка */
+      const correct = w.Runtime.get("mini").run(wm.code, {}).output;
+      good = await attemptWarmup(wm.id, correct);
+      if (!good.ok) bad(`[разминки] ${wm.id}: верное предсказание не засчитано — ${good.why}`);
+      const wrong = normPred(correct) + "\nэтого-в-выводе-нет";
+      wr = await attemptWarmup(wm.id, wrong);
+      if (wr.ok) bad(`[разминки] ${wm.id}: неверное предсказание засчитано как верное`);
+    }
+    if (good.ok && !wr.ok) warmupsChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
+  console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
+  console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

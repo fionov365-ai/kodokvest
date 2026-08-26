@@ -22,6 +22,7 @@ const MP = globalThis.MiniPy;
 global.window = global;
 global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -97,7 +98,15 @@ CURRICULUM.forEach(w => {
   });
 });
 
+/* Разминки «угадай вывод»: правильный ответ ребёнку — это вывод программы,
+   поэтому он обязан совпадать с настоящим python3 до знака. */
+let warmups = 0;
+(global.WARMUPS || []).forEach(w => {
+  warmups++;
+  compare("разминка " + w.id, w.code, null, null, null);
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
-console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped);
+console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ")");
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 process.exit(bad ? 1 : 0);

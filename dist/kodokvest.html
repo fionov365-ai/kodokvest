@@ -187,6 +187,59 @@ button{font-family:inherit}
   font:13px/1.6 'JetBrains Mono',ui-monospace,monospace}
 .stdinbox:focus{outline:none;border-color:var(--acc2)}
 .stdinhint{margin-top:6px;font-size:11.5px;color:var(--faint);line-height:1.5}
+
+/* игровое поле ввода (раздел «Игры») */
+.playbar{display:flex;gap:8px;align-items:center;margin-top:10px;padding:10px 12px;
+  border:1px solid var(--acc2);border-radius:12px;background:rgba(0,224,184,.06);flex-wrap:wrap}
+.playbar .playq{font:13px/1.4 'JetBrains Mono',ui-monospace,monospace;color:var(--acc2);flex:1 1 140px;min-width:0}
+.playbar .playin{flex:1 1 160px;min-width:0;box-sizing:border-box;border:1px solid var(--line);
+  border-radius:8px;background:var(--sunken);color:var(--soft);padding:8px 10px;
+  font:14px/1.4 'JetBrains Mono',ui-monospace,monospace}
+.playbar .playin:focus{outline:none;border-color:var(--acc2)}
+.rbtn.play{background:var(--acc2);color:#04231e}
+
+/* карточки игр */
+.gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.gamecard{display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
+  border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px 16px 18px;
+  transition:.15s;color:inherit}
+.gamecard:hover{border-color:var(--acc2);transform:translateY(-2px)}
+.gamecard .gemoji{font-size:34px;line-height:1}
+.gamecard b{font-size:16px}
+.gamecard span{font-size:13px;color:var(--soft);line-height:1.5}
+.edittag,.gamecard .edittag{font:600 10px/1 sans-serif;color:var(--acc2);border:1px solid var(--acc2);
+  border-radius:6px;padding:2px 5px;vertical-align:middle}
+.edittag.done{color:var(--acc2);border-color:var(--acc2)}
+
+/* раздел «Разминка»: угадай вывод (predict) */
+.gamecard .wtag{align-self:flex-start;margin-top:2px;font:600 10.5px/1 'Inter',sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:6px;padding:3px 7px}
+.predict{display:flex;flex-direction:column;gap:12px}
+.predict .pcode{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--code);box-shadow:var(--sh)}
+.predict .pcode pre{margin:0;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.62}
+.predict .pcode code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.predict .pans .predin{min-height:120px}
+.predict .runbar{border:1px solid var(--line);border-radius:var(--r)}
+.predict .msg{margin-top:0}
+
+/* «собери из блоков»: перетаскиваемые строки */
+.blocks .ehead{border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0}
+.blocklist{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 var(--r) var(--r);background:var(--code);padding:12px}
+.block{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);
+  border-radius:10px;padding:6px 10px;cursor:grab;transition:border-color .15s,transform .05s,box-shadow .15s}
+.block:hover{border-color:var(--acc)}
+.block.dragging{opacity:.55;cursor:grabbing}
+.block.over{border-color:var(--acc2);box-shadow:0 0 0 2px rgba(0,224,184,.35)}
+.block .bgrip{flex:none;color:var(--faint);font-size:16px;line-height:1;user-select:none;letter-spacing:-1px}
+.block .bcode{flex:1;min-width:0;margin:0;overflow-x:auto;white-space:pre;
+  font-size:13.5px;line-height:1.5;padding:2px 0}
+.block .bcode code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.block .bmove{flex:none;display:flex;flex-direction:column;gap:2px}
+.block .bbtn{border:1px solid var(--line2);background:var(--panel2);color:var(--soft);border-radius:6px;
+  width:26px;height:18px;line-height:1;font-size:10px;cursor:pointer;padding:0;transition:.15s}
+.block .bbtn:hover{color:var(--ink);border-color:var(--acc2)}
+
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
@@ -360,6 +413,8 @@ body.focus .lede{display:none}
     </div>
     <span class="starcount" id="stars">★ 0</span>
     <button class="tbtn" id="btn-map">Миры</button>
+    <button class="tbtn" id="btn-warm">Разминка</button>
+    <button class="tbtn" id="btn-games">Игры</button>
     <button class="tbtn" id="btn-sand">Песочница</button>
     <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">Фокус</button>
   </div>
@@ -2004,6 +2059,12 @@ function Interp(opts){
   this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
   this.stdin = (opts.stdin || []).map(String);  // заранее записанные ответы для input()
   this.stdinPos = 0;
+  /* Интерактивный режим (игры): когда ответы кончились, программа не падает,
+     а «замирает» на input() — раннер снаружи покажет поле ввода и запустит
+     программу заново с добавленным ответом. seed фиксирует random, чтобы
+     такой перезапуск давал ровно ту же игру. */
+  this.interactive = !!opts.interactive;
+  if (opts.seed !== undefined && opts.seed !== null) this._seed = Math.trunc(opts.seed);
   this.modules = {};     // уже подключённые модули
   this.global = new Env(null);
   this.installBuiltins();
@@ -2171,7 +2232,10 @@ Interp.prototype.installBuiltins = function(){
   def("sorted", sortedFn);
   def("reversed", function(args, kw, line){ return I.iterate(args[0], line).slice().reverse(); });
   def("enumerate", function(args, kw, line){
-    var arr = I.iterate(args[0], line), st = args.length > 1 ? Math.trunc(nv(args[1])) : 0;
+    var arr = I.iterate(args[0], line);
+    /* start можно задать и позиционно, и по имени: enumerate(xs, start=1) */
+    var st = (kw && kw.start !== undefined) ? Math.trunc(nv(kw.start))
+           : args.length > 1 ? Math.trunc(nv(args[1])) : 0;
     return arr.map(function(v, i){ return Tup([i + st, v]); });
   });
   def("zip", function(args, kw, line){
@@ -2194,10 +2258,18 @@ Interp.prototype.installBuiltins = function(){
       raise("TypeError", "input() принимает не больше одного приглашения.", line,
             { pymsg: "input expected at most 1 argument, got " + args.length });
     if (args.length === 1) I.write(pyStr(args[0]));
-    if (I.stdinPos >= I.stdin.length)
+    if (I.stdinPos >= I.stdin.length){
+      if (I.interactive)
+        raise("__AwaitInput__", "жду ввод игрока", line, { fatal: true });
+      // сюда попадаем только в неинтерактивном режиме
       raise("EOFError", "Ответы закончились: программа спросила больше, чем ей заготовили. Добавь строку в список ответов.", line,
             { pymsg: "EOF when reading a line" });
-    return I.stdin[I.stdinPos++];
+    }
+    var ответ = I.stdin[I.stdinPos++];
+    /* в игре показываем, что набрал игрок: труба этого не делает, но человеку
+       за экраном нужно видеть свой ввод — печатаем его как эхо с переводом строки */
+    if (I.interactive) I.write(ответ + "\n");
+    return ответ;
   });
 
   // математика
@@ -4641,7 +4713,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
@@ -4658,7 +4730,10 @@ function run(src, opts){
     while (!step.done) step = it.next();
   } catch (e){
     if (!e.pyKind) throw e;
-    result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+    /* программа дошла до input() без готового ответа — это не ошибка,
+       а сигнал «жду ввод»: раннер добавит ответ и перезапустит */
+    if (e.pyKind === "__AwaitInput__") result.awaitingInput = true;
+    else result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
   }
   result.output = I.out.join("");
   result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
@@ -4673,7 +4748,7 @@ function run(src, opts){
 function stepper(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
   CUR = I;
   var ast = parse(src);
   var it = I.runBlock(ast.body, I.global);
@@ -4710,10 +4785,66 @@ function snapshotVars(env, skip){
   return out;
 }
 
+/* ---------- снимок «кучи» для визуализатора ----------
+   Возвращает неизменяемое дерево состояния для одного шага:
+     vars    — [{name, cell}] видимые переменные (локальные + внешние);
+     objects — {id: {kind, items|pairs}} все списки/кортежи/множества/словари.
+   cell — это либо {t:"val", type, text} (скаляр или объект без раскладки),
+   либо {t:"ref", id} — ссылка на объект в objects.
+
+   Идентичность объектов держит idMap (Map: объект → id), общий на весь прогон:
+   если две переменные ссылаются на ОДИН список, id совпадёт — так видно
+   алиасинг (b = a) и рисуются стрелки к одной коробке. Содержимое при этом
+   каждый раз сериализуется заново (копией), поэтому позднейшие изменения
+   не портят уже снятые кадры. */
+function heapSnapshot(env, idMap, skip){
+  var objects = {};
+  function cell(v){
+    if (v === null || v === undefined) return { t:"val", type:"NoneType", text:"None" };
+    if (v === true || v === false || isNum(v) || typeof v === "string")
+      return { t:"val", type: typeName(v), text: pyRepr(v) };
+    var tuple = isTup(v);
+    var list = Array.isArray(v) && !tuple;
+    var set = v instanceof PySet;
+    var dict = v instanceof Map;
+    if (list || tuple || set || dict){
+      var id = idMap.get(v);
+      if (id === undefined){ idMap._n = (idMap._n || 0) + 1; id = "o" + idMap._n; idMap.set(v, id); }
+      if (!objects[id]){
+        var node = { kind: list ? "list" : tuple ? "tuple" : set ? "set" : "dict", id: id };
+        objects[id] = node;                     // ставим заранее — защита от циклов
+        if (dict){
+          node.pairs = [];
+          v.forEach(function(val, k){ node.pairs.push({ key: pyRepr(k), val: cell(val) }); });
+        } else {
+          var arr = set ? v.values() : v;
+          node.items = arr.map(function(x){ return cell(x); });
+        }
+      }
+      return { t:"ref", id: id };
+    }
+    /* классы, объекты, функции-генераторы и прочее — как значение с текстом repr */
+    return { t:"val", type: typeName(v), text: pyRepr(v) };
+  }
+  var seen = {}, vars = [], e = env;
+  while (e){
+    e.vars.forEach(function(v, k){
+      if (seen[k]) return;
+      if (typeof v === "function" || v instanceof PyFunc) return;   // функции — не данные
+      if (k.indexOf("__") === 0) return;                            // служебные имена
+      if (skip && skip.indexOf(k) >= 0) return;
+      seen[k] = 1;
+      vars.push({ name: k, cell: cell(v) });
+    });
+    e = e.parent;
+  }
+  return { vars: vars, objects: objects };
+}
+
 global.MiniPy = {
   run: run, stepper: stepper, parse: parse, lex: lex, PyDisk: PyDisk,
   Turtle: Turtle, pyRepr: pyRepr, pyStr: pyStr, snapshotVars: snapshotVars,
-  COLORS: COLORS
+  heapSnapshot: heapSnapshot, COLORS: COLORS
 };
 
 })(typeof window !== "undefined" ? window : globalThis);
@@ -4969,6 +5100,310 @@ var CURRICULUM = [
 /* Порядок уроков первой волны — для переноса старого прогресса */
 var LEGACY_ORDER = ["print-first","vars","fstrings","turtle-first","for-range",
                     "for-turtle","if-else","lists-first","while-loop","functions"];
+
+</script>
+
+<script>
+/* ============================================================
+   Игры Кодоквеста — готовые программы, которые можно менять.
+   Каждая открывается в редакторе: код виден, его можно править,
+   запускать и играть по-настоящему. Работают на встроенном движке
+   в интерактивном режиме (input() ждёт ответ игрока).
+
+   Поле seed фиксирует «замысел» игры (что загадано, что выберет
+   компьютер) на время одной партии: движок перезапускает программу
+   на каждый ход, и seed делает это честным. Новая партия — новый seed.
+   ============================================================ */
+window.GAMES = [
+{
+  id: "guess",
+  title: "Угадай число",
+  emoji: "🔢",
+  desc: "Компьютер загадал число от 1 до 100. Найди его за меньшее число попыток. Классика на сравнения и цикл while.",
+  interactive: true,
+  seed: 7,
+  code: "import random\n\nСЕКРЕТ = random.randint(1, 100)\nпопыток = 0\n\nprint(\"Я загадал число от 1 до 100. Угадаешь?\")\n\nwhile True:\n    ответ = input(\"Твой вариант: \")\n    попыток += 1\n    число = int(ответ)\n    if число == СЕКРЕТ:\n        print(f\"Точно! Это {СЕКРЕТ}. Ты угадал за {попыток} попыток.\")\n        break\n    elif число < СЕКРЕТ:\n        print(\"Моё число больше.\")\n    else:\n        print(\"Моё число меньше.\")\n"
+},
+{
+  id: "rps",
+  title: "Камень-ножницы-бумага",
+  emoji: "✊",
+  desc: "Играй против компьютера до трёх побед. Словари решают, кто кого бьёт.",
+  interactive: true,
+  seed: 3,
+  code: "import random\n\nВАРИАНТЫ = [\"камень\", \"ножницы\", \"бумага\"]\nБЬЁТ = {\"камень\": \"ножницы\", \"ножницы\": \"бумага\", \"бумага\": \"камень\"}\n\nмой_счёт = 0\nсчёт_компа = 0\n\nprint(\"Камень-ножницы-бумага. Играем до 3 побед!\")\nprint(\"Пиши: камень, ножницы или бумага.\")\n\nwhile мой_счёт < 3 and счёт_компа < 3:\n    ход = input(\"Твой ход: \").strip().lower()\n    if ход not in ВАРИАНТЫ:\n        print(\"Не понял. Напиши: камень, ножницы или бумага.\")\n        continue\n    комп = random.choice(ВАРИАНТЫ)\n    print(\"Компьютер выбрал:\", комп)\n    if ход == комп:\n        print(\"Ничья.\")\n    elif БЬЁТ[ход] == комп:\n        мой_счёт += 1\n        print(\"Раунд твой!\")\n    else:\n        счёт_компа += 1\n        print(\"Раунд компьютера.\")\n    print(f\"Счёт — ты {мой_счёт} : {счёт_компа} компьютер\")\n    print()\n\nprint(\"Ты победил!\" if мой_счёт == 3 else \"Компьютер победил. Реванш?\")\n"
+},
+{
+  id: "ttt",
+  title: "Крестики-нолики",
+  emoji: "❌",
+  desc: "Ты — крестики, компьютер — нолики. Поле, проверка линий и простой соперник.",
+  interactive: true,
+  seed: 5,
+  code: "import random\n\nполе = [\" \"] * 9\nЛИНИИ = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]\n\n\ndef показать():\n    for р in range(3):\n        строка = поле[р*3:р*3+3]\n        print(\" \" + \" | \".join(к if к != \" \" else str(р*3+н+1) for н, к in enumerate(строка)))\n        if р < 2:\n            print(\"---+---+---\")\n\n\ndef победа(знак):\n    return any(all(поле[к] == знак for к in линия) for линия in ЛИНИИ)\n\n\nprint(\"Крестики-нолики. Ты — X. Пиши номер клетки от 1 до 9.\")\nпоказать()\n\nwhile True:\n    ход = input(\"Твоя клетка: \").strip()\n    if not ход.isdigit() or not (1 <= int(ход) <= 9):\n        print(\"Нужно число от 1 до 9.\")\n        continue\n    клетка = int(ход) - 1\n    if поле[клетка] != \" \":\n        print(\"Занято, выбери другую.\")\n        continue\n    поле[клетка] = \"X\"\n    if победа(\"X\"):\n        показать()\n        print(\"Ты выиграл!\")\n        break\n    свободные = [i for i in range(9) if поле[i] == \" \"]\n    if not свободные:\n        показать()\n        print(\"Ничья!\")\n        break\n    поле[random.choice(свободные)] = \"O\"\n    показать()\n    if победа(\"O\"):\n        print(\"Компьютер выиграл.\")\n        break\n"
+},
+{
+  id: "quiz",
+  title: "Викторина по Python",
+  emoji: "❓",
+  desc: "Четыре вопроса о том, что ты уже проходил. Список словарей и подсчёт очков.",
+  interactive: true,
+  seed: 1,
+  code: "ВОПРОСЫ = [\n    {\"в\": \"Как вывести текст на экран?\", \"варианты\": [\"print()\", \"echo()\", \"say()\"], \"ответ\": 1},\n    {\"в\": \"Что вернёт len('кот')?\", \"варианты\": [\"2\", \"3\", \"4\"], \"ответ\": 2},\n    {\"в\": \"Как называется цикл со счётчиком?\", \"варианты\": [\"while\", \"for\", \"loop\"], \"ответ\": 2},\n    {\"в\": \"Что такое []?\", \"варианты\": [\"пустой список\", \"пустая строка\", \"ошибка\"], \"ответ\": 1},\n]\n\nсчёт = 0\nprint(\"Викторина по Python. Пиши номер ответа.\\n\")\n\nfor i, вопрос in enumerate(ВОПРОСЫ, start=1):\n    print(f\"Вопрос {i}. {вопрос['в']}\")\n    for н, вариант in enumerate(вопрос[\"варианты\"], start=1):\n        print(f\"  {н}) {вариант}\")\n    выбор = int(input(\"Ответ: \"))\n    if выбор == вопрос[\"ответ\"]:\n        print(\"Верно!\\n\")\n        счёт += 1\n    else:\n        правильный = вопрос[\"варианты\"][вопрос[\"ответ\"] - 1]\n        print(f\"Нет. Правильно: {правильный}\\n\")\n\nprint(f\"Итог: {счёт} из {len(ВОПРОСЫ)}\")\nif счёт == len(ВОПРОСЫ):\n    print(\"Отлично, всё верно!\")\nelif счёт >= 2:\n    print(\"Неплохо, но можно лучше.\")\nelse:\n    print(\"Стоит повторить материал.\")\n"
+},
+{
+  id: "adventure",
+  title: "Пещера дракона",
+  emoji: "🐉",
+  desc: "Текстовое приключение: выбираешь путь, теряешь жизни, ищешь золото. Ветвления решают всё.",
+  interactive: true,
+  seed: 1,
+  code: "здоровье = 3\nзолото = 0\nидём = True\n\nprint(\"=== Пещера дракона ===\")\nprint(\"У тебя 3 жизни. Дойди до сокровища живым.\\n\")\n\ndef выбор(текст, варианты):\n    print(текст)\n    for н, в in enumerate(варианты, start=1):\n        print(f\"  {н}) {в}\")\n    while True:\n        ответ = input(\"> \").strip()\n        if ответ.isdigit() and 1 <= int(ответ) <= len(варианты):\n            return int(ответ)\n        print(\"Пиши номер варианта.\")\n\nшаг = выбор(\"Перед тобой две пещеры.\", [\"Левая, тёмная\", \"Правая, тёплая\"])\nif шаг == 1:\n    print(\"В темноте ты нашёл 5 золотых!\\n\")\n    золото += 5\nelse:\n    print(\"Из тёплой пещеры дохнуло огнём. Минус жизнь.\\n\")\n    здоровье -= 1\n\nшаг = выбор(\"Впереди спящий дракон.\", [\"Красться мимо\", \"Напасть с криком\"])\nif шаг == 2:\n    print(\"Дракон проснулся и обжёг тебя. Минус жизнь.\\n\")\n    здоровье -= 1\nelse:\n    print(\"Ты тихо прошёл мимо. Молодец.\\n\")\n\nif здоровье > 0:\n    print(f\"Ты дошёл до сокровища! Жизней: {здоровье}, золота: {золото}.\")\n    print(\"ПОБЕДА!\" if золото > 0 else \"Ты цел, но с пустыми руками.\")\nelse:\n    print(\"Силы кончились. Дракон победил. Попробуй другой путь!\")\n"
+},
+];
+
+</script>
+
+<script>
+/* ============================================================
+   Разминки Кодоквеста — короткие упражнения «угадай вывод» (predict).
+   Ребёнок читает готовую программу и ДО запуска пишет, что она напечатает.
+   Потом сверка: правильно — победа, нет — видно, где разошлось.
+
+   Это отдельный раздел рядом с «Играми»: он не входит в сотню уроков,
+   прогресс по нему хранится отдельно (S.warmups) и не влияет на звёзды.
+
+   Поле code — это программа, которую видит ребёнок и по которой считается
+   правильный ответ. Она обязана:
+     - работать без ошибок и что-то печатать (проверяет tests/lessons.js);
+     - совпадать с настоящим python3 (проверяет tests/content-vs-python.js);
+     - открываться и честно проверяться в игре (tests/full-run.js);
+     - не зависеть от случайности, времени и черепашки.
+   Про сравнение: хвостовые пробелы и пустые строки в конце не важны,
+   поэтому упражнения, весь смысл которых в хвостовых пробелах, сюда не кладём.
+   ============================================================ */
+window.WARMUPS = [
+{
+  id: "predict-order",
+  type: "predict",
+  title: "Порядок важен",
+  emoji: "🔮",
+  tag: "переменные",
+  intro: "Переменные переприсваивают друг через друга. Что окажется внутри в конце?",
+  brief: "Прочитай программу и запиши, что она напечатает — по строке на каждый print.",
+  code:
+`a = 2
+b = a + 3
+a = b * 2
+b = a - 1
+print(a)
+print(b)
+`,
+  hints: [
+    "Иди строго по строкам сверху вниз и держи в голове текущее значение каждой переменной.",
+    "Каждая строка берёт те значения, что есть ПРЯМО СЕЙЧАС, а не будущие.",
+    "Последняя строка считает b заново — от того значения a, что стало к этому моменту."
+  ],
+  note: "Каждое присваивание берёт значения, какие есть в этот миг. b = a + 3 дало 5, потом a = b * 2 стало 10, и уже от нового a последняя строка посчитала b = 10 − 1 = 9. Поэтому печатается 10 и 9."
+},
+{
+  id: "predict-division",
+  type: "predict",
+  title: "Три вида деления",
+  emoji: "➗",
+  tag: "арифметика",
+  intro: "Деление в Python подкидывает два сюрприза. Найдёшь оба?",
+  brief: "Запиши, что напечатает каждая строка. Особое внимание — знаку и точке в ответе.",
+  code:
+`print(10 / 2)
+print(-7 // 2)
+print(7 % 3)
+print(2 ** 10)
+`,
+  hints: [
+    "Одинарная черта / всегда даёт число с точкой, даже когда делится ровно.",
+    "// округляет ВНИЗ, к меньшему числу. Для отрицательных это не то же самое, что «отбросить дробь».",
+    "% — это остаток от деления, ** — возведение в степень."
+  ],
+  note: "Два подвоха. Первый: 10 / 2 = 5.0, а не 5 — одинарная черта всегда даёт число с точкой. Второй: −7 // 2 = −4, а не −3, потому что деление нацело округляет ВНИЗ, к меньшему, а −4 меньше −3. Остальное просто: 7 % 3 = 1 (остаток), 2 ** 10 = 1024."
+},
+{
+  id: "predict-strings",
+  type: "predict",
+  title: "Строки умеют умножаться",
+  emoji: "🔤",
+  tag: "строки",
+  intro: "С текстом работают + и *, но не так, как с числами.",
+  brief: "Запиши три строки вывода. Помни: со строками + склеивает, а * повторяет.",
+  code:
+`s = "ab"
+print(s * 3)
+print(s + "!")
+print(len(s * 3))
+`,
+  hints: [
+    "s * 3 — это та же строка, повторённая три раза подряд, без пробелов.",
+    "s + \"!\" — это склейка: строка, а сразу за ней восклицательный знак.",
+    "len(...) считает, сколько всего знаков получилось в строке."
+  ],
+  note: "Со строками * повторяет, а + склеивает. Главная ловушка в третьей строке: len считает знаки в том, что ПОЛУЧИЛОСЬ после умножения, — в «ababab» их шесть, а не два."
+},
+{
+  id: "predict-loop",
+  type: "predict",
+  title: "Сумма в цикле",
+  emoji: "🔁",
+  tag: "циклы",
+  intro: "Переменная total копит сумму, а цикл печатает её на каждом шаге.",
+  brief: "Запиши весь вывод. На каждом обороте цикла печатается по строке из двух чисел.",
+  code:
+`total = 0
+for n in range(1, 5):
+    total = total + n
+    print(n, total)
+`,
+  hints: [
+    "range(1, 5) останавливается ПЕРЕД 5 — сама пятёрка в цикл не попадает.",
+    "total не обнуляется внутри цикла: он копит сумму от шага к шагу.",
+    "print(n, total) печатает два числа через пробел, по строке на каждый оборот."
+  ],
+  note: "range(1, 5) — это 1, 2, 3, 4 (без 5). total копит сумму: 1, потом 3, потом 6, потом 10."
+},
+{
+  id: "predict-alias",
+  type: "predict",
+  title: "Два имени, один список",
+  emoji: "🎭",
+  tag: "списки",
+  intro: "Меняем список через b, а печатаем a. Что увидят оба print?",
+  brief: "Запиши две строки вывода. Внимательно проследи, что происходит со списком после каждой строки.",
+  code:
+`a = [1, 2, 3]
+b = a
+b.append(4)
+print(a)
+print(len(a))
+`,
+  hints: [
+    "Проследи, на какой именно список показывает каждое имя после строки b = a.",
+    "b.append(4) добавляет число в список. А есть ли у a свой отдельный список, или он тот же самый?",
+    "b = a не копирует список — это второе имя для того же самого. Поэтому append виден и через a."
+  ],
+  note: "b = a не копирует список, а даёт ему второе имя. Поэтому b.append(4) добавляет четвёрку и в a: получается [1, 2, 3, 4], длина 4. Чтобы скопировать по-настоящему, пишут b = a.copy() или b = a[:]."
+},
+
+/* ---- собери из перемешанных строк (blocks) ----
+   code — это ПРАВИЛЬНЫЙ порядок. Строки перемешиваются, ребёнок собирает
+   их обратно (перетаскиванием или кнопками). Верным считается тот порядок,
+   что даёт такой же вывод, как code. Пустые строки в блоки не идут. */
+{
+  id: "blocks-greeting",
+  type: "blocks",
+  title: "Соберём приветствие",
+  emoji: "🧩",
+  tag: "переменные",
+  intro: "Три строки перепутаны. Собери программу, которая поздоровается по имени.",
+  brief: "Расставь строки по порядку так, чтобы программа поздоровалась с Аней по имени.",
+  code:
+`name = "Аня"
+greeting = "Привет, " + name + "!"
+print(greeting)
+`,
+  hints: [
+    "Нельзя пользоваться тем, что ещё не создано: сначала заведи, потом используй.",
+    "greeting склеивается из name — значит, name должно появиться раньше.",
+    "print(greeting) — самый последний шаг: печатаем то, что уже собрали."
+  ],
+  note: "Программа читается сверху вниз. Сначала создаём name, потом из него собираем greeting, и только потом печатаем. Использовать имя раньше, чем оно создано, нельзя."
+},
+{
+  id: "blocks-append",
+  type: "blocks",
+  title: "Список по порядку",
+  emoji: "📝",
+  tag: "списки",
+  intro: "Порядок команд решает, в каком порядке окажутся фрукты в списке.",
+  brief: "Собери программу так, чтобы она напечатала список ['яблоко', 'груша'].",
+  code:
+`fruits = []
+fruits.append("яблоко")
+fruits.append("груша")
+print(fruits)
+`,
+  hints: [
+    "Сначала нужно создать пустой список, иначе добавлять будет некуда.",
+    "append добавляет в КОНЕЦ: кто раньше добавлен, тот раньше в списке.",
+    "print идёт последним, когда список уже собран."
+  ],
+  note: "append добавляет в конец списка, поэтому порядок команд задаёт порядок элементов. Сначала пустой список, затем «яблоко», затем «груша», и в самом конце печать."
+},
+{
+  id: "blocks-sum",
+  type: "blocks",
+  title: "Сумма из цикла",
+  emoji: "🔢",
+  tag: "циклы",
+  intro: "Одна строка должна оказаться ВНУТРИ цикла. Собери программу целиком.",
+  brief: "Собери программу, которая сложит числа из списка и напечатает сумму. Обрати внимание на отступы.",
+  code:
+`total = 0
+for n in [4, 7, 2]:
+    total += n
+print(total)
+`,
+  hints: [
+    "Копилку total нужно завести до цикла, иначе внутри нечего будет пополнять.",
+    "Строка с отступом — это тело цикла, она идёт сразу под строкой for.",
+    "print без отступа — уже вне цикла: печатаем, когда всё сложено."
+  ],
+  note: "total = 0 заводит копилку до цикла. Строка с отступом — тело цикла, она повторяется для каждого числа. print стоит без отступа, значит выполняется один раз, уже после цикла."
+},
+{
+  id: "blocks-countdown",
+  type: "blocks",
+  title: "Обратный отсчёт",
+  emoji: "🚀",
+  tag: "циклы",
+  intro: "Внутри цикла while две строки, и их порядок важен. Собери отсчёт 3, 2, 1, пуск.",
+  brief: "Собери программу так, чтобы она напечатала 3, 2, 1, а потом «Пуск!».",
+  code:
+`n = 3
+while n > 0:
+    print(n)
+    n -= 1
+print("Пуск!")
+`,
+  hints: [
+    "n нужно задать до цикла — иначе while нечего проверять.",
+    "В теле две строки. Подумай: если уменьшить n РАНЬШЕ, чем напечатать, попадёт ли тройка в вывод?",
+    "«Пуск!» печатается без отступа — уже после того, как цикл закончился."
+  ],
+  note: "Порядок двух строк в теле важен: сначала print(n), потом n -= 1. Если уменьшить раньше печати, тройка потеряется и отсчёт начнётся с двойки. «Пуск!» без отступа — вне цикла."
+},
+{
+  id: "blocks-maxfn",
+  type: "blocks",
+  title: "Кто больше",
+  emoji: "⚖️",
+  tag: "функции",
+  intro: "Самая хитрая: тут два уровня отступов. Собери функцию, которая вернёт большее из двух чисел.",
+  brief: "Собери функцию bigger, которая возвращает большее из a и b, и проверь её на двух парах. Следи за отступами.",
+  code:
+`def bigger(a, b):
+    if a > b:
+        return a
+    return b
+print(bigger(8, 3))
+print(bigger(2, 5))
+`,
+  hints: [
+    "Строка def открывает функцию — с неё всё начинается.",
+    "Отступ показывает вложенность: return a глубже остальных, потому что работает только внутри if.",
+    "return b — запасной ответ функции, когда условие if не сработало. Оба вызова print идут в самом конце, без отступа."
+  ],
+  note: "Два уровня отступа задают вложенность: return a глубже, потому что он внутри if. Если a больше b — вернётся a, иначе управление дойдёт до return b. Поэтому функция каждый раз отдаёт большее: 8 и 5."
+}
+];
 
 </script>
 
@@ -9159,7 +9594,7 @@ var ADMIN_CODE = "kodokvest-2026";
 /* ================= сохранение ================= */
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0, log:{}, admin:{ unlockAll:false } };
+          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{}, admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -9177,6 +9612,7 @@ try {
   }
 } catch(e){}
 if (!S.log || typeof S.log !== "object") S.log = {};
+if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
 if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
 function saveLocal(){
   S.savedAt = Date.now();
@@ -9292,6 +9728,13 @@ function mergeProgress(a, b){
   out.perfect = maxN(a.perfect, b.perfect);
   out.sandboxRuns = maxN(a.sandboxRuns, b.sandboxRuns);
 
+  /* разгаданные разминки: объединяем — разгаданное на любом устройстве
+     остаётся разгаданным. Это не звёзды и не входит в сотню уроков. */
+  out.warmups = {};
+  [a.warmups || {}, b.warmups || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.warmups[k] = 1; });
+  });
+
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
   var older = fresher === b ? a : b;
@@ -9395,6 +9838,12 @@ function worldContent(n){
 function lessonBody(l){
   var c = CONTENT["world" + l.world];
   return c ? c[l.id] : null;
+}
+/* Подгрузить содержание всех миров. На сайте (index.html) миры грузятся
+   по отдельным файлам, и без этого экран миров на первой отрисовке показывал
+   миры 2–5 как «в работе», пока их контент ещё не приехал. */
+function allWorldsContent(){
+  return Promise.all(CURRICULUM.map(function(w){ return worldContent(w.n); }));
 }
 function worldReadyLessons(w){
   var c = CONTENT["world" + w.n] || {};
@@ -9611,8 +10060,8 @@ function makeStudio(cfg){
 
   var ed = makeEditor(cfg.code || "", cfg.label, cfg.files);
   ed.querySelector(".runbar").innerHTML =
-    '<button class="rbtn" data-role="run">▶ Запустить</button>' +
-    (eng.supportsStep ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
+    '<button class="rbtn" data-role="run">' + (cfg.play ? "▶ Новая игра" : "▶ Запустить") + '</button>' +
+    (eng.supportsStep && !cfg.play ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
     '<button class="rbtn sec" data-role="reset">↺ Сброс</button>' +
     (cfg.restore ? '<button class="rbtn sec" data-role="restore">↩ Вернуть как было</button>' : "") +
     (cfg.check ? '<button class="rbtn check" data-role="check">✓ Проверить</button>' : "") +
@@ -9652,8 +10101,22 @@ function makeStudio(cfg){
   var msg = document.createElement("div"); msg.className = "msg";
   left.appendChild(msg);
 
-  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(stdinPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
-  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(stdinPane); left.appendChild(diskPane); wrap.appendChild(left); }
+  /* Игровое поле ввода: появляется, когда игра ждёт хода игрока.
+     Игры устроены на перезапуске (replay) — движок гоняет программу заново
+     с накопленными ходами и фиксированным seed, поэтому «замысел» не плывёт. */
+  var playPane = null, playInput = null;
+  if (cfg.play){
+    playPane = document.createElement("div"); playPane.className = "playbar";
+    playPane.style.display = "none";
+    playPane.innerHTML =
+      '<span class="playq"></span>' +
+      '<input class="playin" type="text" autocomplete="off" spellcheck="false" placeholder="твой ход и Enter">' +
+      '<button class="rbtn play" data-role="move">Ход ↵</button>';
+    playInput = playPane.querySelector(".playin");
+  }
+
+  if (canvas){ side.appendChild(conPane); if (playPane) side.appendChild(playPane); side.appendChild(varsPane); side.appendChild(stdinPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
+  else { left.appendChild(conPane); if (playPane) left.appendChild(playPane); left.appendChild(varsPane); left.appendChild(stdinPane); left.appendChild(diskPane); wrap.appendChild(left); }
 
   /* Что сейчас в панели ответов. Пустой хвост убираем: перевод строки в конце
      текста — это не лишний пустой ответ, ровно как при вводе с клавиатуры. */
@@ -9738,14 +10201,66 @@ function makeStudio(cfg){
   function doReset(){
     stepper = null; ed.setLine(0); hideMsg();
     varsPane.style.display = "none";
+    if (playPane) playPane.style.display = "none";
     con.innerHTML = '<span class="empty">пока пусто — нажми «Запустить»</span>';
     if (canvas && eng.newTurtle) drawTurtle(canvas, eng.newTurtle());
+  }
+
+  /* ===== игровой режим: партия через перезапуск с накопленными ходами ===== */
+  var playAnswers = [], playSeed = 0;
+
+  function playRender(){
+    hideMsg(); ed.setError(0);
+    var t = eng.newTurtle ? eng.newTurtle() : null;
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(),
+      files: dataFiles(cfg.data), stdin: playAnswers, interactive: true, seed: playSeed });
+    setConsole(res.output);
+    if (res.files) showDisk(res.files);
+    if (canvas) animateTurtle(canvas, res.turtle || t);
+    award("first");
+    if (res.error){
+      ed.setError(res.error.line);
+      showMsg("bad", errHTML(res.error));
+      playPane.style.display = "none";
+      return;
+    }
+    if (res.awaitingInput){
+      /* последняя строка вывода — это приглашение input(); показываем его у поля */
+      var lines = res.output.split("\n");
+      var q = lines[lines.length - 1] || "твой ход:";
+      playPane.querySelector(".playq").textContent = q;
+      playPane.style.display = "";
+      playInput.value = "";
+      setTimeout(function(){ playInput.focus(); }, 0);
+    } else {
+      playPane.style.display = "none";
+      showMsg("ok", "<b>Игра окончена</b>Нажми «Новая игра», чтобы сыграть ещё раз, или поменяй код — и играй свою версию.");
+    }
+    if (cfg.onRun) cfg.onRun(res);
+  }
+  function playStart(){
+    playAnswers = [];
+    playSeed = Math.floor(Math.random() * 2000000000) + 1;
+    con.innerHTML = "";
+    playRender();
+  }
+  function playMove(){
+    if (!playPane || playPane.style.display === "none") return;
+    playAnswers.push(playInput.value);
+    playRender();
+  }
+  if (playPane){
+    playPane.querySelector('[data-role="move"]').onclick = playMove;
+    playInput.addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); playMove(); }
+    });
   }
 
   ed.querySelector(".runbar").addEventListener("click", function(e){
     var b = e.target.closest("button"); if (!b) return;
     var r = b.getAttribute("data-role");
-    if (r === "run") doRun();
+    if (r === "run") cfg.play ? playStart() : doRun();
+    else if (r === "move") playMove();
     else if (r === "step") doStep();
     else if (r === "reset") doReset();
     else if (r === "restore"){
@@ -9953,6 +10468,14 @@ function diffBlock(exp, got){
 /* ================= экран: миры ================= */
 function screenWorlds(){
   stopTimer(); clearAdminHash();
+  /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
+     только на сайте с раздельными файлами), догружаем всё и перерисовываем —
+     иначе готовые миры показались бы как «в работе». */
+  if (!window.__SINGLE_FILE__ && CURRICULUM.some(function(w){ return !CONTENT["world" + w.n]; })){
+    allWorldsContent().then(function(){
+      if (document.querySelector(".worlds")) screenWorlds();
+    });
+  }
   var doneTotal = Object.keys(S.stars).length;
   var h = '<div class="hero">' +
     '<h1>Кодоквест</h1>' +
@@ -10388,6 +10911,479 @@ function screenSandbox(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ================= экран: игры =================
+   Готовые маленькие игры. Код виден и его можно менять прямо здесь:
+   поправил — нажал «Новая игра» — играешь свою версию. Изменения
+   сохраняются между заходами, а кнопка «Вернуть оригинал» их сбрасывает. */
+function gamesList(){ return (window.GAMES || []); }
+function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
+
+function screenGames(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var gs = gamesList();
+  var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
+    '<p class="lede">Настоящие маленькие игры на Python. В каждой виден код — меняй его и смотри, что получится: сделай подсказку добрее, добавь свой вопрос в викторину, поменяй ответы дракона. Это самый быстрый способ понять, как код превращается в игру.</p>' +
+    '<div class="gamegrid">';
+  gs.forEach(function(g){
+    var edited = !!(S.games && S.games[g.id]);
+    h += '<button class="gamecard" data-id="' + g.id + '">' +
+      '<span class="gemoji">' + g.emoji + '</span>' +
+      '<b>' + esc(g.title) + (edited ? ' <span class="edittag">твоя версия</span>' : '') + '</b>' +
+      '<span>' + esc(g.desc) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openGame(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openGame(id){
+  var g = gamesList().filter(function(x){ return x.id === id; })[0];
+  if (!g) return screenGames();
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
+    '<p class="lede">' + esc(g.desc) + '</p>' +
+    '<div class="note"><b>Как играть</b>Нажми «Новая игра», потом пиши ходы в поле снизу и жми Enter. Хочешь изменить игру — правь код слева и снова жми «Новая игра».</div>';
+  app.innerHTML = head + '<div id="studio"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="games">← Ко всем играм</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="greset">↩ Вернуть оригинал</button></div>';
+
+  var studio = makeStudio({
+    engine: "mini", draw: !!g.draw, play: true, code: gameCode(g), label: g.title,
+    onRun: function(){
+      S.games = S.games || {};
+      S.games[g.id] = studio.editor.getCode();
+      S.gamesPlayed = S.gamesPlayed || {};
+      S.gamesPlayed[g.id] = 1;
+      save();
+    }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  document.getElementById("greset").onclick = function(){
+    if (S.games) delete S.games[g.id];
+    save();
+    openGame(id);
+  };
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ screenGames(); };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= экран: разминка (predict) =================
+   Отдельный раздел рядом с «Играми». Ребёнок читает готовую программу
+   и ДО запуска пишет, что она напечатает. Потом сверка.
+   Прогресс хранится в S.warmups и не влияет на звёзды и сотню уроков.
+   ============================================================ */
+function warmupsList(){ return (window.WARMUPS || []); }
+function warmupDone(id){ return !!(S.warmups && S.warmups[id]); }
+
+/* Сравнение предсказания с настоящим выводом. Хвостовые пробелы в каждой
+   строке и пустые строки в конце не считаем — их ребёнок мог не набрать,
+   а на смысл они не влияют. Внутренние пустые строки важны и остаются. */
+function normPred(s){
+  return String(s == null ? "" : s)
+    .replace(/\r/g, "")
+    .split("\n")
+    .map(function(x){ return x.replace(/[ \t]+$/, ""); })
+    .join("\n")
+    .replace(/\n+$/, "");
+}
+
+/* Где вывод впервые разошёлся с ожидаемым. Подписи колонок можно задать:
+   для «угадай вывод» это «на самом деле / ты предсказал», для «собери из
+   блоков» — «нужный вывод / твой вывод». */
+function predictDiff(want, got, wantLabel, gotLabel){
+  wantLabel = wantLabel || "на самом деле";
+  gotLabel = gotLabel || "ты предсказал";
+  var W = normPred(want).split("\n"), G = normPred(got).split("\n");
+  var n = Math.max(W.length, G.length), bad = -1;
+  for (var i = 0; i < n; i++) if ((W[i] || "") !== (G[i] || "")){ bad = i; break; }
+  var head = bad < 0
+    ? "Строк должно быть " + W.length + ", а получилось " + G.length + "."
+    : "Первое расхождение в строке " + (bad + 1) + ".";
+  return head + '<div class="cmp"><div><u>' + wantLabel + '</u>' +
+    esc(W.slice(0, 10).join("\n") || "(пусто)") + (W.length > 10 ? "\n…" : "") +
+    '</div><div><u>' + gotLabel + '</u>' +
+    esc(G.slice(0, 10).join("\n") || "(пусто)") + (G.length > 10 ? "\n…" : "") +
+    '</div></div>';
+}
+
+/* Рабочая станция разминки: слева программа только для чтения, снизу
+   поле для предсказания. Устроена так, чтобы сквозной тест мог с ней
+   работать теми же ручками, что и с обычным редактором: editor.setCode /
+   editor.getCode задают и читают предсказание, а кнопка «Проверить»
+   помечена data-role="check". */
+function makePredictStudio(cfg){
+  cfg = cfg || {};
+  var wrap = document.createElement("div");
+  wrap.className = "predict";
+
+  var codeBox = document.createElement("div");
+  codeBox.className = "pcode";
+  codeBox.innerHTML = '<div class="ehead"><span class="dot"></span><span class="dot"></span>' +
+    '<span class="dot"></span><span class="lbl">программа — только читаем</span></div>' +
+    '<pre><code>' + hl(cfg.code || "") + '</code></pre>';
+
+  var ansBox = document.createElement("div");
+  ansBox.className = "pane pans";
+  ansBox.innerHTML = '<div class="ph">что напечатает программа?</div><div class="pb">' +
+    '<textarea class="stdinbox predin" spellcheck="false" autocapitalize="off" autocorrect="off" rows="6" ' +
+    'placeholder="Запиши вывод по строкам — так, как его напечатает программа"></textarea>' +
+    '<div class="stdinhint">По строке на каждый print. Потом нажми «Проверить».</div></div>';
+  var ta = ansBox.querySelector("textarea");
+
+  var runbar = document.createElement("div");
+  runbar.className = "runbar";
+  runbar.innerHTML = '<button class="rbtn check" data-role="check">✓ Проверить</button>' +
+    '<button class="rbtn sec" data-role="clear">↺ Очистить</button>' +
+    '<span class="sp"></span><span class="tip">сначала подумай, потом проверь</span>';
+
+  var msg = document.createElement("div"); msg.className = "msg";
+
+  var outPane = document.createElement("div"); outPane.className = "pane pout"; outPane.style.display = "none";
+  outPane.innerHTML = '<div class="ph">настоящий вывод программы</div><div class="console"></div>';
+  var con = outPane.querySelector(".console");
+
+  wrap.appendChild(codeBox);
+  wrap.appendChild(ansBox);
+  wrap.appendChild(runbar);
+  wrap.appendChild(msg);
+  wrap.appendChild(outPane);
+
+  function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
+  function hideMsg(){ msg.className = "msg"; }
+
+  wrap.editor = {
+    getCode: function(){ return ta.value; },
+    setCode: function(v){ ta.value = v; },
+    focusEditor: function(){ ta.focus(); }
+  };
+  wrap.showMsg = showMsg;
+  wrap.reveal = function(text){
+    outPane.style.display = "";
+    con.innerHTML = text ? esc(text) : '<span class="empty">программа ничего не печатает</span>';
+  };
+  wrap.hideOut = function(){ outPane.style.display = "none"; };
+
+  runbar.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    var r = b.getAttribute("data-role");
+    if (r === "check") cfg.check(wrap.editor, showMsg);
+    else if (r === "clear"){ ta.value = ""; hideMsg(); wrap.hideOut(); ta.focus(); }
+  });
+  ta.addEventListener("keydown", function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); cfg.check(wrap.editor, showMsg); }
+  });
+
+  return wrap;
+}
+
+/* Рабочая станция «собери из блоков»: перемешанные строки, которые
+   переставляют перетаскиванием или кнопками ▲▼. Как и у predict,
+   editor.setCode / editor.getCode работают со сборкой (нужны тесту):
+   getCode возвращает собранную программу, setCode раскладывает блоки
+   в порядок переданного текста. */
+function makeBlocksStudio(cfg){
+  cfg = cfg || {};
+  var wrap = document.createElement("div");
+  wrap.className = "predict blocks";
+
+  /* строки-блоки: без пустых, отступы сохраняем — они и есть подсказка о вложенности */
+  var blocks = String(cfg.code || "").replace(/\r/g, "").split("\n")
+    .filter(function(l){ return l.trim() !== ""; });
+
+  /* стартовый порядок — перемешанный и заведомо не равный правильному */
+  var order = blocks.map(function(_, i){ return i; });
+  (function shuffle(){
+    for (var i = order.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = order[i]; order[i] = order[j]; order[j] = t;
+    }
+    var same = order.every(function(v, i){ return v === i; });
+    if (same && order.length > 1) order.push(order.shift());
+  })();
+
+  var head = document.createElement("div");
+  head.className = "ehead";
+  head.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
+    '<span class="lbl">переставь строки по порядку — тяни за ⠿ или жми ▲ ▼</span>';
+
+  var list = document.createElement("div");
+  list.className = "blocklist";
+
+  function render(){
+    list.innerHTML = order.map(function(bi, pos){
+      return '<div class="block" draggable="true" data-pos="' + pos + '">' +
+        '<span class="bgrip" title="перетащи">⠿</span>' +
+        '<pre class="bcode"><code>' + hl(blocks[bi]) + '</code></pre>' +
+        '<span class="bmove"><button class="bbtn" data-up title="выше">▲</button>' +
+        '<button class="bbtn" data-down title="ниже">▼</button></span>' +
+        '</div>';
+    }).join("");
+  }
+  render();
+
+  function move(from, to){
+    if (to < 0 || to >= order.length || from === to) return;
+    var v = order.splice(from, 1)[0];
+    order.splice(to, 0, v);
+    render();
+  }
+
+  /* кнопки ▲ ▼ — работают и на телефоне, где перетаскивать неудобно */
+  list.addEventListener("click", function(e){
+    var b = e.target.closest("button.bbtn"); if (!b) return;
+    var row = b.closest(".block"); if (!row) return;
+    var pos = +row.getAttribute("data-pos");
+    move(pos, b.hasAttribute("data-up") ? pos - 1 : pos + 1);
+  });
+
+  /* перетаскивание мышью */
+  var dragFrom = -1;
+  list.addEventListener("dragstart", function(e){
+    var row = e.target.closest(".block"); if (!row) return;
+    dragFrom = +row.getAttribute("data-pos");
+    row.classList.add("dragging");
+    if (e.dataTransfer){ e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", ""); } catch(_){} }
+  });
+  list.addEventListener("dragover", function(e){
+    e.preventDefault();
+    var row = e.target.closest(".block"); if (!row) return;
+    list.querySelectorAll(".block.over").forEach(function(x){ x.classList.remove("over"); });
+    row.classList.add("over");
+  });
+  list.addEventListener("drop", function(e){
+    e.preventDefault();
+    var row = e.target.closest(".block"); if (!row || dragFrom < 0) return;
+    move(dragFrom, +row.getAttribute("data-pos"));
+    dragFrom = -1;
+  });
+  list.addEventListener("dragend", function(){
+    dragFrom = -1;
+    list.querySelectorAll(".dragging,.over").forEach(function(x){ x.classList.remove("dragging","over"); });
+  });
+
+  var runbar = document.createElement("div");
+  runbar.className = "runbar";
+  runbar.innerHTML = '<button class="rbtn check" data-role="check">✓ Проверить</button>' +
+    '<button class="rbtn sec" data-role="shuffle">🔀 Перемешать заново</button>' +
+    '<span class="sp"></span><span class="tip">строки читаются сверху вниз</span>';
+
+  var msg = document.createElement("div"); msg.className = "msg";
+
+  var outPane = document.createElement("div"); outPane.className = "pane pout"; outPane.style.display = "none";
+  outPane.innerHTML = '<div class="ph">что напечатала твоя сборка</div><div class="console"></div>';
+  var con = outPane.querySelector(".console");
+
+  wrap.appendChild(head);
+  wrap.appendChild(list);
+  wrap.appendChild(runbar);
+  wrap.appendChild(msg);
+  wrap.appendChild(outPane);
+
+  function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
+
+  wrap.editor = {
+    getCode: function(){ return order.map(function(bi){ return blocks[bi]; }).join("\n"); },
+    setCode: function(text){
+      var target = String(text || "").replace(/\r/g, "").split("\n")
+        .filter(function(l){ return l.trim() !== ""; });
+      var used = {}, newOrder = [];
+      target.forEach(function(line){
+        for (var i = 0; i < blocks.length; i++){
+          if (!used[i] && blocks[i] === line){ used[i] = 1; newOrder.push(i); break; }
+        }
+      });
+      for (var i = 0; i < blocks.length; i++) if (!used[i]) newOrder.push(i);
+      order = newOrder; render();
+    },
+    focusEditor: function(){}
+  };
+  wrap.showMsg = showMsg;
+  wrap.reveal = function(text){
+    outPane.style.display = "";
+    con.innerHTML = text ? esc(text) : '<span class="empty">программа ничего не напечатала</span>';
+  };
+  wrap.hideOut = function(){ outPane.style.display = "none"; };
+
+  runbar.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    var r = b.getAttribute("data-role");
+    if (r === "check") cfg.check(wrap.editor, showMsg);
+    else if (r === "shuffle"){
+      msg.className = "msg"; wrap.hideOut();
+      for (var i = order.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = order[i]; order[i] = order[j]; order[j] = t;
+      }
+      render();
+    }
+  });
+
+  return wrap;
+}
+
+function runBlocksCheck(w, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini");
+  var got = eng.run(ed.getCode(), {});
+  if (got.error){
+    session.studio.hideOut();
+    showMsg("bad", "<b>Пока не запускается</b>" + errHTML(got.error) +
+      "<br>Скорее всего, какая-то строка стоит не на своём месте или не на своём отступе. Переставь и попробуй снова.");
+    return;
+  }
+  var ref = eng.run(w.code, {});
+  session.studio.reveal(got.output);
+  if (got.output === ref.output){
+    winWarmup(w);
+  } else {
+    showMsg("bad", "<b>Запускается, но вывод не тот</b>" +
+      predictDiff(ref.output, got.output, "нужный вывод", "твой вывод") +
+      "Порядок строк меняет и вывод — переставь и попробуй снова.");
+  }
+}
+
+function screenWarmups(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var ws = warmupsList();
+  var done = ws.filter(function(w){ return warmupDone(w.id); }).length;
+  var h = '<div class="lvlhead"><div><div class="idx">думай, потом проверяй</div><h1>🔮 Разминка</h1></div>' +
+    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + ws.length + '</span></div></div>' +
+    '<p class="lede">Короткие загадки «угадай вывод». Прочитай программу и запиши, что она напечатает, — до запуска. ' +
+    'Это тренирует главное умение программиста: держать ход программы в голове. Звёзды тут не начисляются, ошибаться можно сколько угодно.</p>' +
+    '<div class="gamegrid">';
+  ws.forEach(function(w){
+    h += '<button class="gamecard" data-id="' + w.id + '">' +
+      '<span class="gemoji">' + w.emoji + '</span>' +
+      '<b>' + esc(w.title) + (warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
+      '<span>' + esc(w.intro) + '</span>' +
+      '<span class="wtag">' + esc(w.tag) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openWarmup(id){
+  var ws = warmupsList();
+  var w = ws.filter(function(x){ return x.id === id; })[0];
+  if (!w) return screenWarmups();
+  stopTimer(); clearAdminHash();
+  session = { id:id, attempts:0, hints:0, shown:false };
+  var pos = ws.indexOf(w);
+  var next = pos < ws.length - 1 ? ws[pos+1] : null;
+  var prev = pos > 0 ? ws[pos-1] : null;
+
+  var isBlocks = w.type === "blocks";
+  var head = '<div class="crumbs"><span data-go="warmups">Разминка</span> › ' + w.emoji + ' ' + esc(w.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + (isBlocks ? "собери из блоков" : "угадай вывод") + '</div><h1>' + w.emoji + ' ' + esc(w.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + esc(w.tag) + '</span></div></div>' +
+    '<p class="lede">' + esc(w.intro) + '</p>' +
+    '<div class="goal"><h3>🎯 Твоя задача</h3><p>' + esc(w.brief) + '</p></div>';
+
+  var hints = '<div class="hintbox">' +
+    '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    '<span class="tip">подсказки не отнимают ничего — это разминка</span></div>' +
+    '<div class="hintout" id="hintout"></div>';
+
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="warmups">← Ко всем разминкам</button><span class="sp"></span>' +
+    (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
+    (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
+
+  app.innerHTML = head + '<div id="studio"></div>' + hints + pager;
+
+  var studio = isBlocks
+    ? makeBlocksStudio({ code: w.code, check: function(ed, showMsg){ runBlocksCheck(w, ed, showMsg); } })
+    : makePredictStudio({ code: w.code, check: function(ed, showMsg){ runPredictCheck(w, ed, showMsg); } });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+
+  document.getElementById("hintbtn").onclick = function(){
+    var hs = w.hints || [];
+    if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
+    if (session.hints >= hs.length) return;
+    session.hints++;
+    var out = document.getElementById("hintout");
+    out.className = "hintout show";
+    out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
+      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
+    }).join("");
+    if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
+  };
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ screenWarmups(); };
+  });
+  app.querySelectorAll("[data-next]").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-next")); };
+  });
+  app.querySelectorAll("[data-prev]").forEach(function(b){
+    b.onclick = function(){ openWarmup(b.getAttribute("data-prev")); };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function runPredictCheck(w, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini");
+  var res = eng.run(w.code, {});
+  if (res.error){ showMsg("bad", errHTML(res.error)); return; }
+  var want = res.output, got = ed.getCode();
+  if (normPred(want) === normPred(got)){
+    session.studio.reveal(res.output);
+    winWarmup(w);
+  } else {
+    session.studio.reveal(res.output);
+    showMsg("bad", "<b>Ещё не совпало</b>" + predictDiff(want, got) +
+      "Смотри на настоящий вывод справа, найди, где разошлось, и попробуй снова.");
+  }
+}
+
+function winWarmup(w){
+  S.warmups = S.warmups || {};
+  S.warmups[w.id] = 1; save();
+  var ws = warmupsList(), pos = ws.indexOf(w);
+  var next = pos >= 0 && pos < ws.length - 1 ? ws[pos+1] : null;
+  var firstTry = session.attempts === 1 && session.hints === 0;
+  var isBlocks = w.type === "blocks";
+  var big = firstTry ? "🎯" : (isBlocks ? "🧩" : "🔮");
+  var h2 = firstTry
+    ? (isBlocks ? "Собрал с первой попытки!" : "Точно, с первой попытки!")
+    : (isBlocks ? "Собрал!" : "Угадал!");
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + big + '</div>' +
+    '<h2>' + h2 + '</h2>' +
+    '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>' +
+    '<div class="winrow">' +
+      (next ? '<button class="bigbtn" id="wnext">Следующая →</button>'
+            : '<button class="bigbtn" id="wlist">Ко всем разминкам</button>') +
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(2);
+  var wn = document.getElementById("wnext");
+  if (wn) wn.onclick = function(){ closeWin(); openWarmup(next.id); };
+  var wl = document.getElementById("wlist");
+  if (wl) wl.onclick = function(){ closeWin(); screenWarmups(); };
+  document.getElementById("wstay").onclick = closeWin;
+}
+
 /* ================= экран: панель наставника =================
    Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
    с #admin на конце. Показывает прогресс, позволяет открывать и
@@ -10396,8 +11392,15 @@ function screenSandbox(){
    ============================================================ */
 function clearAdminHash(){
   try {
-    if ((location.hash || "").toLowerCase() === "#admin" && history.replaceState)
-      history.replaceState(null, "", location.pathname + location.search);
+    if (!history.replaceState) return;
+    var hash = (location.hash || "").toLowerCase() === "#admin" ? "" : location.hash;
+    /* убираем admin из ?query, остальные параметры (например ?kid=) сохраняем */
+    var search = (location.search || "").replace(/([?&])admin(=[^&]*)?(&|$)/i, function(m, p1, v, tail){
+      return tail === "&" ? p1 : (p1 === "?" ? "" : "");
+    });
+    if (search === "?") search = "";
+    if (hash !== location.hash || search !== location.search)
+      history.replaceState(null, "", location.pathname + search + hash);
   } catch(e){}
 }
 function adminUnlocked(){
@@ -10411,8 +11414,18 @@ function adminLock(){
   window.__adminOk = false;
   try { sessionStorage.removeItem("kodokvest_admin"); } catch(e){}
 }
+/* Панель наставника открывается любым из способов:
+   .../kodokvest/#admin, .../kodokvest/?admin и просто .../kodokvest/admin
+   (последнее ловит 404.html и превращает в ?admin). */
+function wantsAdmin(){
+  var h = (location.hash || "").toLowerCase();
+  var q = (location.search || "").toLowerCase();
+  return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
+}
 function routeHash(){
-  if ((location.hash || "").toLowerCase() === "#admin"){ screenAdmin(); return true; }
+  if (wantsAdmin()){ screenAdmin(); return true; }
+  if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
+  if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
   return false;
 }
 function fmtMins(ms){
@@ -10839,6 +11852,8 @@ function screenAdmin(){
 document.getElementById("btn-map").onclick = screenWorlds;
 document.getElementById("logo").onclick = screenWorlds;
 document.getElementById("btn-sand").onclick = screenSandbox;
+(function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
+(function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
 document.getElementById("btn-focus").onclick = function(){
   document.body.classList.toggle("focus");
   this.classList.toggle("on");
@@ -10865,7 +11880,9 @@ window.addEventListener("resize", function(){
   } catch(e){}
 })();
 
-worldContent(1).then(function(){
+/* грузим содержание всех миров до первой отрисовки — иначе на сайте
+   миры 2–5 мигают как «в работе», пока их файлы не приедут */
+allWorldsContent().then(function(){
   if (!routeHash()) screenWorlds();
   /* сервер подключаем в фоне: игра должна открываться сразу и работать без сети */
   if (cloudEnabled()){
@@ -10881,7 +11898,8 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
-  screenSandbox: screenSandbox, screenAdmin: screenAdmin, state: S, save: save,
+  screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
+  openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },
