@@ -199,6 +199,43 @@ button{font-family:inherit}
   border-radius:6px;padding:2px 5px;vertical-align:middle}
 .edittag.done{color:var(--acc2);border-color:var(--acc2)}
 
+/* ---------- раздел «Сегодня»: дневной стрик и задача дня ---------- */
+.tbtn.streak{border-color:var(--warn)}
+.tbtn.streak.lit{background:linear-gradient(135deg,var(--warn),#ff7a3d);color:#fff;border-color:transparent}
+.streakhero{background:
+    radial-gradient(600px 200px at 20% -40%, rgba(255,171,61,.18) 0%, transparent 60%),
+    var(--panel);
+  border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);
+  padding:22px 20px;margin-bottom:16px;text-align:center}
+.streakhero .flame{font-size:52px;line-height:1;filter:grayscale(.55) opacity(.7)}
+.streakhero .flame.lit{filter:none;animation:flamepulse 2.4s ease-in-out infinite}
+@keyframes flamepulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.streaknum{font-family:'Fredoka','Inter',sans-serif;font-size:24px;margin-top:6px}
+.streaknum b{font-size:30px;color:var(--warn)}
+.streaksub{color:var(--soft);font-size:14px;margin-top:4px;max-width:46ch;margin-left:auto;margin-right:auto}
+.streakbest{color:var(--faint);font-size:12.5px;margin-top:6px;letter-spacing:.03em}
+.weekstrip{display:flex;justify-content:center;gap:8px;margin-top:16px;flex-wrap:wrap}
+.wkcell{display:flex;flex-direction:column;align-items:center;gap:4px;width:40px;padding:7px 0;
+  border:1px solid var(--line);border-radius:11px;background:var(--sunken)}
+.wkcell .wkd{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
+.wkcell .wkdot{font-size:15px;line-height:1;color:var(--faint)}
+.wkcell.on{border-color:var(--warn);background:rgba(255,171,61,.12)}
+.wkcell.today{outline:2px solid var(--acc);outline-offset:1px}
+.streakline{margin-top:8px;font-size:16px;color:var(--soft)}
+.streakline b{color:var(--warn);font-size:20px}
+.dailycard{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);
+  box-shadow:var(--sh);padding:18px 20px;margin-bottom:14px}
+.dailycard.done{border-color:var(--ok)}
+.dctop{display:flex;align-items:center;gap:12px}
+.dcemoji{font-size:34px;line-height:1;flex:none}
+.dcttl{flex:1;min-width:0}
+.dckicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);font-weight:700}
+.dcttl b{font-size:18px}
+.dcintro{color:var(--soft);font-size:14px;margin:10px 0 12px}
+.dcstatus{font-size:13.5px;color:var(--soft);margin-bottom:12px}
+.dcstatus.done{color:var(--ok);font-weight:600}
+.dailycard .winrow{justify-content:flex-start}
+
 /* раздел «Разминка»: угадай вывод (predict) */
 .gamecard .wtag{align-self:flex-start;margin-top:2px;font:600 10.5px/1 'Inter',sans-serif;letter-spacing:.06em;
   text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:6px;padding:3px 7px}

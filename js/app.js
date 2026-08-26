@@ -35,7 +35,8 @@ var ADMIN_CODE = "kodokvest-2026";
 /* ================= сохранение ================= */
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{}, admin:{ unlockAll:false } };
+          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{},
+          days:{}, daily:{}, admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -54,12 +55,108 @@ try {
 } catch(e){}
 if (!S.log || typeof S.log !== "object") S.log = {};
 if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
+if (!S.days || typeof S.days !== "object") S.days = {};
+if (!S.daily || typeof S.daily !== "object") S.daily = {};
 if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
 function saveLocal(){
   S.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
 }
 function save(){ saveLocal(); schedulePush(); }
+
+/* ================= дневной стрик и задача дня =================
+   Стрик — сколько дней ПОДРЯД ребёнок занимался. Считаем не по счётчику,
+   а по множеству дат в S.days («ГГГГ-ММ-ДД» по местному времени): так
+   слияние двух устройств — это просто объединение дней, и никакой перевод
+   часов или летнее время счётчик не сломает. Даты для арифметики берём
+   в полдень — тогда сдвиг на час туда-сюда не перепрыгивает через сутки. */
+function dayKey(d){
+  d = d || new Date();
+  var p = function(x){ return (x < 10 ? "0" : "") + x; };
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+function shiftDay(key, delta){
+  var d = new Date(key + "T12:00:00");
+  d.setDate(d.getDate() + delta);
+  return dayKey(d);
+}
+function activeOn(key){ return !!(S.days && S.days[key]); }
+
+/* сколько дней подряд заканчивается ровно этой датой */
+function streakEndingAt(key){
+  var n = 0, cur = key;
+  while (activeOn(cur)){ n++; cur = shiftDay(cur, -1); }
+  return n;
+}
+/* текущий стрик: если сегодня уже занимались — считаем по сегодня; если нет,
+   но занимались вчера — стрик ещё живой (продолжится, если позаниматься сегодня);
+   если и вчера не было — стрик прерван, показываем 0 */
+function streakCurrent(){
+  var today = dayKey();
+  if (activeOn(today)) return streakEndingAt(today);
+  var y = shiftDay(today, -1);
+  if (activeOn(y)) return streakEndingAt(y);
+  return 0;
+}
+/* длина серии, НАЧИНАЮЩЕЙСЯ этой датой (идём вперёд) */
+function streakForwardFrom(key){
+  var n = 0, cur = key;
+  while (activeOn(cur)){ n++; cur = shiftDay(cur, 1); }
+  return n;
+}
+/* рекорд: самая длинная серия за всю историю в S.days */
+function streakBest(){
+  var keys = Object.keys(S.days || {}).sort();
+  var best = 0;
+  for (var i = 0; i < keys.length; i++){
+    /* считаем каждую серию один раз — только от её первого дня */
+    if (!activeOn(shiftDay(keys[i], -1))){
+      var run = streakForwardFrom(keys[i]);
+      if (run > best) best = run;
+    }
+  }
+  return best;
+}
+/* отметить, что сегодня занимались (урок, разминка или задача дня).
+   Возвращает true, если сегодняшний день засчитан впервые. */
+function markActiveToday(){
+  S.days = S.days || {};
+  var k = dayKey();
+  if (S.days[k]) return false;
+  S.days[k] = 1;
+  pruneDays();
+  save();
+  try { refreshTop(); } catch(e){}
+  return true;
+}
+/* не даём множеству дней расти без предела — хватает истории за ~2 года */
+function pruneDays(){
+  var keys = Object.keys(S.days || {});
+  if (keys.length <= 800) return;
+  keys.sort();
+  keys.slice(0, keys.length - 800).forEach(function(k){ delete S.days[k]; });
+}
+
+/* задача дня: одна и та же на всех устройствах в один и тот же день, без
+   сервера. Берём её из уже проверенного пула разминок по хэшу даты, так что
+   каждый день — новая, а порядок предсказуем. */
+function dailyPick(key){
+  var ws = warmupsList();
+  if (!ws.length) return null;
+  key = key || dayKey();
+  var h = 0;
+  for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return ws[h % ws.length];
+}
+function dailyDone(key){ return !!(S.daily && S.daily[key || dayKey()]); }
+
+/* русское склонение: 1 день, 2 дня, 5 дней */
+function plural(n, one, few, many){
+  var m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
 
 /* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
 function logOf(id){
@@ -123,6 +220,16 @@ function refreshTop(){
   document.getElementById("xpfill").style.width = Math.min(100, S.xp / nextRankXp() * 100) + "%";
   var done = Object.keys(S.stars).length;
   document.getElementById("stars").textContent = "★ " + totalStars() + " · " + done + "/" + CURRICULUM.total;
+  var bt = document.getElementById("btn-today");
+  if (bt){
+    var s = streakCurrent();
+    bt.textContent = s > 0 ? ("🔥 " + s) : "🔥 Сегодня";
+    /* «горит», если сегодня уже занимались — маленький визуальный маячок */
+    bt.classList.toggle("lit", activeOn(dayKey()));
+    bt.title = s > 0
+      ? (s + " " + plural(s, "день", "дня", "дней") + " подряд — открой задачу дня")
+      : "Задача дня и дни подряд";
+  }
 }
 
 /* ============================================================
@@ -174,6 +281,19 @@ function mergeProgress(a, b){
   out.warmups = {};
   [a.warmups || {}, b.warmups || {}].forEach(function(src){
     Object.keys(src).forEach(function(k){ if (src[k]) out.warmups[k] = 1; });
+  });
+
+  /* дни занятий и выполненные «задачи дня»: объединяем множества дат.
+     День, засчитанный на любом устройстве, остаётся засчитанным — так стрик
+     не рвётся из-за того, что ребёнок в понедельник занимался на планшете,
+     а во вторник на ноутбуке. Дата — строка «ГГГГ-ММ-ДД» по местному времени. */
+  out.days = {};
+  [a.days || {}, b.days || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.days[k] = 1; });
+  });
+  out.daily = {};
+  [a.daily || {}, b.daily || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.daily[k] = 1; });
   });
 
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
@@ -1261,6 +1381,7 @@ function winLesson(l, body){
   lg.stars = Math.max(lg.stars || 0, stars);
   if (!lg.solvedAt) lg.solvedAt = Date.now();
   lg.last = Date.now();
+  markActiveToday();   /* пройденный урок держит дневной стрик живым */
   save(); refreshTop();
 
   var ready = worldReadyLessons(w), pos = ready.indexOf(l);
@@ -1695,6 +1816,86 @@ function runBlocksCheck(w, ed, showMsg){
   }
 }
 
+/* ================= экран: Сегодня (стрик + задача дня) =================
+   Показывает, сколько дней подряд ребёнок занимался, рекорд, полоску за
+   неделю и одну «задачу дня» — детерминированно выбранную по дате разминку.
+   Вне сотни уроков, звёзд не даёт. Смысл — привычка заходить каждый день.
+   ============================================================ */
+function weekStripHTML(){
+  var names = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+  var today = dayKey();
+  var cells = "";
+  for (var i = 6; i >= 0; i--){
+    var key = shiftDay(today, -i);
+    var d = new Date(key + "T12:00:00");
+    var on = activeOn(key);
+    var isToday = key === today;
+    var cls = "wkcell" + (on ? " on" : "") + (isToday ? " today" : "");
+    cells += '<div class="' + cls + '"><span class="wkd">' + names[d.getDay()] + '</span>' +
+      '<span class="wkdot">' + (on ? "🔥" : "·") + '</span></div>';
+  }
+  return '<div class="weekstrip">' + cells + '</div>';
+}
+
+function screenToday(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var streak = streakCurrent();
+  var best = streakBest();
+  var doneToday = activeOn(dayKey());
+  var pick = dailyPick();
+  var taskDone = dailyDone();
+
+  var hero = '<div class="streakhero">' +
+    '<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
+    '<div class="streaknum"><b>' + streak + '</b> ' + plural(streak, "день", "дня", "дней") + ' подряд</div>' +
+    '<div class="streaksub">' +
+      (streak === 0
+        ? "Серия прервалась — начни новую сегодня."
+        : (doneToday ? "Сегодня уже занимался — так держать!"
+                     : "Серия жива. Позанимайся сегодня, чтобы она росла.")) +
+    '</div>' +
+    '<div class="streakbest">Рекорд: ' + best + ' ' + plural(best, "день", "дня", "дней") + '</div>' +
+    weekStripHTML() +
+  '</div>';
+
+  var taskCard;
+  if (!pick){
+    taskCard = '<div class="card"><p class="lede">Задача дня появится, когда подключены разминки.</p></div>';
+  } else {
+    var isBlocks = pick.type === "blocks";
+    var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
+    taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
+      '<div class="dctop"><span class="dcemoji">' + pick.emoji + '</span>' +
+        '<div class="dcttl"><div class="dckicker">🔥 Задача дня · ' + typeLbl + '</div>' +
+        '<b>' + esc(pick.title) + '</b></div>' +
+        '<span class="tag">' + esc(pick.tag) + '</span></div>' +
+      '<p class="dcintro">' + esc(pick.intro) + '</p>' +
+      (taskDone
+        ? '<div class="dcstatus done">✓ Выполнена сегодня. Новая задача — завтра.</div>' +
+          '<div class="winrow"><button class="bigbtn ghost" id="dopen">Пройти ещё раз</button>' +
+          '<button class="bigbtn ghost" id="dwarm">Ещё размяться</button></div>'
+        : '<div class="winrow"><button class="bigbtn" id="dopen">Открыть задачу дня</button></div>') +
+    '</div>';
+  }
+
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">заходи каждый день</div><h1>🔥 Сегодня</h1></div>' +
+      '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
+    '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
+    'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
+    hero + taskCard +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+
+  var dopen = document.getElementById("dopen");
+  if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
+  var dwarm = document.getElementById("dwarm");
+  if (dwarm) dwarm.onclick = screenWarmups;
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 function screenWarmups(){
   stopTimer(); clearAdminHash();
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -1722,18 +1923,24 @@ function screenWarmups(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-function openWarmup(id){
+function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
   stopTimer(); clearAdminHash();
-  session = { id:id, attempts:0, hints:0, shown:false };
+  var isDaily = !!(opts && opts.daily);
+  session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
+  /* из задачи дня «назад» и списки ведут на экран «Сегодня», а не в разминку */
+  var backFn = isDaily ? screenToday : screenWarmups;
   var pos = ws.indexOf(w);
-  var next = pos < ws.length - 1 ? ws[pos+1] : null;
-  var prev = pos > 0 ? ws[pos-1] : null;
+  var next = isDaily ? null : (pos < ws.length - 1 ? ws[pos+1] : null);
+  var prev = isDaily ? null : (pos > 0 ? ws[pos-1] : null);
 
   var isBlocks = w.type === "blocks";
-  var head = '<div class="crumbs"><span data-go="warmups">Разминка</span> › ' + w.emoji + ' ' + esc(w.title) + '</div>' +
+  var crumbRoot = isDaily
+    ? '<span data-go="back">Сегодня</span> › 🔥 Задача дня'
+    : '<span data-go="back">Разминка</span>';
+  var head = '<div class="crumbs">' + crumbRoot + ' › ' + w.emoji + ' ' + esc(w.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + (isBlocks ? "собери из блоков" : "угадай вывод") + '</div><h1>' + w.emoji + ' ' + esc(w.title) + '</h1></div>' +
     '<div class="right"><span class="tag">' + esc(w.tag) + '</span></div></div>' +
     '<p class="lede">' + esc(w.intro) + '</p>' +
@@ -1744,7 +1951,8 @@ function openWarmup(id){
     '<span class="tip">подсказки не отнимают ничего — это разминка</span></div>' +
     '<div class="hintout" id="hintout"></div>';
 
-  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="warmups">← Ко всем разминкам</button><span class="sp"></span>' +
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="back">' +
+    (isDaily ? '← Назад на «Сегодня»' : '← Ко всем разминкам') + '</button><span class="sp"></span>' +
     (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
     (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
@@ -1769,7 +1977,7 @@ function openWarmup(id){
     if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
   };
   app.querySelectorAll("[data-go]").forEach(function(b){
-    b.onclick = function(){ screenWarmups(); };
+    b.onclick = function(){ backFn(); };
   });
   app.querySelectorAll("[data-next]").forEach(function(b){
     b.onclick = function(){ openWarmup(b.getAttribute("data-next")); };
@@ -1799,30 +2007,47 @@ function runPredictCheck(w, ed, showMsg){
 
 function winWarmup(w){
   S.warmups = S.warmups || {};
-  S.warmups[w.id] = 1; save();
+  S.warmups[w.id] = 1;
+  var isDaily = session && session.daily;
+  if (isDaily){ S.daily = S.daily || {}; S.daily[dayKey()] = 1; }
+  markActiveToday();                 /* разминка держит дневной стрик живым */
+  save();
+  var streak = streakCurrent();
   var ws = warmupsList(), pos = ws.indexOf(w);
-  var next = pos >= 0 && pos < ws.length - 1 ? ws[pos+1] : null;
+  var next = (!isDaily && pos >= 0 && pos < ws.length - 1) ? ws[pos+1] : null;
   var firstTry = session.attempts === 1 && session.hints === 0;
   var isBlocks = w.type === "blocks";
-  var big = firstTry ? "🎯" : (isBlocks ? "🧩" : "🔮");
-  var h2 = firstTry
-    ? (isBlocks ? "Собрал с первой попытки!" : "Точно, с первой попытки!")
-    : (isBlocks ? "Собрал!" : "Угадал!");
+  var big = isDaily ? "🔥" : (firstTry ? "🎯" : (isBlocks ? "🧩" : "🔮"));
+  var h2 = isDaily
+    ? "Задача дня выполнена!"
+    : (firstTry ? (isBlocks ? "Собрал с первой попытки!" : "Точно, с первой попытки!")
+                : (isBlocks ? "Собрал!" : "Угадал!"));
+  var body = isDaily
+    ? '<p>' + esc(w.note || "Ты справился с сегодняшней задачей.") + '</p>' +
+      '<div class="streakline">🔥 <b>' + streak + '</b> ' + plural(streak, "день", "дня", "дней") + ' подряд</div>'
+    : '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>';
+  var buttons = isDaily
+    ? '<button class="bigbtn" id="wtoday">← На «Сегодня»</button>' +
+      '<button class="bigbtn ghost" id="wmore">Ещё размяться</button>'
+    : (next ? '<button class="bigbtn" id="wnext">Следующая →</button>'
+            : '<button class="bigbtn" id="wlist">Ко всем разминкам</button>') +
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
   document.getElementById("wincard").innerHTML =
     '<div class="big">' + big + '</div>' +
-    '<h2>' + h2 + '</h2>' +
-    '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>' +
-    '<div class="winrow">' +
-      (next ? '<button class="bigbtn" id="wnext">Следующая →</button>'
-            : '<button class="bigbtn" id="wlist">Ко всем разминкам</button>') +
-      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+    '<h2>' + h2 + '</h2>' + body +
+    '<div class="winrow">' + buttons + '</div>';
   document.getElementById("win").classList.add("show");
-  confetti(2);
+  confetti(isDaily ? 3 : 2);
   var wn = document.getElementById("wnext");
   if (wn) wn.onclick = function(){ closeWin(); openWarmup(next.id); };
   var wl = document.getElementById("wlist");
   if (wl) wl.onclick = function(){ closeWin(); screenWarmups(); };
-  document.getElementById("wstay").onclick = closeWin;
+  var wt = document.getElementById("wtoday");
+  if (wt) wt.onclick = function(){ closeWin(); screenToday(); };
+  var wm = document.getElementById("wmore");
+  if (wm) wm.onclick = function(){ closeWin(); screenWarmups(); };
+  var wstay = document.getElementById("wstay");
+  if (wstay) wstay.onclick = closeWin;
 }
 
 /* ================= экран: визуализатор (машина времени) =================
@@ -2128,6 +2353,7 @@ function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
   if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
   if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
+  if ((location.hash || "").toLowerCase() === "#today"){ screenToday(); return true; }
   if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
   return false;
 }
@@ -2556,6 +2782,7 @@ document.getElementById("btn-map").onclick = screenWorlds;
 document.getElementById("logo").onclick = screenWorlds;
 document.getElementById("btn-sand").onclick = screenSandbox;
 (function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
+(function(){ var b = document.getElementById("btn-today"); if (b) b.onclick = screenToday; })();
 (function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
 (function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
 document.getElementById("btn-focus").onclick = function(){
@@ -2604,6 +2831,8 @@ window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
+  screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
+  streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,

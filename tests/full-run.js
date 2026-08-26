@@ -554,10 +554,49 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- задача дня и дневной стрик --- */
+  let dailyChecked = 0;
+  if (typeof g.dailyPick === "function"){
+    const pick = g.dailyPick();
+    if (!pick || !pick.id) bad("[сегодня] задача дня не выбралась из пула разминок");
+    else {
+      /* одна и та же дата → одна и та же задача (иначе на двух устройствах
+         в один день задачи разъедутся) */
+      const p1 = g.dailyPick("2030-05-01"), p2 = g.dailyPick("2030-05-01");
+      if (!p1 || !p2 || p1.id !== p2.id) bad("[сегодня] задача дня не детерминирована по дате");
+      g.screenToday();
+      await tick();
+      const openBtn = doc.getElementById("dopen");
+      if (!openBtn) bad("[сегодня] на экране «Сегодня» нет кнопки открыть задачу дня");
+      else {
+        openBtn.click();
+        await tick();
+        const st = studioOf();
+        if (!st) bad("[сегодня] задача дня не открылась");
+        else {
+          const answer = pick.type === "blocks"
+            ? pick.code
+            : w.Runtime.get("mini").run(pick.code, {}).output;
+          st.editor.setCode(answer);
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[сегодня] верное решение задачи дня не засчитано — " + msgText());
+          else closeWin();
+          const today = g.dayKey();
+          if (!g.dailyDone(today)) bad("[сегодня] задача дня не отмечена выполненной");
+          if (g.streakCurrent() < 1) bad("[сегодня] стрик не засчитался за задачу дня");
+          if (g.dailyDone(today) && g.streakCurrent() >= 1) dailyChecked++;
+        }
+      }
+    }
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
+  console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
