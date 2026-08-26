@@ -6,13 +6,27 @@ const { execFileSync } = require('child_process');
 require('../js/engine-mini.js');
 
 const file = process.argv[2];
-const code = fs.readFileSync(file, 'utf8');
+const raw = fs.readFileSync(file, 'utf8');
+/* строки «#!stdin: текст» в начале файла — ответы для input() */
+const stdin = [];
+const data = {};
+const code = raw.split('\n').filter(l => {
+  const m = /^#!stdin: ?(.*)$/.exec(l);
+  if (m) { stdin.push(m[1]); return false; }
+  /* «#!data: имя.csv» — файл рядом с программой кладём и на диск python3,
+     и в память движка: так сверяются уроки с файлами данных */
+  const d = /^#!data: ?(.+)$/.exec(l);
+  if (d) { data[d[1].trim()] = fs.readFileSync(require('path').join(require('path').dirname(file), d[1].trim()), 'utf8'); return false; }
+  return true;
+}).join('\n');
+fs.writeFileSync(file + '.run.py', code);
 
 let exp;
-try { exp = execFileSync('python3', [file], { encoding: 'utf8' }); }
+try { exp = execFileSync('python3', [file + '.run.py'], { encoding: 'utf8',
+  input: stdin.length ? stdin.join('\n') + '\n' : '' }); }
 catch (e) { exp = '<<PYTHON ERROR>>' + (e.stderr || ''); }
 
-const r = MiniPy.run(code);
+const r = MiniPy.run(code, { stdin: stdin, files: data });
 const got = r.error
   ? '<<ERR ' + r.error.kind + ': ' + r.error.msg + ' (строка ' + r.error.line + ')>>'
   : r.output;

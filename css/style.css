@@ -167,6 +167,14 @@ button{font-family:inherit}
 .diskfile span{float:right;font-size:11px;color:var(--faint)}
 .diskfile pre{margin:6px 0 0;font:12px/1.5 'JetBrains Mono',ui-monospace,monospace;color:var(--soft);
   white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
+.showcode{margin-top:10px;border:1px dashed var(--line);border-radius:12px;background:var(--sunken);padding:10px 12px}
+.showcode pre{margin:0;overflow:auto}
+.showcode .shownote{display:block;margin-top:8px;font-size:11.5px;color:var(--faint);line-height:1.5}
+.stdinbox{width:100%;box-sizing:border-box;resize:vertical;min-height:84px;border:1px solid var(--line);
+  border-radius:10px;background:var(--sunken);color:var(--soft);padding:8px 10px;
+  font:13px/1.6 'JetBrains Mono',ui-monospace,monospace}
+.stdinbox:focus{outline:none;border-color:var(--acc2)}
+.stdinhint{margin-top:6px;font-size:11.5px;color:var(--faint);line-height:1.5}
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}

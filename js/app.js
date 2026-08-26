@@ -511,13 +511,34 @@ function makeStudio(cfg){
   diskPane.style.display = hasData ? "" : "none";
   diskPane.innerHTML = '<div class="ph">файлы на диске</div><div class="pb"><div class="disklist"></div></div>';
 
+  /* Клавиатуры у программы в тренажёре нет, поэтому ответы на input()
+     записаны заранее — по одному в строке. Их можно менять и запускать снова:
+     для кода это неотличимо от живого человека за клавиатурой. */
+  var hasStdin = !!(cfg.stdin && cfg.stdin.length);
+  var stdinPane = document.createElement("div"); stdinPane.className = "pane";
+  stdinPane.style.display = hasStdin ? "" : "none";
+  stdinPane.innerHTML = '<div class="ph">ответы для input()</div><div class="pb">' +
+    '<textarea class="stdinbox" spellcheck="false" rows="6"></textarea>' +
+    '<div class="stdinhint">По одному ответу в строке. Меняй и запускай снова — программа прочитает их сверху вниз.</div></div>';
+  var stdinBox = stdinPane.querySelector(".stdinbox");
+  stdinBox.value = hasStdin ? cfg.stdin.join("\n") : "";
+
   var left = document.createElement("div");
   left.appendChild(ed);
   var msg = document.createElement("div"); msg.className = "msg";
   left.appendChild(msg);
 
-  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
-  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(diskPane); wrap.appendChild(left); }
+  if (canvas){ side.appendChild(conPane); side.appendChild(varsPane); side.appendChild(stdinPane); side.appendChild(diskPane); wrap.appendChild(left); wrap.appendChild(side); }
+  else { left.appendChild(conPane); left.appendChild(varsPane); left.appendChild(stdinPane); left.appendChild(diskPane); wrap.appendChild(left); }
+
+  /* Что сейчас в панели ответов. Пустой хвост убираем: перевод строки в конце
+     текста — это не лишний пустой ответ, ровно как при вводе с клавиатуры. */
+  wrap.getStdin = function(){
+    if (!hasStdin) return [];
+    var a = stdinBox.value.split("\n");
+    while (a.length && a[a.length - 1] === "") a.pop();
+    return a;
+  };
 
   var con = conPane.querySelector(".console");
   var stepper = null;
@@ -546,7 +567,7 @@ function makeStudio(cfg){
   function doRun(){
     hideMsg(); ed.setError(0); stepper = null; varsPane.style.display = "none";
     var t = eng.newTurtle ? eng.newTurtle() : null;
-    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) });
+    var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data), stdin: wrap.getStdin() });
     setConsole(res.output);
     if (res.files) showDisk(res.files);
     if (canvas) animateTurtle(canvas, res.turtle || t);
@@ -565,7 +586,7 @@ function makeStudio(cfg){
     if (!stepper){
       try {
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data) }), t: t };
+        stepper = { s: eng.stepper(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data), stdin: wrap.getStdin() }), t: t };
       } catch(e){
         if (!e.pyKind) throw e;
         ed.setError(e.pyLine);
@@ -766,12 +787,22 @@ function solutionSources(body){
    Ученик пишет функции по описанию и не видит проверок — как на работе.
    Каждый вызов из chk.calls дописывается к его коду отдельной программой,
    результат сравнивается с тем же вызовом на эталонном решении. */
-function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data){
+/* Есть ли в коде такой кусок. Спецсимволы экранируем — иначе «max(» рушит
+   регулярное выражение, а «\b» приклеиваем только к латинским краям: в
+   JavaScript \w — это латиница, и после русской буквы граница слова не ловится. */
+function codeHas(code, needle){
+  var esc = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var pre = /^[A-Za-z0-9_]/.test(needle) ? "\\b" : "";
+  var post = /[A-Za-z0-9_]$/.test(needle) ? "\\b" : "";
+  return new RegExp(pre + esc + post).test(code);
+}
+
+function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data, stdin){
   for (var i = 0; i < calls.length; i++){
     var call = calls[i];
     var probe = "\nprint(repr(" + call + "))\n";
-    var want = eng.run(solution + probe, { sources: refSrcs, files: data });
-    var got = eng.run(code + probe, { sources: srcs, files: data });
+    var want = eng.run(solution + probe, { sources: refSrcs, files: data, stdin: stdin || [] });
+    var got = eng.run(code + probe, { sources: srcs, files: data, stdin: stdin || [] });
     if (got.error)
       return "Проверка вызвала <code>" + esc(call) + "</code> — и программа упала: " +
              (KIND_RU[got.error.kind] || got.error.kind) + ", " + esc(got.error.msg);
@@ -917,13 +948,22 @@ function openLesson(id){
       '<p class="lede">' + body.lede + '</p>';
 
     var theory = body.theory.map(function(t, i){
-      return '<div class="card theory"><h3>' + t.h + '</h3><p>' + t.p + '</p>' +
-        '<div class="demo" data-demo="' + i + '"><pre><code>' + hl(t.demo) + '</code></pre>' +
-        '<div class="bar"><button class="minibtn" data-run="' + i + '">▶ Запустить пример</button>' +
-        '<button class="minibtn" data-copy="' + i + '">→ В редактор</button>' +
-        '<span class="hintx' + (t.err ? " errx" : "") + '">' +
-        (t.err ? "этот пример падает с ошибкой — так и задумано" : "можно менять и запускать снова") +
-        '</span></div><div class="res"></div></div></div>';
+      /* t.show — код, который в тренажёре не запускается: настоящий Flask,
+         команды терминала, чужие библиотеки. Показываем как есть и честно
+         пишем, где он работает. t.demo при этом может и быть, и не быть. */
+      var shown = t.show
+        ? '<div class="showcode"><pre><code>' + hl(t.show) + '</code></pre>' +
+          '<span class="shownote">' + (t.showNote || "этот код работает на настоящем компьютере, а не в тренажёре") + '</span></div>'
+        : "";
+      var demo = t.demo
+        ? '<div class="demo" data-demo="' + i + '"><pre><code>' + hl(t.demo) + '</code></pre>' +
+          '<div class="bar"><button class="minibtn" data-run="' + i + '">▶ Запустить пример</button>' +
+          '<button class="minibtn" data-copy="' + i + '">→ В редактор</button>' +
+          '<span class="hintx' + (t.err ? " errx" : "") + '">' +
+          (t.err ? "этот пример падает с ошибкой — так и задумано" : "можно менять и запускать снова") +
+          '</span></div><div class="res"></div></div>'
+        : "";
+      return '<div class="card theory"><h3>' + t.h + '</h3><p>' + t.p + '</p>' + shown + demo + '</div>';
     }).join("");
 
     var isFix = body.task.type === "fix";
@@ -960,6 +1000,7 @@ function openLesson(id){
 
     var studio = makeStudio({
       engine: l.engine, draw: body.draw, code: body.task.starter, data: body.task.data,
+      stdin: body.task.stdin,
       label: isFix ? "сломанный код — почини его" : "твой код",
       files: taskFiles,
       restore: isFix ? body.task.starter : null,
@@ -970,12 +1011,12 @@ function openLesson(id){
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
 
-    app.querySelectorAll(".demo").forEach(function(d){
+    app.querySelectorAll(".demo[data-demo]").forEach(function(d){
       var i = +d.getAttribute("data-demo"), res = d.querySelector(".res");
       d.querySelector("[data-run]").onclick = function(){
         var eng = studio.engine;
         var t = eng.newTurtle ? eng.newTurtle() : null;
-        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {}, files: dataFiles(body.theory[i].data) });
+        var r = eng.run(body.theory[i].demo, { turtle:t, sources: body.theory[i].files || {}, files: dataFiles(body.theory[i].data), stdin: body.theory[i].stdin || [] });
         res.className = "res show";
         res.textContent = r.error
           ? ("⚠ " + (KIND_RU[r.error.kind] || r.error.kind) + (r.error.line ? " (строка " + r.error.line + ")" : "") + ": " + r.error.msg)
@@ -1029,9 +1070,15 @@ function runCheck(l, body, ed, showMsg, canvas){
   logOf(l.id).attempts++; touchLog(l.id);
   var chk = body.task.check, code = ed.getCode(), eng = Runtime.get(l.engine);
 
+  /* Требования проверяем по ВСЕМ файлам задания, а не только по главному:
+     в многофайловом уроке нужная строчка законно живёт в подключённом файле. */
+  var srcsForCheck = ed.getSources ? ed.getSources() : {};
+  var весьКод = code;
+  for (var fk in srcsForCheck) весьКод += "\n" + srcsForCheck[fk];
+
   if (chk.needCode){
     for (var i = 0; i < chk.needCode.length; i++){
-      if (!new RegExp("\\b" + chk.needCode[i] + "\\b").test(code)){
+      if (!codeHas(весьКод, chk.needCode[i])){
         showMsg("warn", "<b>Почти</b>" + chk.needMsg);
         return;
       }
@@ -1041,7 +1088,7 @@ function runCheck(l, body, ed, showMsg, canvas){
      нельзя, например для «-> str» или для тройных кавычек. */
   if (chk.needText){
     for (var t2 = 0; t2 < chk.needText.length; t2++){
-      if (code.indexOf(chk.needText[t2]) < 0){
+      if (весьКод.indexOf(chk.needText[t2]) < 0){
         showMsg("warn", "<b>Почти</b>" + chk.needMsg);
         return;
       }
@@ -1051,7 +1098,7 @@ function runCheck(l, body, ed, showMsg, canvas){
      рекурсией, а не циклом — иначе смысл урока теряется. */
   if (chk.noCode){
     for (var j = 0; j < chk.noCode.length; j++){
-      if (new RegExp("\\b" + chk.noCode[j] + "\\b").test(code)){
+      if (codeHas(весьКод, chk.noCode[j])){
         showMsg("warn", "<b>Так нельзя</b>" + (chk.noMsg || ("В этом задании нельзя использовать «" + chk.noCode[j] + "».")));
         return;
       }
@@ -1061,7 +1108,10 @@ function runCheck(l, body, ed, showMsg, canvas){
   var srcs = ed.getSources ? ed.getSources() : {};
   var refSrcs = solutionSources(body);
   var t = eng.newTurtle ? eng.newTurtle() : null;
-  var res = eng.run(code, { turtle:t, sources: srcs, files: dataFiles(body.task.data) });
+  /* Ответы для input() берём те, что сейчас в панели: эталон считается
+     на них же, иначе сравнивать вывод было бы нечестно. */
+  var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (body.task.stdin || []);
+  var res = eng.run(code, { turtle:t, sources: srcs, files: dataFiles(body.task.data), stdin: stdin });
   if (canvas) animateTurtle(canvas, t);
   if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
 
@@ -1069,14 +1119,14 @@ function runCheck(l, body, ed, showMsg, canvas){
   if (chk.kind === "custom"){
     problem = (CUSTOM[chk.fn] || function(){ return null; })(res, code);
   } else if (chk.kind === "tests"){
-    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs, dataFiles(body.task.data));
+    problem = runHiddenTests(eng, chk.calls, code, srcs, body.task.solution, refSrcs, dataFiles(body.task.data), stdin);
   } else if (chk.kind === "output"){
-    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs, files: dataFiles(body.task.data) }).lines;
+    var exp = chk.lines || eng.run(body.task.solution, { sources: refSrcs, files: dataFiles(body.task.data), stdin: stdin }).lines;
     var got = res.lines;
     if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; })))
       problem = diffBlock(exp, got);
   } else if (chk.kind === "turtle"){
-    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs, files: dataFiles(body.task.data) }).turtle;
+    var ref = eng.run(body.task.solution, { turtle: eng.newTurtle(), sources: refSrcs, files: dataFiles(body.task.data), stdin: stdin }).turtle;
     if (!sameDrawing(t.segs, ref.segs)){
       problem = t.segs.length === 0
         ? "Черепашка не нарисовала ни одной линии. Проверь, что вызываешь forward(...) — и что карандаш опущен."

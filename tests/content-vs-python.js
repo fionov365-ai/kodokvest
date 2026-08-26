@@ -40,8 +40,8 @@ let checked = 0, skipped = 0, bad = 0;
 /* Уроки про модули состоят из нескольких файлов. Для python3 мы их
    действительно кладём на диск рядом — тогда import работает как в жизни,
    и сверка остаётся честной. */
-function compare(what, code, files, data){
-  const srcs = files || {}, dataFiles = data || {};
+function compare(what, code, files, data, stdin){
+  const srcs = files || {}, dataFiles = data || {}, answers = stdin || [];
   let all = code;
   for (const k in srcs) all += "\n" + srcs[k];
   const why = skipReason(all);
@@ -57,9 +57,10 @@ function compare(what, code, files, data){
   /* файлы с данными кладём как есть: программа их читает и переписывает */
   for (const name in dataFiles) fs.writeFileSync(path.join(TMP, name), dataFiles[name]);
   let expected;
-  try { expected = execFileSync("python3", [f], { encoding: "utf8", cwd: TMP }); }
+  try { expected = execFileSync("python3", [f], { encoding: "utf8", cwd: TMP,
+    input: answers.length ? answers.join("\n") + "\n" : "" }); }
   catch (e){ expected = "<<PYTHON ОШИБКА>> " + String(e.stderr || "").trim().split("\n").pop(); }
-  const r = MP.run(code, { turtle: new MP.Turtle(), sources: srcs, files: dataFiles });
+  const r = MP.run(code, { turtle: new MP.Turtle(), sources: srcs, files: dataFiles, stdin: answers });
   const got = r.error ? "<<ОШИБКА " + r.error.kind + " строка " + r.error.line + ">>" : r.output;
   if (got !== expected){
     bad++;
@@ -82,15 +83,16 @@ CURRICULUM.forEach(w => {
     });
     body.theory.forEach((t, i) => {
       if (t.err) { skipped++; return; }   /* ошибка по-русски — сравнивать нечего */
-      compare(l.id + " · пример " + (i + 1), t.demo, t.files, t.data);
+      if (!t.demo) { skipped++; return; }  /* карточка только показывает код (t.show) */
+      compare(l.id + " · пример " + (i + 1), t.demo, t.files, t.data, t.stdin);
     });
-    compare(l.id + " · решение", body.task.solution, solSrc, body.task.data);
-    if (body.task.type !== "fix") compare(l.id + " · заготовка", body.task.starter, stSrc, body.task.data);
+    compare(l.id + " · решение", body.task.solution, solSrc, body.task.data, body.task.stdin);
+    if (body.task.type !== "fix") compare(l.id + " · заготовка", body.task.starter, stSrc, body.task.data, body.task.stdin);
     /* скрытые тесты сверяем с python3 тоже: что вернёт эталон на каждом вызове */
     if (body.task.check.kind === "tests")
       (body.task.check.calls || []).forEach(call => {
         compare(l.id + " · скрытая проверка " + call,
-                body.task.solution + "\nprint(repr(" + call + "))\n", solSrc, body.task.data);
+                body.task.solution + "\nprint(repr(" + call + "))\n", solSrc, body.task.data, body.task.stdin);
       });
   });
 });

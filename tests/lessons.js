@@ -10,6 +10,15 @@
    Запуск: node tests/lessons.js
    ============================================================ */
 const fs = require("fs");
+
+/* Тот же поиск куска кода, что и в app.js: спецсимволы экранируем,
+   границу слова приклеиваем только к латинским краям. */
+function codeHas(code, needle){
+  const esc = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pre = /^[A-Za-z0-9_]/.test(needle) ? "\\b" : "";
+  const post = /[A-Za-z0-9_]$/.test(needle) ? "\\b" : "";
+  return new RegExp(pre + esc + post).test(code);
+}
 const path = require("path");
 const root = path.join(__dirname, "..");
 
@@ -81,6 +90,16 @@ CURRICULUM.forEach(w => {
     if (isFix) fixes++;
 
     if (!task.type) say(`[схема] ${l.id}: у задания не указан type`);
+    /* input() без заранее записанных ответов упадёт на первом же вызове */
+    const usesInput = /\binput\s*\(/.test(task.solution + "\n" + task.starter);
+    if (usesInput && !(task.stdin && task.stdin.length))
+      say(`[схема] ${l.id}: в задании есть input(), но нет списка ответов task.stdin`);
+    if (task.stdin && !usesInput)
+      say(`[схема] ${l.id}: задан task.stdin, но input() в задании не вызывается`);
+    body.theory.forEach((t, i) => {
+      if (t.demo && /\binput\s*\(/.test(t.demo) && !(t.stdin && t.stdin.length))
+        say(`[схема] ${l.id}: в примере ${i+1} есть input(), но нет t.stdin`);
+    });
     (task.files || []).forEach(f => {
       if (!f.name || !/^[a-z_][a-z0-9_]*\.py$/.test(f.name))
         say(`[схема] ${l.id}: имя файла «${f.name}» не годится для import (нужно вроде tools.py)`);
@@ -89,11 +108,12 @@ CURRICULUM.forEach(w => {
 
     /* 1. решение */
     const solSrc = solutionSources(task), stSrc = starterSources(task);
-    const sol = MP.run(task.solution, { turtle: new MP.Turtle(), sources: solSrc, files: dataOf(task.data) });
+    const answers = task.stdin || [];
+    const sol = MP.run(task.solution, { turtle: new MP.Turtle(), sources: solSrc, files: dataOf(task.data), stdin: answers });
     if (sol.error) say(`[решение] ${l.id}: ${sol.error.kind} — ${sol.error.msg}`);
 
     /* 2. заготовка */
-    const st = MP.run(task.starter, { turtle: new MP.Turtle(), sources: stSrc, files: dataOf(task.data) });
+    const st = MP.run(task.starter, { turtle: new MP.Turtle(), sources: stSrc, files: dataOf(task.data), stdin: answers });
     if (!isFix){
       if (st.error) say(`[заготовка] ${l.id}: ${st.error.kind} — ${st.error.msg}`);
     } else {
@@ -117,8 +137,14 @@ CURRICULUM.forEach(w => {
 
     /* 3. примеры теории */
     body.theory.forEach((t, i) => {
+      /* карточка может показывать код без запуска (t.show) — тогда demo нет */
+      if (!t.demo){
+        if (!t.show) say(`[пример ${i+1}] ${l.id}: в карточке нет ни demo, ни show`);
+        if (t.err) say(`[пример ${i+1}] ${l.id}: err:true без demo — падать нечему`);
+        return;
+      }
       demos++;
-      const r = MP.run(t.demo, { turtle: new MP.Turtle(), sources: t.files || {}, files: dataOf(t.data) });
+      const r = MP.run(t.demo, { turtle: new MP.Turtle(), sources: t.files || {}, files: dataOf(t.data), stdin: t.stdin || [] });
       if (r.error && !t.err)
         say(`[пример ${i+1}] ${l.id}: ${r.error.kind} — ${r.error.msg}`);
       if (!r.error && t.err)
@@ -134,16 +160,45 @@ CURRICULUM.forEach(w => {
         let starterPasses = 0;
         task.check.calls.forEach(call => {
           const probe = "\nprint(repr(" + call + "))\n";
-          const w = MP.run(task.solution + probe, { sources: solSrc, files: dataOf(task.data) });
+          const w = MP.run(task.solution + probe, { sources: solSrc, files: dataOf(task.data), stdin: answers });
           if (w.error)
             say(`[tests] ${l.id}: вызов ${call} на решении падает — ${w.error.kind}: ${w.error.msg}`);
-          const g = MP.run(task.starter + probe, { sources: stSrc, files: dataOf(task.data) });
+          const g = MP.run(task.starter + probe, { sources: stSrc, files: dataOf(task.data), stdin: answers });
           if (!g.error && g.lines[g.lines.length - 1] === w.lines[w.lines.length - 1]) starterPasses++;
         });
         if (starterPasses === task.check.calls.length)
           say(`[tests] ${l.id}: заготовка проходит все скрытые проверки — задание нечего решать`);
       }
     }
+
+    /* 3.7. Эталон обязан проходить собственные требования.
+       Иначе получается урок, который не решается даже правильным ответом:
+       так уже ловилась опечатка в needCode и сломанное регулярное выражение. */
+    const chk = task.check || {};
+    /* эталон = главный файл плюс все подключённые: требования могут
+       относиться к любому файлу задания */
+    let эталонВесь = task.solution;
+    (task.files || []).forEach(f => {
+      эталонВесь += "\n" + (f.solution !== undefined ? f.solution : f.starter);
+    });
+    (chk.needCode || []).forEach(needle => {
+      let ok;
+      try { ok = codeHas(эталонВесь, needle); }
+      catch (e){ say(`[схема] ${l.id}: needCode «${needle}» не превращается в поиск — ${e.message}`); return; }
+      if (!ok) say(`[схема] ${l.id}: needCode требует «${needle}», а в эталонном решении этого нет`);
+    });
+    (chk.noCode || []).forEach(needle => {
+      let bad2;
+      try { bad2 = codeHas(эталонВесь, needle); }
+      catch (e){ say(`[схема] ${l.id}: noCode «${needle}» не превращается в поиск — ${e.message}`); return; }
+      if (bad2) say(`[схема] ${l.id}: noCode запрещает «${needle}», а эталонное решение это использует`);
+    });
+    (chk.needText || []).forEach(needle => {
+      if (эталонВесь.indexOf(needle) < 0)
+        say(`[схема] ${l.id}: needText требует «${needle}», а в эталонном решении этого нет`);
+    });
+    if ((chk.needCode || chk.needText) && !chk.needMsg)
+      say(`[схема] ${l.id}: есть needCode/needText, но нет needMsg — ученик не поймёт, чего от него хотят`);
 
     /* 4. check.lines против настоящего вывода решения */
     if (task.check.kind === "output" && task.check.lines && !sol.error){

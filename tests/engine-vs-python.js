@@ -14,6 +14,10 @@ let cur = null;
 for (const line of raw.split('\n')) {
   const m = /^### (.+)$/.exec(line);
   if (m) { cur = { name: m[1], code: [] }; cases.push(cur); continue; }
+  /* строка «#!stdin: текст» — заранее записанный ответ для input().
+     В код программы она не попадает, а уходит на вход и python3, и движку. */
+  const si = /^#!stdin: ?(.*)$/.exec(line);
+  if (cur && si) { (cur.stdin || (cur.stdin = [])).push(si[1]); continue; }
   if (cur) cur.code.push(line);
 }
 cases.forEach(c => c.code = c.code.join('\n').replace(/\n+$/, '') + '\n');
@@ -27,11 +31,12 @@ for (const c of cases) {
   let expected;
   try {
     /* cwd — временная папка: программы, которые создают файлы, не мусорят в проекте */
-    expected = execFileSync('python3', [f], { encoding: 'utf8', cwd: TMP });
+    expected = execFileSync('python3', [f], { encoding: 'utf8', cwd: TMP,
+      input: c.stdin ? c.stdin.join('\n') + '\n' : '' });
   } catch (e) {
     expected = '<<PYTHON ERROR>>' + (e.stderr || '');
   }
-  const r = MiniPy.run(c.code);
+  const r = MiniPy.run(c.code, { stdin: c.stdin || [] });
   /* файлы, созданные программой, живут только внутри своего запуска */
   const got = r.error ? '<<ERR ' + r.error.kind + ': ' + r.error.msg + ' (строка ' + r.error.line + ')>>' : r.output;
   if (got === expected) { pass++; }

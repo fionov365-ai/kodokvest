@@ -1186,3 +1186,205 @@ print("%.2f" % 3.14159)
 print("%5d|%-5d|" % (42, 42))
 print("%d%%" % 80)
 print("итого: %s" % [1, 2])
+### input_basic
+#!stdin: Аня
+#!stdin: 12
+name = input("Как тебя зовут? ")
+print()
+age = int(input("Сколько тебе лет? "))
+print()
+print(name, "через год будет", age + 1)
+### input_loop
+#!stdin: север
+#!stdin: взять ключ
+#!stdin: выход
+while True:
+    cmd = input("> ")
+    print()
+    if cmd == "выход":
+        print("пока")
+        break
+    print("команда:", cmd)
+### input_no_prompt
+#!stdin: 7
+#!stdin: 3
+a = int(input())
+b = int(input())
+print(a * b)
+### input_eof
+#!stdin: один
+print(input())
+try:
+    input()
+except EOFError as e:
+    print("кончились:", e)
+### input_strip
+#!stdin:   пробелы вокруг  
+#!stdin: 
+s = input()
+print(repr(s))
+print(repr(input()))
+### dunder_name_main
+print(__name__)
+if __name__ == "__main__":
+    print("это главный файл")
+else:
+    print("меня подключили")
+### docstrings
+"""Программа-пример."""
+def clean(text):
+    """Убирает пробелы по краям и делает строчные буквы."""
+    return text.strip().lower()
+
+class Book:
+    """Книга на полке."""
+    def __init__(self, title):
+        self.title = title
+    def short(self):
+        """Первые пять букв названия."""
+        return self.title[:5]
+
+print(clean.__doc__)
+print(Book.__doc__)
+print(Book.short.__doc__)
+print(clean("  Привет  "))
+def no_doc(x):
+    return x
+print(no_doc.__doc__)
+### docstring_of_object
+class Cat:
+    """Кошка."""
+    def __init__(self, name):
+        self.name = name
+    def __repr__(self):
+        return f"Cat({self.name!r})"
+c = Cat("Мурка")
+print(c.__doc__)
+print(c)
+### dir_own_class
+class Player:
+    speed = 5
+    def __init__(self, name):
+        self.name = name
+        self.hp = 10
+    def hit(self, n):
+        self.hp -= n
+    def __repr__(self):
+        return f"Player({self.name!r})"
+
+p = Player("Аня")
+print([n for n in dir(p) if not n.startswith("_")])
+print([n for n in dir(Player) if not n.startswith("_")])
+p.gold = 3
+print([n for n in dir(p) if not n.startswith("_")])
+### dir_inherited
+class Animal:
+    def sound(self):
+        return "..."
+
+class Dog(Animal):
+    def sound(self):
+        return "гав"
+    def fetch(self):
+        return "принёс"
+
+print([n for n in dir(Dog) if not n.startswith("_")])
+print([n for n in dir(Animal) if not n.startswith("_")])
+### json_decode_error
+import json
+def read(text):
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+print(read('{"a": 1}'))
+print(read("не json"))
+print(read("[1, 2, 3]"))
+### json_decode_error_is_value_error
+import json
+try:
+    json.loads("{сломано}")
+except ValueError:
+    print("ValueError тоже ловит — JSONDecodeError его наследник")
+try:
+    json.loads("{сломано}")
+except json.JSONDecodeError as e:
+    print(type(e).__name__)
+### fstring_nested_spec
+ширина = 12
+точность = 3
+имя = "аня"
+число = 3.14159
+print(f"[{имя:<{ширина}}]")
+print(f"[{имя:>{ширина}}]")
+print(f"[{имя:^{ширина}}]")
+print(f"[{число:.{точность}f}]")
+print(f"[{число:{ширина}.{точность}f}]")
+полоска = "█" * 4
+print(f"{'тест':<10}{полоска:<8}|")
+for n in [1, 22, 333]:
+    print(f"{n:>{len(str(n)) + 3}}")
+### genexp_in_call
+числа = [1, 2, 3, 4]
+print(sum(x * 2 for x in числа))
+print(", ".join(str(x) for x in числа))
+print(max(len(s) for s in ["аб", "абвг", "а"]))
+print(min(abs(x - 3) for x in числа))
+print(sorted(x % 3 for x in числа))
+print(sum(1 for x in числа if x > 2))
+print(list(dict((x, x * x) for x in числа)))
+### genexp_parens
+g = (x * 2 for x in [1, 2, 3])
+print(type(g).__name__)
+print(next(g))
+print(list(g))
+print(list(g))
+слова = ["аня", "боря"]
+пары = ((с, len(с)) for с in слова)
+for пара in пары:
+    print(пара)
+### any_all
+числа = [2, 4, 6]
+print(any(x > 5 for x in числа))
+print(all(x % 2 == 0 for x in числа))
+print(any(x > 100 for x in числа))
+print(all(x > 100 for x in числа))
+print(any([]), all([]))
+print(any(["", 0, "да"]))
+print(all(["да", 1]))
+имена = ["аня", "", "вика"]
+print(all(имена), any(имена))
+### format_named
+шаблон = "{имя} набрал {балл} из {всего}"
+print(шаблон.format(имя="аня", балл=5, всего=5))
+print("{} и {}".format("а", "б"))
+print("{0} {1} {0}".format("раз", "два"))
+print("{:.2f} и {:>6}".format(3.14159, "хвост"))
+print("{n:03d}".format(n=7))
+print("{{это скобки}} и {x}".format(x=1))
+print("{:{}}|".format("а", 5))
+print("{:.{}f}".format(2.71828, 3))
+### format_errors
+try:
+    print("{нет}".format(есть=1))
+except KeyError as e:
+    print("KeyError:", e)
+try:
+    print("{} {}".format(1))
+except IndexError as e:
+    print("IndexError:", e)
+### split_maxsplit
+print("a=b=c".split("=", 1))
+print("a=b=c".rsplit("=", 1))
+print("a b  c".split(None, 1))
+print("a,b,c,d".split(",", 2))
+print("а=б=в".split("=", 1))
+print("a=b".split("=", 5))
+print("".split(","))
+print("нет разделителя".split(",", 1))
+print("один два три".rsplit(None, 1))
+print("путь/к/файлу".rsplit("/", 1))
+строка = "/оценка?имя=аня&балл=5"
+путь, хвост = строка.split("?", 1)
+print(путь, хвост.split("&"))

@@ -69,6 +69,17 @@ function PyFunc(name, params, defaults, body, closure, extra){
   this.vararg = extra.vararg || null;   // имя после * — сюда попадут лишние позиционные
   this.kwarg = extra.kwarg || null;     // имя после ** — сюда попадут лишние именованные
   this.owner = null;                    // класс, если это метод
+  this.doc = null;                      // строка документации, если она есть
+}
+
+/* Строка документации — первая строка в теле функции, класса или модуля.
+   В Python она не выполняется, а кладётся в __doc__. */
+function docOf(body){
+  if (!body || !body.length) return null;
+  var first = body[0];
+  if (first.type === "ExprStmt" && first.value && first.value.type === "Str")
+    return first.value.value;
+  return null;
 }
 
 /* ---------- типы как настоящие значения ----------
@@ -148,7 +159,7 @@ function genOf(name, makeIter){
 }
 
 /* ---------- модуль ---------- */
-function PyModule(name){ this.name = name; this.vars = new Map(); }
+function PyModule(name){ this.name = name; this.vars = new Map(); this.doc = null; }
 
 /* ---------- файлы ----------
    Настоящего диска в браузере нет. Файлы живут в памяти запуска: что урок
@@ -289,6 +300,7 @@ defType("OSError", TYPES.Exception);
 defType("FileNotFoundError", TYPES.OSError);
 defType("IndentationError", TYPES.Exception);
 defType("SyntaxError", TYPES.Exception);
+defType("EOFError", TYPES.Exception);
 /* «Здесь так нельзя» — не питоновская ошибка, а сообщение тренажёра.
    Наследуем от BaseException, чтобы «except Exception» её не проглатывал. */
 defType("NotSupported", TYPES.BaseException);
@@ -304,6 +316,16 @@ EXC_NAMES.forEach(function(n){
     return o;
   };
 });
+
+/* json.JSONDecodeError — наследник ValueError. Заведён отдельно и уже после
+   EXC_NAMES: в Python это не встроенное имя, добраться до него можно только
+   через модуль (json.JSONDecodeError), и «except ValueError» его ловит. */
+TYPES["JSONDecodeError"] = new PyType("JSONDecodeError", TYPES.ValueError, { module: "json" });
+TYPES["JSONDecodeError"].ctor = function(args){
+  var o = new PyObj(TYPES["JSONDecodeError"]);
+  o.excArgs = (args || []).slice();
+  return o;
+};
 
 function typeOf(v){
   if (v instanceof PyObj) return v.cls;
@@ -1008,7 +1030,16 @@ Parser.prototype = {
             var kn = this.next().v; this.next();
             kwargs[kn] = this.parseExpr();
           } else {
-            args.push(this.parseExpr());
+            var argExpr = this.parseExpr();
+            /* sum(x * 2 for x in числа) — генераторное выражение без своих
+               скобок. Разрешено только когда аргумент один: так же в Python. */
+            if (this.atKw("for")){
+              if (args.length || Object.keys(kwargs).length || dstar.length)
+                raise("SyntaxError", "Генераторное выражение можно писать без своих скобок только когда аргумент один. Возьми его в скобки.", this.line);
+              var gcl = this.parseCompClauses();
+              argExpr = { type:"Comp", kind:"gen", value: argExpr, clauses: gcl, line: node.line };
+            }
+            args.push(argExpr);
           }
           if (this.atOp(",")) this.next(); else break;
         }
@@ -1058,6 +1089,11 @@ Parser.prototype = {
       this.next();
       if (this.atOp(")")){ this.next(); return { type:"Tuple", elts:[], line:line }; }
       var e = this.parseExpr();
+      if (this.atKw("for")){
+        var pcl = this.parseCompClauses();
+        this.expectOp(")", "Не закрыта круглая скобка у генераторного выражения.");
+        return { type:"Comp", kind:"gen", value:e, clauses:pcl, line:line };
+      }
       if (this.atOp(",")){
         var elts = [e];
         while (this.atOp(",")){ this.next(); if (this.atOp(")")) break; elts.push(this.parseExpr()); }
@@ -1147,6 +1183,66 @@ function splitFormatSpec(code){
     if (ch === ":" && depth === 0) return { code: code.slice(0, i), spec: code.slice(i + 1) };
   }
   return { code: code, spec: "" };
+}
+
+/* "{имя} набрал {0:.2f}".format(3.5, имя="аня") — старший брат f-строки.
+   Раньше движок понимал только пустые {} и молча оставлял всё остальное
+   как есть: строка выглядела правильной, а внутри был шаблон. */
+function formatTemplate(tmpl, args, kw, line){
+  var out = "", i = 0, auto = 0;
+
+  function lookup(field){
+    field = field.trim();
+    if (field === ""){
+      if (auto >= args.length)
+        raise("IndexError", "В format() не хватило значений для очередной пары скобок.", line,
+              { pymsg: "Replacement index " + auto + " out of range for positional args tuple" });
+      return args[auto++];
+    }
+    if (/^\d+$/.test(field)){
+      var n = parseInt(field, 10);
+      if (n >= args.length)
+        raise("IndexError", "В format() нет значения номер " + n + ".", line,
+              { pymsg: "Replacement index " + n + " out of range for positional args tuple" });
+      return args[n];
+    }
+    if (/^[^\W\d]\w*$/.test(field) || /^[A-Za-zА-Яа-яЁё_][A-Za-zА-Яа-яЁё0-9_]*$/.test(field)){
+      if (!(field in kw))
+        raise("KeyError", "В format() не передали «" + field + "».", line, { pymsg: field });
+      return kw[field];
+    }
+    raise("NotSupported", "В format() поддерживаются номер, имя или пустые скобки. Обращение вида «" + field +
+      "» тренажёр не разбирает — проще написать f-строку.", line);
+  }
+
+  while (i < tmpl.length){
+    var c = tmpl[i];
+    if (c === "{" && tmpl[i+1] === "{"){ out += "{"; i += 2; continue; }
+    if (c === "}" && tmpl[i+1] === "}"){ out += "}"; i += 2; continue; }
+    if (c !== "{"){ out += c; i++; continue; }
+    var depth = 1, body = "";
+    i++;
+    while (i < tmpl.length && depth > 0){
+      if (tmpl[i] === "{") depth++;
+      if (tmpl[i] === "}"){ depth--; if (!depth) break; }
+      body += tmpl[i]; i++;
+    }
+    if (depth > 0) raise("ValueError", "В format() не закрыта фигурная скобка.", line,
+                         { pymsg: "Single '{' encountered in format string" });
+    i++;
+    var split = splitFormatSpec(body);
+    var field = split.code, spec = split.spec, conv = null;
+    var cm = /^(.*)!([rsa])$/.exec(field);
+    if (cm){ field = cm[1]; conv = cm[2]; }
+    var v = lookup(field);
+    if (conv === "r" || conv === "a") v = pyRepr(v);
+    else if (conv === "s") v = pyStr(v);
+    /* ширина и точность тоже могут прийти из значений: "{:{}}".format(x, 8) */
+    if (spec.indexOf("{") >= 0)
+      spec = spec.replace(/\{([^{}]*)\}/g, function(_, inner){ return pyStr(lookup(inner)); });
+    out += applySpec(v, spec.trim(), line);
+  }
+  return out;
 }
 
 function parseFString(raw, line){
@@ -1529,6 +1625,8 @@ function Interp(opts){
   this.curExc = null;    // исключение, которое сейчас обрабатывается в except
   this.sources = opts.sources || {};   // «файлы» урока для import
   this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
+  this.stdin = (opts.stdin || []).map(String);  // заранее записанные ответы для input()
+  this.stdinPos = 0;
   this.modules = {};     // уже подключённые модули
   this.global = new Env(null);
   this.installBuiltins();
@@ -1616,6 +1714,18 @@ Interp.prototype.installBuiltins = function(){
   def("bool", function(args){ return args.length ? truthy(args[0]) : false; });
   def("list", function(args, kw, line){ return args.length ? I.iterate(args[0], line).slice() : []; });
   def("tuple", function(args, kw, line){ return Tup(args.length ? I.iterate(args[0], line) : []); });
+  /* any/all — «хотя бы один» и «все». Вместе с генераторным выражением это
+     самый частый способ задать вопрос списку: any(x > 5 for x in числа). */
+  def("any", function(args, kw, line){
+    var it = I.iterate(args[0], line);
+    for (var i = 0; i < it.length; i++) if (truthy(it[i])) return true;
+    return false;
+  });
+  def("all", function(args, kw, line){
+    var it = I.iterate(args[0], line);
+    for (var i = 0; i < it.length; i++) if (!truthy(it[i])) return false;
+    return true;
+  });
   def("sum", function(args, kw, line){
     var it = I.iterate(args[0], line), acc = 0, floaty = false;
     for (var i = 0; i < it.length; i++){
@@ -1697,8 +1807,20 @@ Interp.prototype.installBuiltins = function(){
   def("set", function(args, kw, line){
     return args.length ? new PySet(I.iterate(args[0], line)) : new PySet();
   });
+  /* input() читает не с клавиатуры, а из списка заранее записанных ответов
+     (opts.stdin у запуска, поле «ответы» у урока). Для кода ученика разницы
+     нет: на настоящем компьютере тот же код читает то, что печатает человек.
+     Приглашение печатается без перевода строки, сам ответ НЕ отражается
+     в выводе — ровно как у python3, когда ввод приходит по трубе. */
   def("input", function(args, kw, line){
-    raise("NotSupported", "input() здесь не работает — в тренажёре нет клавиатурного ввода. Задай значение переменной прямо в коде.", line);
+    if (args.length > 1)
+      raise("TypeError", "input() принимает не больше одного приглашения.", line,
+            { pymsg: "input expected at most 1 argument, got " + args.length });
+    if (args.length === 1) I.write(pyStr(args[0]));
+    if (I.stdinPos >= I.stdin.length)
+      raise("EOFError", "Ответы закончились: программа спросила больше, чем ей заготовили. Добавь строку в список ответов.", line,
+            { pymsg: "EOF when reading a line" });
+    return I.stdin[I.stdinPos++];
   });
 
   // математика
@@ -1780,7 +1902,73 @@ Interp.prototype.installBuiltins = function(){
     return typeOf(args[0]);
   });
   g.set("object", TYPES.object);
+  /* Главная программа всегда называется "__main__" — так её видит Python.
+     У подключённого файла имя другое, см. loadModule. */
+  g.set("__name__", "__main__");
   EXC_NAMES.forEach(function(n){ g.set(n, TYPES[n]); });
+
+  /* dir() — список имён у объекта.
+     Настоящий Python подмешивает сюда десятки служебных имён (__class__,
+     __sizeof__ и прочие), и их набор меняется от версии к версии — повторить
+     его точь-в-точь нельзя. Поэтому dir() здесь работает только с тем, что
+     написал сам ученик: свой класс, свой объект, свой файл-модуль.
+     Правило проекта: в уроках dir() всегда фильтруется от служебных имён —
+     [n for n in dir(x) if not n.startswith("_")] — и тогда результат
+     совпадает с настоящим Python в точности. */
+  /* getattr(объект, "имя") — то же, что объект.имя, только имя вычисляется.
+     Третий аргумент — что вернуть, если такого имени нет. */
+  def("getattr", function(args, kw, line){
+    if (args.length < 2) raise("TypeError", "getattr() принимает объект и имя.", line);
+    var nm = pyStr(args[1]);
+    if (args.length > 2){
+      try { return I.bindMethod(args[0], nm, line); }
+      catch (e){
+        if (e.pyKind === "AttributeError") return args[2];
+        throw e;
+      }
+    }
+    return I.bindMethod(args[0], nm, line);
+  });
+  def("hasattr", function(args, kw, line){
+    if (args.length !== 2) raise("TypeError", "hasattr() принимает объект и имя.", line);
+    try { I.bindMethod(args[0], pyStr(args[1]), line); return true; }
+    catch (e){
+      if (e.pyKind === "AttributeError") return false;
+      throw e;
+    }
+  });
+  /* callable() — «это можно вызвать?»: функция, метод, класс или встроенное. */
+  def("callable", function(args, kw, line){
+    var v = args[0];
+    return typeof v === "function" || v instanceof PyFunc || v instanceof Bound || v instanceof PyType;
+  });
+
+  def("dir", function(args, kw, line){
+    if (args.length !== 1)
+      raise("TypeError", "dir() здесь принимает ровно один объект: dir(что-то).", line);
+    var v = args[0], names = {};
+    function addType(t){
+      while (t){ t.attrs.forEach(function(_, k){ names[k] = 1; }); t = t.base; }
+    }
+    if (v instanceof PyModule){
+      v.vars.forEach(function(_, k){ names[k] = 1; });
+    } else if (v instanceof PyType){
+      if (v.module !== "__main__") dirRefuse(typeName(v), line);
+      addType(v);
+    } else if (v instanceof PyObj){
+      if (v.cls.module !== "__main__") dirRefuse(v.cls.name, line);
+      addType(v.cls);
+      v.fields.forEach(function(_, k){ names[k] = 1; });
+    } else {
+      dirRefuse(typeName(v), line);
+    }
+    return Object.keys(names).sort();
+  });
+
+  function dirRefuse(what, line){
+    raise("NotSupported", "dir() здесь работает только с тем, что написал ты сам: своим классом, своим объектом или своим файлом-модулем. У «" + what +
+      "» список имён у каждой версии Python свой, и подделывать его тренажёр не станет — посмотри его в документации.", line);
+  }
 
   def("next", function(args, kw, line){
     var g = args[0];
@@ -2046,6 +2234,7 @@ Interp.prototype.execStmt = function*(st, env){
       var fdef = new PyFunc(st.name, st.params, st.defaults, st.body, env,
                             { vararg: st.vararg, kwarg: st.kwarg });
       fdef.defaultVals = dv;
+      fdef.doc = docOf(st.body);
       var res = fdef;
       if (st.decorators) for (var fdi = st.decorators.length - 1; fdi >= 0; fdi--){
         var dec = yield* this.eval(st.decorators[fdi], env);
@@ -2074,6 +2263,7 @@ Interp.prototype.execStmt = function*(st, env){
         base = b0;
       }
       var cls = new PyType(st.name, base, { module: "__main__" });
+      cls.doc = docOf(st.body);
       var cenv = new Env(env);
       cenv.annotations = [];
       yield* this.runBlock(st.body, cenv);
@@ -2235,12 +2425,17 @@ Interp.prototype.loadModule = function*(name, line){
     var mod = new PyModule(name);
     this.modules[name] = mod;          // ставим сразу: спасает от кольцевых import
     var menv = new Env(this.global);
+    /* Внутри подключённого файла __name__ — это имя модуля, а не "__main__".
+       Отсюда и растёт «if __name__ == "__main__"»: главный файл знает,
+       что он главный, а подключённый — что его подключили. */
+    menv.set("__name__", name);
     var ast;
     try { ast = parse(src); }
     catch (e){
       raise(e.pyKind || "SyntaxError", "В модуле «" + name + ".py» ошибка: " + (e.pyMsg || e.message) +
             " (строка " + (e.pyLine || 0) + " в файле " + name + ".py)", line);
     }
+    mod.doc = docOf(ast.body);
     yield* this.runBlock(ast.body, menv);
     menv.vars.forEach(function(v, k){ mod.vars.set(k, v); });
     return mod;
@@ -2363,7 +2558,22 @@ Interp.prototype.eval = function*(e, env){
         var v = yield* this.eval(p.ast, env);
         if (p.conv === "r" || p.conv === "a") v = pyRepr(v);
         else if (p.conv === "s") v = pyStr(v);
-        s += applySpec(v, p.spec, e.line);
+        /* Внутри формата тоже могут стоять фигурные скобки: f"{имя:<{ширина}}".
+           Ширину и точность в Python разрешено брать из переменной, поэтому
+           сначала собираем сам формат, а потом уже применяем его. */
+        var spec = p.spec;
+        if (spec && spec.indexOf("{") >= 0){
+          if (!p.specParts) p.specParts = parseFString(spec, e.line);
+          var built = "";
+          for (var si = 0; si < p.specParts.length; si++){
+            var sp = p.specParts[si];
+            if (sp.text !== undefined){ built += sp.text; continue; }
+            if (!sp.ast) sp.ast = new Parser(lex(sp.code)).parseExpr();
+            built += pyStr(yield* this.eval(sp.ast, env));
+          }
+          spec = built;
+        }
+        s += applySpec(v, spec, e.line);
       }
       return s;
     }
@@ -2434,10 +2644,17 @@ Interp.prototype.eval = function*(e, env){
     }
 
     case "Comp": {
-      var acc = e.kind === "list" ? [] : e.kind === "set" ? new PySet() : dictNew();
+      var acc = (e.kind === "list" || e.kind === "gen") ? []
+              : e.kind === "set" ? new PySet() : dictNew();
       /* переменная включения живёт в своём окружении и не портит внешнюю —
          как в Python 3, где [x for x in ...] не затирает внешний x */
       yield* this.runComp(e, 0, new Env(env), acc);
+      /* Генераторное выражение отдаёт генератор: его можно перебрать один раз.
+         Отличие от настоящего Python: значения считаются сразу, а не по одному.
+         Для конечных данных разницы нет; на бесконечном источнике настоящий
+         Python отдал бы первое значение мгновенно, а тренажёр упрётся
+         в защиту от вечного цикла. Записано в HANDOFF.md. */
+      if (e.kind === "gen") return genOf("<genexpr>", function(){ return acc[Symbol.iterator](); });
       return acc;
     }
 
@@ -3029,6 +3246,7 @@ var BUILTIN_MODULES = {
 
   json: function(I){
     return {
+      JSONDecodeError: TYPES.JSONDecodeError,
       dumps: function(args, kw, line){
         var ensure = !(kw && kw.ensure_ascii !== undefined && !truthy(kw.ensure_ascii));
         var indent = kw && kw.indent !== undefined && kw.indent !== null ? Math.trunc(nv(kw.indent)) : 0;
@@ -3039,7 +3257,7 @@ var BUILTIN_MODULES = {
         var parsed;
         try { parsed = JSON.parse(text); }
         catch (e){
-          raise("ValueError", "Это не похоже на JSON: " + e.message, line,
+          raise("JSONDecodeError", "Это не похоже на JSON: " + e.message, line,
                 { pymsg: "Expecting value: line 1 column 1 (char 0)" });
         }
         return jsonToPy(parsed);
@@ -3581,6 +3799,7 @@ Interp.prototype.bindMethod = function(obj, name, line){
   if (obj instanceof PyType){
     /* __name__ — короткое имя: у datetime.date это «date», как в Python */
     if (name === "__name__") return obj.shortName();
+    if (name === "__doc__" && !obj.attrs.has("__doc__")) return obj.doc || null;
     var ca = obj.lookup(name);
     if (ca !== undefined) return ca;
     raise("AttributeError", "У класса «" + obj.name + "» нет «" + name + "».", line,
@@ -3597,18 +3816,32 @@ Interp.prototype.bindMethod = function(obj, name, line){
 
   if (obj instanceof PyModule){
     if (obj.vars.has(name)) return obj.vars.get(name);
+    if (name === "__name__") return obj.name;
+    if (name === "__doc__") return obj.doc || null;
     raise("AttributeError", "В модуле «" + obj.name + "» нет «" + name + "».", line,
           { pymsg: "module '" + obj.name + "' has no attribute '" + name + "'" });
   }
 
+  /* Метод, привязанный к объекту (к.снять), — тоже функция: у него есть
+     и имя, и строка документации. Берём их у той функции, что внутри. */
+  if (obj instanceof Bound){
+    if (name === "__name__") return obj.fn.name;
+    if (name === "__doc__") return obj.fn.doc === undefined ? null : obj.fn.doc;
+    if (name === "__self__") return obj.self;
+    raise("AttributeError", "У метода нет «" + name + "».", line,
+          { pymsg: "'method' object has no attribute '" + name + "'" });
+  }
+
   if (obj instanceof PyFunc){
     if (name === "__name__") return obj.name;
-    if (name === "__doc__") return null;
+    if (name === "__doc__") return obj.doc === null ? null : obj.doc;
     raise("AttributeError", "У функции нет «" + name + "».", line,
           { pymsg: "'function' object has no attribute '" + name + "'" });
   }
 
   if (obj instanceof PyObj){
+    if (name === "__doc__" && !obj.fields.has("__doc__") && obj.cls.lookup("__doc__") === undefined)
+      return obj.cls.doc || null;
     var mm = moduleMethod(I, obj, name, line);
     if (mm !== undefined) return mm;
     if (obj.fields.has(name)) return obj.fields.get(name);
@@ -3628,9 +3861,55 @@ Interp.prototype.bindMethod = function(obj, name, line){
       rstrip: function(){ return obj.replace(/\s+$/, ""); },
       capitalize: function(){ return obj ? obj[0].toUpperCase() + obj.slice(1).toLowerCase() : obj; },
       title: function(){ return obj.replace(/\S+/g, function(w){ return w[0].toUpperCase() + w.slice(1).toLowerCase(); }); },
+      /* Второй аргумент — сколько раз делить: "a=b=c".split("=", 1) даёт
+         ['a', 'b=c']. Без него разбор «имя=значение» ломается на значениях,
+         в которых сам знак равенства и встречается. */
       split: function(a){
-        if (!a || !a.length) return obj.trim().length ? obj.trim().split(/\s+/) : [];
-        return obj.split(pyStr(a[0]));
+        var lim = (a && a.length > 1 && a[1] !== null) ? Math.trunc(nv(a[1])) : -1;
+        if (!a || !a.length || a[0] === null){
+          var t = obj.trim();
+          if (!t.length) return [];
+          var ws = t.split(/\s+/);
+          if (lim < 0 || ws.length <= lim + 1) return ws;
+          var headw = ws.slice(0, lim);
+          /* хвост берём из исходной строки, чтобы пробелы внутри сохранились */
+          var restw = t, cut = 0;
+          for (var wi = 0; wi < lim; wi++){
+            var m2 = /\s+/.exec(restw.slice(cut + headw[wi].length));
+            cut = cut + headw[wi].length + m2[0].length;
+          }
+          return headw.concat([t.slice(cut)]);
+        }
+        var sep = pyStr(a[0]);
+        if (sep === "") raise("ValueError", "split() не умеет делить по пустой строке.", line,
+                              { pymsg: "empty separator" });
+        if (lim < 0) return obj.split(sep);
+        var out = [], from = 0;
+        while (out.length < lim){
+          var at = obj.indexOf(sep, from);
+          if (at < 0) break;
+          out.push(obj.slice(from, at));
+          from = at + sep.length;
+        }
+        out.push(obj.slice(from));
+        return out;
+      },
+      /* rsplit — то же самое, но считает от конца строки */
+      rsplit: function(a){
+        var lim = (a && a.length > 1 && a[1] !== null) ? Math.trunc(nv(a[1])) : -1;
+        if (!a || !a.length || a[0] === null){
+          var t2 = obj.trim();
+          if (!t2.length) return [];
+          var all = t2.split(/\s+/);
+          if (lim < 0 || all.length <= lim + 1) return all;
+          return [all.slice(0, all.length - lim).join(" ")].concat(all.slice(all.length - lim));
+        }
+        var sep2 = pyStr(a[0]);
+        if (sep2 === "") raise("ValueError", "rsplit() не умеет делить по пустой строке.", line,
+                               { pymsg: "empty separator" });
+        var parts2 = obj.split(sep2);
+        if (lim < 0 || parts2.length <= lim + 1) return parts2;
+        return [parts2.slice(0, parts2.length - lim).join(sep2)].concat(parts2.slice(parts2.length - lim));
       },
       join: function(a){
         var parts = I.iterate(a[0], line);
@@ -3696,11 +3975,11 @@ Interp.prototype.bindMethod = function(obj, name, line){
         var sfx = pyStr(a[0]);
         return sfx && obj.slice(obj.length - sfx.length) === sfx ? obj.slice(0, obj.length - sfx.length) : obj;
       },
-      format: function(a){ var i = 0; return obj.replace(/\{\}/g, function(){ return pyStr(a[i++]); }); }
+      format: function(a, kw){ return formatTemplate(obj, a, kw || {}, line); }
     };
     if (!S[name]) raise("AttributeError", "У строки нет метода «" + name + "».", line,
                         { pymsg: "'str' object has no attribute '" + name + "'" });
-    return function(args){ return S[name](args); };
+    return function(args, kw){ return S[name](args, kw); };
   }
   if (Array.isArray(obj)){
     var A = {
@@ -3985,7 +4264,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
@@ -4017,7 +4296,7 @@ function run(src, opts){
 function stepper(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin });
   CUR = I;
   var ast = parse(src);
   var it = I.runBlock(ast.body, I.global);
@@ -4044,6 +4323,7 @@ function snapshotVars(env, skip){
     e.vars.forEach(function(v, k){
       if (seen[k]) return;
       if (typeof v === "function") return;
+      if (k.indexOf("__") === 0) return;      // служебные имена вроде __name__
       if (skip && skip.indexOf(k) >= 0) return;
       seen[k] = 1;
       out.push({ name: k, value: pyRepr(v), type: typeName(v) });
