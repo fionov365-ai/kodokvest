@@ -233,6 +233,20 @@ button{font-family:inherit}
 .wkcell .wkdot{font-size:15px;line-height:1;color:var(--faint)}
 .wkcell.on{border-color:var(--warn);background:rgba(255,171,61,.12)}
 .wkcell.today{outline:2px solid var(--acc);outline-offset:1px}
+/* щит для стрика */
+.shieldbox{margin-top:14px;padding:10px 14px;border-radius:12px;border:1px dashed var(--line2);
+  background:var(--sunken);display:inline-block;max-width:52ch}
+.shieldbox.has{border-style:solid;border-color:var(--acc2);background:rgba(0,224,184,.07)}
+.shrow{display:flex;align-items:center;justify-content:center;gap:6px;font-size:18px}
+.shrow .shoff{filter:grayscale(1) opacity(.3)}
+.shnum{font-size:13.5px;color:var(--soft);margin-left:6px}
+.shnum b{color:var(--acc2);font-size:16px}
+.shsub{color:var(--faint);font-size:12.5px;margin-top:5px;line-height:1.5}
+.wkcell.shielded{border-color:var(--acc2);border-style:solid;background:rgba(0,224,184,.10)}
+.wkcell.shielded .wkdot{filter:none}
+.shieldsaved{margin:10px 0;padding:10px 14px;border-radius:12px;font-size:14px;
+  border:1px solid var(--acc2);background:rgba(0,224,184,.10);color:var(--ink)}
+.daybanner.shield{background:rgba(0,224,184,.10);border-color:var(--acc2);color:var(--ink)}
 .streakline{margin-top:8px;font-size:16px;color:var(--soft)}
 .streakline b{color:var(--warn);font-size:20px}
 .dailycard{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);
@@ -10031,6 +10045,7 @@ if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
 if (!S.ailab || typeof S.ailab !== "object") S.ailab = {};
 if (!S.days || typeof S.days !== "object") S.days = {};
 if (!S.daily || typeof S.daily !== "object") S.daily = {};
+if (!S.shields || typeof S.shields !== "object") S.shields = {};
 if (!S.schedule || typeof S.schedule !== "object") S.schedule = { days:[] };
 if (!Array.isArray(S.schedule.days)) S.schedule.days = [];
 if (typeof S.name !== "string") S.name = "";
@@ -10095,10 +10110,13 @@ function streakBestIn(days){
   }
   return best;
 }
-/* обёртки над локальным прогрессом */
+/* обёртки над локальным прогрессом.
+   activeOn — НАСТОЯЩЕЕ занятие в этот день: по нему горит огонёк и считается
+   напоминание по расписанию. Серия же считается по «закрытым» дням
+   (coveredNow: занятие ИЛИ щит), поэтому один пропуск со щитом её не рвёт. */
 function activeOn(key){ return activeIn(S.days, key); }
-function streakCurrent(){ return streakCurrentIn(S.days); }
-function streakBest(){ return streakBestIn(S.days); }
+function streakCurrent(){ return streakCurrentIn(coveredNow()); }
+function streakBest(){ return streakBestIn(coveredNow()); }
 /* отметить, что сегодня занимались (урок, разминка или задача дня).
    Возвращает true, если сегодняшний день засчитан впервые. */
 function markActiveToday(){
@@ -10106,17 +10124,101 @@ function markActiveToday(){
   var k = dayKey();
   if (S.days[k]) return false;
   S.days[k] = 1;
+  useShield();       /* вернулся после пропуска — щит закрывает вчерашнюю дыру */
   pruneDays();
   save();
   try { refreshTop(); } catch(e){}
   return true;
 }
-/* не даём множеству дней расти без предела — хватает истории за ~2 года */
+/* не даём множествам дней расти без предела — хватает истории за ~2 года */
 function pruneDays(){
-  var keys = Object.keys(S.days || {});
-  if (keys.length <= 800) return;
-  keys.sort();
-  keys.slice(0, keys.length - 800).forEach(function(k){ delete S.days[k]; });
+  [S.days, S.shields].forEach(function(set){
+    var keys = Object.keys(set || {});
+    if (keys.length <= 800) return;
+    keys.sort();
+    keys.slice(0, keys.length - 800).forEach(function(k){ delete set[k]; });
+  });
+}
+
+/* ================= щит для стрика =================
+   Один пропущенный день не должен обнулять серию — это главная причина
+   бросить занятия. Щит закрывает ровно один пропуск.
+
+   Щиты НЕ храним счётчиком. Счётчик разъехался бы при слиянии двух устройств —
+   та же грабля, что и со стриком. Вместо этого храним МНОЖЕСТВО ДАТ, на которые
+   щит потрачен (S.shields), а сколько щитов заработано — вычисляем из числа
+   дней занятий. Оба множества сливаются объединением, поэтому на любом
+   устройстве получается одно и то же.
+
+   Щит срабатывает не в полночь, а в момент, когда ребёнок вернулся и что-то
+   сделал: статический сайт не может выполнить код, пока он закрыт (та же
+   причина, по которой напоминания живут только внутри сайта). Заодно это
+   честнее — щит награждает возвращение, а не отсутствие. */
+var SHIELD_EVERY = 5;   /* один щит за каждые 5 дней занятий */
+var SHIELD_MAX   = 2;   /* больше двух про запас не копится */
+
+/* дни, которые считаются для серии: настоящие занятия плюс закрытые щитом.
+   Работает с ЛЮБЫМ набором данных — это нужно панели наставника, где стрик
+   считается и для чужого ученика по его прогрессу. */
+function coveredDays(days, shields){
+  var out = {};
+  [days || {}, shields || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out[k] = 1; });
+  });
+  return out;
+}
+function shieldsEarnedIn(days){
+  return Math.floor(Object.keys(days || {}).length / SHIELD_EVERY);
+}
+function shieldsSpentIn(shields){ return Object.keys(shields || {}).length; }
+/* сколько щитов на руках: заработано минус потрачено, но не больше запаса */
+function shieldsLeftIn(days, shields){
+  var n = shieldsEarnedIn(days) - shieldsSpentIn(shields);
+  if (n > SHIELD_MAX) n = SHIELD_MAX;
+  return n > 0 ? n : 0;
+}
+/* сколько дней занятий до следующего щита (0 — запас уже полон) */
+function shieldToNextIn(days, shields){
+  if (shieldsLeftIn(days, shields) >= SHIELD_MAX) return 0;
+  var n = Object.keys(days || {}).length % SHIELD_EVERY;
+  return n === 0 ? SHIELD_EVERY : SHIELD_EVERY - n;
+}
+function coveredNow(){ return coveredDays(S.days, S.shields); }
+function shieldedOn(key){ return !!(S.shields && S.shields[key]); }
+function shieldsLeft(){ return shieldsLeftIn(S.days, S.shields); }
+function shieldToNext(){ return shieldToNextIn(S.days, S.shields); }
+
+var shieldJustUsed = null;   /* дата, которую щит закрыл только что */
+
+/* щит спас бы серию прямо сейчас? Ничего не тратит — только смотрит.
+   Условия все три: вчера не занимались и щит на него ещё не тратили;
+   позавчера серия БЫЛА (иначе продолжать нечего); щит есть в запасе.
+   Нужно ещё и экрану «Сегодня»: пока ребёнок не сел заниматься, серия
+   показывает 0, и без этой подсказки он решит, что всё пропало. */
+function shieldWouldSave(){
+  var y = shiftDay(dayKey(), -1);
+  if (activeOn(y) || shieldedOn(y)) return false;          /* вчера дыры нет */
+  if (!activeIn(coveredNow(), shiftDay(y, -1))) return false;  /* продолжать нечего */
+  return shieldsLeft() >= 1;
+}
+/* потратить щит на вчерашний пропуск. Возвращает закрытую дату или null.
+   Закрывает ровно ОДИН день: пропустил два подряд — серия начинается заново. */
+function useShield(){
+  S.shields = S.shields || {};
+  if (!shieldWouldSave()) return null;
+  var y = shiftDay(dayKey(), -1);
+  S.shields[y] = 1;
+  shieldJustUsed = y;
+  return y;
+}
+/* «щит спас серию» — показываем один раз, у первого же экрана после спасения */
+function takeShieldNote(){
+  if (!shieldJustUsed) return "";
+  var d = new Date(shieldJustUsed + "T12:00:00");
+  var p = function(x){ return (x < 10 ? "0" : "") + x; };
+  shieldJustUsed = null;
+  return '<div class="shieldsaved">🛡 <b>Щит закрыл пропуск</b> ' +
+    p(d.getDate()) + "." + p(d.getMonth() + 1) + ' — серия не оборвалась.</div>';
 }
 
 /* задача дня: одна и та же на всех устройствах в один и тот же день, без
@@ -10204,7 +10306,7 @@ function slugFromName(name){
    смешать двух детей на одном устройстве. Настройки устройства (admin) не трогаем. */
 function resetProgressLocal(){
   S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.ailab = {}; S.days = {}; S.daily = {};
+  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.ailab = {}; S.days = {}; S.daily = {}; S.shields = {};
   S.sandbox = null; S.sandboxRuns = 0; S.name = ""; S.schedule = { days:[] };
   save();
 }
@@ -10394,6 +10496,17 @@ function mergeProgress(a, b){
   out.daily = {};
   [a.daily || {}, b.daily || {}].forEach(function(src){
     Object.keys(src).forEach(function(k){ if (src[k]) out.daily[k] = 1; });
+  });
+  /* потраченные щиты — тоже множество дат, тоже объединяем. Счётчик щитов
+     нигде не хранится: сколько их заработано, считается из числа дней занятий,
+     поэтому после слияния обе стороны получают одинаковый ответ. Крайний
+     случай: два устройства офлайн потратили последний щит на РАЗНЫЕ дни —
+     тогда после слияния потрачено на один больше, чем заработано. Ничего не
+     ломается (запас просто уходит в ноль и восстанавливается занятиями),
+     и оба спасённых дня остаются закрытыми — так честнее к ребёнку. */
+  out.shields = {};
+  [a.shields || {}, b.shields || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.shields[k] = 1; });
   });
 
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
@@ -11504,6 +11617,7 @@ function winLesson(l, body){
     '<p>' + (stars === 3 ? "С первой попытки и без подсказок."
           : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
+    takeShieldNote() +
     '<div class="winxp">+' + gained + ' XP</div><div class="winrow">' +
       (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
             : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
@@ -12055,13 +12169,32 @@ function weekStripHTML(){
     var key = shiftDay(today, -i);
     var d = new Date(key + "T12:00:00");
     var on = activeOn(key);
+    var sh = !on && shieldedOn(key);
     var isToday = key === today;
     var study = isStudyDay(key);
-    var cls = "wkcell" + (on ? " on" : "") + (isToday ? " today" : "") + (study ? " study" : "");
+    var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
+      (isToday ? " today" : "") + (study ? " study" : "");
     cells += '<div class="' + cls + '"><span class="wkd">' + names[d.getDay()] + '</span>' +
-      '<span class="wkdot">' + (on ? "🔥" : (study ? "📌" : "·")) + '</span></div>';
+      '<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡" : (study ? "📌" : "·"))) + '</span></div>';
   }
   return '<div class="weekstrip">' + cells + '</div>';
+}
+
+/* запас щитов на экране «Сегодня»: сколько на руках и что они делают */
+function shieldBoxHTML(){
+  var left = shieldsLeft(), toNext = shieldToNext();
+  var icons = "";
+  for (var i = 0; i < SHIELD_MAX; i++) icons += (i < left ? "🛡" : "<span class=\"shoff\">🛡</span>");
+  var sub = left > 0
+    ? "Пропустишь день — щит закроет его сам, когда вернёшься. Серия не оборвётся." +
+      (toNext > 0 ? " Следующий щит — через " + toNext + " " +
+        plural(toNext, "день", "дня", "дней") + " занятий." : "")
+    : "Щитов пока нет. Ещё " + toNext + " " + plural(toNext, "день", "дня", "дней") +
+      " занятий — и появится щит: он закрывает один пропуск.";
+  return '<div class="shieldbox' + (left > 0 ? " has" : "") + '">' +
+    '<div class="shrow">' + icons + '<span class="shnum">Щиты: <b>' + left + '</b> из ' + SHIELD_MAX + '</span></div>' +
+    '<div class="shsub">' + sub + '</div>' +
+  '</div>';
 }
 
 function screenToday(){
@@ -12078,12 +12211,15 @@ function screenToday(){
     '<div class="streaknum"><b>' + streak + '</b> ' + plural(streak, "день", "дня", "дней") + ' подряд</div>' +
     '<div class="streaksub">' +
       (streak === 0
-        ? "Серия прервалась — начни новую сегодня."
+        ? (shieldWouldSave()
+            ? "Вчера пропущено — но щит наготове. Позанимайся сегодня, и серия продолжится."
+            : "Серия прервалась — начни новую сегодня.")
         : (doneToday ? "Сегодня уже занимался — так держать!"
                      : "Серия жива. Позанимайся сегодня, чтобы она росла.")) +
     '</div>' +
     '<div class="streakbest">Рекорд: ' + best + ' ' + plural(best, "день", "дня", "дней") + '</div>' +
     weekStripHTML() +
+    shieldBoxHTML() +
   '</div>';
 
   var taskCard;
@@ -12105,6 +12241,9 @@ function screenToday(){
         : '<div class="winrow"><button class="bigbtn" id="dopen">Открыть задачу дня</button></div>') +
     '</div>';
   }
+
+  /* «щит спас серию» — показываем один раз, сразу после спасения */
+  var saved = takeShieldNote();
 
   /* напоминание по расписанию — только внутри сайта */
   var banner = "";
@@ -12136,7 +12275,7 @@ function screenToday(){
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    banner + hero + taskCard + schedBox +
+    saved + banner + hero + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
 
   var dopen = document.getElementById("dopen");
@@ -12277,10 +12416,11 @@ function winWarmup(w){
     ? "Задача дня выполнена!"
     : (firstTry ? (isBlocks ? "Собрал с первой попытки!" : "Точно, с первой попытки!")
                 : (isBlocks ? "Собрал!" : "Угадал!"));
+  var savedNote = takeShieldNote();
   var body = isDaily
-    ? '<p>' + esc(w.note || "Ты справился с сегодняшней задачей.") + '</p>' +
+    ? '<p>' + esc(w.note || "Ты справился с сегодняшней задачей.") + '</p>' + savedNote +
       '<div class="streakline">🔥 <b>' + streak + '</b> ' + plural(streak, "день", "дня", "дней") + ' подряд</div>'
-    : '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>';
+    : '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>' + savedNote;
   var buttons = isDaily
     ? '<button class="bigbtn" id="wtoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="wmore">Ещё размяться</button>'
@@ -12884,7 +13024,10 @@ function statsGridHTML(st){
     statBox("Подсказок взято", String(hints)) +
     statBox("Время за тренажёром", fmtMins(timeMs)) +
     statBox("Последнее занятие", fmtWhen(last)) +
-    statBox("Дней подряд", streakCurrentIn(st.days) + " (рекорд " + streakBestIn(st.days) + ")") +
+    statBox("Дней подряд", streakCurrentIn(coveredDays(st.days, st.shields)) +
+      " (рекорд " + streakBestIn(coveredDays(st.days, st.shields)) + ")") +
+    statBox("Щиты", shieldsLeftIn(st.days, st.shields) + " из " + SHIELD_MAX +
+      " (потрачено " + shieldsSpentIn(st.shields) + ")") +
     statBox("Бейджи", (st.badges || []).length + " из " + BADGES.length) +
     '</div>';
 }
@@ -13078,7 +13221,7 @@ function screenAdmin(){
       try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи, статистику и серию дней? Отменить будет нельзя."); } catch(e2){}
       if (!yes) return;
       S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {};
+      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {}; S.shields = {};
       save(); refreshTop(); screenAdmin();
     }
     else if (act === "go"){ openLesson(id); }
@@ -13210,7 +13353,7 @@ function screenAdmin(){
       Object.keys(S).forEach(function(k){ delete S[k]; });
       S.v = 2; S.xp = 0; S.stars = {}; S.badges = []; S.sandbox = null; S.sandboxRuns = 0;
       S.drawDone = {}; S.firstTry = 0; S.perfect = 0; S.log = {}; S.admin = { unlockAll:false };
-      S.days = {}; S.daily = {}; S.schedule = { days:[] }; S.name = "";
+      S.days = {}; S.daily = {}; S.shields = {}; S.schedule = { days:[] }; S.name = "";
       Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
       if (!S.log || typeof S.log !== "object") S.log = {};
       if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
@@ -13285,6 +13428,9 @@ window.__game = {
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+  shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
+  shieldWouldSave: shieldWouldSave,
+  coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,

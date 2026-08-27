@@ -658,6 +658,84 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- щит для стрика --- */
+  let shieldChecked = 0;
+  if (typeof g.useShield === "function"){
+    const p0 = problems.length;
+    const E = g.SHIELD_EVERY, MAX = g.SHIELD_MAX;
+    /* дата со сдвигом в днях, в полдень — как в самом приложении */
+    const dk = (off) => {
+      const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + off);
+      const p = x => (x < 10 ? "0" : "") + x;
+      return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+    };
+    const setDays = (offs, shieldOffs) => {
+      g.state.days = {}; offs.forEach(o => { g.state.days[dk(o)] = 1; });
+      g.state.shields = {}; (shieldOffs || []).forEach(o => { g.state.shields[dk(o)] = 1; });
+    };
+    /* n произвольных дат подряд — только для арифметики запаса */
+    const mkDays = (n) => {
+      const o = {}; const d = new Date("2030-01-01T12:00:00");
+      for (let i = 0; i < n; i++){
+        const p = x => (x < 10 ? "0" : "") + x;
+        o[d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())] = 1;
+        d.setDate(d.getDate() + 1);
+      }
+      return o;
+    };
+
+    /* арифметика запаса: щит за каждые E дней занятий, но не больше MAX */
+    if (g.shieldsLeftIn(mkDays(E - 1), {}) !== 0)
+      bad("[щит] щит выдан раньше " + E + " дней занятий");
+    if (g.shieldsLeftIn(mkDays(E), {}) !== 1)
+      bad("[щит] за " + E + " дней занятий щит не выдан");
+    if (g.shieldsLeftIn(mkDays(E * (MAX + 1)), {}) !== MAX)
+      bad("[щит] запас не ограничен " + MAX + " щитами");
+    if (g.shieldsLeftIn(mkDays(E), { "2030-06-01": 1 }) !== 0)
+      bad("[щит] потраченный щит не списался из запаса");
+
+    /* сквозной путь: вчера пропущено, ребёнок вернулся и позанимался —
+       щит должен сработать сам и продолжить серию */
+    setDays([-6, -5, -4, -3, -2]);             /* вчера (-1) пропущено, сегодня ещё нет */
+    if (!g.shieldWouldSave()) bad("[щит] щит не готов спасти серию после одного пропуска");
+    if (g.streakCurrent() !== 0)
+      bad("[щит] до занятия серия должна показывать 0, а не " + g.streakCurrent());
+    g.markActiveToday();
+    if (!g.shieldedOn(dk(-1))) bad("[щит] первое занятие после пропуска не пустило щит в дело");
+    if (g.streakCurrent() !== 7)
+      bad("[щит] серия после спасения должна быть 7, а не " + g.streakCurrent());
+    if (g.useShield() !== null) bad("[щит] щит потратился на тот же день дважды");
+    if (g.shieldWouldSave()) bad("[щит] щит всё ещё «готов спасти» уже закрытый день");
+
+    /* два пропуска подряд щит не закрывает — серия честно начинается заново */
+    setDays([-7, -6, -5, -4, -3, 0]);          /* пропущены и -1, и -2 */
+    if (g.shieldWouldSave()) bad("[щит] щит считает, что спасёт серию с дырой в два дня");
+    if (g.useShield() !== null) bad("[щит] щит закрыл дыру в два дня");
+    if (g.streakCurrent() !== 1)
+      bad("[щит] после двух пропусков серия должна быть 1, а не " + g.streakCurrent());
+
+    /* без запаса щит не срабатывает */
+    setDays([-3, -2, 0]);                      /* всего 3 дня занятий — щита нет */
+    if (g.shieldsLeft() !== 0) bad("[щит] запас есть там, где его быть не должно");
+    if (g.useShield() !== null) bad("[щит] щит сработал при пустом запасе");
+
+    /* слияние двух устройств: потраченные щиты объединяются, как дни */
+    const ms = g.mergeProgress({ shields:{ "2030-02-01":1 } }, { shields:{ "2030-02-05":1 } });
+    if (!ms.shields || !ms.shields["2030-02-01"] || !ms.shields["2030-02-05"])
+      bad("[щит] слияние потеряло потраченные щиты: " + JSON.stringify(ms && ms.shields));
+
+    /* запас виден на экране «Сегодня» */
+    setDays([-4, -3, -2, -1, 0]);
+    g.screenToday();
+    await tick();
+    if (!doc.querySelector(".shieldbox")) bad("[щит] на экране «Сегодня» нет блока про щиты");
+
+    /* оставляем состояние опрятным */
+    g.state.days = {}; g.state.days[g.dayKey()] = 1; g.state.shields = {}; g.save();
+    if (problems.length === p0) shieldChecked++;
+    viewReset(g);
+  }
+
   /* --- регистрация по имени --- */
   let regChecked = 0;
   if (typeof g.slugFromName === "function"){
@@ -697,6 +775,7 @@ function checkEncoding(){
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
+  console.log(`щит для стрика: ${shieldChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);

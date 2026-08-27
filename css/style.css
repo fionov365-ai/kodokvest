@@ -221,6 +221,20 @@ button{font-family:inherit}
 .wkcell .wkdot{font-size:15px;line-height:1;color:var(--faint)}
 .wkcell.on{border-color:var(--warn);background:rgba(255,171,61,.12)}
 .wkcell.today{outline:2px solid var(--acc);outline-offset:1px}
+/* щит для стрика */
+.shieldbox{margin-top:14px;padding:10px 14px;border-radius:12px;border:1px dashed var(--line2);
+  background:var(--sunken);display:inline-block;max-width:52ch}
+.shieldbox.has{border-style:solid;border-color:var(--acc2);background:rgba(0,224,184,.07)}
+.shrow{display:flex;align-items:center;justify-content:center;gap:6px;font-size:18px}
+.shrow .shoff{filter:grayscale(1) opacity(.3)}
+.shnum{font-size:13.5px;color:var(--soft);margin-left:6px}
+.shnum b{color:var(--acc2);font-size:16px}
+.shsub{color:var(--faint);font-size:12.5px;margin-top:5px;line-height:1.5}
+.wkcell.shielded{border-color:var(--acc2);border-style:solid;background:rgba(0,224,184,.10)}
+.wkcell.shielded .wkdot{filter:none}
+.shieldsaved{margin:10px 0;padding:10px 14px;border-radius:12px;font-size:14px;
+  border:1px solid var(--acc2);background:rgba(0,224,184,.10);color:var(--ink)}
+.daybanner.shield{background:rgba(0,224,184,.10);border-color:var(--acc2);color:var(--ink)}
 .streakline{margin-top:8px;font-size:16px;color:var(--soft)}
 .streakline b{color:var(--warn);font-size:20px}
 .dailycard{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);
