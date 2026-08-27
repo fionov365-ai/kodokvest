@@ -10217,7 +10217,7 @@ function takeShieldNote(){
   var d = new Date(shieldJustUsed + "T12:00:00");
   var p = function(x){ return (x < 10 ? "0" : "") + x; };
   shieldJustUsed = null;
-  return '<div class="shieldsaved">🛡 <b>Щит закрыл пропуск</b> ' +
+  return '<div class="shieldsaved">🛡️ <b>Щит закрыл пропуск</b> ' +
     p(d.getDate()) + "." + p(d.getMonth() + 1) + ' — серия не оборвалась.</div>';
 }
 
@@ -12175,7 +12175,7 @@ function weekStripHTML(){
     var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
       (isToday ? " today" : "") + (study ? " study" : "");
     cells += '<div class="' + cls + '"><span class="wkd">' + names[d.getDay()] + '</span>' +
-      '<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡" : (study ? "📌" : "·"))) + '</span></div>';
+      '<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡️" : (study ? "📌" : "·"))) + '</span></div>';
   }
   return '<div class="weekstrip">' + cells + '</div>';
 }
@@ -12184,7 +12184,7 @@ function weekStripHTML(){
 function shieldBoxHTML(){
   var left = shieldsLeft(), toNext = shieldToNext();
   var icons = "";
-  for (var i = 0; i < SHIELD_MAX; i++) icons += (i < left ? "🛡" : "<span class=\"shoff\">🛡</span>");
+  for (var i = 0; i < SHIELD_MAX; i++) icons += (i < left ? "🛡️" : "<span class=\"shoff\">🛡️</span>");
   var sub = left > 0
     ? "Пропустишь день — щит закроет его сам, когда вернёшься. Серия не оборвётся." +
       (toNext > 0 ? " Следующий щит — через " + toNext + " " +
