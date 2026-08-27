@@ -510,6 +510,40 @@ body.focus .lede{display:none}
 .bugcard .bugtip{display:block;font-size:12.5px;color:#a98a9a}
 .demo .bar .hintx.errx{color:var(--warn)}
 
+/* ---------- задание «вынеси вердикт» (тип review в «Ты и ИИ») ---------- */
+.claimcard{background:linear-gradient(150deg,#1d2b4a,#1a2340);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.claimcard h3{margin:0 0 6px;font-size:17px;color:#9fd0ff}
+.claimcard p{margin:0 0 9px;color:#e2e9ff;font-size:16.5px}
+.claimcard .claimtip{display:block;font-size:12.5px;color:var(--faint)}
+.verdict{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:16px 0 0}
+.verdict h3{margin:0 0 6px;font-size:18px}
+.verdict > p{margin:0 0 13px;color:var(--soft);font-size:14.5px}
+.vbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.vbtn{display:block;text-align:left;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;
+      padding:12px 15px;color:var(--ink);cursor:pointer;transition:.15s;font-size:14px}
+.vbtn:hover{border-color:var(--acc);transform:translateY(-1px)}
+.vbtn.on{border-color:var(--acc);background:rgba(124,92,255,.16)}
+.vbtn b{display:block;font-size:15px;margin-bottom:3px}
+.vbtn span{display:block;color:var(--faint);font-size:12.5px;line-height:1.45}
+.vpick{margin-top:12px}
+.lines{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:7px 0;overflow-x:auto}
+.lrow{display:flex;align-items:flex-start;gap:12px;width:100%;background:none;border:0;border-left:3px solid transparent;
+      padding:2px 14px 2px 11px;text-align:left;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.7}
+.lrow:hover{background:rgba(124,92,255,.13);border-left-color:var(--acc)}
+.lrow.on{background:rgba(124,92,255,.2);border-left-color:var(--acc)}
+.lrow.off{cursor:default;opacity:.5}
+.lrow.off:hover{background:none;border-left-color:transparent}
+.lrow .ln{flex:none;width:22px;text-align:right;color:var(--c);user-select:none}
+.lrow code{white-space:pre;color:var(--ink)}
+.proof{margin:12px 0 4px;text-align:left;font-size:13.5px;color:var(--soft)}
+.proof u{display:block;text-decoration:none;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.proof .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;font-family:'JetBrains Mono';font-size:12.5px}
+.proof .cmp div{background:rgba(0,0,0,.32);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.proof .cmp u{margin-bottom:5px}
+@media (max-width:620px){
+  .proof .cmp{grid-template-columns:1fr}
+}
+
 /* ---------- панель наставника ---------- */
 .admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}
@@ -5208,6 +5242,7 @@ var CURRICULUM = [
 {
   n: 5, key: "pro", title: "Профессия", icon: "🚀",
   desc: "Четыре больших проекта, git и выход из тренажёра в настоящую разработку.",
+  engine: "mini",
   lessons: [
     { id:"quest-1",       title:"Квест: замысел",        sub:"проектируем текстовую игру" },
     { id:"quest-2",       title:"Квест: комнаты",        sub:"структура данных мира" },
@@ -5607,6 +5642,52 @@ print("Приятного аппетита")
     "Порядок печати и есть порядок строк: что должно оказаться в выводе первым, то и стоит выше."
   ],
   note: "Тут порядок держится на двух разных причинах. Первая — зависимость: len(меню) нечего считать, пока меню не создано. Вторая — время: программа печатает ровно в том порядке, в каком идут строки, поэтому пожелание не может стоять выше цикла. А отступ у строки печати прямо показывает, что она повторяется на каждом круге."
+},
+{
+  id: "predict-zip",
+  type: "predict",
+  title: "Зелий меньше, чем героев",
+  emoji: "🧪",
+  tag: "списки",
+  intro: "Героям выдают зелья: имена в одном списке, зелья в другом. Списки разной длины.",
+  brief: "Прочитай программу и запиши, что она напечатает — по строке на каждый print.",
+  code:
+`герои = ["аня", "боря", "вика"]
+зелья = ["лечебное", "силы"]
+for герой, зелье in zip(герои, зелья):
+    print(герой, "берёт", зелье)
+print("выдано:", len(list(zip(герои, зелья))))
+print("героев:", len(герои))
+`,
+  hints: [
+    "zip склеивает списки парами: первый с первым, второй со вторым.",
+    "Пары кончаются там, где кончается более короткий список. Ошибки при этом не будет.",
+    "Посчитай на пальцах, сколько пар успело получиться, — и сравни с тем, сколько героев в списке."
+  ],
+  note: "zip молча останавливается на самом коротком списке. Вика не получила ничего, и программа об этом не сказала ни слова — ошибки нет, просто один круг цикла не случился. Поэтому последние две строки и печатают разные числа: пар вышло 2, а героев 3. Это и есть главная ловушка zip: если списки должны быть одной длины, проверяй это сам через len — zip за тебя не проверит."
+},
+{
+  id: "blocks-zip",
+  type: "blocks",
+  title: "Чек из двух списков",
+  emoji: "🧾",
+  tag: "списки",
+  intro: "Шесть строк перепутаны. Товары в одном списке, цены — в другом.",
+  brief: "Собери программу: сначала заголовок «Чек:», потом строка на каждый товар, в конце итог.",
+  code:
+`цены = [40, 90, 250]
+товары = ["хлеб", "молоко", "сыр"]
+print("Чек:")
+for товар, цена in zip(товары, цены):
+    print(товар, "—", цена)
+print("Итого:", sum(цены))
+`,
+  hints: [
+    "zip нечего склеивать, пока оба списка не созданы.",
+    "Заголовок печатается один раз и до строк товаров, а итог — один раз и после них.",
+    "Отступ у одной строки говорит сам за себя: она работает внутри цикла, значит идёт сразу за ним."
+  ],
+  note: "Два списка можно поставить в любом порядке между собой — они друг от друга не зависят. А вот строка с zip обязана стоять после обоих: склеивать нечего, пока списков нет. Дальше решает время печати: «Чек:» выводится один раз до товаров, поэтому стоит выше цикла, а «Итого» — один раз после, поэтому ниже и без отступа. Строка с отступом одна, и она внутри цикла — печатается на каждом круге."
 }
 ];
 
@@ -5614,7 +5695,7 @@ print("Приятного аппетита")
 
 <script>
 /* ============================================================
-   Раздел «Ты и ИИ» — восемь упражнений про то, как быть человеком,
+   Раздел «Ты и ИИ» — одиннадцать упражнений про то, как быть человеком,
    который командует ИИ: точно ставить задачу, читать чужой код и
    проверять результат. Отдельный раздел рядом с «Играми» и «Разминкой»,
    ВНЕ сотни уроков: прогресс хранится в S.ailab и звёзды не трогает.
@@ -5623,23 +5704,44 @@ print("Приятного аппетита")
    в упражнении. Судья правды — наш мини-движок: он реально запускает
    «код от ИИ» и показывает, где тот падает или врёт.
 
-   Три типа заданий (все уже есть в движке):
+   Четыре типа заданий:
      - "predict"  — прочитай код, до запуска напиши вывод (как в разминке);
                     правильный ответ — это вывод программы w.code.
      - "fix"      — сломанный код, найди и почини одну поломку (как в уроках);
                     starter обязан работать НЕ так, как solution.
      - "code"     — напиши код по заготовке (как в уроках);
                     проверка — вывод совпал с выводом solution.
+     - "review"   — вердикт: ребёнку НЕ говорят заранее, сломан ли код.
+                    Он читает, запускает, пробует свои данные — и сам решает,
+                    верен код или нет. Это единственный тип, где ответ
+                    «работает верно» бывает правильным.
+
+   Как устроен "review". Обещание ИИ лежит в claim, его код — в code
+   (вместе с его собственным примером). Рядом truth — правильная версия
+   с тем же интерфейсом и тем же примером, и probe — несколько своих
+   проверок, которые дописываются и к code, и к truth. Вердикт из этих
+   трёх полей ВЫЧИСЛЯЕТСЯ, а не объявляется на глазок:
+
+     вывод code ≠ вывод truth                    → "wrong"  (врёт сразу)
+     выводы совпали, а с probe разошлись         → "partly" (не всегда)
+     совпали и там, и там                        → "ok"     (работает верно)
+
+   Поле verdict в записи — это тот же ответ, записанный руками для игры;
+   tests/lessons.js вычисляет его сам и падает, если содержание врёт.
+   Поэтому подделать «правильный ответ» здесь нельзя.
 
    Что обязано быть у каждой записи (проверяют tests/):
      общие: id, type, title, emoji, tag, intro, brief, hints[], note
      predict: code (запускается без ошибок, что-то печатает, совпадает с python3)
      code:    starter (запускается), solution (запускается), опц. needCode/needMsg
      fix:     starter (СЛОМАН), solution (работает), symptom, опц. fixBudget
+     review:  claim, code, truth, probe, verdict; badLine — номер сломанной
+              строки, обязателен при wrong/partly и запрещён при ok
 
-   Правило из заметки docs/ai-module.md: урок №5 про «выдуманную функцию»
-   специально падает с ошибкой — поэтому он "fix" (там сломанный код ожидаем),
-   а не "predict" (предсказывать нечего, если программа не запускается).
+   Правило из заметки docs/ai-module.md: упражнение про «выдуманную функцию»
+   (ai-hallucination) специально падает с ошибкой — поэтому оно "fix" (там
+   сломанный код ожидаем), а не "predict": предсказывать нечего, если
+   программа не запускается.
    ============================================================ */
 window.AILAB = [
 
@@ -5724,7 +5826,137 @@ print(итог)
   note: "Функция считает площадь одной комнаты, цикл складывает три: 12 + 10 + 36 = 58. Чтобы это понять, запускать не нужно — достаточно прочитать код по шагам. Ровно так ты и проверяешь работу ИИ."
 },
 
-/* 4. ИИ ошибся в логике — почини · проверка + починка · fix */
+/* 4. Врёт сразу · вердикт · review */
+{
+  id: "ai-verdict-wrong",
+  type: "review",
+  title: "Первый вердикт",
+  emoji: "⚖️",
+  tag: "выносим вердикт",
+  intro: "Раньше тебе говорили заранее: «код сломан, чини». В жизни так не бывает — ИИ отдаёт код и уверяет, что всё хорошо. Решать, так ли это, придётся тебе.",
+  brief: "Прочитай код и его обещание. Запусти, если хочешь: движок покажет правду. Потом вынеси вердикт — и, если код врёт, ткни в строку, где поломка.",
+  claim: "Функция считает, сколько слов в строке.",
+  code:
+`def сколько_слов(текст):
+    """Считает, сколько слов в строке."""
+    return len(текст)
+
+
+print(сколько_слов("мама мыла раму"))
+`,
+  truth:
+`def сколько_слов(текст):
+    """Считает, сколько слов в строке."""
+    return len(текст.split())
+
+
+print(сколько_слов("мама мыла раму"))
+`,
+  probe:
+`print(сколько_слов("привет"))
+print(сколько_слов("а б"))
+`,
+  verdict: "wrong",
+  badLine: 3,
+  hints: [
+    "Сначала посчитай слова в строке «мама мыла раму» сам. Сколько их?",
+    "Теперь посмотри, что печатает программа. Столько же?",
+    "len от строки — это длина строки в знаках, а не число слов. Ищи строку, где считается длина."
+  ],
+  note: "len(текст) — это длина строки в знаках: у «мама мыла раму» их четырнадцать. Слов же три, и разбить строку на слова умеет split(). Обещание в кавычках под def выглядит солидно, но обещание — это не проверка: врёт код или нет, решает запуск. Этот врёт сразу, на своём же примере."
+},
+
+/* 5. Работает, но не всегда · вердикт · review */
+{
+  id: "ai-verdict-partly",
+  type: "review",
+  title: "На своём примере — верно",
+  emoji: "🎣",
+  tag: "выносим вердикт",
+  intro: "Самый частый и самый опасный случай. ИИ показывает код вместе с примером — и на этом примере всё сходится. Именно поэтому его и принимают не глядя.",
+  brief: "Вынеси вердикт. Подсказка от тимлида: не верь примеру, который выбрал сам автор, — подставь свои числа.",
+  claim: "Функция считает среднее значение любого списка чисел.",
+  code:
+`def среднее(числа):
+    """Считает среднее значение списка чисел."""
+    сумма = 0
+    for ч in числа:
+        сумма = сумма + ч
+    return сумма / 3
+
+
+print(среднее([10, 20, 30]))
+`,
+  truth:
+`def среднее(числа):
+    """Считает среднее значение списка чисел."""
+    сумма = 0
+    for ч in числа:
+        сумма = сумма + ч
+    return сумма / len(числа)
+
+
+print(среднее([10, 20, 30]))
+`,
+  probe:
+`print(среднее([4, 6]))
+print(среднее([7]))
+`,
+  verdict: "partly",
+  badLine: 6,
+  hints: [
+    "Проверь код на его примере: (10 + 20 + 30) / 3 = 20. Сходится.",
+    "А теперь допиши своей рукой print(среднее([4, 6])) и запусти. Среднее двух чисел 4 и 6 — это 5?",
+    "Сумма считается правильно, а делится всегда на одно и то же число. Откуда там взялась тройка?"
+  ],
+  note: "Делить надо на количество чисел — len(числа), а не на три. Тройка подошла к примеру автора и только к нему: на списке из двух чисел ответ уже неверный. Это главная ловушка кода от ИИ — он почти всегда работает на том примере, который показывают вместе с ним. Проверять надо своими данными, а не авторскими."
+},
+
+/* 6. Работает верно · вердикт · review */
+{
+  id: "ai-verdict-ok",
+  type: "review",
+  title: "А тут всё честно",
+  emoji: "✅",
+  tag: "выносим вердикт",
+  intro: "Проверять — не значит подозревать всех подряд. Иногда ИИ пишет ровно то, что обещал, и трогать его код не нужно. Признать это — тоже работа проверяющего.",
+  brief: "Тот же вопрос, тот же порядок: прочитай, запусти, вынеси вердикт. Ответ «работает верно» тут такой же полноправный, как и остальные.",
+  claim: "Функция возвращает самое длинное слово списка.",
+  code:
+`def самое_длинное(слова):
+    """Возвращает самое длинное слово списка."""
+    лучшее = слова[0]
+    for слово in слова:
+        if len(слово) > len(лучшее):
+            лучшее = слово
+    return лучшее
+
+
+print(самое_длинное(["кот", "бегемот", "пёс"]))
+`,
+  truth:
+`def самое_длинное(слова):
+    """Возвращает самое длинное слово списка."""
+    return max(слова, key=len)
+
+
+print(самое_длинное(["кот", "бегемот", "пёс"]))
+`,
+  probe:
+`print(самое_длинное(["один"]))
+print(самое_длинное(["аа", "бб"]))
+print(самое_длинное(["я", "мы", "они"]))
+`,
+  verdict: "ok",
+  hints: [
+    "Начни с того, за что обычно и цепляются: лучшее = слова[0] — почему первое слово, а не пустая строка?",
+    "Подставь свои списки: из одного слова, из двух одинаковой длины, из трёх разной.",
+    "Если ни один твой пример не разошёлся с обещанием — так и скажи. «Работает верно» — это ответ, а не отказ отвечать."
+  ],
+  note: "Код честный. Первое слово взято за лучшее не случайно: с ним сравнение работает и на списке из одного слова, а с пустой строкой пришлось бы держать особый случай. Знак > строгий, поэтому при равной длине остаётся то слово, что встретилось раньше. Проверяющий, который правит и правильный код, мешает работе не меньше того, кто не проверяет вовсе."
+},
+
+/* 7. ИИ ошибся в логике — почини · проверка + починка · fix */
 {
   id: "ai-logic",
   type: "fix",
@@ -5767,7 +5999,7 @@ print(сумма_чётных([1, 2, 3, 4, 5, 6]))
   note: "Код работал и не падал — а результат был неверный. Это самый опасный вид ошибки ИИ: всё выглядит правильно. Поймать такое можно только одним способом — проверить вывод на примере, где ответ известен заранее."
 },
 
-/* 5. ИИ выдумал функцию · галлюцинация · fix (специально падает) */
+/* 8. ИИ выдумал функцию · галлюцинация · fix (специально падает) */
 {
   id: "ai-hallucination",
   type: "fix",
@@ -5798,7 +6030,7 @@ print(sum(оценки) / len(оценки))
   note: "ИИ уверенно вызвал .average() — а такого метода у списков нет, он его придумал. Движок Кодоквеста тут работает как детектор вранья: «уверенно» не значит «правильно». Настоящий способ короткий: sum / len."
 },
 
-/* 6. ИИ уверен, но неправ · проверка вывода · predict */
+/* 9. ИИ уверен, но неправ · проверка вывода · predict */
 {
   id: "ai-confident",
   type: "predict",
@@ -5820,7 +6052,7 @@ print(x // y)   # ИИ уверял, что здесь будет 2.5
   note: "// — это деление нацело, оно отбрасывает дробную часть: 5 // 2 = 2, а не 2.5. ИИ спутал // (нацело) и / (обычное деление). Комментарий был уверенным и неверным — а правда видна за одну проверку."
 },
 
-/* 7. Спроси точно · постановка задачи, капстоун · code */
+/* 10. Спроси точно · постановка задачи, капстоун · code */
 {
   id: "ai-spec",
   type: "code",
@@ -5854,7 +6086,7 @@ print("Самая дорогая:", max(цены))
   note: "Ты почувствовал изнутри, как выглядит однозначная задача: каждое слово спецификации превратилось в строку кода. Теперь так же чётко формулируй просьбы к ИИ — и лазеек для «понял по-своему» не останется."
 },
 
-/* 8. Ты — тимлид, ИИ — джун · финальный проект · fix + code · boss */
+/* 11. Ты — тимлид, ИИ — джун · финальный проект · fix + code · boss */
 {
   id: "ai-teamlead",
   type: "fix",
@@ -7129,7 +7361,7 @@ CONTENT.world2 = {
 },
 
 "tuples": {
-  lede: "Кортеж — как список, но менять его нельзя. Именно поэтому им и пользуются.",
+  lede: "Кортеж — как список, но менять его нельзя. Именно поэтому им и пользуются. Заодно познакомимся с zip — он как раз выдаёт кортежи.",
   theory: [
     { h:"Круглые скобки вместо квадратных",
       p:"Всё остальное как у списка: номера с нуля, <code>len</code>, перебор циклом.",
@@ -7141,6 +7373,9 @@ CONTENT.world2 = {
     { h:"Распаковка — сразу по именам",
       p:"Слева столько имён, сколько значений справа. Работает и со списком, который вернул <code>split</code>.",
       demo:'point = (3, 4)\nx, y = point\nprint(x, y)\nyear, month, day = "2026-08-25".split("-")\nprint(day, month, year)' },
+    { h:"Два списка рядом — zip()",
+      p:"<code>zip</code> склеивает два списка парами: первый с первым, второй со вторым. На каждом круге получается кортеж — поэтому его сразу распаковывают в две переменные, как <code>point</code> выше. Списки разной длины — не ошибка: <code>zip</code> остановится на самом коротком и промолчит.",
+      demo:'names = ["аня", "боря", "вика"]\npowers = [7, 9, 4]\nfor name, power in zip(names, powers):\n    print(name, "—", power)\nprint("---")\nprint(list(zip([1, 2, 3], "аб")))' },
     { h:"Кортеж можно взять ключом словаря",
       p:"Списком — нельзя, а кортежем можно, как раз потому что он не меняется. Так хранят карты и поля по координатам.",
       demo:'places = {(0, 0): "старт", (2, 3): "клад"}\nprint(places[(2, 3)])\nfor coord, name in places.items():\n    print(coord, name)' }
@@ -9835,9 +10070,9 @@ CONTENT.world5 = {
 "web-2": {
   lede: "Одной страницы мало. Учим сервер адресам с <b>переменной частью</b> — <code>/герой/аня</code>, <code>/герой/боря</code> — и честному ответу «нет такой страницы».",
   theory: [
-    { h:"Новое: zip — идти по двум спискам сразу",
-      p:"Дальше понадобится сравнивать две части адреса поштучно. <code>zip</code> склеивает списки парами и останавливается на самом коротком. Раньше в курсе он не встречался, поэтому вот он отдельно.",
-      demo:'образец = ["герой", "<имя>"]\nпуть = ["герой", "аня"]\n\nfor о, п in zip(образец, путь):\n    print(о, "против", п)\n\nprint(list(zip([1, 2, 3], "аб")))' },
+    { h:"Вспомним zip — и зачем тут сверять длины",
+      p:"<code>zip</code> был в Мире 2, в уроке «Кортежи»: склеивает два списка парами и <b>молча</b> останавливается на самом коротком. Сейчас эта молчаливость становится опасной. Мы сравниваем адрес с образцом кусок за куском — и если образец <code>/герой/&lt;имя&gt;</code> сверить с коротким путём <code>/герой</code>, выйдет ровно одна пара, она совпадёт, и адрес пройдёт проверку, хотя имени в нём нет. Поэтому в коде ниже длины сверяются <b>до</b> цикла, а не внутри.",
+      demo:'образец = ["герой", "<имя>"]\nпуть = ["герой"]\n\nfor о, п in zip(образец, путь):\n    print(о, "против", п)\n\nprint("пар:", len(list(zip(образец, путь))))\nprint("длины:", len(образец), len(путь))' },
 
     { h:"Адрес с дыркой",
       p:"В образце <code>/герой/&lt;имя&gt;</code> угловые скобки означают «здесь что угодно, и это что угодно передай функции аргументом». Сравнение идёт по кусочкам между <code>/</code>: если кусок в угловых скобках — запоминаем значение, если нет — он обязан совпасть буква в букву. Две мелочи. <code>strip(\"/\")</code> — тот же <code>strip()</code>, только срезает не пробелы, а указанные знаки: без него у каждого адреса появился бы лишний пустой кусок. И осторожно с ответом: пустой список <code>[]</code> здесь значит «подошло, аргументов нет», а <code>None</code> — «не подошло». В <code>if</code> они оба ложные, поэтому проверять надо именно <code>is None</code>.",
@@ -12744,11 +12979,12 @@ function winWarmup(w){
 }
 
 /* ================= раздел: «Ты и ИИ» =================
-   Восемь упражнений про то, как командовать ИИ: точно ставить задачу,
+   Одиннадцать упражнений про то, как командовать ИИ: точно ставить задачу,
    читать чужой код, проверять результат. Отдельный раздел, вне сотни.
    Прогресс в S.ailab (объединяется при слиянии), звёзд и XP не даёт.
    Внутри — гибрид механик: predict открывается студией разминки,
-   а code/fix — студией уроков. Контент — js/ailab.js (window.AILAB).
+   code/fix — студией уроков, а review добавляет к студии панель вердикта.
+   Контент — js/ailab.js (window.AILAB).
    ============================================================ */
 function ailabList(){ return (window.AILAB || []); }
 function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
@@ -12795,24 +13031,31 @@ function openAILesson(id){
 
   var isPredict = x.type === "predict";
   var isFix = x.type === "fix";
-  var kindLabel = isPredict ? "угадай вывод" : (isFix ? "почини код ИИ" : "напиши код");
+  var isReview = x.type === "review";
+  var kindLabel = isPredict ? "угадай вывод"
+                : isFix ? "почини код ИИ"
+                : isReview ? "вынеси вердикт" : "напиши код";
 
   var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
     '<div class="right"><span class="tag">' + esc(x.tag) + '</span></div></div>' +
     '<p class="lede">' + esc(x.intro) + '</p>';
 
-  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
+  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини"
+                                       : isReview ? "⚖️ Задача: вынеси вердикт" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
     (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
 
   var bug = isFix
     ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + esc(x.symptom) + '</p>' +
       '<span class="bugtip">Код ниже нужно проверить и починить, а не переписать заново. Кнопка «↩ Вернуть как было» вернёт исходный вариант от ИИ.</span></div>'
+    : isReview
+    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
+      '<span class="claimtip">Никто не сказал тебе заранее, правда это или нет — в этом и задание. Код можно запускать и менять как угодно: дописывай свои проверки, подставляй свои данные. Вердикт ниже.</span></div>'
     : "";
 
   var hints = '<div class="hintbox">' +
     '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    (isPredict ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
+    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
     '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
     '<div class="hintout" id="hintout"></div>';
 
@@ -12820,11 +13063,21 @@ function openAILesson(id){
     (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
     (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
-  app.innerHTML = head + goal + bug + '<div id="studio"></div>' + hints + pager;
+  app.innerHTML = head + goal + bug + '<div id="studio"></div>' +
+    (isReview ? reviewPanelHTML() : "") + hints + pager;
 
   var studio;
   if (isPredict){
     studio = makePredictStudio({ code: x.code, check: function(ed, showMsg){ runAIPredict(x, ed, showMsg); } });
+  } else if (isReview){
+    /* Кнопки «Проверить» тут нет намеренно: проверка — это вердикт ниже, а
+       студия нужна как лаборатория. Ребёнок вправе дописывать свои строки и
+       ломать код как угодно — «Вернуть как было» вернёт вариант от ИИ. */
+    studio = makeStudio({
+      engine: "mini", code: x.code,
+      label: "код от ИИ — читай, запускай, пробуй свои данные",
+      restore: x.code
+    });
   } else {
     studio = makeStudio({
       engine: "mini", code: x.starter,
@@ -12836,6 +13089,7 @@ function openAILesson(id){
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
 
+  if (isReview) wireReview(x);
   wireHint(x.hints);
   var solb = document.getElementById("solbtn");
   if (solb) solb.onclick = function(){
@@ -12892,7 +13146,125 @@ function runAICheck(x, ed, showMsg){
   winAI(x);
 }
 
-function winAI(x){
+/* ===== review: вердикт вместо починки =====
+   Единственный тип в разделе, где ребёнку НЕ говорят заранее, сломан ли код.
+   Три ответа, а не два: «врёт сразу» и «работает, но не всегда» — разные
+   вещи, и вторая как раз про код от ИИ, который сходится на примере автора
+   и разъезжается на любом другом. Угадать с трёх попыток трудно, а после
+   верного вердикта «врёт» надо ещё ткнуть в строку — там вариантов ещё
+   больше. Что верно на самом деле, знает не текст задания, а движок: см.
+   reviewTruth() и вычисление вердикта в tests/lessons.js. */
+var VERDICTS = [
+  { v:"ok",     label:"Работает верно",           sub:"делает обещанное на любых данных" },
+  { v:"partly", label:"Работает, но не всегда",   sub:"на своём примере верно, на других врёт" },
+  { v:"wrong",  label:"Врёт сразу",               sub:"расходится с обещанием на своём же примере" }
+];
+
+function reviewPanelHTML(){
+  return '<div class="verdict" id="verdict"><h3>⚖️ Твой вердикт</h3>' +
+    '<p>Прочитал, запустил, попробовал свои данные — теперь решай. Ответ «работает верно» тут такой же настоящий, как и остальные.</p>' +
+    '<div class="vbtns">' +
+    VERDICTS.map(function(o){
+      return '<button class="vbtn" data-v="' + o.v + '"><b>' + o.label + '</b><span>' + o.sub + '</span></button>';
+    }).join("") +
+    '</div><div class="msg" id="vmsg"></div><div class="vpick" id="vpick"></div></div>';
+}
+
+/* Что происходит на самом деле: гоняем код ИИ и правильную версию на одних и
+   тех же данных. Своим примером ИИ считается вывод code без probe, чужими —
+   с probe. Ошибку тоже считаем ответом: код, который падает, обещания не
+   исполняет. */
+function reviewRun(src){
+  var res = Runtime.get("mini").run(src, {});
+  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
+}
+function reviewTruth(x){
+  var own  = reviewRun(x.code)                  !== reviewRun(x.truth);
+  var wide = reviewRun(x.code + "\n" + x.probe) !== reviewRun(x.truth + "\n" + x.probe);
+  return own ? "wrong" : (wide ? "partly" : "ok");
+}
+
+/* Доказательство для победной карточки: на чём именно код разошёлся с
+   обещанием. Для «работает верно» показывать нечего — там и не разошёлся. */
+function reviewProof(x, real){
+  if (real === "ok") return "";
+  var suffix = real === "wrong" ? "" : "\n" + x.probe;
+  var got  = reviewRun(x.code  + suffix).split("\n");
+  var want = reviewRun(x.truth + suffix).split("\n");
+  while (got.length  && got[got.length-1]  === "") got.pop();
+  while (want.length && want[want.length-1] === "") want.pop();
+  return '<div class="proof"><u>' +
+    (real === "wrong" ? "Вот на его же примере" : "Вот на других данных") +
+    '</u>' + diffBlock(want, got) + '</div>';
+}
+
+function vmsg(cls, html){
+  var m = document.getElementById("vmsg");
+  if (!m) return;
+  m.className = "msg show " + cls;
+  m.innerHTML = html;
+}
+
+/* Почему ответ не подошёл — по возможности объясняем причину, а не просто
+   «неверно»: намёк должен двигать к проверке, а не к перебору кнопок. */
+function verdictNudge(said, real){
+  if (said === "ok")
+    return "<b>Не так быстро</b>Ты решил, что всё в порядке. Возьми свои данные, а не авторские: допиши в код свою строку с вызовом и запусти. Если хоть на одном примере вывод расходится с обещанием — вердикт другой.";
+  if (real === "ok")
+    return "<b>Тут подозрение напрасно</b>Ты решил, что код где-то врёт. Тогда покажи это себе: найди данные, на которых он расходится с обещанием. Не находится ни одних — значит вердикт другой.";
+  if (said === "wrong" && real === "partly")
+    return "<b>Почти, но нет</b>«Врёт сразу» значит, что ошибка видна на том самом примере, который показал автор. Запусти код как есть: на его примере ответ верный. Значит врёт он не сразу.";
+  return "<b>Почти, но нет</b>«Работает, но не всегда» значит, что на примере автора всё сходится. Запусти код как есть и сравни вывод с обещанием — сходится ли?";
+}
+
+function wireReview(x){
+  var panel = document.getElementById("verdict");
+  if (!panel) return;
+  /* Правильный ответ СЧИТАЕМ движком, а не берём из x.verdict. Поле в
+     содержании остаётся, но служит страховкой: tests/lessons.js сверяет его
+     с этим же вычислением и падает, если они разошлись. Так «правильный
+     ответ» невозможно записать неверно — его определяет запуск кода. */
+  var real = reviewTruth(x);
+  panel.querySelectorAll(".vbtn").forEach(function(b){
+    b.onclick = function(){
+      session.attempts++;
+      var said = b.getAttribute("data-v");
+      panel.querySelectorAll(".vbtn").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (said !== real){
+        document.getElementById("vpick").innerHTML = "";
+        vmsg("bad", verdictNudge(said, real));
+        return;
+      }
+      if (real === "ok"){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("ok", "<b>Вердикт верный</b>Осталось показать, где именно поломка: ткни в строку кода от ИИ.");
+      showLinePicker(x, real);
+    };
+  });
+}
+
+/* Строки берём из x.code, а не из редактора: ребёнок мог там всё переписать,
+   пока проверял, и номера бы разъехались. Пустые строки не кликаются. */
+function showLinePicker(x, real){
+  var box = document.getElementById("vpick");
+  var lines = String(x.code).replace(/\n+$/, "").split("\n");
+  box.innerHTML = '<div class="lines">' +
+    lines.map(function(t, i){
+      var empty = t.trim() === "";
+      return '<button class="lrow' + (empty ? " off" : "") + '"' + (empty ? " disabled" : "") +
+        ' data-line="' + (i+1) + '"><span class="ln">' + (i+1) + '</span><code>' + (hl(t) || "&nbsp;") + '</code></button>';
+    }).join("") + '</div>';
+  box.querySelectorAll(".lrow").forEach(function(b){
+    b.onclick = function(){
+      session.attempts++;
+      var n = +b.getAttribute("data-line");
+      box.querySelectorAll(".lrow").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (n === x.badLine){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("bad", "<b>Строка не та</b>Эта строка делает своё дело правильно. Ищи ту, из-за которой ответ расходится с обещанием: сравни, что в ней написано, с тем, что должно получиться.");
+    };
+  });
+}
+
+function winAI(x, extra){
   S.ailab = S.ailab || {};
   S.ailab[x.id] = 1;
   markActiveToday();                 /* задание раздела держит дневной стрик живым */
@@ -12908,7 +13280,7 @@ function winAI(x){
     '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
   document.getElementById("wincard").innerHTML =
     '<div class="big">' + big + '</div><h2>' + h2 + '</h2>' +
-    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' +
+    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' + (extra || "") +
     '<div class="winrow">' + buttons + '</div>';
   document.getElementById("win").classList.add("show");
   confetti(x.boss ? 3 : 2);
@@ -13981,6 +14353,7 @@ window.__game = {
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
+  reviewTruth: reviewTruth,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

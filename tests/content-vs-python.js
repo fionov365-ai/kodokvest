@@ -48,7 +48,7 @@ function compare(what, code, files, data, stdin){
   let all = code;
   for (const k in srcs) all += "\n" + srcs[k];
   const why = skipReason(all);
-  if (why){ skipped++; return; }
+  if (why){ skipped++; return false; }
   checked++;
   fs.readdirSync(TMP).forEach(n => {
     try { fs.rmSync(path.join(TMP, n), { recursive: true, force: true }); } catch(e){}
@@ -104,8 +104,7 @@ CURRICULUM.forEach(w => {
    поэтому он обязан совпадать с настоящим python3 до знака. */
 let warmups = 0;
 (global.WARMUPS || []).forEach(w => {
-  warmups++;
-  compare("разминка " + w.id, w.code, null, null, null);
+  if (compare("разминка " + w.id, w.code, null, null, null) !== false) warmups++;
 });
 
 /* Раздел «Ты и ИИ»: predict — ответ ребёнку это вывод code; code/fix —
@@ -114,9 +113,21 @@ let warmups = 0;
    по-русски или выдуманный метод, python3 упадёт иначе). */
 let ailab = 0;
 (global.AILAB || []).forEach(x => {
-  ailab++;
-  if (x.type === "predict"){ compare("ты-и-ии " + x.id, x.code, null, null, null); return; }
-  compare("ты-и-ии " + x.id + " · решение", x.solution, null, null, null);
+  if (x.type === "predict"){
+    if (compare("ты-и-ии " + x.id, x.code, null, null, null) !== false) ailab++;
+    return;
+  }
+  /* review: вердикт вычисляется из четырёх запусков, и все четыре обязаны
+     совпасть с настоящим python3. Иначе «правильный ответ» задания зависел бы
+     от особенностей нашего мини-движка, а не от Python. */
+  if (x.type === "review"){
+    if (compare("ты-и-ии " + x.id + " · код ИИ", x.code, null, null, null) !== false) ailab++;
+    compare("ты-и-ии " + x.id + " · правильная версия", x.truth, null, null, null);
+    compare("ты-и-ии " + x.id + " · код ИИ с probe", x.code + "\n" + x.probe, null, null, null);
+    compare("ты-и-ии " + x.id + " · правильная версия с probe", x.truth + "\n" + x.probe, null, null, null);
+    return;
+  }
+  if (compare("ты-и-ии " + x.id + " · решение", x.solution, null, null, null) !== false) ailab++;
   if (x.type === "code") compare("ты-и-ии " + x.id + " · заготовка", x.starter, null, null, null);
 });
 
@@ -126,14 +137,20 @@ let ailab = 0;
 let projsteps = 0;
 (global.PROJECTS || []).forEach(p => {
   (p.steps || []).forEach((step, i) => {
-    projsteps++;
-    compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, null);
+    if (compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, null) !== false)
+      projsteps++;
     if (i === 0 && step.starter !== undefined)
       compare("проект " + p.id + " · заготовка", step.starter, null, null, null);
   });
 });
 
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
-console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ")");
+/* Осторожно с этой строкой: warmups/ailab/projsteps — это сколько таких штук
+   ОТДАНО на сверку, а не сколько пропущено. Раньше они стояли в скобках после
+   слова «пропущено» и читались как его расшифровка — выходило, будто разминки
+   с python3 не сверяются вовсе. */
+console.log("\nсверено с python3: " + checked + " (из них разминок: " + warmups +
+            ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps +
+            "), пропущено как черепашка и случайность: " + skipped);
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 process.exit(bad ? 1 : 0);

@@ -498,6 +498,40 @@ body.focus .lede{display:none}
 .bugcard .bugtip{display:block;font-size:12.5px;color:#a98a9a}
 .demo .bar .hintx.errx{color:var(--warn)}
 
+/* ---------- задание «вынеси вердикт» (тип review в «Ты и ИИ») ---------- */
+.claimcard{background:linear-gradient(150deg,#1d2b4a,#1a2340);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.claimcard h3{margin:0 0 6px;font-size:17px;color:#9fd0ff}
+.claimcard p{margin:0 0 9px;color:#e2e9ff;font-size:16.5px}
+.claimcard .claimtip{display:block;font-size:12.5px;color:var(--faint)}
+.verdict{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:16px 0 0}
+.verdict h3{margin:0 0 6px;font-size:18px}
+.verdict > p{margin:0 0 13px;color:var(--soft);font-size:14.5px}
+.vbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.vbtn{display:block;text-align:left;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;
+      padding:12px 15px;color:var(--ink);cursor:pointer;transition:.15s;font-size:14px}
+.vbtn:hover{border-color:var(--acc);transform:translateY(-1px)}
+.vbtn.on{border-color:var(--acc);background:rgba(124,92,255,.16)}
+.vbtn b{display:block;font-size:15px;margin-bottom:3px}
+.vbtn span{display:block;color:var(--faint);font-size:12.5px;line-height:1.45}
+.vpick{margin-top:12px}
+.lines{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:7px 0;overflow-x:auto}
+.lrow{display:flex;align-items:flex-start;gap:12px;width:100%;background:none;border:0;border-left:3px solid transparent;
+      padding:2px 14px 2px 11px;text-align:left;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.7}
+.lrow:hover{background:rgba(124,92,255,.13);border-left-color:var(--acc)}
+.lrow.on{background:rgba(124,92,255,.2);border-left-color:var(--acc)}
+.lrow.off{cursor:default;opacity:.5}
+.lrow.off:hover{background:none;border-left-color:transparent}
+.lrow .ln{flex:none;width:22px;text-align:right;color:var(--c);user-select:none}
+.lrow code{white-space:pre;color:var(--ink)}
+.proof{margin:12px 0 4px;text-align:left;font-size:13.5px;color:var(--soft)}
+.proof u{display:block;text-decoration:none;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.proof .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;font-family:'JetBrains Mono';font-size:12.5px}
+.proof .cmp div{background:rgba(0,0,0,.32);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.proof .cmp u{margin-bottom:5px}
+@media (max-width:620px){
+  .proof .cmp{grid-template-columns:1fr}
+}
+
 /* ---------- панель наставника ---------- */
 .admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}

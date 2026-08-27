@@ -2567,11 +2567,12 @@ function winWarmup(w){
 }
 
 /* ================= раздел: «Ты и ИИ» =================
-   Восемь упражнений про то, как командовать ИИ: точно ставить задачу,
+   Одиннадцать упражнений про то, как командовать ИИ: точно ставить задачу,
    читать чужой код, проверять результат. Отдельный раздел, вне сотни.
    Прогресс в S.ailab (объединяется при слиянии), звёзд и XP не даёт.
    Внутри — гибрид механик: predict открывается студией разминки,
-   а code/fix — студией уроков. Контент — js/ailab.js (window.AILAB).
+   code/fix — студией уроков, а review добавляет к студии панель вердикта.
+   Контент — js/ailab.js (window.AILAB).
    ============================================================ */
 function ailabList(){ return (window.AILAB || []); }
 function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
@@ -2618,24 +2619,31 @@ function openAILesson(id){
 
   var isPredict = x.type === "predict";
   var isFix = x.type === "fix";
-  var kindLabel = isPredict ? "угадай вывод" : (isFix ? "почини код ИИ" : "напиши код");
+  var isReview = x.type === "review";
+  var kindLabel = isPredict ? "угадай вывод"
+                : isFix ? "почини код ИИ"
+                : isReview ? "вынеси вердикт" : "напиши код";
 
   var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
     '<div class="right"><span class="tag">' + esc(x.tag) + '</span></div></div>' +
     '<p class="lede">' + esc(x.intro) + '</p>';
 
-  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
+  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини"
+                                       : isReview ? "⚖️ Задача: вынеси вердикт" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
     (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
 
   var bug = isFix
     ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + esc(x.symptom) + '</p>' +
       '<span class="bugtip">Код ниже нужно проверить и починить, а не переписать заново. Кнопка «↩ Вернуть как было» вернёт исходный вариант от ИИ.</span></div>'
+    : isReview
+    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
+      '<span class="claimtip">Никто не сказал тебе заранее, правда это или нет — в этом и задание. Код можно запускать и менять как угодно: дописывай свои проверки, подставляй свои данные. Вердикт ниже.</span></div>'
     : "";
 
   var hints = '<div class="hintbox">' +
     '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    (isPredict ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
+    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
     '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
     '<div class="hintout" id="hintout"></div>';
 
@@ -2643,11 +2651,21 @@ function openAILesson(id){
     (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
     (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
-  app.innerHTML = head + goal + bug + '<div id="studio"></div>' + hints + pager;
+  app.innerHTML = head + goal + bug + '<div id="studio"></div>' +
+    (isReview ? reviewPanelHTML() : "") + hints + pager;
 
   var studio;
   if (isPredict){
     studio = makePredictStudio({ code: x.code, check: function(ed, showMsg){ runAIPredict(x, ed, showMsg); } });
+  } else if (isReview){
+    /* Кнопки «Проверить» тут нет намеренно: проверка — это вердикт ниже, а
+       студия нужна как лаборатория. Ребёнок вправе дописывать свои строки и
+       ломать код как угодно — «Вернуть как было» вернёт вариант от ИИ. */
+    studio = makeStudio({
+      engine: "mini", code: x.code,
+      label: "код от ИИ — читай, запускай, пробуй свои данные",
+      restore: x.code
+    });
   } else {
     studio = makeStudio({
       engine: "mini", code: x.starter,
@@ -2659,6 +2677,7 @@ function openAILesson(id){
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
 
+  if (isReview) wireReview(x);
   wireHint(x.hints);
   var solb = document.getElementById("solbtn");
   if (solb) solb.onclick = function(){
@@ -2715,7 +2734,125 @@ function runAICheck(x, ed, showMsg){
   winAI(x);
 }
 
-function winAI(x){
+/* ===== review: вердикт вместо починки =====
+   Единственный тип в разделе, где ребёнку НЕ говорят заранее, сломан ли код.
+   Три ответа, а не два: «врёт сразу» и «работает, но не всегда» — разные
+   вещи, и вторая как раз про код от ИИ, который сходится на примере автора
+   и разъезжается на любом другом. Угадать с трёх попыток трудно, а после
+   верного вердикта «врёт» надо ещё ткнуть в строку — там вариантов ещё
+   больше. Что верно на самом деле, знает не текст задания, а движок: см.
+   reviewTruth() и вычисление вердикта в tests/lessons.js. */
+var VERDICTS = [
+  { v:"ok",     label:"Работает верно",           sub:"делает обещанное на любых данных" },
+  { v:"partly", label:"Работает, но не всегда",   sub:"на своём примере верно, на других врёт" },
+  { v:"wrong",  label:"Врёт сразу",               sub:"расходится с обещанием на своём же примере" }
+];
+
+function reviewPanelHTML(){
+  return '<div class="verdict" id="verdict"><h3>⚖️ Твой вердикт</h3>' +
+    '<p>Прочитал, запустил, попробовал свои данные — теперь решай. Ответ «работает верно» тут такой же настоящий, как и остальные.</p>' +
+    '<div class="vbtns">' +
+    VERDICTS.map(function(o){
+      return '<button class="vbtn" data-v="' + o.v + '"><b>' + o.label + '</b><span>' + o.sub + '</span></button>';
+    }).join("") +
+    '</div><div class="msg" id="vmsg"></div><div class="vpick" id="vpick"></div></div>';
+}
+
+/* Что происходит на самом деле: гоняем код ИИ и правильную версию на одних и
+   тех же данных. Своим примером ИИ считается вывод code без probe, чужими —
+   с probe. Ошибку тоже считаем ответом: код, который падает, обещания не
+   исполняет. */
+function reviewRun(src){
+  var res = Runtime.get("mini").run(src, {});
+  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
+}
+function reviewTruth(x){
+  var own  = reviewRun(x.code)                  !== reviewRun(x.truth);
+  var wide = reviewRun(x.code + "\n" + x.probe) !== reviewRun(x.truth + "\n" + x.probe);
+  return own ? "wrong" : (wide ? "partly" : "ok");
+}
+
+/* Доказательство для победной карточки: на чём именно код разошёлся с
+   обещанием. Для «работает верно» показывать нечего — там и не разошёлся. */
+function reviewProof(x, real){
+  if (real === "ok") return "";
+  var suffix = real === "wrong" ? "" : "\n" + x.probe;
+  var got  = reviewRun(x.code  + suffix).split("\n");
+  var want = reviewRun(x.truth + suffix).split("\n");
+  while (got.length  && got[got.length-1]  === "") got.pop();
+  while (want.length && want[want.length-1] === "") want.pop();
+  return '<div class="proof"><u>' +
+    (real === "wrong" ? "Вот на его же примере" : "Вот на других данных") +
+    '</u>' + diffBlock(want, got) + '</div>';
+}
+
+function vmsg(cls, html){
+  var m = document.getElementById("vmsg");
+  if (!m) return;
+  m.className = "msg show " + cls;
+  m.innerHTML = html;
+}
+
+/* Почему ответ не подошёл — по возможности объясняем причину, а не просто
+   «неверно»: намёк должен двигать к проверке, а не к перебору кнопок. */
+function verdictNudge(said, real){
+  if (said === "ok")
+    return "<b>Не так быстро</b>Ты решил, что всё в порядке. Возьми свои данные, а не авторские: допиши в код свою строку с вызовом и запусти. Если хоть на одном примере вывод расходится с обещанием — вердикт другой.";
+  if (real === "ok")
+    return "<b>Тут подозрение напрасно</b>Ты решил, что код где-то врёт. Тогда покажи это себе: найди данные, на которых он расходится с обещанием. Не находится ни одних — значит вердикт другой.";
+  if (said === "wrong" && real === "partly")
+    return "<b>Почти, но нет</b>«Врёт сразу» значит, что ошибка видна на том самом примере, который показал автор. Запусти код как есть: на его примере ответ верный. Значит врёт он не сразу.";
+  return "<b>Почти, но нет</b>«Работает, но не всегда» значит, что на примере автора всё сходится. Запусти код как есть и сравни вывод с обещанием — сходится ли?";
+}
+
+function wireReview(x){
+  var panel = document.getElementById("verdict");
+  if (!panel) return;
+  /* Правильный ответ СЧИТАЕМ движком, а не берём из x.verdict. Поле в
+     содержании остаётся, но служит страховкой: tests/lessons.js сверяет его
+     с этим же вычислением и падает, если они разошлись. Так «правильный
+     ответ» невозможно записать неверно — его определяет запуск кода. */
+  var real = reviewTruth(x);
+  panel.querySelectorAll(".vbtn").forEach(function(b){
+    b.onclick = function(){
+      session.attempts++;
+      var said = b.getAttribute("data-v");
+      panel.querySelectorAll(".vbtn").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (said !== real){
+        document.getElementById("vpick").innerHTML = "";
+        vmsg("bad", verdictNudge(said, real));
+        return;
+      }
+      if (real === "ok"){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("ok", "<b>Вердикт верный</b>Осталось показать, где именно поломка: ткни в строку кода от ИИ.");
+      showLinePicker(x, real);
+    };
+  });
+}
+
+/* Строки берём из x.code, а не из редактора: ребёнок мог там всё переписать,
+   пока проверял, и номера бы разъехались. Пустые строки не кликаются. */
+function showLinePicker(x, real){
+  var box = document.getElementById("vpick");
+  var lines = String(x.code).replace(/\n+$/, "").split("\n");
+  box.innerHTML = '<div class="lines">' +
+    lines.map(function(t, i){
+      var empty = t.trim() === "";
+      return '<button class="lrow' + (empty ? " off" : "") + '"' + (empty ? " disabled" : "") +
+        ' data-line="' + (i+1) + '"><span class="ln">' + (i+1) + '</span><code>' + (hl(t) || "&nbsp;") + '</code></button>';
+    }).join("") + '</div>';
+  box.querySelectorAll(".lrow").forEach(function(b){
+    b.onclick = function(){
+      session.attempts++;
+      var n = +b.getAttribute("data-line");
+      box.querySelectorAll(".lrow").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (n === x.badLine){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("bad", "<b>Строка не та</b>Эта строка делает своё дело правильно. Ищи ту, из-за которой ответ расходится с обещанием: сравни, что в ней написано, с тем, что должно получиться.");
+    };
+  });
+}
+
+function winAI(x, extra){
   S.ailab = S.ailab || {};
   S.ailab[x.id] = 1;
   markActiveToday();                 /* задание раздела держит дневной стрик живым */
@@ -2731,7 +2868,7 @@ function winAI(x){
     '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
   document.getElementById("wincard").innerHTML =
     '<div class="big">' + big + '</div><h2>' + h2 + '</h2>' +
-    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' +
+    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' + (extra || "") +
     '<div class="winrow">' + buttons + '</div>';
   document.getElementById("win").classList.add("show");
   confetti(x.boss ? 3 : 2);
@@ -3804,6 +3941,7 @@ window.__game = {
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
+  reviewTruth: reviewTruth,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

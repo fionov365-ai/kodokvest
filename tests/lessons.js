@@ -81,6 +81,28 @@ function drawingKey(segs){
 let problems = 0, lessons = 0, demos = 0, fixes = 0;
 const say = m => { problems++; console.log(m); };
 
+/* Каждый мир обязан назвать движок явно. Раньше у Мира 5 поля engine не было:
+   уроки получали engine: undefined и молча падали в mini через фолбэк
+   Runtime.get(). Работало верно, но неявно — а когда подключат Pyodide, именно
+   в таком мире и не заметят, что движок выбран не тем, кем думали.
+   Список известных имён читаем из самого runtime.js, чтобы тест не разошёлся
+   с движком. */
+{
+  const rt = fs.readFileSync(path.join(root, "js/runtime.js"), "utf8");
+  const known = (rt.match(/name:\s*"([^"]+)"/g) || [])
+    .map(m => m.replace(/name:\s*"([^"]+)"/, "$1"));
+  if (!known.length) say("[схема] в js/runtime.js не нашлось ни одного адаптера — тест ослеп");
+  CURRICULUM.forEach(w => {
+    if (!w.engine) say(`[схема] мир ${w.n}: не указан engine — движок выберется неявно`);
+    else if (w.engine !== "mixed" && known.indexOf(w.engine) < 0)
+      say(`[схема] мир ${w.n}: engine «${w.engine}» не зарегистрирован в runtime.js`);
+    w.lessons.forEach(l => {
+      if (l.engine && l.engine !== "mixed" && known.indexOf(l.engine) < 0)
+        say(`[схема] ${l.id}: engine «${l.engine}» не зарегистрирован в runtime.js`);
+    });
+  });
+}
+
 CURRICULUM.forEach(w => {
   const c = CONTENT["world" + w.n];
   if (!c) return;
@@ -262,8 +284,8 @@ const seenAI = {};
   if (!x.id) say(`[ты-и-ии] у задания нет id`);
   else if (seenAI[x.id]) say(`[ты-и-ии] ${id}: повтор id`);
   seenAI[x.id] = 1;
-  if (!["predict", "code", "fix"].includes(x.type))
-    say(`[ты-и-ии] ${id}: type должен быть predict/code/fix, а он «${x.type}»`);
+  if (!["predict", "code", "fix", "review"].includes(x.type))
+    say(`[ты-и-ии] ${id}: type должен быть predict/code/fix/review, а он «${x.type}»`);
   ["title", "emoji", "tag", "intro", "brief", "note"].forEach(f => {
     if (!x[f] || !String(x[f]).trim()) say(`[ты-и-ии] ${id}: пустое поле «${f}»`);
   });
@@ -276,6 +298,72 @@ const seenAI = {};
     if (r.error) say(`[ты-и-ии] ${id}: программа падает — ${r.error.kind}: ${r.error.msg}`);
     else if (!r.output || !r.output.trim())
       say(`[ты-и-ии] ${id}: программа ничего не печатает — предсказывать нечего`);
+    return;
+  }
+
+  /* review: «вынеси вердикт». Правильный ответ тут не объявляют, а ВЫЧИСЛЯЮТ
+     запуском — иначе содержание могло бы врать ребёнку, и никто бы не заметил.
+     Считаем ровно так же, как reviewTruth() в app.js: вывод кода от ИИ против
+     вывода правильной версии, сначала на примере автора, потом с probe. */
+  if (x.type === "review"){
+    for (const f of ["claim", "code", "truth", "probe", "verdict"])
+      if (x[f] === undefined || !String(x[f]).trim())
+        return say(`[ты-и-ии] ${id}: у review нет поля «${f}»`);
+    if (!["ok", "wrong", "partly"].includes(x.verdict))
+      return say(`[ты-и-ии] ${id}: verdict должен быть ok/wrong/partly, а он «${x.verdict}»`);
+    if (String(x.code).trim() === String(x.truth).trim())
+      say(`[ты-и-ии] ${id}: truth дословно совпал с code — тогда он ничего не проверяет`);
+
+    const out = src => {
+      const r = MP.run(src, { stdin: [] });
+      return r.error ? "!" + r.error.kind + ": " + r.error.msg : r.output;
+    };
+    const tr = MP.run(x.truth, { stdin: [] });
+    if (tr.error)
+      say(`[ты-и-ии] ${id}: правильная версия (truth) падает — ${tr.error.kind}: ${tr.error.msg}`);
+    else if (!tr.output || !tr.output.trim())
+      say(`[ты-и-ии] ${id}: truth ничего не печатает — сравнивать будет нечего`);
+    const trProbe = MP.run(x.truth + "\n" + x.probe, { stdin: [] });
+    if (trProbe.error)
+      say(`[ты-и-ии] ${id}: truth с probe падает — ${trProbe.error.kind}: ${trProbe.error.msg}`);
+    else if (trProbe.output === tr.output)
+      say(`[ты-и-ии] ${id}: probe ничего не добавил к выводу — проверка пустая`);
+
+    const own  = out(x.code) !== out(x.truth);
+    const wide = out(x.code + "\n" + x.probe) !== out(x.truth + "\n" + x.probe);
+    const real = own ? "wrong" : (wide ? "partly" : "ok");
+    if (real !== x.verdict)
+      say(`[ты-и-ии] ${id}: в записи verdict «${x.verdict}», а по запуску выходит «${real}» — содержание врёт ребёнку`);
+
+    if (real === "ok"){
+      if (x.badLine !== undefined)
+        say(`[ты-и-ии] ${id}: код верный, а badLine указан — тыкать будет некуда`);
+      return;
+    }
+
+    /* badLine мы не принимаем на слово: и содержание, и игра сверяются с одним
+       и тем же числом, так что неверный номер прошёл бы незамеченным. Поэтому
+       выводим его сами — из разницы между кодом ИИ и правильной версией. Заодно
+       это требует, чтобы поломка была ОДНА: иначе у ребёнка два правильных
+       ответа, а игра примет только один. */
+    const rstrip = t => String(t).replace(/\n+$/, "").split("\n").map(v => v.replace(/\s+$/, ""));
+    const cl = rstrip(x.code), tl = rstrip(x.truth);
+    let diff = [];
+    if (cl.length === tl.length){
+      cl.forEach((t, i) => { if (t !== tl[i]) diff.push(i + 1); });
+    } else {
+      cl.forEach((t, i) => { if (t.trim() && tl.indexOf(t) < 0) diff.push(i + 1); });
+    }
+    if (typeof x.badLine !== "number")
+      say(`[ты-и-ии] ${id}: код неверный, а badLine не указан`);
+    else if (x.badLine < 1 || x.badLine > cl.length)
+      say(`[ты-и-ии] ${id}: badLine ${x.badLine} вне кода (строк всего ${cl.length})`);
+    else if (!cl[x.badLine - 1].trim())
+      say(`[ты-и-ии] ${id}: badLine ${x.badLine} — пустая строка, в неё нельзя ткнуть`);
+    if (diff.length !== 1)
+      say(`[ты-и-ии] ${id}: код ИИ и правильная версия расходятся в ${diff.length} строках (${diff.join(", ") || "ни в одной"}) — поломка должна быть одна, иначе верных ответов несколько`);
+    else if (typeof x.badLine === "number" && diff[0] !== x.badLine)
+      say(`[ты-и-ии] ${id}: badLine указывает на строку ${x.badLine}, а с правильной версией расходится строка ${diff[0]}`);
     return;
   }
 

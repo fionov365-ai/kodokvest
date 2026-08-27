@@ -680,7 +680,7 @@ function checkEncoding(){
   }
 
   /* --- раздел «Ты и ИИ»: верный ответ засчитывается, неверный — нет --- */
-  let ailabChecked = 0;
+  let ailabChecked = 0, reviewChecked = 0;
   const AILAB = w.AILAB || [];
   if (!AILAB.length) bad("[ты-и-ии] список пуст — js/ailab.js не подключён");
   async function attemptAI(id, text){
@@ -697,8 +697,69 @@ function checkEncoding(){
     if (res.ok) closeWin();
     return res;
   }
+  /* review: тут проверять надо не текст в редакторе, а вердикт. Порядок такой
+     же, как у ребёнка: неверный ответ не засчитывается, верный ведёт к выбору
+     строки, и только верная строка приносит победу. */
+  async function attemptReview(x){
+    w.__game.openAILesson(x.id);
+    await tick();
+    const panel = doc.getElementById("verdict");
+    if (!panel) return bad(`[ты-и-ии] ${x.id}: у review нет панели вердикта`);
+    if (studioOf() && studioOf().querySelector('[data-role="check"]'))
+      bad(`[ты-и-ии] ${x.id}: у review осталась кнопка «Проверить» — проверка это вердикт`);
+    if (!doc.querySelector(".claimcard"))
+      bad(`[ты-и-ии] ${x.id}: не показано обещание ИИ (claim)`);
+
+    const real = w.__game.reviewTruth(x);
+    if (real !== x.verdict)
+      bad(`[ты-и-ии] ${x.id}: app считает вердикт «${real}», а в содержании «${x.verdict}»`);
+
+    const vbtn = v => panel.querySelector('.vbtn[data-v="' + v + '"]');
+    for (const v of ["ok", "wrong", "partly"]){
+      if (!vbtn(v)) return bad(`[ты-и-ии] ${x.id}: нет кнопки вердикта «${v}»`);
+      if (v === x.verdict) continue;
+      vbtn(v).click();
+      await tick();
+      if (won()){ bad(`[ты-и-ии] ${x.id}: неверный вердикт «${v}» засчитан`); closeWin(); return; }
+      if (doc.querySelectorAll("#vpick .lrow").length)
+        bad(`[ты-и-ии] ${x.id}: после неверного вердикта «${v}» открылся выбор строки`);
+    }
+
+    vbtn(x.verdict).click();
+    await tick();
+    if (x.verdict === "ok"){
+      if (!won()) return bad(`[ты-и-ии] ${x.id}: верный вердикт «работает верно» не засчитан`);
+      if (doc.querySelectorAll("#vpick .lrow").length)
+        bad(`[ты-и-ии] ${x.id}: код верный, а выбор строки всё равно открылся`);
+      closeWin();
+      return true;
+    }
+    if (won()){ closeWin(); return bad(`[ты-и-ии] ${x.id}: вердикт засчитан без указания строки`); }
+    const rows = [...doc.querySelectorAll("#vpick .lrow")];
+    if (!rows.length) return bad(`[ты-и-ии] ${x.id}: после верного вердикта не открылся выбор строки`);
+    const right = rows.filter(r => +r.getAttribute("data-line") === x.badLine)[0];
+    if (!right) return bad(`[ты-и-ии] ${x.id}: строки ${x.badLine} нет среди выбираемых`);
+    const wrongRow = rows.filter(r => r !== right && !r.disabled)[0];
+    if (!wrongRow) return bad(`[ты-и-ии] ${x.id}: выбирать не из чего — одна строка`);
+    wrongRow.click();
+    await tick();
+    if (won()){ closeWin(); return bad(`[ты-и-ии] ${x.id}: победа за неверную строку`); }
+    right.click();
+    await tick();
+    if (!won()) return bad(`[ты-и-ии] ${x.id}: верная строка ${x.badLine} не принесла победу`);
+    /* доказательство в победной карточке: на чём именно код разошёлся */
+    if (!doc.querySelector("#wincard .proof"))
+      bad(`[ты-и-ии] ${x.id}: в победной карточке нет доказательства (.proof)`);
+    closeWin();
+    return true;
+  }
+
   for (const x of AILAB){
     let good, wr;
+    if (x.type === "review"){
+      if (await attemptReview(x) === true){ ailabChecked++; reviewChecked++; }
+      continue;
+    }
     if (x.type === "predict"){
       const correct = w.Runtime.get("mini").run(x.code, {}).output;
       good = await attemptAI(x.id, correct);
@@ -1067,7 +1128,8 @@ function checkEncoding(){
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
-  console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}`);
+  console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}` +
+              ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length})`);
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
