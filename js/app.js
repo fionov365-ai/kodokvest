@@ -35,7 +35,7 @@ var ADMIN_CODE = "kodokvest-2026";
 /* ================= сохранение ================= */
 var KEY = "kodokvest_v2";
 var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{},
+          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{}, ailab:{},
           days:{}, daily:{}, schedule:{ days:[] }, name:"", admin:{ unlockAll:false } };
 try {
   var raw = localStorage.getItem(KEY);
@@ -55,6 +55,7 @@ try {
 } catch(e){}
 if (!S.log || typeof S.log !== "object") S.log = {};
 if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
+if (!S.ailab || typeof S.ailab !== "object") S.ailab = {};
 if (!S.days || typeof S.days !== "object") S.days = {};
 if (!S.daily || typeof S.daily !== "object") S.daily = {};
 if (!S.schedule || typeof S.schedule !== "object") S.schedule = { days:[] };
@@ -230,7 +231,7 @@ function slugFromName(name){
    смешать двух детей на одном устройстве. Настройки устройства (admin) не трогаем. */
 function resetProgressLocal(){
   S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.days = {}; S.daily = {};
+  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.ailab = {}; S.days = {}; S.daily = {};
   S.sandbox = null; S.sandboxRuns = 0; S.name = ""; S.schedule = { days:[] };
   save();
 }
@@ -400,6 +401,13 @@ function mergeProgress(a, b){
   out.warmups = {};
   [a.warmups || {}, b.warmups || {}].forEach(function(src){
     Object.keys(src).forEach(function(k){ if (src[k]) out.warmups[k] = 1; });
+  });
+
+  /* пройденные задания раздела «Ты и ИИ»: тоже объединяем — как разминки,
+     это не звёзды и не входит в сотню уроков. */
+  out.ailab = {};
+  [a.ailab || {}, b.ailab || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out.ailab[k] = 1; });
   });
 
   /* дни занятий и выполненные «задачи дня»: объединяем множества дат.
@@ -2324,6 +2332,193 @@ function winWarmup(w){
   if (wstay) wstay.onclick = closeWin;
 }
 
+/* ================= раздел: «Ты и ИИ» =================
+   Восемь упражнений про то, как командовать ИИ: точно ставить задачу,
+   читать чужой код, проверять результат. Отдельный раздел, вне сотни.
+   Прогресс в S.ailab (объединяется при слиянии), звёзд и XP не даёт.
+   Внутри — гибрид механик: predict открывается студией разминки,
+   а code/fix — студией уроков. Контент — js/ailab.js (window.AILAB).
+   ============================================================ */
+function ailabList(){ return (window.AILAB || []); }
+function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
+
+function screenAILab(){
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var xs = ailabList();
+  var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
+  var h = '<div class="lvlhead"><div><div class="idx">командуй, не подчиняйся</div><h1>🤖 Ты и ИИ</h1></div>' +
+    '<div class="right"><span class="tag">пройдено ' + done + ' из ' + xs.length + '</span></div></div>' +
+    '<p class="lede">Код всё чаще пишет ИИ — и тем дороже три вещи, которые он не забирает: ' +
+    'точно поставить задачу, прочитать чужой код и проверить результат. Здесь ты тренируешь именно их. ' +
+    '«Ответ ИИ» — это заранее написанный код, а судья правды — движок: он запускает его и показывает, где тот врёт. ' +
+    'Раздел вне сотни уроков, звёзды тут не начисляются.</p>' +
+    '<div class="gamegrid">';
+  xs.forEach(function(x){
+    h += '<button class="gamecard" data-id="' + x.id + '">' +
+      '<span class="gemoji">' + x.emoji + '</span>' +
+      '<b>' + esc(x.title) + (x.boss ? ' <span class="wtag">финал</span>' : '') +
+      (ailabDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+      '<span>' + esc(x.intro) + '</span>' +
+      '<span class="wtag">' + esc(x.tag) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openAILesson(id){
+  var xs = ailabList();
+  var x = xs.filter(function(e){ return e.id === id; })[0];
+  if (!x) return screenAILab();
+  stopTimer(); clearAdminHash();
+  session = { id:id, attempts:0, hints:0, shown:false };
+  var pos = xs.indexOf(x);
+  var next = pos < xs.length - 1 ? xs[pos+1] : null;
+  var prev = pos > 0 ? xs[pos-1] : null;
+
+  var isPredict = x.type === "predict";
+  var isFix = x.type === "fix";
+  var kindLabel = isPredict ? "угадай вывод" : (isFix ? "почини код ИИ" : "напиши код");
+
+  var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + esc(x.tag) + '</span></div></div>' +
+    '<p class="lede">' + esc(x.intro) + '</p>';
+
+  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
+    (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
+
+  var bug = isFix
+    ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + esc(x.symptom) + '</p>' +
+      '<span class="bugtip">Код ниже нужно проверить и починить, а не переписать заново. Кнопка «↩ Вернуть как было» вернёт исходный вариант от ИИ.</span></div>'
+    : "";
+
+  var hints = '<div class="hintbox">' +
+    '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    (isPredict ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
+    '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
+    '<div class="hintout" id="hintout"></div>';
+
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем заданиям</button><span class="sp"></span>' +
+    (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
+    (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
+
+  app.innerHTML = head + goal + bug + '<div id="studio"></div>' + hints + pager;
+
+  var studio;
+  if (isPredict){
+    studio = makePredictStudio({ code: x.code, check: function(ed, showMsg){ runAIPredict(x, ed, showMsg); } });
+  } else {
+    studio = makeStudio({
+      engine: "mini", code: x.starter,
+      label: isFix ? "код от ИИ — проверь и почини" : "твой код",
+      restore: isFix ? x.starter : null,
+      check: function(ed, showMsg){ runAICheck(x, ed, showMsg); }
+    });
+  }
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+
+  document.getElementById("hintbtn").onclick = function(){
+    var hs = x.hints || [];
+    if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
+    if (session.hints >= hs.length) return;
+    session.hints++;
+    var out = document.getElementById("hintout");
+    out.className = "hintout show";
+    out.innerHTML = hs.slice(0, session.hints).map(function(s, i){
+      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(s) + '</div>';
+    }).join("");
+    if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
+  };
+  var solb = document.getElementById("solbtn");
+  if (solb) solb.onclick = function(){
+    session.shown = true;
+    studio.editor.setCode(x.solution);
+    studio.showMsg("warn", "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой и запусти. Звёзд в разделе нет — смотреть решение можно без потерь, но сначала попробуй сам.");
+  };
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = function(){ screenAILab(); }; });
+  app.querySelectorAll("[data-next]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-next")); }; });
+  app.querySelectorAll("[data-prev]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-prev")); }; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* predict: правильный ответ — это вывод программы w.code (как в разминке) */
+function runAIPredict(x, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini");
+  var res = eng.run(x.code, {});
+  if (res.error){ showMsg("bad", errHTML(res.error)); return; }
+  session.studio.reveal(res.output);
+  if (normPred(res.output) === normPred(ed.getCode())){
+    winAI(x);
+  } else {
+    showMsg("bad", "<b>Ещё не совпало</b>" + predictDiff(res.output, ed.getCode()) +
+      "Смотри на настоящий вывод справа, найди, где разошлось, и попробуй снова.");
+  }
+}
+
+/* code/fix: вывод должен совпасть с выводом эталона; у fix ещё бюджет правок */
+function runAICheck(x, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini"), code = ed.getCode();
+  if (x.needCode){
+    for (var i = 0; i < x.needCode.length; i++){
+      if (!codeHas(code, x.needCode[i])){ showMsg("warn", "<b>Почти</b>" + (x.needMsg || "Не хватает нужной конструкции.")); return; }
+    }
+  }
+  var res = eng.run(code, {});
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+  var exp = eng.run(x.solution, {}).lines, got = res.lines;
+  if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; }))){
+    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
+    return;
+  }
+  if (x.type === "fix"){
+    var budget = x.fixBudget || (editUnits(x.starter, x.solution) + 1);
+    if (editUnits(x.starter, code) > budget){
+      showMsg("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно. " +
+        "Смысл в другом: найти поломку и тронуть только её. Нажми «↩ Вернуть как было» и попробуй ещё раз.");
+      return;
+    }
+  }
+  winAI(x);
+}
+
+function winAI(x){
+  S.ailab = S.ailab || {};
+  S.ailab[x.id] = 1;
+  markActiveToday();                 /* задание раздела держит дневной стрик живым */
+  save();
+  var xs = ailabList(), pos = xs.indexOf(x);
+  var next = (pos >= 0 && pos < xs.length - 1) ? xs[pos+1] : null;
+  var firstTry = session.attempts === 1 && session.hints === 0 && !session.shown;
+  var big = x.boss ? "🏆" : (firstTry ? "🎯" : "🤖");
+  var h2 = x.boss ? "Проект готов!" : (firstTry ? "Верно, с первого раза!" : "Верно!");
+  var buttons = (next
+      ? '<button class="bigbtn" id="wnext">Следующее →</button>'
+      : '<button class="bigbtn" id="wlist">Ко всем заданиям</button>') +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + big + '</div><h2>' + h2 + '</h2>' +
+    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' +
+    '<div class="winrow">' + buttons + '</div>';
+  document.getElementById("win").classList.add("show");
+  confetti(x.boss ? 3 : 2);
+  var wn = document.getElementById("wnext");
+  if (wn) wn.onclick = function(){ closeWin(); openAILesson(next.id); };
+  var wl = document.getElementById("wlist");
+  if (wl) wl.onclick = function(){ closeWin(); screenAILab(); };
+  document.getElementById("wstay").onclick = closeWin;
+}
+
 /* ================= экран: визуализатор (машина времени) =================
    Прогоняем программу по шагам, на каждом шаге снимаем неизменяемый снимок
    памяти (heapSnapshot в engine-mini): переменные + списки/словари/кортежи/
@@ -2630,6 +2825,7 @@ function routeHash(){
   if ((location.hash || "").toLowerCase() === "#today"){ screenToday(); return true; }
   if ((location.hash || "").toLowerCase() === "#account"){ screenAccount(); return true; }
   if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
+  if ((location.hash || "").toLowerCase() === "#ai"){ screenAILab(); return true; }
   return false;
 }
 function fmtMins(ms){
@@ -3063,6 +3259,7 @@ document.getElementById("btn-sand").onclick = screenSandbox;
 (function(){ var b = document.getElementById("btn-who"); if (b) b.onclick = screenAccount; })();
 (function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
 (function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
+(function(){ var b = document.getElementById("btn-ai"); if (b) b.onclick = screenAILab; })();
 document.getElementById("btn-focus").onclick = function(){
   document.body.classList.toggle("focus");
   this.classList.toggle("on");
@@ -3119,6 +3316,7 @@ window.__game = {
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
   screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
+  screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

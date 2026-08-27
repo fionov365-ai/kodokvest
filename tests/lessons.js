@@ -30,6 +30,7 @@ global.window = global;
 global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -242,6 +243,65 @@ const seenIds = {};
   }
 });
 
-console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}`);
+/* ===== раздел «Ты и ИИ» (predict / code / fix) =====
+   Гибрид механик разминок и уроков, поэтому и проверки гибридные:
+   у всех — общие поля; predict обязан запускаться и печатать; code —
+   заготовка и решение работают; fix — заготовка СЛОМАНА, решение работает,
+   есть symptom, решение отличается на 2..8 правок; needCode проходит эталон. */
+let ailab = 0;
+const seenAI = {};
+(global.AILAB || []).forEach(x => {
+  ailab++;
+  const id = x.id || "(без id)";
+  if (!x.id) say(`[ты-и-ии] у задания нет id`);
+  else if (seenAI[x.id]) say(`[ты-и-ии] ${id}: повтор id`);
+  seenAI[x.id] = 1;
+  if (!["predict", "code", "fix"].includes(x.type))
+    say(`[ты-и-ии] ${id}: type должен быть predict/code/fix, а он «${x.type}»`);
+  ["title", "emoji", "tag", "intro", "brief", "note"].forEach(f => {
+    if (!x[f] || !String(x[f]).trim()) say(`[ты-и-ии] ${id}: пустое поле «${f}»`);
+  });
+  if (!Array.isArray(x.hints) || !x.hints.length)
+    say(`[ты-и-ии] ${id}: нет подсказок (hints)`);
+
+  if (x.type === "predict"){
+    if (!x.code || !x.code.trim()) return say(`[ты-и-ии] ${id}: у predict нет code`);
+    const r = MP.run(x.code, { stdin: [] });
+    if (r.error) say(`[ты-и-ии] ${id}: программа падает — ${r.error.kind}: ${r.error.msg}`);
+    else if (!r.output || !r.output.trim())
+      say(`[ты-и-ии] ${id}: программа ничего не печатает — предсказывать нечего`);
+    return;
+  }
+
+  /* code / fix */
+  if (x.starter === undefined || x.solution === undefined)
+    return say(`[ты-и-ии] ${id}: у ${x.type} нужны starter и solution`);
+  const sol = MP.run(x.solution, { stdin: [] });
+  if (sol.error) say(`[ты-и-ии] ${id}: решение падает — ${sol.error.kind}: ${sol.error.msg}`);
+  const st = MP.run(x.starter, { stdin: [] });
+  if (x.type === "code"){
+    if (st.error) say(`[ты-и-ии] ${id}: заготовка (code) должна запускаться, а падает — ${st.error.kind}: ${st.error.msg}`);
+  } else {
+    const brokenByError = !!st.error;
+    const brokenByResult = !brokenByError && !sol.error && st.output !== sol.output;
+    if (!brokenByError && !brokenByResult)
+      say(`[ты-и-ии] ${id}: задание «починить», а заготовка уже работает правильно — чинить нечего`);
+    if (!x.symptom) say(`[ты-и-ии] ${id}: у «починить» нет поля symptom`);
+    const units = editUnits(x.starter, x.solution);
+    if (units < 2) say(`[ты-и-ии] ${id}: решение почти не отличается от заготовки (${units} правок)`);
+    if (units > 8) say(`[ты-и-ии] ${id}: между заготовкой и решением ${units} правок — это уже не «одна поломка»`);
+    if (x.fixBudget !== undefined && x.fixBudget < units)
+      say(`[ты-и-ии] ${id}: fixBudget ${x.fixBudget} меньше, чем правок в самом решении (${units}) — эталон не пройдёт бюджет`);
+  }
+  (x.needCode || []).forEach(needle => {
+    let ok; try { ok = codeHas(x.solution, needle); }
+    catch (e){ say(`[ты-и-ии] ${id}: needCode «${needle}» не превращается в поиск — ${e.message}`); return; }
+    if (!ok) say(`[ты-и-ии] ${id}: needCode требует «${needle}», а в решении этого нет`);
+  });
+  if (x.needCode && !x.needMsg)
+    say(`[ты-и-ии] ${id}: есть needCode, но нет needMsg — ученик не поймёт, чего от него хотят`);
+});
+
+console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);

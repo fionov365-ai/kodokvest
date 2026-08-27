@@ -516,6 +516,43 @@ function checkEncoding(){
     if (good.ok && !wr.ok) warmupsChecked++;
   }
 
+  /* --- раздел «Ты и ИИ»: верный ответ засчитывается, неверный — нет --- */
+  let ailabChecked = 0;
+  const AILAB = w.AILAB || [];
+  if (!AILAB.length) bad("[ты-и-ии] список пуст — js/ailab.js не подключён");
+  async function attemptAI(id, text){
+    w.__game.openAILesson(id);
+    await tick();
+    const st = studioOf();
+    if (!st) return { ok:false, why:"задание не открылось" };
+    st.editor.setCode(text);
+    const btn = st.querySelector('[data-role="check"]');
+    if (!btn) return { ok:false, why:"нет кнопки «Проверить»" };
+    btn.click();
+    await tick();
+    const res = { ok: won(), why: msgText() };
+    if (res.ok) closeWin();
+    return res;
+  }
+  for (const x of AILAB){
+    let good, wr;
+    if (x.type === "predict"){
+      const correct = w.Runtime.get("mini").run(x.code, {}).output;
+      good = await attemptAI(x.id, correct);
+      if (!good.ok) bad(`[ты-и-ии] ${x.id}: верный ответ не засчитан — ${good.why}`);
+      wr = await attemptAI(x.id, normPred(correct) + "\nэтого-в-выводе-нет");
+      if (wr.ok) bad(`[ты-и-ии] ${x.id}: неверный ответ засчитан как верный`);
+    } else {
+      /* code/fix: эталон засчитывается; исходная заготовка (пустая или сломанная) — нет */
+      good = await attemptAI(x.id, x.solution);
+      if (!good.ok) bad(`[ты-и-ии] ${x.id}: эталонное решение не засчитано — ${good.why}`);
+      wr = await attemptAI(x.id, x.starter);
+      if (wr.ok) bad(`[ты-и-ии] ${x.id}: исходная заготовка засчитана как решение`);
+    }
+    if (good.ok && !wr.ok) ailabChecked++;
+  }
+  viewReset(g);
+
   /* --- визуализатор (машина времени) --- */
   let vizChecked = 0;
   if (typeof g.screenViz === "function"){
@@ -656,6 +693,7 @@ function checkEncoding(){
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
+  console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}`);
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);

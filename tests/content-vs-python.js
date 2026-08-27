@@ -23,6 +23,7 @@ global.window = global;
 global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -106,7 +107,19 @@ let warmups = 0;
   compare("разминка " + w.id, w.code, null, null, null);
 });
 
+/* Раздел «Ты и ИИ»: predict — ответ ребёнку это вывод code; code/fix —
+   правильный вывод задаёт solution. Всё обязано совпасть с python3.
+   Заготовку fix специально НЕ проверяем: она сломана (у нас — ошибка
+   по-русски или выдуманный метод, python3 упадёт иначе). */
+let ailab = 0;
+(global.AILAB || []).forEach(x => {
+  ailab++;
+  if (x.type === "predict"){ compare("ты-и-ии " + x.id, x.code, null, null, null); return; }
+  compare("ты-и-ии " + x.id + " · решение", x.solution, null, null, null);
+  if (x.type === "code") compare("ты-и-ии " + x.id + " · заготовка", x.starter, null, null, null);
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
-console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ")");
+console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ", «Ты и ИИ»: " + ailab + ")");
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 process.exit(bad ? 1 : 0);
