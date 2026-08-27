@@ -33,11 +33,65 @@ var STAR_XP = [0, 25, 60, 100];
    Это защита от случайного нажатия, а не настоящий пароль. */
 var ADMIN_CODE = "kodokvest-2026";
 
-/* ================= сохранение ================= */
+/* ================= сохранение =================
+   Форма прогресса описана ОДИН раз — тремя списками ниже. Раньше её
+   переписывали руками в четырёх местах (загрузка, смена ученика, сброс в
+   панели наставника, загрузка файла), и каждое новое поле забывали хотя бы
+   в двух из них: так S.games и S.gamesPlayed остались вне слияния и вне
+   очистки при смене ученика, а «Сбросить весь прогресс» не сбрасывал
+   разминки и «Ты и ИИ». Добавляешь поле — дописываешь его в один список,
+   и все четыре места узнают о нём сами.
+
+     PROGRESS_MAPS  множества и словари «id → значение»
+     PROGRESS_NUMS  счётчики
+     KEEP_ON_RESET  что НЕ трогает сброс в панели наставника: имя ученика,
+                    расписание и то, что ребёнок сделал сам (песочница,
+                    свои версии игр). Смена ученика чистит и это тоже.
+   ============================================================ */
 var KEY = "kodokvest_v2";
-var S = { v:2, xp:0, stars:{}, badges:[], sandbox:null, sandboxRuns:0,
-          drawDone:{}, firstTry:0, perfect:0, log:{}, warmups:{}, ailab:{},
-          days:{}, daily:{}, schedule:{ days:[] }, name:"", admin:{ unlockAll:false } };
+var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
+                     "days","daily","shields","projects"];
+var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
+var KEEP_ON_RESET = ["games"];
+
+/* пустой прогресс: только структура, без данных */
+function blankProgress(){
+  var o = { v:2, badges:[], sandbox:null, name:"", schedule:{ days:[] } };
+  PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
+  PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
+  return o;
+}
+/* привести объект к нужной форме, ничего не потеряв. Настройки устройства
+   (admin) живут отдельно от прогресса и на сервер не уходят. */
+function ensureShape(o){
+  o.v = 2;
+  PROGRESS_MAPS.forEach(function(k){ if (!o[k] || typeof o[k] !== "object") o[k] = {}; });
+  PROGRESS_NUMS.forEach(function(k){ if (typeof o[k] !== "number") o[k] = 0; });
+  if (!Array.isArray(o.badges)) o.badges = [];
+  if (typeof o.sandbox !== "string") o.sandbox = null;
+  if (typeof o.name !== "string") o.name = "";
+  if (!o.schedule || typeof o.schedule !== "object") o.schedule = { days:[] };
+  if (!Array.isArray(o.schedule.days)) o.schedule.days = [];
+  if (!o.admin || typeof o.admin !== "object") o.admin = { unlockAll:false };
+  return o;
+}
+/* стереть результаты занятий, оставив имя, расписание и сделанное ребёнком */
+function clearResults(o){
+  PROGRESS_MAPS.forEach(function(k){ if (KEEP_ON_RESET.indexOf(k) < 0) o[k] = {}; });
+  PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
+  o.badges = [];
+  return ensureShape(o);
+}
+/* стереть всё, включая имя и сделанное ребёнком — это смена ученика */
+function clearAll(o){
+  clearResults(o);
+  KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
+  o.sandbox = null; o.name = ""; o.schedule = { days:[] };
+  return ensureShape(o);
+}
+
+var S = blankProgress();
+S.admin = { unlockAll:false };
 try {
   var raw = localStorage.getItem(KEY);
   if (raw) S = Object.assign(S, JSON.parse(raw));
@@ -54,17 +108,7 @@ try {
     }
   }
 } catch(e){}
-if (!S.log || typeof S.log !== "object") S.log = {};
-if (!S.warmups || typeof S.warmups !== "object") S.warmups = {};
-if (!S.ailab || typeof S.ailab !== "object") S.ailab = {};
-if (!S.days || typeof S.days !== "object") S.days = {};
-if (!S.daily || typeof S.daily !== "object") S.daily = {};
-if (!S.shields || typeof S.shields !== "object") S.shields = {};
-if (!S.projects || typeof S.projects !== "object") S.projects = {};
-if (!S.schedule || typeof S.schedule !== "object") S.schedule = { days:[] };
-if (!Array.isArray(S.schedule.days)) S.schedule.days = [];
-if (typeof S.name !== "string") S.name = "";
-if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
+ensureShape(S);
 function saveLocal(){
   S.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
@@ -320,10 +364,7 @@ function slugFromName(name){
 /* очистить локальный прогресс — чтобы войти в другой аккаунт начисто, а не
    смешать двух детей на одном устройстве. Настройки устройства (admin) не трогаем. */
 function resetProgressLocal(){
-  S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-  S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.ailab = {}; S.days = {}; S.daily = {}; S.shields = {};
-  S.projects = {};
-  S.sandbox = null; S.sandboxRuns = 0; S.name = ""; S.schedule = { days:[] };
+  clearAll(S);
   save();
 }
 /* создать аккаунт по имени и уйти на карту миров */
@@ -460,6 +501,17 @@ var cloudState = { busy:false, lastSync:0, lastError:null, lastPush:0, timer:nul
 
 function maxN(a, b){ a = a || 0; b = b || 0; return a > b ? a : b; }
 
+/* Объединение множества (дата→1 или id→1): помеченное на любом устройстве
+   остаётся помеченным. Шесть полей прогресса сливаются ровно так, и раньше
+   этот цикл был выписан по разу на каждое — новое поле легко было забыть. */
+function mergeSet(a, b){
+  var out = {};
+  [a || {}, b || {}].forEach(function(src){
+    Object.keys(src).forEach(function(k){ if (src[k]) out[k] = 1; });
+  });
+  return out;
+}
+
 function mergeProgress(a, b){
   a = a || {}; b = b || {};
   var out = { v:2, stars:{}, badges:[], log:{} };
@@ -478,10 +530,7 @@ function mergeProgress(a, b){
     if (out.badges.indexOf(x) < 0) out.badges.push(x);
   });
 
-  out.drawDone = {};
-  [a.drawDone || {}, b.drawDone || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ out.drawDone[k] = 1; });
-  });
+  out.drawDone = mergeSet(a.drawDone, b.drawDone);
 
   out.firstTry = maxN(a.firstTry, b.firstTry);
   out.perfect = maxN(a.perfect, b.perfect);
@@ -489,30 +538,21 @@ function mergeProgress(a, b){
 
   /* разгаданные разминки: объединяем — разгаданное на любом устройстве
      остаётся разгаданным. Это не звёзды и не входит в сотню уроков. */
-  out.warmups = {};
-  [a.warmups || {}, b.warmups || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ if (src[k]) out.warmups[k] = 1; });
-  });
+  out.warmups = mergeSet(a.warmups, b.warmups);
 
   /* пройденные задания раздела «Ты и ИИ»: тоже объединяем — как разминки,
      это не звёзды и не входит в сотню уроков. */
-  out.ailab = {};
-  [a.ailab || {}, b.ailab || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ if (src[k]) out.ailab[k] = 1; });
-  });
+  out.ailab = mergeSet(a.ailab, b.ailab);
+
+  /* какие игры вообще открывали: объединяем, как разминки */
+  out.gamesPlayed = mergeSet(a.gamesPlayed, b.gamesPlayed);
 
   /* дни занятий и выполненные «задачи дня»: объединяем множества дат.
      День, засчитанный на любом устройстве, остаётся засчитанным — так стрик
      не рвётся из-за того, что ребёнок в понедельник занимался на планшете,
      а во вторник на ноутбуке. Дата — строка «ГГГГ-ММ-ДД» по местному времени. */
-  out.days = {};
-  [a.days || {}, b.days || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ if (src[k]) out.days[k] = 1; });
-  });
-  out.daily = {};
-  [a.daily || {}, b.daily || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ if (src[k]) out.daily[k] = 1; });
-  });
+  out.days = mergeSet(a.days, b.days);
+  out.daily = mergeSet(a.daily, b.daily);
   /* потраченные щиты — тоже множество дат, тоже объединяем. Счётчик щитов
      нигде не хранится: сколько их заработано, считается из числа дней занятий,
      поэтому после слияния обе стороны получают одинаковый ответ. Крайний
@@ -520,10 +560,7 @@ function mergeProgress(a, b){
      тогда после слияния потрачено на один больше, чем заработано. Ничего не
      ломается (запас просто уходит в ноль и восстанавливается занятиями),
      и оба спасённых дня остаются закрытыми — так честнее к ребёнку. */
-  out.shields = {};
-  [a.shields || {}, b.shields || {}].forEach(function(src){
-    Object.keys(src).forEach(function(k){ if (src[k]) out.shields[k] = 1; });
-  });
+  out.shields = mergeSet(a.shields, b.shields);
 
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
@@ -537,6 +574,15 @@ function mergeProgress(a, b){
   /* имя ученика едет вместе с прогрессом (это подпись аккаунта, не результат) —
      берём из более свежего сохранения, но не теряем, если в свежем оно пустое */
   out.name = fresher.name || older.name || "";
+
+  /* свои версии игр: по каждой игре это КОД, а код сложить нельзя — как
+     песочница, берём из более свежего сохранения. Игра, которую правили
+     только на одном устройстве, при этом не теряется. */
+  out.games = {};
+  Object.keys(mergeSet(a.games, b.games)).forEach(function(k){
+    out.games[k] = (fresher.games || {})[k] || (older.games || {})[k] || null;
+    if (!out.games[k]) delete out.games[k];
+  });
 
   /* проекты: пройденный шаг — результат, поэтому берём дальний (max), а вот КОД
      сложить нельзя, он как песочница — берём из более свежего сохранения.
@@ -1281,9 +1327,34 @@ function diffBlock(exp, got){
     (got.length > 8 ? "\n…" : "") + '</div></div>';
 }
 
+/* ===== кнопка подсказки =====
+   Одна механика на уроки, разминки, «Ты и ИИ» и проекты. Раньше этот
+   обработчик был скопирован четырежды, и копии успели разойтись: в уроке
+   не было проверки «а подсказки вообще есть», поэтому урок без hints ронял
+   бы страницу на первом же нажатии (в тестах требование hints стояло только
+   для разминок, «Ты и ИИ» и проектов). onTake — что записать в журнал:
+   у уроков подсказка стоит звезды, в остальных разделах нет. */
+function wireHint(hints, onTake){
+  var btn = document.getElementById("hintbtn");
+  if (!btn) return;
+  var hs = hints || [];
+  if (!hs.length){ btn.disabled = true; btn.textContent = "Подсказок нет"; return; }
+  btn.onclick = function(){
+    if (session.hints >= hs.length) return;
+    session.hints++;
+    if (onTake) onTake();
+    var out = document.getElementById("hintout");
+    out.className = "hintout show";
+    out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
+      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
+    }).join("");
+    if (session.hints >= hs.length) btn.textContent = "Подсказки кончились";
+  };
+}
+
 /* ================= экран: миры ================= */
 function screenWorlds(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
      только на сайте с раздельными файлами), догружаем всё и перерисовываем —
      иначе готовые миры показались бы как «в работе». */
@@ -1350,9 +1421,10 @@ function screenWorlds(){
 
 /* ================= экран: мир ================= */
 function screenWorld(n){
-  stopTimer(); clearAdminHash();
+  var seq = enterScreen();
   var w = CURRICULUM.world(n);
   worldContent(n).then(function(){
+    if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
     var ready = worldReadyLessons(w);
     var h = '<div class="lvlhead"><div><div class="idx">Мир ' + w.n + ' из 5</div>' +
       '<h1>' + w.icon + ' ' + w.title + '</h1></div></div>' +
@@ -1426,7 +1498,9 @@ var session = null;
 function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
+  var seq = claimScreen();
   worldContent(l.world).then(function(){
+    if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
     var body = lessonBody(l);
     if (!body) return screenWorld(l.world);
     session = { id:id, attempts:0, hints:0, shown:false };
@@ -1525,18 +1599,7 @@ function openLesson(id){
       };
     });
 
-    document.getElementById("hintbtn").onclick = function(){
-      var hs = body.task.hints;
-      if (session.hints >= hs.length) return;
-      session.hints++;
-      logOf(l.id).hints++; save();
-      var out = document.getElementById("hintout");
-      out.className = "hintout show";
-      out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
-        return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
-      }).join("");
-      if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
-    };
+    wireHint(body.task.hints, function(){ logOf(l.id).hints++; save(); });
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
       logOf(l.id).shown++; save();
@@ -1726,7 +1789,7 @@ function confetti(n){
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
              "goto(0, 0)","dot(10)","circle(60)","print(x)","range(10)","len(s)","sum(xs)","randint(1, 6)","sqrt(16)"];
@@ -1768,7 +1831,7 @@ function gamesList(){ return (window.GAMES || []); }
 function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
 
 function screenGames(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var gs = gamesList();
   var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
@@ -1794,7 +1857,7 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
@@ -1807,8 +1870,12 @@ function openGame(id){
   var studio = makeStudio({
     engine: "mini", draw: !!g.draw, play: true, code: gameCode(g), label: g.title,
     onRun: function(){
+      /* «твоя версия» — только если код действительно поменяли. Раньше здесь
+         сохранялся любой запуск, и после первой же партии карточка игры
+         врала: «твоя версия» появлялась на нетронутом коде. */
+      var code = studio.editor.getCode();
       S.games = S.games || {};
-      S.games[g.id] = studio.editor.getCode();
+      if (code === g.code) delete S.games[g.id]; else S.games[g.id] = code;
       S.gamesPlayed = S.gamesPlayed || {};
       S.gamesPlayed[g.id] = 1;
       save();
@@ -1951,16 +2018,20 @@ function makeBlocksStudio(cfg){
   var blocks = String(cfg.code || "").replace(/\r/g, "").split("\n")
     .filter(function(l){ return l.trim() !== ""; });
 
-  /* стартовый порядок — перемешанный и заведомо не равный правильному */
+  /* Порядок блоков. Правильный ответ — это порядок 0,1,2,… (блоки нарезаны
+     из готовой программы), поэтому перемешивание обязано его избегать: иначе
+     упражнение решается само собой. Раньше проверка стояла только на старте,
+     а кнопка «Перемешать заново» тасовала без неё — и могла выдать ответ. */
   var order = blocks.map(function(_, i){ return i; });
-  (function shuffle(){
+  function shuffleOrder(){
     for (var i = order.length - 1; i > 0; i--){
       var j = Math.floor(Math.random() * (i + 1));
       var t = order[i]; order[i] = order[j]; order[j] = t;
     }
-    var same = order.every(function(v, i){ return v === i; });
+    var same = order.every(function(v, k){ return v === k; });
     if (same && order.length > 1) order.push(order.shift());
-  })();
+  }
+  shuffleOrder();
 
   var head = document.createElement("div");
   head.className = "ehead";
@@ -2071,10 +2142,7 @@ function makeBlocksStudio(cfg){
     if (r === "check") cfg.check(wrap.editor, showMsg);
     else if (r === "shuffle"){
       msg.className = "msg"; wrap.hideOut();
-      for (var i = order.length - 1; i > 0; i--){
-        var j = Math.floor(Math.random() * (i + 1));
-        var t = order[i]; order[i] = order[j]; order[j] = t;
-      }
+      shuffleOrder();
       render();
     }
   });
@@ -2108,7 +2176,7 @@ function runBlocksCheck(w, ed, showMsg){
    Ребёнок вводит имя → создаётся код и аккаунт. Либо входит по готовому коду.
    ============================================================ */
 function screenRegister(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var h =
     '<div class="reghero"><span class="regmark">🐍</span>' +
@@ -2180,7 +2248,7 @@ function copyText(text, btn){
   } catch(e2){}
 }
 function screenAccount(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var code = myCode(), name = myName();
   var link = "";
@@ -2227,7 +2295,6 @@ function screenAccount(){
    Вне сотни уроков, звёзд не даёт. Смысл — привычка заходить каждый день.
    ============================================================ */
 function weekStripHTML(){
-  var names = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
   var today = dayKey();
   var cells = "";
   for (var i = 6; i >= 0; i--){
@@ -2239,7 +2306,7 @@ function weekStripHTML(){
     var study = isStudyDay(key);
     var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
       (isToday ? " today" : "") + (study ? " study" : "");
-    cells += '<div class="' + cls + '"><span class="wkd">' + names[d.getDay()] + '</span>' +
+    cells += '<div class="' + cls + '"><span class="wkd">' + WD_SHORT[d.getDay()] + '</span>' +
       '<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡️" : (study ? "📌" : "·"))) + '</span></div>';
   }
   return '<div class="weekstrip">' + cells + '</div>';
@@ -2263,7 +2330,7 @@ function shieldBoxHTML(){
 }
 
 function screenToday(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var streak = streakCurrent();
   var best = streakBest();
@@ -2356,7 +2423,7 @@ function screenToday(){
 }
 
 function screenWarmups(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
   var done = ws.filter(function(w){ return warmupDone(w.id); }).length;
@@ -2386,7 +2453,7 @@ function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
-  stopTimer(); clearAdminHash();
+  enterScreen();
   var isDaily = !!(opts && opts.daily);
   session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
   /* из задачи дня «назад» и списки ведут на экран «Сегодня», а не в разминку */
@@ -2423,18 +2490,7 @@ function openWarmup(id, opts){
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
 
-  document.getElementById("hintbtn").onclick = function(){
-    var hs = w.hints || [];
-    if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
-    if (session.hints >= hs.length) return;
-    session.hints++;
-    var out = document.getElementById("hintout");
-    out.className = "hintout show";
-    out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
-      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
-    }).join("");
-    if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
-  };
+  wireHint(w.hints);
   app.querySelectorAll("[data-go]").forEach(function(b){
     b.onclick = function(){ backFn(); };
   });
@@ -2521,7 +2577,7 @@ function ailabList(){ return (window.AILAB || []); }
 function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
 
 function screenAILab(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = ailabList();
   var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
@@ -2554,7 +2610,7 @@ function openAILesson(id){
   var xs = ailabList();
   var x = xs.filter(function(e){ return e.id === id; })[0];
   if (!x) return screenAILab();
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:id, attempts:0, hints:0, shown:false };
   var pos = xs.indexOf(x);
   var next = pos < xs.length - 1 ? xs[pos+1] : null;
@@ -2603,18 +2659,7 @@ function openAILesson(id){
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
 
-  document.getElementById("hintbtn").onclick = function(){
-    var hs = x.hints || [];
-    if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
-    if (session.hints >= hs.length) return;
-    session.hints++;
-    var out = document.getElementById("hintout");
-    out.className = "hintout show";
-    out.innerHTML = hs.slice(0, session.hints).map(function(s, i){
-      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(s) + '</div>';
-    }).join("");
-    if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
-  };
+  wireHint(x.hints);
   var solb = document.getElementById("solbtn");
   if (solb) solb.onclick = function(){
     session.shown = true;
@@ -2746,13 +2791,15 @@ function projectStartCode(p, i){
 function openProject(id, forceStep){
   var p = projectById(id);
   if (!p) return screenWorlds();
+  var seq = claimScreen();
   worldContent(p.world).then(function(){
+    if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
     if (!projectOpen(p)) return screenWorld(p.world);
     var st = projectState(p.id);
     var i = (typeof forceStep === "number") ? forceStep : st.step;
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
-    stopTimer(); clearAdminHash();
+    enterScreen();
     session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
 
     var dots = p.steps.map(function(s, k){
@@ -2794,18 +2841,7 @@ function openProject(id, forceStep){
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
 
-    document.getElementById("hintbtn").onclick = function(){
-      var hs = step.hints || [];
-      if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
-      if (session.hints >= hs.length) return;
-      session.hints++;
-      var out = document.getElementById("hintout");
-      out.className = "hintout show";
-      out.innerHTML = hs.slice(0, session.hints).map(function(x, k){
-        return '<div class="step"><b>' + (k+1) + '.</b> ' + esc(x) + '</div>';
-      }).join("");
-      if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
-    };
+    wireHint(step.hints);
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
       studio.editor.setCode(step.solution);
@@ -2875,7 +2911,7 @@ function winProjectStep(p, i, code){
 function screenProjectDone(id){
   var p = projectById(id);
   if (!p) return screenWorlds();
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var st = projectState(p.id);
   var code = st.code || p.steps[p.steps.length - 1].solution;
@@ -2935,6 +2971,19 @@ var VIZ_EXAMPLES = [
 ];
 var VIZ_COLORS = ["#7c5cff","#00e0b8","#ffc53d","#ff6b6b","#3ddc84","#4aa3ff","#e06bff","#ff9f45"];
 var VIZ_MAX_FRAMES = 800;
+
+/* Тик кнопки «Играть» — один на всю страницу, с ручкой остановки. Держим его
+   снаружи vizPlayer, потому что уход с экрана обязан его выключить: плеер
+   при переходе просто выбрасывается из документа, а интервал сам не умирает
+   и продолжает перерисовывать невидимую разметку. */
+var vizPlay = null;
+function vizStopPlay(){
+  if (!vizPlay) return;
+  var p = vizPlay; vizPlay = null;
+  clearInterval(p.id);
+  if (p.onStop) try { p.onStop(); } catch(e){}
+}
+function vizPlaying(){ return !!vizPlay; }
 
 function vizColorIdx(id){ var n = parseInt(String(id).replace(/\D/g, ""), 10) || 0; return n % VIZ_COLORS.length; }
 function vizColor(id){ return VIZ_COLORS[vizColorIdx(id)]; }
@@ -3056,7 +3105,7 @@ function vizDrawArrows(mem){
 }
 
 function screenViz(){
-  stopTimer(); clearAdminHash();
+  enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var h = '<div class="lvlhead"><div><div class="idx">загляни внутрь программы</div><h1>🔍 Визуализатор</h1></div></div>' +
     '<p class="lede">Запусти программу по шагам и смотри, что происходит в памяти: переменные, списки и словари рисуются коробками, ' +
@@ -3094,6 +3143,7 @@ function screenViz(){
 }
 
 function vizStart(player, ed){
+  vizStopPlay();                       /* прошлый прогон больше не тикает */
   var rec = vizRecord(ed.getCode());
   player.style.display = "";
   if (rec.error && !rec.frames.length){
@@ -3107,7 +3157,7 @@ function vizStart(player, ed){
 }
 
 function vizPlayer(player, ed, rec){
-  var frames = rec.frames, i = 0, timer = null;
+  var frames = rec.frames, i = 0;
   player.innerHTML =
     '<div class="vizctl">' +
       '<button class="rbtn sec" data-v="first" title="в начало">⏮</button>' +
@@ -3154,12 +3204,19 @@ function vizPlayer(player, ed, rec){
     } else errEl.style.display = "none";
   }
   function goto(k){ i = Math.max(0, Math.min(frames.length - 1, k)); render(); }
-  function stop(){ if (timer){ clearInterval(timer); timer = null; playBtn.textContent = "▶ Играть"; playBtn.classList.remove("on"); } }
+  function stop(){ vizStopPlay(); }
   function play(){
-    if (timer){ stop(); return; }
+    if (vizPlay){ stop(); return; }
     if (i >= frames.length - 1) i = 0;
     playBtn.textContent = "⏸ Пауза"; playBtn.classList.add("on");
-    timer = setInterval(function(){ if (i >= frames.length - 1){ stop(); return; } goto(i + 1); }, 800);
+    var id = setInterval(function(){
+      /* плеер убрали с экрана — гасим сами, даже если про нас забыли */
+      if (!document.body.contains(memEl)){ vizStopPlay(); return; }
+      if (i >= frames.length - 1){ stop(); return; }
+      goto(i + 1);
+    }, 800);
+    vizPlay = { id: id, onStop: function(){
+      playBtn.textContent = "▶ Играть"; playBtn.classList.remove("on"); } };
   }
   player.querySelector('[data-v="first"]').onclick = function(){ stop(); goto(0); };
   player.querySelector('[data-v="prev"]').onclick = function(){ stop(); goto(i - 1); };
@@ -3167,9 +3224,8 @@ function vizPlayer(player, ed, rec){
   playBtn.onclick = play;
   slider.oninput = function(){ stop(); goto(+slider.value); };
 
-  function onResize(){ if (!document.body.contains(memEl)){ window.removeEventListener("resize", onResize); return; } vizDrawArrows(memEl); }
-  window.addEventListener("resize", onResize);
-
+  /* стрелки перерисовываются общим обработчиком resize внизу файла:
+     свой слушатель на каждый запуск накапливался бы по одному за нажатие */
   render();
   if (player.scrollIntoView) player.scrollIntoView({ behavior:"smooth", block:"nearest" });
 }
@@ -3180,6 +3236,25 @@ function vizPlayer(player, ed, rec){
    зачитывать уроки, обмениваться данными с сервером и смотреть
    прогресс другого ученика по его коду.
    ============================================================ */
+/* Вход на новый экран: гасим всё, что тикает в фоне. Раньше эти две команды
+   были выписаны в пятнадцати местах, и когда у визуализатора появился свой
+   таймер, его туда не дописали — «Играть» продолжал перерисовывать плеер,
+   уже выброшенный из документа. */
+function enterScreen(){
+  stopTimer();
+  vizStopPlay();
+  clearAdminHash();
+  return claimScreen();
+}
+
+/* Урок и мир дорисовываются ПОСЛЕ загрузки файла мира, то есть асинхронно.
+   Если за эти десятки миллисекунд ребёнок успел уйти на другой экран,
+   запоздавшая отрисовка затирала уже показанный экран, а у урока вдобавок
+   запускался счётчик времени — по уроку, который никто не открывал. Каждый
+   заход на экран берёт номер, а отрисовка сверяет: номер сменился — не рисуем. */
+var screenSeq = 0;
+function claimScreen(){ return ++screenSeq; }
+function screenStale(n){ return n !== screenSeq; }
 function clearAdminHash(){
   try {
     if (!history.replaceState) return;
@@ -3212,15 +3287,19 @@ function wantsAdmin(){
   var q = (location.search || "").toLowerCase();
   return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
 }
+var HASH_SCREENS = {
+  "#games":   function(){ screenGames(); },
+  "#warmup":  function(){ screenWarmups(); },
+  "#today":   function(){ screenToday(); },
+  "#account": function(){ screenAccount(); },
+  "#viz":     function(){ screenViz(); },
+  "#ai":      function(){ screenAILab(); }
+};
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
-  if ((location.hash || "").toLowerCase() === "#games"){ screenGames(); return true; }
-  if ((location.hash || "").toLowerCase() === "#warmup"){ screenWarmups(); return true; }
-  if ((location.hash || "").toLowerCase() === "#today"){ screenToday(); return true; }
-  if ((location.hash || "").toLowerCase() === "#account"){ screenAccount(); return true; }
-  if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
-  if ((location.hash || "").toLowerCase() === "#ai"){ screenAILab(); return true; }
-  var ph = (location.hash || "").replace(/^#/, "").toLowerCase();
+  var h = (location.hash || "").toLowerCase();
+  if (HASH_SCREENS[h]){ HASH_SCREENS[h](); return true; }
+  var ph = h.replace(/^#/, "");
   if (ph && projectById(ph)){ openProject(ph); return true; }
   return false;
 }
@@ -3285,9 +3364,11 @@ function adminGate(){
 function statsGridHTML(st){
   var readyTotal = 0;
   CURRICULUM.forEach(function(w){ readyTotal += worldReadyLessons(w).length; });
-  var stars = 0, solved = 0;
+  /* solvedCount, а не solved: имя solved занято функцией «урок пройден» —
+     локальная переменная её затеняла на всю функцию */
+  var stars = 0, solvedCount = 0;
   var sm = st.stars || {};
-  Object.keys(sm).forEach(function(k){ stars += sm[k] || 0; solved++; });
+  Object.keys(sm).forEach(function(k){ stars += sm[k] || 0; solvedCount++; });
   var timeMs = 0, attempts = 0, hints = 0, last = 0;
   var lg = st.log || {};
   Object.keys(lg).forEach(function(k){
@@ -3298,7 +3379,7 @@ function statsGridHTML(st){
     if ((g.last || 0) > last) last = g.last;
   });
   return '<div class="admstats">' +
-    statBox("Пройдено уроков", solved + " из " + CURRICULUM.total) +
+    statBox("Пройдено уроков", solvedCount + " из " + CURRICULUM.total) +
     statBox("Уроков готово", String(readyTotal)) +
     statBox("Звёзды", stars + " из " + (readyTotal * 3)) +
     statBox("Опыт", (st.xp || 0) + " XP") +
@@ -3403,7 +3484,8 @@ function serverCardHTML(){
 }
 
 function screenAdmin(){
-  stopTimer();
+  /* без clearAdminHash: этот экран как раз открывается по #admin */
+  stopTimer(); vizStopPlay();
   if (!adminUnlocked()) return adminGate();
 
   var h = "";
@@ -3501,10 +3583,9 @@ function screenAdmin(){
     }
     else if (act === "resetall"){
       var yes = true;
-      try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи, статистику и серию дней? Отменить будет нельзя."); } catch(e2){}
+      try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи, статистику, серию дней, разминки, «Ты и ИИ» и проекты? Имя, расписание и свои версии игр останутся. Отменить будет нельзя."); } catch(e2){}
       if (!yes) return;
-      S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {}; S.shields = {}; S.projects = {};
+      clearResults(S);
       save(); refreshTop(); screenAdmin();
     }
     else if (act === "go"){ openLesson(id); }
@@ -3634,12 +3715,10 @@ function screenAdmin(){
       try { ok = confirm("Заменить прогресс на этом устройстве загруженным? Нынешний будет стёрт."); } catch(e6){}
       if (!ok) return;
       Object.keys(S).forEach(function(k){ delete S[k]; });
-      S.v = 2; S.xp = 0; S.stars = {}; S.badges = []; S.sandbox = null; S.sandboxRuns = 0;
-      S.drawDone = {}; S.firstTry = 0; S.perfect = 0; S.log = {}; S.admin = { unlockAll:false };
-      S.days = {}; S.daily = {}; S.shields = {}; S.projects = {}; S.schedule = { days:[] }; S.name = "";
+      Object.assign(S, blankProgress());
+      S.admin = { unlockAll:false };
       Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
-      if (!S.log || typeof S.log !== "object") S.log = {};
-      if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
+      ensureShape(S);
       save(); refreshTop(); screenAdmin();
       say("ok", "<b>Прогресс загружен</b>Данные заменены.");
     }
@@ -3669,6 +3748,9 @@ window.addEventListener("resize", function(){
   document.querySelectorAll("canvas.stage").forEach(function(c){
     if (c._lastTurtle) drawTurtle(c, c._lastTurtle);
   });
+  /* стрелки визуализатора нарисованы по реальным координатам — после
+     изменения размера их надо пересчитать */
+  document.querySelectorAll(".vizmem").forEach(function(m){ vizDrawArrows(m); });
 });
 
 /* Ссылка вида .../kodokvest/?kid=misha-7f3a один раз задаёт код ученика
@@ -3717,7 +3799,7 @@ window.__game = {
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
-  screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
+  screenViz: screenViz, vizRecord: vizRecord, vizPlaying: vizPlaying, state: S, save: save,
   openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
@@ -3726,6 +3808,8 @@ window.__game = {
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },
   mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
+  blankProgress: blankProgress, ensureShape: ensureShape,
+  clearResults: clearResults, clearAll: clearAll,
   cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState
 };
 })();

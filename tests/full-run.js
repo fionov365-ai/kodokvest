@@ -52,6 +52,9 @@ const doc = w.document;
    Холст подменяем не пустышкой, а записывающим контекстом: тогда код
    отрисовки выполняется целиком и настоящие ошибки в нём будут видны. */
 w.scrollTo = function(){};
+/* Диалоги: в jsdom их нет, а код спрашивает подтверждение перед сбросом и
+   загрузкой прогресса. Отвечаем «да», чтобы проверять сами действия. */
+w.confirm = function(){ return true; };
 w.requestAnimationFrame = function(){ return 0; };
 w.cancelAnimationFrame = function(){};
 const drawCalls = { n:0 };
@@ -242,6 +245,19 @@ function checkEncoding(){
     }
   }
 
+  /* ---------- уход с экрана во время загрузки ----------
+     Урок дорисовывается асинхронно. Если ребёнок за это время нажал другой
+     раздел, старый экран дорисовываться НЕ должен: он затрёт новый. */
+  g.openLesson("print-first");
+  g.screenWarmups();                 /* ушли, не дожидаясь отрисовки урока */
+  await tick();
+  if (!doc.querySelector(".gamegrid"))
+    bad("[экраны] урок дорисовался поверх раздела, открытого позже");
+  if (doc.querySelector("#hintbtn"))
+    bad("[экраны] на экране разминок оказалась разметка урока");
+  viewReset(g);
+  await tick();
+
   /* ---------- панель наставника ---------- */
   g.screenAdmin();
   await tick();
@@ -278,6 +294,42 @@ function checkEncoding(){
   g.setStars("print-first", 0);
   if (g.state.stars["print-first"] !== undefined) bad("[панель] «сбросить» не убрало звёзды");
   if (g.state.xp !== xp0) bad("[панель] XP после сброса не вернулся к прежнему");
+
+  /* «Сбросить весь прогресс» и «Загрузить из этого поля» — оба места когда-то
+     перечисляли поля прогресса руками и оба отставали от игры. Проверяем
+     через настоящие кнопки, а не в обход. */
+  g.state.warmups["проверка-сброса"] = 1;
+  g.state.ailab["проверка-сброса"] = 1;
+  g.state.days["2030-01-01"] = 1;
+  g.state.name = "Тест";
+  g.setStars("print-first", 3);
+  g.screenAdmin();
+  await tick();
+  doc.querySelector('[data-act="resetall"]').click();
+  await tick();
+  if (Object.keys(g.state.warmups).length) bad("[панель] сброс не стёр разминки");
+  if (Object.keys(g.state.ailab).length) bad("[панель] сброс не стёр «Ты и ИИ»");
+  if (Object.keys(g.state.days).length) bad("[панель] сброс не стёр дни занятий");
+  if (Object.keys(g.state.stars).length) bad("[панель] сброс не стёр звёзды");
+  if (g.state.name !== "Тест") bad("[панель] сброс прогресса стёр имя ученика");
+
+  /* загрузка файлом: заменяет прогресс целиком и оставляет рабочую форму */
+  g.screenAdmin();
+  await tick();
+  const jsonBox = doc.getElementById("admjson");
+  jsonBox.value = JSON.stringify({ xp: 125, stars: { "print-first": 3, "vars": 2 } });
+  doc.querySelector('[data-act="import"]').click();
+  await tick();
+  if (g.state.xp !== 125) bad(`[панель] загрузка файлом не применилась: xp ${g.state.xp}`);
+  if (g.state.stars.vars !== 2) bad("[панель] загрузка файлом потеряла звёзды");
+  ["warmups","ailab","games","gamesPlayed","days","daily","shields","projects","log","drawDone"]
+    .forEach(k => {
+      if (!g.state[k] || typeof g.state[k] !== "object")
+        bad(`[панель] после загрузки файлом поле «${k}» не заполнено — игра упадёт на первом обращении`);
+    });
+  if (!Array.isArray(g.state.schedule.days)) bad("[панель] после загрузки файлом сломано расписание");
+  /* и игра после этого работает: разминка засчитывается, а не падает */
+  g.state.xp = 0; g.state.stars = {};
 
   /* ---------- синхронизация с сервером ----------
      Подменяем только fetch. Дальше работает настоящая серверная функция
@@ -333,6 +385,71 @@ function checkEncoding(){
   if (M2.sandbox !== M.sandbox) bad("[слияние] песочница зависит от порядка копий");
   if (M2.badges.slice().sort().join() !== M.badges.slice().sort().join())
     bad("[слияние] бейджи зависят от порядка копий");
+
+  /* --- форма прогресса: один список полей на все четыре места ---
+     Проверяем не отдельные поля, а ИНВАРИАНТ: каждое поле прогресса обязано
+     сливаться при синхронизации и обнуляться при смене ученика. Именно этой
+     проверки не хватало, когда появились S.games и S.gamesPlayed: они
+     выпали и из слияния, и из очистки, и это никого не уронило. */
+  if (typeof g.blankProgress === "function"){
+    const blank = g.blankProgress();
+    const fields = Object.keys(blank).filter(k => k !== "v");
+    const full = {};
+    fields.forEach(k => {
+      const v = blank[k];
+      if (typeof v === "number") full[k] = 7;
+      else if (Array.isArray(v)) full[k] = ["что-то"];
+      else if (v && typeof v === "object") full[k] = { "x": 1 };
+      else full[k] = "непусто";
+    });
+    full.schedule = { days:[1,3] };
+    full.savedAt = 5000;
+    const merged = g.mergeProgress(full, {});
+    fields.forEach(k => {
+      if (merged[k] === undefined || merged[k] === null)
+        bad(`[слияние] поле «${k}» теряется при обмене с сервером — допиши его в mergeProgress`);
+    });
+    /* обмен ничего не должен терять и в обратную сторону */
+    const merged2 = g.mergeProgress({ savedAt:1 }, full);
+    fields.forEach(k => {
+      if (merged2[k] === undefined || merged2[k] === null)
+        bad(`[слияние] поле «${k}» теряется, когда свежая копия пришла с сервера`);
+    });
+    if (merged.games && merged.games.x !== 1)
+      bad("[слияние] свой код игры не доехал");
+
+    /* смена ученика: не должно остаться НИЧЕГО от прошлого ребёнка */
+    const mine = g.clearAll(Object.assign({}, full));
+    fields.forEach(k => {
+      const v = mine[k];
+      const empty = v === null || v === "" || v === 0 ||
+        (Array.isArray(v) ? v.length === 0 :
+         (v && typeof v === "object" ? Object.keys(v).filter(x => x !== "days").length === 0 : false));
+      if (!empty)
+        bad(`[смена ученика] поле «${k}» не очищено: ${JSON.stringify(v)} — прогресс двух детей смешается`);
+    });
+    if (mine.schedule.days.length) bad("[смена ученика] расписание прошлого ребёнка осталось");
+
+    /* сброс в панели наставника: результаты стёрты, имя и своё творчество целы */
+    const res = g.clearResults(Object.assign({}, full, { name:"Аня", sandbox:"мой код" }));
+    ["stars","log","warmups","ailab","days","daily","shields","projects","drawDone","gamesPlayed"]
+      .forEach(k => {
+        if (Object.keys(res[k] || {}).length)
+          bad(`[сброс] «${k}» не сброшен панелью наставника`);
+      });
+    if (res.xp !== 0 || res.badges.length) bad("[сброс] XP или бейджи не сброшены");
+    if (res.name !== "Аня") bad("[сброс] имя ученика не должно стираться при сбросе прогресса");
+    if (res.sandbox !== "мой код") bad("[сброс] песочница — работа ребёнка, сбросом её не трогаем");
+    if (!res.games || !Object.keys(res.games).length)
+      bad("[сброс] свои версии игр — работа ребёнка, сбросом их не трогаем");
+
+    /* ensureShape не портит уже осмысленные значения */
+    const sh = g.ensureShape({ sandbox:"код", name:"Боря", stars:{ a:1 } });
+    if (sh.sandbox !== "код" || sh.name !== "Боря" || sh.stars.a !== 1)
+      bad("[форма] ensureShape затирает нормальные значения");
+    if (!sh.games || !sh.warmups || !sh.ailab || !sh.schedule || !Array.isArray(sh.schedule.days))
+      bad("[форма] ensureShape не дополнил пустые поля");
+  } else bad("[форма] blankProgress не выведен наружу — проверить форму прогресса нечем");
 
   /* --- отправка на сервер --- */
   w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
@@ -469,6 +586,31 @@ function checkEncoding(){
         bad(`[игры] ${game.id}: партия не завершилась за ${moves.length} ходов`);
       else gamesChecked++;
     }
+    /* Партия сама по себе не делает игру «твоей версией»: пометка ставится
+       только за изменённый код. Иначе карточка врёт после первого запуска. */
+    if (g.state.games && g.state.games[game.id] !== undefined)
+      bad(`[игры] ${game.id}: игра помечена как «твоя версия», хотя код не меняли`);
+    if (!(g.state.gamesPlayed && g.state.gamesPlayed[game.id]))
+      bad(`[игры] ${game.id}: партия не отмечена в gamesPlayed`);
+  }
+  /* а изменённый код запоминается */
+  if (GAMES.length){
+    const gm = GAMES[0];
+    g.openGame(gm.id);
+    await tick();
+    const st0 = studioOf();
+    if (st0){
+      st0.editor.setCode(gm.code + '\nprint("моя правка")\n');
+      st0.querySelector('[data-role="run"]').click();
+      await tick();
+      if (!(g.state.games && g.state.games[gm.id]))
+        bad(`[игры] ${gm.id}: изменённый код не сохранился`);
+      /* «Вернуть оригинал» снимает пометку */
+      doc.getElementById("greset").click();
+      await tick();
+      if (g.state.games && g.state.games[gm.id] !== undefined)
+        bad(`[игры] ${gm.id}: «Вернуть оригинал» не снял «твою версию»`);
+    }
   }
 
   /* --- разминки «угадай вывод»: правильное предсказание засчитывается,
@@ -514,6 +656,27 @@ function checkEncoding(){
       if (wr.ok) bad(`[разминки] ${wm.id}: неверное предсказание засчитано как верное`);
     }
     if (good.ok && !wr.ok) warmupsChecked++;
+  }
+
+  /* «Перемешать заново» обязано избегать правильного порядка: иначе одно
+     нажатие решает упражнение за ребёнка. Проверяем не логику, а результат —
+     двести перемешиваний и ни одного попадания в ответ. */
+  const someBlocks = WARMUPS.filter(x => x.type === "blocks");
+  for (const wm of someBlocks.slice(0, 3)){
+    w.__game.openWarmup(wm.id);
+    await tick();
+    const st = studioOf();
+    const shuf = st && st.querySelector('[data-role="shuffle"]');
+    if (!shuf){ bad(`[разминки] ${wm.id}: нет кнопки «Перемешать заново»`); continue; }
+    const answer = codeLinesOf(wm.code).join("\n");
+    if (st.editor.getCode() === answer)
+      bad(`[разминки] ${wm.id}: стартовая раскладка совпала с ответом`);
+    let leaks = 0;
+    for (let k = 0; k < 200; k++){
+      shuf.click();
+      if (st.editor.getCode() === answer) leaks++;
+    }
+    if (leaks) bad(`[разминки] ${wm.id}: «Перемешать заново» выдало готовый ответ ${leaks} раз из 200`);
   }
 
   /* --- раздел «Ты и ИИ»: верный ответ засчитывается, неверный — нет --- */
@@ -591,6 +754,34 @@ function checkEncoding(){
         const dobj = Object.values(dlast.objects)[0];
         if (!dobj || dobj.kind !== "dict" || dobj.pairs[0].key !== "'м'")
           bad(`[виз] ключ словаря показан неверно: ${dobj && dobj.pairs && JSON.stringify(dobj.pairs[0])}`);
+      }
+      /* Кнопка «Играть» ставит интервал на 800 мс. Уход с экрана обязан его
+         погасить: плеер просто выбрасывается из документа, а таймер сам не
+         умирает — он продолжал бы перерисовывать невидимую разметку вечно,
+         и каждый следующий заход добавлял бы ещё один такой таймер. */
+      const playBtn = player && player.querySelector('[data-v="play"]');
+      if (!playBtn || typeof g.vizPlaying !== "function") bad("[виз] нет кнопки «Играть»");
+      else {
+        playBtn.click();
+        if (!g.vizPlaying()) bad("[виз] «Играть» не запустило проигрывание");
+        playBtn.click();
+        if (g.vizPlaying()) bad("[виз] повторное нажатие не поставило на паузу");
+        playBtn.click();
+        g.screenWorlds();                    /* ушли с экрана, не нажав паузу */
+        await tick();
+        if (g.vizPlaying()) bad("[виз] проигрывание продолжает тикать после ухода с экрана");
+        /* и новый прогон не оставляет прошлый таймер */
+        g.screenViz();
+        await tick();
+        doc.querySelector('[data-role="viz"]').click();
+        await tick();
+        const p2 = doc.querySelector('.vizplayer [data-v="play"]');
+        if (p2){
+          p2.click();
+          doc.querySelector('[data-role="viz"]').click();   /* запустили разбор заново */
+          await tick();
+          if (g.vizPlaying()) bad("[виз] новый прогон не погасил прошлое проигрывание");
+        }
       }
     }
     viewReset(g);

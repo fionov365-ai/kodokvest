@@ -151,7 +151,8 @@ var CURRICULUM = [
       flat.push(l);
     });
   });
-  CURRICULUM.flat = flat;
+  /* наружу список уроков не отдаём: имя CURRICULUM.flat затеняло бы
+     встроенный Array.prototype.flat, а пользоваться им никто не пользовался */
   CURRICULUM.byId = function(id){
     for (var i = 0; i < flat.length; i++) if (flat[i].id === id) return flat[i];
     return null;

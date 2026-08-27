@@ -203,6 +203,11 @@ CURRICULUM.forEach(w => {
     if ((chk.needCode || chk.needText) && !chk.needMsg)
       say(`[схема] ${l.id}: есть needCode/needText, но нет needMsg — ученик не поймёт, чего от него хотят`);
 
+    /* Подсказки обязательны, как у разминок, «Ты и ИИ» и проектов. Кнопка
+       «Подсказка» есть на каждом уроке, и урок без hints ей нечего показать. */
+    if (!Array.isArray(task.hints) || !task.hints.length)
+      say(`[схема] ${l.id}: нет подсказок (hints) — кнопке «Подсказка» нечего показать`);
+
     /* 4. check.lines против настоящего вывода решения */
     if (task.check.kind === "output" && task.check.lines && !sol.error){
       const exp = task.check.lines, got = sol.lines;
