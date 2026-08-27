@@ -24,6 +24,7 @@ global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -119,7 +120,20 @@ let ailab = 0;
   if (x.type === "code") compare("ты-и-ии " + x.id + " · заготовка", x.starter, null, null, null);
 });
 
+/* Проекты: правильный вывод шага задаёт его solution, а стартовый код первого
+   шага ребёнок запускает своими руками — значит и он обязан вести себя как
+   настоящий python3. */
+let projsteps = 0;
+(global.PROJECTS || []).forEach(p => {
+  (p.steps || []).forEach((step, i) => {
+    projsteps++;
+    compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, null);
+    if (i === 0 && step.starter !== undefined)
+      compare("проект " + p.id + " · заготовка", step.starter, null, null, null);
+  });
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
-console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ", «Ты и ИИ»: " + ailab + ")");
+console.log("\nсверено с python3: " + checked + ", пропущено: " + skipped + " (в т.ч. разминок: " + warmups + ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ")");
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 process.exit(bad ? 1 : 0);

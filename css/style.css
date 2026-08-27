@@ -199,6 +199,30 @@ button{font-family:inherit}
   border-radius:6px;padding:2px 5px;vertical-align:middle}
 .edittag.done{color:var(--acc2);border-color:var(--acc2)}
 
+/* ---------- проект в конце мира ---------- */
+.projcard{display:flex;align-items:center;gap:14px;margin-top:18px;padding:16px 18px;
+  border:1px solid var(--acc);border-radius:var(--r);box-shadow:var(--sh);
+  background:radial-gradient(600px 200px at 15% -60%, rgba(124,92,255,.20) 0%, transparent 60%), var(--panel)}
+.projcard.locked{border-color:var(--line);border-style:dashed;background:var(--panel);opacity:.72}
+.projcard.done{border-color:var(--ok)}
+.pjemoji{font-size:38px;line-height:1;flex:none}
+.pjbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pjkicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);font-weight:700}
+.pjbody b{font-size:19px;font-family:'Fredoka','Inter',sans-serif}
+.pjbody>span:nth-child(3){color:var(--soft);font-size:14px}
+.pjnote{color:var(--faint);font-size:12.5px;margin-top:3px}
+.projcard .bigbtn{flex:none}
+.pstepbar{display:flex;gap:8px;align-items:center;margin:0 0 16px}
+.pdot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;
+  border:1px solid var(--line2);background:var(--sunken);color:var(--faint);font-size:13px;font-weight:700}
+.pdot.done{border-color:var(--ok);color:var(--ok);background:rgba(61,220,132,.10)}
+.pdot.now{border-color:var(--acc);color:var(--ink);background:rgba(124,92,255,.18);
+  outline:2px solid var(--acc);outline-offset:1px}
+@media (max-width:620px){
+  .projcard{flex-wrap:wrap}
+  .projcard .bigbtn{width:100%}
+}
+
 /* ---------- раздел «Сегодня»: дневной стрик и задача дня ---------- */
 .tbtn.streak{border-color:var(--warn)}
 .tbtn.streak.lit{background:linear-gradient(135deg,var(--warn),#ff7a3d);color:#fff;border-color:transparent}

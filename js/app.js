@@ -16,7 +16,8 @@ var BADGES = [
   { id:"ten",     em:"⚡", name:"Первый десяток", desc:"10 уроков пройдено" },
   { id:"perfect", em:"💎", name:"Перфекционист",  desc:"5 раз по три звезды" },
   { id:"explorer",em:"🧪", name:"Исследователь",  desc:"10 запусков в песочнице" },
-  { id:"world1",  em:"🌱", name:"Мир пройден",    desc:"все уроки одного мира" }
+  { id:"world1",  em:"🌱", name:"Мир пройден",    desc:"все уроки одного мира" },
+  { id:"builder", em:"🏗", name:"Строитель",      desc:"собрал проект целиком" }
 ];
 var RANKS = [
   [0,"Новичок"], [150,"Ученик"], [400,"Кодер"], [700,"Инженер"],
@@ -59,6 +60,7 @@ if (!S.ailab || typeof S.ailab !== "object") S.ailab = {};
 if (!S.days || typeof S.days !== "object") S.days = {};
 if (!S.daily || typeof S.daily !== "object") S.daily = {};
 if (!S.shields || typeof S.shields !== "object") S.shields = {};
+if (!S.projects || typeof S.projects !== "object") S.projects = {};
 if (!S.schedule || typeof S.schedule !== "object") S.schedule = { days:[] };
 if (!Array.isArray(S.schedule.days)) S.schedule.days = [];
 if (typeof S.name !== "string") S.name = "";
@@ -320,6 +322,7 @@ function slugFromName(name){
 function resetProgressLocal(){
   S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
   S.firstTry = 0; S.perfect = 0; S.warmups = {}; S.ailab = {}; S.days = {}; S.daily = {}; S.shields = {};
+  S.projects = {};
   S.sandbox = null; S.sandboxRuns = 0; S.name = ""; S.schedule = { days:[] };
   save();
 }
@@ -534,6 +537,24 @@ function mergeProgress(a, b){
   /* имя ученика едет вместе с прогрессом (это подпись аккаунта, не результат) —
      берём из более свежего сохранения, но не теряем, если в свежем оно пустое */
   out.name = fresher.name || older.name || "";
+
+  /* проекты: пройденный шаг — результат, поэтому берём дальний (max), а вот КОД
+     сложить нельзя, он как песочница — берём из более свежего сохранения.
+     Так занятие с двух устройств не откатывает проект назад и не склеивает
+     две разные версии программы в кашу. */
+  out.projects = {};
+  var pids = {};
+  Object.keys(a.projects || {}).forEach(function(k){ pids[k] = 1; });
+  Object.keys(b.projects || {}).forEach(function(k){ pids[k] = 1; });
+  Object.keys(pids).forEach(function(k){
+    var pa = (a.projects || {})[k] || {}, pb = (b.projects || {})[k] || {};
+    var pf = (fresher === a ? pa : pb), po = (fresher === a ? pb : pa);
+    out.projects[k] = {
+      step: maxN(pa.step, pb.step),
+      done: maxN(pa.done, pb.done),
+      code: pf.code || po.code || null
+    };
+  });
 
   var ids = {};
   Object.keys(a.log || {}).forEach(function(k){ ids[k] = 1; });
@@ -1353,7 +1374,33 @@ function screenWorld(n){
         '<span class="lright">' + (has ? '<span class="stars">' + stars + '</span>' : '<span class="soontag">скоро</span>') + '</span>' +
         '</button>';
     });
-    h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button><span class="sp"></span>' +
+    h += '</div>';
+
+    /* карточка проекта — сразу за последним уроком мира. Проект живёт вне
+       сотни (звёзд не даёт), но показан прямо здесь, чтобы мимо не пройти. */
+    var proj = projectOfWorld(n);
+    if (proj){
+      var popen = projectOpen(proj), pdone = projectDone(proj.id);
+      var pst = projectState(proj.id);
+      var pnote = pdone
+        ? "Собран целиком. Можно открыть, запустить и забрать код себе."
+        : (popen
+            ? (pst.step > 0 ? "Начат: пройдено шагов " + pst.step + " из " + proj.steps.length + "."
+                            : "Все уроки мира пройдены — можно собирать проект.")
+            : "Откроется, когда пройдёшь все уроки этого мира.");
+      h += '<div class="projcard' + (popen ? "" : " locked") + (pdone ? " done" : "") + '">' +
+        '<span class="pjemoji">' + proj.emoji + '</span>' +
+        '<span class="pjbody"><span class="pjkicker">Проект мира ' + n + ' · вне сотни уроков</span>' +
+        '<b>' + esc(proj.title) + (pdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
+        '<span>' + esc(proj.tagline) + '</span>' +
+        '<span class="pjnote">' + esc(pnote) + '</span></span>' +
+        (popen ? '<button class="bigbtn" id="openproj">' +
+                   (pdone ? "Открыть" : (pst.step > 0 ? "Продолжить" : "Собрать проект")) + '</button>'
+               : '<span class="soontag">закрыт</span>') +
+      '</div>';
+    }
+
+    h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button><span class="sp"></span>' +
       (n < 5 ? '<button class="bigbtn ghost" id="wnext">Мир ' + (n+1) + ' →</button>' : '') + '</div>';
 
     app.innerHTML = h;
@@ -1361,6 +1408,11 @@ function screenWorld(n){
       b.onclick = function(){ if (!b.disabled) openLesson(b.getAttribute("data-id")); };
     });
     document.getElementById("tomap").onclick = screenWorlds;
+    var op = document.getElementById("openproj");
+    if (op) op.onclick = function(){
+      var pr = projectOfWorld(n);
+      if (projectDone(pr.id)) screenProjectDone(pr.id); else openProject(pr.id);
+    };
     var wn = document.getElementById("wnext");
     if (wn) wn.onclick = function(){ screenWorld(n+1); };
     refreshTop();
@@ -2645,6 +2697,222 @@ function winAI(x){
   document.getElementById("wstay").onclick = closeWin;
 }
 
+/* ================= проекты в конце мира =================
+   Проект — многошаговое задание, где все шаги строят ОДНУ программу.
+   Код переезжает из шага в шаг: стартовый код следующего шага — это то,
+   что ребёнок написал на предыдущем (а если ничего не сохранилось —
+   эталон предыдущего шага). Поэтому в конце получается цельная вещь,
+   а не четыре разрозненные задачки.
+
+   Вне сотни уроков: звёзд и XP не даёт, в счётчик «N из 100» не входит.
+   Прогресс — S.projects[id] = { step, code, done }, где step это номер
+   ТЕКУЩЕГО шага (он же количество пройденных). Карточка проекта живёт
+   на карте мира после последнего урока — так мимо неё не пройти.
+   ============================================================ */
+function projectsList(){ return (window.PROJECTS || []); }
+function projectById(id){
+  var xs = projectsList();
+  for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
+  return null;
+}
+function projectOfWorld(n){
+  var xs = projectsList();
+  for (var i = 0; i < xs.length; i++) if (xs[i].world === n) return xs[i];
+  return null;
+}
+function projectState(id){
+  S.projects = S.projects || {};
+  var st = S.projects[id];
+  if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0 }; S.projects[id] = st; }
+  if (typeof st.step !== "number") st.step = 0;
+  return st;
+}
+function projectDone(id){ return !!projectState(id).done; }
+/* проект открывается, когда все готовые уроки его мира пройдены */
+function projectOpen(p){
+  if (S.admin && S.admin.unlockAll) return true;
+  var w = CURRICULUM.world(p.world);
+  if (!w) return false;
+  var ready = worldReadyLessons(w);
+  return ready.length > 0 && ready.every(function(l){ return solved(l.id); });
+}
+/* стартовый код шага: своё с прошлого шага, иначе эталон прошлого шага */
+function projectStartCode(p, i){
+  var st = projectState(p.id);
+  if (i === 0) return st.code && st.step > 0 ? st.code : p.steps[0].starter;
+  return st.code || p.steps[i-1].solution;
+}
+
+function openProject(id, forceStep){
+  var p = projectById(id);
+  if (!p) return screenWorlds();
+  worldContent(p.world).then(function(){
+    if (!projectOpen(p)) return screenWorld(p.world);
+    var st = projectState(p.id);
+    var i = (typeof forceStep === "number") ? forceStep : st.step;
+    if (i >= p.steps.length) return screenProjectDone(p.id);
+    var step = p.steps[i];
+    stopTimer(); clearAdminHash();
+    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
+
+    var dots = p.steps.map(function(s, k){
+      var cls = k < st.step ? "done" : (k === i ? "now" : "");
+      return '<span class="pdot ' + cls + '" title="' + esc(s.title) + '">' + (k + 1) + '</span>';
+    }).join("");
+
+    var head = '<div class="crumbs"><span data-go="world">Мир ' + p.world + '</span> › ' +
+        p.emoji + ' ' + esc(p.title) + '</div>' +
+      '<div class="lvlhead"><div><div class="idx">Проект мира ' + p.world +
+        ' · шаг ' + (i + 1) + ' из ' + p.steps.length + '</div>' +
+      '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
+      '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+      '<p class="lede">' + esc(p.intro) + '</p>' +
+      '<div class="pstepbar">' + dots + '</div>';
+
+    var goal = '<div class="goal"><h3>🎯 Шаг ' + (i + 1) + ': ' + esc(step.title) + '</h3>' +
+      '<p>' + esc(step.brief) + '</p>' +
+      (step.list ? '<ul>' + step.list.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>' : '') +
+      (i > 0 ? '<span class="bugtip">В редакторе — твой код с прошлого шага. Дописывай в него, а не начинай с нуля.</span>' : '') +
+      '</div>';
+
+    var hints = '<div class="hintbox">' +
+      '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+      '<button class="rbtn sec" id="solbtn">Показать решение шага</button>' +
+      '<span class="tip">проект без звёзд — подсказки ничего не отнимают</span></div>' +
+      '<div class="hintout" id="hintout"></div>';
+
+    var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← К миру ' + p.world + '</button></div>';
+
+    app.innerHTML = head + goal + '<div id="studio"></div>' + hints + pager;
+
+    var studio = makeStudio({
+      engine: "mini",
+      code: projectStartCode(p, i),
+      label: "твоя программа",
+      check: function(ed, showMsg){ runProjectCheck(p, i, ed, showMsg); }
+    });
+    document.getElementById("studio").appendChild(studio);
+    session.studio = studio;
+
+    document.getElementById("hintbtn").onclick = function(){
+      var hs = step.hints || [];
+      if (!hs.length){ this.disabled = true; this.textContent = "Подсказок нет"; return; }
+      if (session.hints >= hs.length) return;
+      session.hints++;
+      var out = document.getElementById("hintout");
+      out.className = "hintout show";
+      out.innerHTML = hs.slice(0, session.hints).map(function(x, k){
+        return '<div class="step"><b>' + (k+1) + '.</b> ' + esc(x) + '</div>';
+      }).join("");
+      if (session.hints >= hs.length) this.textContent = "Подсказки кончились";
+    };
+    document.getElementById("solbtn").onclick = function(){
+      session.shown = true;
+      studio.editor.setCode(step.solution);
+      studio.showMsg("warn", "<b>Вот программа на конец этого шага</b>Прочитай её и запусти. Звёзд в проекте нет — смотреть можно без потерь, но сначала попробуй сам.");
+    };
+    app.querySelectorAll('[data-go="world"]').forEach(function(b){
+      b.onclick = function(){ screenWorld(p.world); };
+    });
+    refreshTop();
+    window.scrollTo({ top:0, behavior:"smooth" });
+  });
+}
+
+/* проверка шага: вывод должен совпасть с выводом эталона этого шага */
+function runProjectCheck(p, i, ed, showMsg){
+  session.attempts++;
+  var step = p.steps[i];
+  var eng = Runtime.get("mini"), code = ed.getCode();
+  if (step.needCode){
+    for (var k = 0; k < step.needCode.length; k++){
+      if (!codeHas(code, step.needCode[k])){
+        showMsg("warn", "<b>Почти</b>" + (step.needMsg || "Не хватает нужной конструкции."));
+        return;
+      }
+    }
+  }
+  var res = eng.run(code, {});
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+  var exp = eng.run(step.solution, {}).lines, got = res.lines;
+  if (!(exp.length === got.length && exp.every(function(v, n){ return v === got[n]; }))){
+    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
+    return;
+  }
+  winProjectStep(p, i, code);
+}
+
+function winProjectStep(p, i, code){
+  var st = projectState(p.id);
+  st.code = code;
+  if (i + 1 > st.step) st.step = i + 1;
+  var last = st.step >= p.steps.length;
+  if (last && !st.done){ st.done = 1; award("builder"); }
+  markActiveToday();          /* шаг проекта держит дневной стрик живым */
+  save();
+
+  var firstTry = session.attempts === 1 && session.hints === 0 && !session.shown;
+  document.getElementById("wincard").innerHTML = last
+    ? '<div class="big">🏆</div><h2>Проект собран!</h2>' +
+      '<p>' + esc(p.finale) + '</p>' +
+      '<div class="winrow"><button class="bigbtn" id="pfin">Посмотреть, что получилось</button></div>'
+    : '<div class="big">' + (firstTry ? "🎯" : "🧱") + '</div>' +
+      '<h2>Шаг ' + (i + 1) + ' из ' + p.steps.length + ' готов</h2>' +
+      '<p>' + esc(p.steps[i + 1].brief) + '</p>' +
+      '<div class="winrow"><button class="bigbtn" id="pnext">Следующий шаг →</button>' +
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(last ? 3 : 1);
+  var pn = document.getElementById("pnext");
+  if (pn) pn.onclick = function(){ closeWin(); openProject(p.id, i + 1); };
+  var pf = document.getElementById("pfin");
+  if (pf) pf.onclick = function(){ closeWin(); screenProjectDone(p.id); };
+  var ws = document.getElementById("wstay");
+  if (ws) ws.onclick = closeWin;
+}
+
+/* финал проекта: вся программа целиком, её можно запустить и забрать себе */
+function screenProjectDone(id){
+  var p = projectById(id);
+  if (!p) return screenWorlds();
+  stopTimer(); clearAdminHash();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var st = projectState(p.id);
+  var code = st.code || p.steps[p.steps.length - 1].solution;
+
+  app.innerHTML =
+    '<div class="crumbs"><span data-go="world">Мир ' + p.world + '</span> › ' + p.emoji + ' ' + esc(p.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">проект мира ' + p.world + ' собран</div>' +
+    '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">готово ✓</span></div></div>' +
+    '<p class="lede">' + esc(p.finale) + '</p>' +
+    '<div id="studio"></div>' +
+    '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
+    '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
+    '<button class="bigbtn ghost" data-go="world">← К миру ' + p.world + '</button></div>';
+
+  var studio = makeStudio({ engine: "mini", code: code, label: "твоя программа целиком" });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+
+  document.getElementById("tosand").onclick = function(){
+    S.sandbox = studio.editor.getCode(); save(); screenSandbox();
+  };
+  document.getElementById("pagain").onclick = function(){
+    var yes = true;
+    try { yes = confirm("Начать проект заново? Пройденные шаги обнулятся, но код останется в редакторе."); } catch(e){}
+    if (!yes) return;
+    var s2 = projectState(p.id);
+    s2.step = 0; s2.done = 0;
+    save(); openProject(p.id, 0);
+  };
+  app.querySelectorAll('[data-go="world"]').forEach(function(b){
+    b.onclick = function(){ screenWorld(p.world); };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ================= экран: визуализатор (машина времени) =================
    Прогоняем программу по шагам, на каждом шаге снимаем неизменяемый снимок
    памяти (heapSnapshot в engine-mini): переменные + списки/словари/кортежи/
@@ -2952,6 +3220,8 @@ function routeHash(){
   if ((location.hash || "").toLowerCase() === "#account"){ screenAccount(); return true; }
   if ((location.hash || "").toLowerCase() === "#viz"){ screenViz(); return true; }
   if ((location.hash || "").toLowerCase() === "#ai"){ screenAILab(); return true; }
+  var ph = (location.hash || "").replace(/^#/, "").toLowerCase();
+  if (ph && projectById(ph)){ openProject(ph); return true; }
   return false;
 }
 function fmtMins(ms){
@@ -3234,7 +3504,7 @@ function screenAdmin(){
       try { yes = confirm("Стереть весь прогресс: звёзды, XP, бейджи, статистику и серию дней? Отменить будет нельзя."); } catch(e2){}
       if (!yes) return;
       S.xp = 0; S.stars = {}; S.badges = []; S.log = {}; S.drawDone = {};
-      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {}; S.shields = {};
+      S.firstTry = 0; S.perfect = 0; S.days = {}; S.daily = {}; S.shields = {}; S.projects = {};
       save(); refreshTop(); screenAdmin();
     }
     else if (act === "go"){ openLesson(id); }
@@ -3366,7 +3636,7 @@ function screenAdmin(){
       Object.keys(S).forEach(function(k){ delete S[k]; });
       S.v = 2; S.xp = 0; S.stars = {}; S.badges = []; S.sandbox = null; S.sandboxRuns = 0;
       S.drawDone = {}; S.firstTry = 0; S.perfect = 0; S.log = {}; S.admin = { unlockAll:false };
-      S.days = {}; S.daily = {}; S.shields = {}; S.schedule = { days:[] }; S.name = "";
+      S.days = {}; S.daily = {}; S.shields = {}; S.projects = {}; S.schedule = { days:[] }; S.name = "";
       Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
       if (!S.log || typeof S.log !== "object") S.log = {};
       if (!S.admin || typeof S.admin !== "object") S.admin = { unlockAll:false };
@@ -3448,6 +3718,9 @@ window.__game = {
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
   screenViz: screenViz, vizRecord: vizRecord, state: S, save: save,
+  openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
+  projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
+  projectOpen: projectOpen, projectStartCode: projectStartCode,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,

@@ -31,6 +31,7 @@ global.CONTENT = {};
 eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -302,6 +303,61 @@ const seenAI = {};
     say(`[ты-и-ии] ${id}: есть needCode, но нет needMsg — ученик не поймёт, чего от него хотят`);
 });
 
-console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}`);
+/* ===== проекты в конце мира =====
+   Проект — многошаговое задание, где каждый шаг достраивает ОДНУ программу.
+   Отсюда и проверки: solution каждого шага обязан работать и что-то печатать;
+   заготовка первого шага обязана запускаться (ребёнок жмёт «Запустить» и видит
+   работающую программу), но НЕ проходить проверку — иначе задания нет;
+   каждый следующий шаг обязан менять вывод, иначе шаг пустой. */
+let projects = 0, psteps = 0;
+const seenPR = {};
+(global.PROJECTS || []).forEach(p => {
+  projects++;
+  const id = p.id || "(без id)";
+  if (!p.id) say(`[проект] у проекта нет id`);
+  else if (seenPR[p.id]) say(`[проект] ${id}: повтор id`);
+  seenPR[p.id] = 1;
+  ["title", "emoji", "tagline", "intro", "finale"].forEach(f => {
+    if (!p[f] || !String(p[f]).trim()) say(`[проект] ${id}: пустое поле «${f}»`);
+  });
+  if (typeof p.world !== "number" || p.world < 1 || p.world > 5)
+    say(`[проект] ${id}: world должен быть числом 1..5, а он «${p.world}»`);
+  if (!Array.isArray(p.steps) || p.steps.length < 2)
+    return say(`[проект] ${id}: у проекта должно быть хотя бы два шага`);
+
+  let prevOut = null;
+  p.steps.forEach((step, i) => {
+    psteps++;
+    const tag = `[проект] ${id} · шаг ${i + 1}`;
+    ["title", "brief", "solution"].forEach(f => {
+      if (!step[f] || !String(step[f]).trim()) say(`${tag}: пустое поле «${f}»`);
+    });
+    if (!Array.isArray(step.hints) || !step.hints.length) say(`${tag}: нет подсказок (hints)`);
+    if (i === 0 && (step.starter === undefined || !String(step.starter).trim()))
+      say(`${tag}: у первого шага обязан быть starter`);
+
+    const sol = MP.run(step.solution || "", { stdin: [] });
+    if (sol.error) return say(`${tag}: решение падает — ${sol.error.kind}: ${sol.error.msg}`);
+    if (!sol.output || !sol.output.trim()) say(`${tag}: решение ничего не печатает`);
+    if (prevOut !== null && sol.output === prevOut)
+      say(`${tag}: вывод не отличается от прошлого шага — шаг ничего не добавляет`);
+    prevOut = sol.output;
+
+    if (i === 0 && step.starter !== undefined){
+      const st = MP.run(step.starter, { stdin: [] });
+      if (st.error) say(`${tag}: заготовка обязана запускаться, а падает — ${st.error.kind}: ${st.error.msg}`);
+      else if (st.output === sol.output) say(`${tag}: заготовка уже даёт верный вывод — задания нет`);
+    }
+    (step.needCode || []).forEach(needle => {
+      let ok; try { ok = codeHas(step.solution, needle); }
+      catch (e){ say(`${tag}: needCode «${needle}» не превращается в поиск — ${e.message}`); return; }
+      if (!ok) say(`${tag}: needCode требует «${needle}», а в решении этого нет`);
+    });
+    if (step.needCode && !step.needMsg)
+      say(`${tag}: есть needCode, но нет needMsg — ученик не поймёт, чего от него хотят`);
+  });
+});
+
+console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps})`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);

@@ -658,6 +658,111 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- проект в конце мира --- */
+  let projChecked = 0;
+  const PROJECTS = w.PROJECTS || [];
+  if (typeof g.openProject === "function" && PROJECTS.length){
+    const p0 = problems.length;
+    const proj = PROJECTS[0];
+    const world1 = CUR.world(proj.world);
+
+    /* выше панель наставника включила «Открыть все уроки» — она законно
+       открывает и проект, поэтому на время проверки замка её выключаем */
+    const savedUnlock = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = false;
+
+    /* пока не все уроки мира пройдены — проект закрыт и кнопки нет */
+    const savedStars = JSON.parse(JSON.stringify(g.state.stars));
+    world1.lessons.forEach(l => { delete g.state.stars[l.id]; });
+    g.state.projects = {};
+    if (g.projectOpen(proj)) bad("[проект] открыт, хотя уроки мира не пройдены");
+    g.screenWorld(proj.world);
+    await tick();
+    if (!doc.querySelector(".projcard.locked"))
+      bad("[проект] на карте мира нет закрытой карточки проекта");
+    if (doc.getElementById("openproj"))
+      bad("[проект] кнопка открытия есть у закрытого проекта");
+
+    /* проходим все уроки мира — проект должен открыться */
+    Object.keys(savedStars).forEach(k => { g.state.stars[k] = savedStars[k]; });
+    world1.lessons.forEach(l => { if (CONTENT["world" + proj.world][l.id]) g.setStars(l.id, 3); });
+    if (!g.projectOpen(proj)) bad("[проект] не открылся после того, как все уроки мира пройдены");
+    g.screenWorld(proj.world);
+    await tick();
+    if (!doc.getElementById("openproj")) bad("[проект] на карте мира нет кнопки открыть проект");
+
+    /* проходим проект по шагам эталонными решениями */
+    doc.getElementById("openproj").click();
+    await tick();
+    for (let i = 0; i < proj.steps.length; i++){
+      const st = studioOf();
+      if (!st){ bad(`[проект] шаг ${i+1} не открылся`); break; }
+
+      /* стартовый код шага: на первом — заготовка, дальше переезжает своё */
+      const startCode = st.editor.getCode();
+      if (i === 0 && startCode !== proj.steps[0].starter)
+        bad("[проект] на первом шаге в редакторе не заготовка");
+      if (i > 0 && startCode !== proj.steps[i-1].solution)
+        bad(`[проект] на шаге ${i+1} код не переехал с прошлого шага`);
+
+      /* стартовый код НЕ должен проходить проверку — иначе шага нет */
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      if (won()){ bad(`[проект] шаг ${i+1} засчитан на неизменённом коде`); closeWin(); }
+
+      st.editor.setCode(proj.steps[i].solution);
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      if (!won()){ bad(`[проект] шаг ${i+1}: верное решение не засчитано — ` + msgText()); break; }
+
+      if (i < proj.steps.length - 1){
+        const nx = doc.getElementById("pnext");
+        if (!nx){ bad(`[проект] после шага ${i+1} нет кнопки следующего шага`); break; }
+        nx.click();
+        await tick();
+      } else {
+        const fin = doc.getElementById("pfin");
+        if (!fin){ bad("[проект] после последнего шага нет выхода на финал"); break; }
+        fin.click();
+        await tick();
+      }
+    }
+
+    /* финал: проект отмечен собранным, бейдж выдан, код целиком показан */
+    if (!g.projectDone(proj.id)) bad("[проект] после всех шагов проект не отмечен собранным");
+    if (g.state.badges.indexOf("builder") < 0) bad("[проект] бейдж «Строитель» не выдан");
+    if (g.projectState(proj.id).code !== proj.steps[proj.steps.length - 1].solution)
+      bad("[проект] в финале сохранён не тот код, который написал ученик");
+    if (!doc.getElementById("tosand")) bad("[проект] на финальном экране нет кнопки «Забрать в песочницу»");
+    /* «забрать в песочницу» кладёт программу в песочницу */
+    doc.getElementById("tosand").click();
+    await tick();
+    if (g.state.sandbox !== proj.steps[proj.steps.length - 1].solution)
+      bad("[проект] код проекта не уехал в песочницу");
+
+    /* слияние: пройденный шаг берём дальний, код — из более свежего сохранения */
+    const mp = g.mergeProgress(
+      { projects:{ x:{ step:1, done:0, code:"стар" } }, savedAt:1 },
+      { projects:{ x:{ step:3, done:1, code:"свеж" } }, savedAt:2 });
+    if (!mp.projects || mp.projects.x.step !== 3 || !mp.projects.x.done)
+      bad("[проект] слияние откатило прогресс: " + JSON.stringify(mp && mp.projects));
+    if (mp.projects.x.code !== "свеж")
+      bad("[проект] слияние взяло не свежий код: " + JSON.stringify(mp.projects.x.code));
+
+    /* проект открыт и мимо замка: «Открыть все уроки» в панели наставника */
+    g.state.projects = {};
+    g.state.admin.unlockAll = true;
+    const w1 = CUR.world(proj.world);
+    const keep = JSON.parse(JSON.stringify(g.state.stars));
+    w1.lessons.forEach(l => { delete g.state.stars[l.id]; });
+    if (!g.projectOpen(proj)) bad("[проект] «Открыть все уроки» не открывает проект");
+    Object.keys(keep).forEach(k => { g.state.stars[k] = keep[k]; });
+    g.state.admin.unlockAll = savedUnlock;
+
+    if (problems.length === p0) projChecked++;
+    viewReset(g);
+  }
+
   /* --- щит для стрика --- */
   let shieldChecked = 0;
   if (typeof g.useShield === "function"){
@@ -776,6 +881,7 @@ function checkEncoding(){
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
   console.log(`щит для стрика: ${shieldChecked ? "да" : "нет"}`);
+  console.log(`проект в конце мира: ${projChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
