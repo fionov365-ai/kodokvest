@@ -432,7 +432,7 @@ function checkEncoding(){
 
     /* сброс в панели наставника: результаты стёрты, имя и своё творчество целы */
     const res = g.clearResults(Object.assign({}, full, { name:"Аня", sandbox:"мой код" }));
-    ["stars","log","warmups","ailab","days","daily","shields","projects","drawDone","gamesPlayed"]
+    ["stars","log","warmups","ailab","days","daily","shields","projects","drawDone","gamesPlayed","drafts"]
       .forEach(k => {
         if (Object.keys(res[k] || {}).length)
           bad(`[сброс] «${k}» не сброшен панелью наставника`);
@@ -1319,6 +1319,121 @@ function checkEncoding(){
     g.state.admin.unlockAll = savedUnlock2;
   }
 
+  /* --- черновики кода на экране урока ---
+     Раньше уход с урока стирал написанное. Проверяем не «поле появилось»,
+     а поведение: код переживает уход и возвращение, нетронутый урок ничего
+     не занимает, а вернуться к чистой заготовке можно кнопкой. */
+  let draftChecked = 0;
+  if (typeof g.draftGet === "function"){
+    const p0 = problems.length;
+    g.state.drafts = {};
+    const id = "vars", body = CONTENT.world1[id];
+    if (!body) bad("[черновик] урока «vars» нет — проверять нечем");
+
+    /* нетронутый урок черновика не заводит: это не работа, а исходное состояние */
+    g.openLesson(id); await tick();
+    viewReset(g); await tick();
+    if (g.draftGet(id)) bad("[черновик] нетронутый урок оставил черновик");
+
+    /* написанное переживает уход и возвращение */
+    g.openLesson(id); await tick();
+    let dst = studioOf();
+    if (!dst) bad("[черновик] урок не открылся");
+    else {
+      dst.editor.setCode("мой = 5\nprint(мой)");
+      viewReset(g); await tick();
+      const d = g.draftGet(id);
+      if (!d) bad("[черновик] код не сохранился при уходе с урока");
+      else if (String(d.files[0].code).indexOf("мой = 5") < 0)
+        bad("[черновик] сохранён не тот код: " + JSON.stringify(d.files[0].code).slice(0, 60));
+
+      g.openLesson(id); await tick();
+      dst = studioOf();
+      if (!dst || dst.editor.getCode().indexOf("мой = 5") < 0)
+        bad("[черновик] код не вернулся в редактор при возвращении в урок");
+      const note = doc.getElementById("draftnote");
+      if (!note || note.hidden)
+        bad("[черновик] нет подписи о том, что в редакторе код с прошлого раза");
+
+      /* выход к чистой заготовке: у обычного урока кнопки «вернуть как было»
+         нет, и без этой ребёнок остался бы заперт со своей кашей */
+      const fresh = doc.getElementById("draftfresh");
+      if (!fresh) bad("[черновик] нет кнопки «Вернуть заготовку»");
+      else {
+        fresh.click(); await tick();
+        const now = studioOf();
+        if (!now || now.editor.getCode() !== body.task.starter)
+          bad("[черновик] «Вернуть заготовку» не вернуло заготовку");
+        if (g.draftGet(id)) bad("[черновик] «Вернуть заготовку» не стёрло черновик");
+        if (!doc.getElementById("draftnote").hidden)
+          bad("[черновик] подпись осталась после возврата к заготовке");
+      }
+      viewReset(g); await tick();
+    }
+
+    /* многофайловый урок: черновик обязан помнить ВСЕ файлы, а не главный */
+    const mid = "modules-own", mbody = CONTENT.world3 && CONTENT.world3[mid];
+    if (!mbody) bad("[черновик] многофайлового урока «modules-own» нет — проверять нечем");
+    else {
+      g.openLesson(mid); await tick();
+      const ms = studioOf();
+      if (!ms || !ms.editor.setFiles) bad("[черновик] многофайловый урок не открылся");
+      else {
+        const files = ms.editor.getFiles();
+        if (files.length < 2) bad("[черновик] в многофайловом уроке один файл");
+        ms.editor.setFiles(files.map(f => ({ name:f.name, code:"# " + f.name + "\nprint(1)" })));
+        viewReset(g); await tick();
+        const md = g.draftGet(mid);
+        if (!md) bad("[черновик] многофайловый урок не сохранил черновик");
+        else if (md.files.length !== files.length)
+          bad(`[черновик] сохранено файлов ${md.files.length}, а в уроке ${files.length}`);
+        g.openLesson(mid); await tick();
+        const back = studioOf().editor.getFiles();
+        if (back.some((f, i) => f.code.indexOf("# " + f.name) !== 0))
+          bad("[черновик] в многофайловом уроке вернулись не все файлы: " +
+              JSON.stringify(back.map(f => f.code.slice(0, 12))));
+        viewReset(g); await tick();
+      }
+    }
+
+    /* песочница теряла код ровно так же: он сохранялся только по «Запустить»
+       и по нижней кнопке, а уход кнопкой верхней панели его стирал */
+    g.screenSandbox(); await tick();
+    const sb = g.getSession().studio;
+    if (!sb) bad("[черновик] песочница не отдала редактор — её код снова можно потерять");
+    else {
+      sb.editor.setCode("# мои каракули\nforward(10)");
+      viewReset(g); await tick();          /* уход НЕ через нижнюю кнопку */
+      if (String(g.state.sandbox).indexOf("мои каракули") < 0)
+        bad("[черновик] код песочницы потерялся при уходе через верхнюю панель");
+    }
+
+    /* слияние: код сложить нельзя, поэтому свежая копия побеждает,
+       но черновик, который был только на одном устройстве, не теряется */
+    const dm = g.mergeProgress(
+      { drafts:{ a:{ files:[{ name:"main.py", code:"свежий" }], at:2 },
+                 b:{ files:[{ name:"main.py", code:"только тут" }], at:1 } }, savedAt:2 },
+      { drafts:{ a:{ files:[{ name:"main.py", code:"старый" }], at:1 } }, savedAt:1 });
+    if (!dm.drafts || !dm.drafts.a || dm.drafts.a.files[0].code !== "свежий")
+      bad("[черновик] слияние взяло не свежую версию: " + JSON.stringify(dm.drafts && dm.drafts.a));
+    if (!dm.drafts.b)
+      bad("[черновик] слияние потеряло черновик, который был только на одном устройстве");
+
+    /* предел: черновики уезжают на сервер, расти без конца им нельзя */
+    g.state.drafts = {};
+    for (let i = 0; i < g.DRAFT_MAX + 5; i++)
+      g.state.drafts["x" + i] = { files:[{ name:"main.py", code:"c" }], at: i + 1 };
+    g.pruneDrafts();
+    const left = Object.keys(g.state.drafts);
+    if (left.length !== g.DRAFT_MAX)
+      bad(`[черновик] предел не соблюдён: осталось ${left.length}, а можно ${g.DRAFT_MAX}`);
+    if (left.indexOf("x0") >= 0) bad("[черновик] выброшены не самые старые черновики");
+
+    g.state.drafts = {};
+    if (problems.length === p0) draftChecked = 1;
+    viewReset(g);
+  } else bad("[черновик] черновиков нет — draftGet не выведен наружу");
+
   /* --- портфолио и сертификаты ---
      Сертификат — обещание, поэтому проверяем в первую очередь не разметку,
      а условие выдачи: уроки мира ПЛЮС собранный проект. Отдельно проверяем,
@@ -2006,6 +2121,7 @@ function checkEncoding(){
   console.log(`цена программы в шагах: ${stepsChecked ? "да" : "нет"}`);
   console.log(`проект с ИИ-напарником: ${aiProjChecked ? "да" : "нет"}`);
   console.log(`отчёт за неделю: ${weekChecked ? "да" : "нет"}`);
+  console.log(`черновики кода на уроке: ${draftChecked ? "да" : "нет"}`);
   console.log(`портфолио и сертификаты: ${folioChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);

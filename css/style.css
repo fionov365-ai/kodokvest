@@ -780,3 +780,10 @@ body.focus .lede{display:none}
   .certsheet{box-shadow:none;border-radius:0;background:#fff;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ---------- подпись «в редакторе код с прошлого раза» ---------- */
+.draftnote{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin:0 0 -4px;padding:9px 14px;border:1px solid var(--line2);border-radius:12px;
+  background:var(--sunken);color:var(--soft);font-size:13.5px}
+.draftnote[hidden]{display:none}
+.draftnote .rbtn{margin-left:auto}

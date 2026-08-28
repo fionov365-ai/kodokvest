@@ -62,7 +62,7 @@ var ADMIN_CODE = "kodokvest-2026";
    ============================================================ */
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
-                     "days","daily","shields","projects","review"];
+                     "days","daily","shields","projects","review","drafts"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 var KEEP_ON_RESET = ["games"];
 
@@ -707,6 +707,15 @@ function mergeProgress(a, b){
     if (!out.games[k]) delete out.games[k];
   });
 
+  /* черновики уроков: это КОД, и сложить две версии нельзя — берём из более
+     свежего сохранения, как песочницу и как свои версии игр. Урок, который
+     правили только на одном устройстве, при этом не теряется. */
+  out.drafts = {};
+  Object.keys(mergeSet(a.drafts, b.drafts)).forEach(function(k){
+    out.drafts[k] = (fresher.drafts || {})[k] || (older.drafts || {})[k] || null;
+    if (!out.drafts[k]) delete out.drafts[k];
+  });
+
   /* проекты: пройденный шаг — результат, поэтому берём дальний (max), а вот КОД
      сложить нельзя, он как песочница — берём из более свежего сохранения.
      Так занятие с двух устройств не откатывает проект назад и не склеивает
@@ -998,7 +1007,14 @@ function makeEditor(initial, label, files){
       g += '<i class="' + (i === box._errLine ? "err" : (i === box._curLine ? "cur" : "")) + '">' + i + '</i>';
     gut.innerHTML = g;
   }
-  ta.addEventListener("input", function(){ box._errLine = 0; box._curLine = 0; sync(); });
+  /* onEdit — крючок для того, кто открыл редактор: экран урока вешает на него
+     отложенное сохранение черновика. Программная подстановка кода (setCode,
+     setFiles) его НЕ дёргает: там сохраняет тот, кто подставил. */
+  box.onEdit = null;
+  ta.addEventListener("input", function(){
+    box._errLine = 0; box._curLine = 0; sync();
+    if (box.onEdit) box.onEdit();
+  });
   ta.addEventListener("keydown", function(e){
     if (e.key === "Tab"){
       e.preventDefault();
@@ -1824,6 +1840,100 @@ function screenWorld(n){
 /* ================= экран: урок ================= */
 var session = null;
 
+/* ================= черновики кода на экране урока =================
+   Раньше уход с урока стирал написанное: код жил только в DOM редактора,
+   ни S, ни localStorage его не помнили. Из-за этого шпаргалку пришлось
+   делать оверлеем, а любой новый экран посреди урока был запрещён (грабля 34).
+   Теперь код урока переживает уход и возвращение.
+
+   Решения, которые тут приняты:
+     - черновик — это «что было в редакторе, когда ты ушёл». Не «последняя
+       попытка», не «твой код»: если ребёнок открыл решение и ушёл, вернётся
+       решение, и подпись над редактором говорит об этом честно;
+     - черновик, совпадающий с заготовкой (или пустой), не хранится: это не
+       работа, а исходное состояние;
+     - рядом с редактором есть «Вернуть заготовку» — иначе ребёнок, оставивший
+       в редакторе кашу, оказался бы заперт: у обычного урока кнопки «вернуть
+       как было» нет, она только у заданий «починить». Название выбрано так,
+       чтобы не спутать с кнопкой «↺ Сброс» в самом редакторе: та чистит вывод
+       и холст, а код не трогает;
+     - код сложить нельзя, поэтому при слиянии двух устройств черновик берётся
+       из более свежего сохранения — как песочница и как свои версии игр;
+     - сохраняем в трёх местах: через паузу после набора, при уходе с экрана
+       (claimScreen — через него проходит ЛЮБАЯ смена экрана) и при закрытии
+       вкладки.
+   ============================================================ */
+var DRAFT_MAX  = 60;    /* больше стольких черновиков в памяти не держим */
+var DRAFT_WAIT = 700;   /* мс тишины после набора — и черновик сохраняется */
+var draftTimer = null;
+
+function draftsAll(){ S.drafts = S.drafts || {}; return S.drafts; }
+function draftGet(id){
+  var d = draftsAll()[id];
+  return (d && Array.isArray(d.files) && d.files.length) ? d : null;
+}
+function draftDrop(id){ delete draftsAll()[id]; save(); }
+
+/* Черновик хранится списком файлов: так же выглядит многофайловый урок,
+   а обычный — это список из одного файла. Совпал с заготовкой — не храним. */
+function draftSave(id, files, starter){
+  var d = draftsAll();
+  var empty = files.every(function(f){ return !String(f.code).trim(); });
+  var same = files.length === starter.length && files.every(function(f, i){
+    return f.code === starter[i].code;
+  });
+  if (empty || same){
+    if (d[id]){ delete d[id]; save(); }
+    return false;
+  }
+  d[id] = { files: files.map(function(f){ return { name:f.name, code:f.code }; }), at: Date.now() };
+  pruneDrafts();
+  save();
+  return true;
+}
+/* Черновики уезжают на сервер вместе с прогрессом, поэтому расти без предела
+   им нельзя: сотня программ в одном запросе не нужна никому. */
+function pruneDrafts(){
+  var d = draftsAll(), keys = Object.keys(d);
+  if (keys.length <= DRAFT_MAX) return;
+  keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+  keys.slice(0, keys.length - DRAFT_MAX).forEach(function(k){ delete d[k]; });
+}
+
+/* Положить черновик в редактор, сопоставляя файлы по ИМЕНИ: содержание урока
+   могли поправить, и порядок файлов мог измениться. Файл, которого в черновике
+   нет, остаётся заготовкой. */
+function draftApply(ed, saved){
+  var by = {};
+  saved.forEach(function(f){ by[f.name] = f.code; });
+  ed.setFiles(ed.getFiles().map(function(f){
+    return { name: f.name, code: by.hasOwnProperty(f.name) ? by[f.name] : f.code };
+  }));
+}
+
+/* Сохранить несохранённый код УХОДЯЩЕГО экрана. Зовётся из claimScreen, то есть
+   на любой смене экрана, включая переход с урока на урок. В этот момент старая
+   разметка ещё в документе — поэтому редактор можно дочитать.
+
+   Песочница здесь же, и вот почему: её код сохранялся только по «Запустить» и по
+   нижней кнопке «Ко всем мирам». Ребёнок, ушедший кнопкой верхней панели, терял
+   написанное ровно так же, как терял его на уроке. */
+function draftFlush(){
+  if (draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
+  var s = session;
+  if (!s || !s.studio || !s.studio.editor) return;
+  try {
+    if (!document.body.contains(s.studio)) return;
+    if (s.sandbox){ S.sandbox = s.studio.editor.getCode(); save(); return; }
+    if (s.lesson && s.starter) draftSave(s.lesson, s.studio.editor.getFiles(), s.starter);
+  } catch(e){}
+}
+function draftSchedule(){
+  if (draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(function(){ draftTimer = null; draftFlush(); }, DRAFT_WAIT);
+}
+
+
 function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
@@ -1832,7 +1942,9 @@ function openLesson(id){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
     var body = lessonBody(l);
     if (!body) return screenWorld(l.world);
-    session = { id:id, attempts:0, hints:0, shown:false };
+    /* lesson — отдельное поле, а не id: id есть и у разминки, и у «Ты и ИИ»,
+       а черновик заводится только у урока */
+    session = { id:id, lesson:id, attempts:0, hints:0, shown:false };
     touchLog(id); startTimer(id);
     var w = CURRICULUM.world(l.world);
     var ready = worldReadyLessons(w);
@@ -1883,7 +1995,9 @@ function openLesson(id){
       (prev ? '<button class="bigbtn ghost" data-open="' + prev.id + '">Назад</button>' : '') +
       (next ? '<button class="bigbtn ghost" data-open="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
-    app.innerHTML = head + theory + goal + bug + '<div id="studio"></div>' + hints + pager;
+    app.innerHTML = head + theory + goal + bug +
+      '<div class="draftnote" id="draftnote" hidden></div>' +
+      '<div id="studio"></div>' + hints + pager;
 
     /* Задание может состоять из нескольких файлов: главный плюс модули. */
     var taskFiles = body.task.files
@@ -1907,6 +2021,33 @@ function openLesson(id){
     });
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
+
+    /* заготовка урока списком файлов — с ней сравнивается черновик, чтобы
+       нетронутый урок не занимал места в прогрессе */
+    session.starter = taskFiles
+      ? taskFiles.map(function(f){ return { name:f.name, code:f.code }; })
+      : [{ name:"main.py", code: body.task.starter }];
+
+    var draft = draftGet(id);
+    if (draft){
+      draftApply(studio.editor, draft.files);
+      var dnote = document.getElementById("draftnote");
+      dnote.hidden = false;
+      /* Подпись намеренно не говорит «твой код»: если ребёнок ушёл, открыв
+         решение, вернётся решение — и врать об этом не надо. */
+      dnote.innerHTML = '<span>📝 В редакторе код с прошлого раза, а не чистая заготовка.</span>' +
+        '<button class="rbtn sec" id="draftfresh">Вернуть заготовку</button>';
+      document.getElementById("draftfresh").onclick = function(){
+        draftDrop(id);
+        if (taskFiles && studio.editor.setFiles) studio.editor.setFiles(taskFiles);
+        else studio.editor.setCode(body.task.starter);
+        dnote.hidden = true;
+        studio.editor.focusEditor();
+      };
+    }
+    /* набор текста откладывает сохранение: уход с экрана поймает claimScreen,
+       а вот просто закрытую вкладку — только это */
+    studio.editor.onEdit = draftSchedule;
 
     app.querySelectorAll(".demo[data-demo]").forEach(function(d){
       var i = +d.getAttribute("data-demo"), res = d.querySelector(".res");
@@ -2173,7 +2314,8 @@ function confetti(n){
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
   enterScreen();
-  session = { id:null, attempts:0, hints:0, shown:false };
+  /* sandbox:true — метка для draftFlush: уход с этого экрана обязан сохранить код */
+  session = { id:null, attempts:0, hints:0, shown:false, sandbox:true };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
              "goto(0, 0)","dot(10)","circle(60)","print(x)","range(10)","len(s)","sum(xs)","randint(1, 6)","sqrt(16)"];
   app.innerHTML =
@@ -2194,6 +2336,8 @@ function screenSandbox(){
     }
   });
   document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  studio.editor.onEdit = draftSchedule;
   app.querySelectorAll(".ref span").forEach(function(sp){
     sp.onclick = function(){
       var c = studio.editor.getCode();
@@ -4703,7 +4847,10 @@ function enterScreen(){
    запускался счётчик времени — по уроку, который никто не открывал. Каждый
    заход на экран берёт номер, а отрисовка сверяет: номер сменился — не рисуем. */
 var screenSeq = 0;
-function claimScreen(){ return ++screenSeq; }
+/* Через claimScreen проходит ЛЮБАЯ смена экрана: и enterScreen, и урок, и
+   проект. Поэтому черновик уходящего урока сохраняется именно здесь — одним
+   местом на все переходы, включая переход с урока сразу на другой урок. */
+function claimScreen(){ draftFlush(); return ++screenSeq; }
 function screenStale(n){ return n !== screenSeq; }
 function clearAdminHash(){
   try {
@@ -5321,6 +5468,8 @@ window.addEventListener("keydown", function(e){
   else if (sheetIsOpen()) closeSheet();
   else closeWin();
 });
+/* Закрытая вкладка — единственный уход, который не проходит через claimScreen */
+window.addEventListener("beforeunload", draftFlush);
 window.addEventListener("resize", function(){
   document.querySelectorAll("canvas.stage").forEach(function(c){
     if (c._lastTurtle) drawTurtle(c, c._lastTurtle);
@@ -5402,6 +5551,9 @@ window.__game = {
   openSheet: openSheet, closeSheet: closeSheet, sheetIsOpen: sheetIsOpen,
   sheetRender: sheetRender, sheetLearned: sheetLearned, sheetRun: sheetRun,
   weekReportHTML: weekReportHTML, WEEK_DAYS: WEEK_DAYS,
+  draftGet: draftGet, draftSave: draftSave, draftDrop: draftDrop,
+  draftApply: draftApply, draftFlush: draftFlush, pruneDrafts: pruneDrafts,
+  DRAFT_MAX: DRAFT_MAX,
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
   openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
