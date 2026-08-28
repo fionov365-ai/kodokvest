@@ -548,6 +548,70 @@ const seenPR = {};
   });
 });
 
+/* ПОРЯДОК ОБЪЯСНЕНИЙ.
+   Тесты проверяют, что код урока работает, и не проверяют, что ребёнку было
+   откуда его узнать. Так в курс дважды попадал один и тот же дефект: решение
+   задания требует команду, которую нигде не показывали. `.title()` в уроке 7
+   назывался только в третьей подсказке — то есть за звезду; `isinstance`
+   стоял в решении сотого урока, а объяснения не было вовсе.
+
+   Правило: если конструкция стоит в решении (или заготовке) задания, она
+   обязана быть либо показана в примере ЭТОГО или любого более раннего урока,
+   либо названа словами в тексте урока или в условии задания.
+
+   ПОДСКАЗКИ НЕ СЧИТАЮТСЯ. Сначала я их засчитал — и проверка честно прошла на
+   том самом дефекте, ради которого писалась: `.title()` в уроке 7 назван в
+   третьей подсказке, и этого хватило, чтобы тест промолчал. Но за подсказку
+   снимается звезда, то есть узнать команду можно только заплатив. Бесплатны
+   теория, условие задания и симптом у «починить» — они и считаются.
+
+   Список токенов ниже не полный и полным быть не может — он покрывает
+   встроенные функции и методы, то есть ровно то, что «берётся из ниоткуда».
+   Границы имени обязательны: поиск по подстроке ловит apply_all внутри all(
+   и уже однажды дал ложный вывод. */
+const W_ID = "A-Za-z_0-9А-Яа-яЁё";
+const AUDIT_CALLS = ["print","len","range","int","str","float","round","abs","min","max","sum","sorted",
+  "list","dict","set","tuple","type","isinstance","any","all","zip","enumerate","reversed","input",
+  "open","super","repr","map","filter","divmod","pow","bool","next","iter","hasattr","getattr","vars","dir"];
+const AUDIT_METHODS = ["append","pop","remove","insert","index","count","sort","reverse","extend","clear",
+  "upper","lower","strip","split","join","replace","startswith","endswith","find","title","capitalize",
+  "get","items","keys","values","setdefault","update","add","discard","union","difference","read","write",
+  "readlines","readline","strftime","copy","isdigit","isalpha","format","rstrip","lstrip","splitlines","zfill"];
+const noTags = x => String(x || "").replace(/<[^>]*>/g, " ");
+const shownBefore = new Set();
+let auditLessons = 0;
+
+CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
+  const body = (CONTENT["world" + w.n] || {})[l.id];
+  if (!body || !body.task) return;
+  auditLessons++;
+  const theoryCode = (body.theory || [])
+    .map(t => [t.demo, t.show].filter(Boolean).join("\n")).join("\n");
+  const words = noTags(body.lede) + " " +
+    (body.theory || []).map(t => noTags(t.h) + " " + noTags(t.p)).join(" ") + " " +
+    noTags(body.task.goal) + " " + noTags((body.task.list || []).join(" ")) + " " +
+    noTags(body.task.symptom);
+  const answer = [body.task.solution, body.task.starter].filter(Boolean).join("\n") + "\n" +
+    (body.task.files || []).map(f => [f.solution, f.starter].filter(Boolean).join("\n")).join("\n");
+
+  const audit = (tok, re) => {
+    if (!re.test(answer)) return;
+    if (re.test(theoryCode)) return;                       /* показано в этом уроке */
+    if (new RegExp("(^|[^" + W_ID + "])" + tok.replace(".", "\\.?") + "\\b").test(words)) return;  /* названо словами */
+    if (shownBefore.has(tok)) return;                      /* показывали раньше */
+    say(`[порядок] урок ${l.num} ${l.id}: «${tok}» нужен в решении, но его не показывали ни здесь, ни раньше`);
+  };
+  AUDIT_CALLS.forEach(n => audit(n, new RegExp("(^|[^" + W_ID + "\\.])" + n + "\\s*\\(")));
+  AUDIT_METHODS.forEach(n => audit("." + n, new RegExp("\\." + n + "\\s*\\(")));
+
+  AUDIT_CALLS.forEach(n => {
+    if (new RegExp("(^|[^" + W_ID + "\\.])" + n + "\\s*\\(").test(theoryCode)) shownBefore.add(n);
+  });
+  AUDIT_METHODS.forEach(n => {
+    if (new RegExp("\\." + n + "\\s*\\(").test(theoryCode)) shownBefore.add("." + n);
+  });
+}));
+
 /* Шпаргалка. Вывод примеров нигде не хранится — его считает движок в момент
    показа, поэтому «неверного ответа» тут быть не может. Зато может быть
    пример, который падает, молчит или ссылается на несуществующий урок:
@@ -575,5 +639,6 @@ const seenCS = {};
 });
 
 console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps}), шпаргалка: ${sheetItems}`);
+console.log(`порядок объяснений проверен на ${auditLessons} уроках`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);
