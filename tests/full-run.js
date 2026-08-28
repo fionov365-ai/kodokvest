@@ -1694,10 +1694,17 @@ function checkEncoding(){
       bad("[шпаргалка] пустой поиск ничего не объясняет");
     qEl.value = ""; doc.getElementById("sheetall").checked = false; g.sheetRender();
 
-    /* вывод примера считается движком, а не берётся из файла */
-    const any = CS[0].items[0];
-    if (!String(g.sheetRun(any)).trim())
-      bad("[шпаргалка] пример «" + any.id + "» показывается без вывода");
+    /* Вывод примера считается движком в момент показа. Проверяем КАЖДУЮ запись,
+       а не первую: sheetRun — отдельный путь от lessons.js и content-vs-python.js,
+       которые зовут движок сами. Запись с файлами (open, csv) падает именно
+       здесь, если sheetRun не отдаст ей data, и раньше это никто бы не заметил. */
+    const brokenSheet = [];
+    CS.forEach(x => (x.items || []).forEach(it => {
+      const out = String(g.sheetRun(it) || "");
+      if (!out.trim() || /^ошибка:/.test(out)) brokenSheet.push(it.id + " → " + out.slice(0, 50));
+    }));
+    if (brokenSheet.length)
+      bad("[шпаргалка] примеры показываются с ошибкой или без вывода: " + brokenSheet.join("; "));
 
     g.closeSheet();
     if (g.sheetIsOpen()) bad("[шпаргалка] не закрылась");

@@ -568,7 +568,7 @@ const seenCS = {};
     seenCS[it.id] = 1;
     if (!CURRICULUM.byId(it.lesson))
       say(`${tag}: ссылается на урок «${it.lesson}», а такого урока нет`);
-    const r = MP.run(it.code || "", { stdin: [] });
+    const r = MP.run(it.code || "", { stdin: [], files: it.data ? JSON.parse(JSON.stringify(it.data)) : {} });
     if (r.error) say(`${tag}: пример падает — ${r.error.kind}: ${r.error.msg}`);
     else if (!r.output || !r.output.trim()) say(`${tag}: пример ничего не печатает`);
   });

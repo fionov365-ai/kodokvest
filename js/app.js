@@ -3274,7 +3274,8 @@ function sheetItems(){ return window.CHEATSHEET || []; }
 function sheetLearned(it){ return solved(it.lesson) || (S.admin && S.admin.unlockAll); }
 function sheetRun(it){
   if (sheetOut[it.id] === undefined){
-    var r = Runtime.get("mini").run(it.code, {});
+    /* data — файлы рядом с примером: без них записи про open() и csv упали бы */
+    var r = Runtime.get("mini").run(it.code, { files: it.data ? JSON.parse(JSON.stringify(it.data)) : {} });
     sheetOut[it.id] = r.error ? ("ошибка: " + r.error.msg) : r.output.replace(/\n+$/, "");
   }
   return sheetOut[it.id];

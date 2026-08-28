@@ -231,7 +231,7 @@ let projsteps = 0;
 let sheetChecked = 0;
 (global.CHEATSHEET || []).forEach(g => {
   (g.items || []).forEach(it => {
-    if (compare("шпаргалка " + it.id, it.code, null, null, null) !== false) sheetChecked++;
+    if (compare("шпаргалка " + it.id, it.code, null, it.data || null, null) !== false) sheetChecked++;
   });
 });
 

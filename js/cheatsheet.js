@@ -12,6 +12,9 @@
      what    — что делает, одной фразой
      code    — короткий пример, 1–4 строки
      lesson  — id урока, где это объясняли (по нему считается «пройдено»)
+     data    — необязательно: файлы рядом с примером, { "имя.txt": "текст" }.
+               Нужны записям про open() и csv: без файла такой пример упал бы,
+               а команды эти забываются чаще всех остальных
 
    Вывод примера НЕ хранится: он считается движком в момент показа. Значит,
    он не может разойтись с тем, что ребёнок получит у себя.
@@ -20,7 +23,8 @@
      - пример обязан запускаться и что-то печатать (tests/lessons.js);
      - пример обязан совпадать с настоящим python3 (tests/content-vs-python.js);
      - lesson обязан быть настоящим id урока из curriculum.js;
-     - никакой черепашки, ввода с клавиатуры и файлов — только чистый расчёт.
+     - никакой черепашки и ввода с клавиатуры. Файлы можно, но только через
+       поле data: и тренажёр, и python3 в проверке получают их одинаково.
        Случайность можно: пример со случайным числом честно показывает разное.
    ============================================================ */
 window.CHEATSHEET = [
@@ -39,6 +43,9 @@ window.CHEATSHEET = [
     { id:"fstring-width", sig:'f"{значение:6}"', lesson:"fstrings",
       what:"выравнивает по ширине — так строки встают в столбик",
       code:'for слово in ["кот", "бегемот"]:\n    print(f"|{слово:10}|")' },
+    { id:"fstring-fixed", sig:'f"{число:.2f}"', lesson:"fn-multi",
+      what:"два знака после запятой. Двоеточие в f-строке начинает формат",
+      code:'цена = 1234.5678\nprint(f"{цена:.2f}")\nprint(f"{7:.2f}")' },
     { id:"str-plus", sig:'"а" + "б"', lesson:"text-vs-num",
       what:"склеивает строки. Число сначала превращают в строку через str()",
       code:'print("уровень " + str(7))' },
@@ -124,6 +131,12 @@ window.CHEATSHEET = [
     { id:"sort-key", sig:"sorted(список, key=...)", lesson:"sorting",
       what:"сортировка по чему-то своему: по длине, по второму значению пары",
       code:'слова = ["ёж", "бегемот", "кот"]\nprint(sorted(слова, key=len))' },
+    { id:"sort-inplace", sig:".sort() против sorted()", lesson:"sorting",
+      what:".sort() меняет сам список и возвращает None, sorted() отдаёт новый",
+      code:'очки = [3, 1, 2]\nновый = sorted(очки)\nprint(очки, новый)\nprint(очки.sort(), очки)' },
+    { id:"slice-back", sig:"список[::-1]", lesson:"slices",
+      what:"переворачивает список или строку: шаг -1 значит «читай с конца»",
+      code:'print([1, 2, 3][::-1])\nprint("кодоквест"[::-1])' },
     { id:"list-in", sig:"значение in список", lesson:"lists-first",
       what:"проверяет, есть ли значение в списке",
       code:'print("ёж" in ["кот", "ёж"], 5 in [1, 2])' },
@@ -171,6 +184,9 @@ window.CHEATSHEET = [
     { id:"set-ops", sig:"| & -", lesson:"sets",
       what:"объединение, пересечение и разность множеств",
       code:'а = {1, 2, 3}\nб = {2, 3, 4}\nprint(sorted(а & б), sorted(а - б), sorted(а | б))' },
+    { id:"set-add", sig:".add() и .discard()", lesson:"sets",
+      what:"добавить и убрать. discard не ругается, если такого и не было",
+      code:'звери = {"кот", "ёж"}\nзвери.add("лис")\nзвери.discard("кот")\nзвери.discard("кит")\nprint(sorted(звери))' },
     { id:"tuple", sig:"кортеж = (1, 2)", lesson:"tuples",
       what:"как список, но менять нельзя. Разбирают сразу в переменные",
       code:'точка = (3, 4)\nx, y = точка\nprint(x, y)' },
@@ -243,7 +259,13 @@ window.CHEATSHEET = [
       code:'def факториал(n):\n    if n <= 1:\n        return 1\n    return n * факториал(n - 1)\n\n\nprint(факториал(5))' },
     { id:"scope", sig:"переменная внутри функции", lesson:"scope",
       what:"живёт только внутри и наружу не выходит. Одинаковые имена не мешают",
-      code:'ш = "снаружи"\n\n\ndef проба():\n    ш = "внутри"\n    print(ш)\n\n\nпроба()\nprint(ш)' }
+      code:'ш = "снаружи"\n\n\ndef проба():\n    ш = "внутри"\n    print(ш)\n\n\nпроба()\nprint(ш)' },
+    { id:"fn-dict", sig:"словарь функций", lesson:"fn-as-value",
+      what:"действие выбирается по названию — короче длинной цепочки if. На этом стоит проект Мира 5",
+      code:'действия = {\n    "плюс": lambda a, b: a + b,\n    "раз": lambda a, b: a * b,\n}\nвыбор = "плюс"\nprint(действия[выбор](2, 3), действия["раз"](2, 3))' },
+    { id:"typing", sig:"def f(x: int) -> int", lesson:"typing",
+      what:"подсказки типов: что принимаем и что отдаём. Python их не проверяет",
+      code:'def сумма(числа: list, множитель: int = 2) -> int:\n    return sum(числа) * множитель\n\n\nprint(сумма([1, 2, 3]))' }
   ]
 },
 {
@@ -278,6 +300,9 @@ window.CHEATSHEET = [
     { id:"except-as", sig:"except Ошибка as e", lesson:"try-except",
       what:"даёт доступ к самому сообщению об ошибке",
       code:'try:\n    int("ёж")\nexcept ValueError as e:\n    print("не вышло:", type(e).__name__)' },
+    { id:"finally", sig:"finally", lesson:"try-except",
+      what:"выполнится в любом случае — и когда ошибка была, и когда нет",
+      code:'try:\n    print(10 // 0)\nexcept ZeroDivisionError:\n    print("поймали")\nfinally:\n    print("а это всегда")' },
     { id:"raise", sig:"raise ValueError(текст)", lesson:"raise",
       what:"сообщает о проблеме самому. Текст пиши так, чтобы было понятно",
       code:'def корень(x):\n    if x < 0:\n        raise ValueError("отрицательное")\n    return x ** 0.5\n\n\ntry:\n    корень(-1)\nexcept ValueError as e:\n    print("поймали:", e)' },
@@ -289,7 +314,10 @@ window.CHEATSHEET = [
       code:'def найти(с, что):\n    for x in с:\n        if x == что:\n            return x\n    return None\n\n\nprint(найти([1, 2], 9) is None)' },
     { id:"type", sig:"type(значение)", lesson:"text-vs-num",
       what:"что это вообще такое. Первое, что смотрят при странной ошибке",
-      code:'print(type(7).__name__, type("7").__name__, type([]).__name__)' }
+      code:'print(type(7).__name__, type("7").__name__, type([]).__name__)' },
+    { id:"with-own", sig:"__enter__ и __exit__", lesson:"context",
+      what:"свой with: __enter__ на входе, __exit__ на выходе — даже если внутри ошибка",
+      code:'class Скобки:\n    def __enter__(self):\n        print("[")\n        return self\n\n    def __exit__(self, *a):\n        print("]")\n\n\nwith Скобки():\n    print("внутри")' }
   ]
 },
 {
@@ -324,7 +352,39 @@ window.CHEATSHEET = [
       code:'def первые(n):\n    for i in range(n):\n        yield i * i\n\n\nprint(list(первые(4)))' },
     { id:"decorator", sig:"@декоратор", lesson:"decorators",
       what:"обёртка вокруг функции: что-то делает до и после неё",
-      code:'def громко(ф):\n    def обёртка(*a):\n        return ф(*a).upper()\n    return обёртка\n\n\n@громко\ndef привет():\n    return "привет"\n\n\nprint(привет())' }
+      code:'def громко(ф):\n    def обёртка(*a):\n        return ф(*a).upper()\n    return обёртка\n\n\n@громко\ndef привет():\n    return "привет"\n\n\nprint(привет())' },
+    { id:"date", sig:"date(год, месяц, день)", lesson:"datetime",
+      what:"дата как значение. У неё есть .year, .month, .day",
+      code:'from datetime import date\nд = date(2026, 3, 8)\nprint(д, д.year, д.day)' },
+    { id:"date-math", sig:"дата2 - дата1 и timedelta", lesson:"datetime",
+      what:"разность дат даёт дни, timedelta сдвигает дату вперёд и назад",
+      code:'from datetime import date, timedelta\nначало = date(2026, 3, 8)\nконец = date(2026, 9, 1)\nprint((конец - начало).days)\nprint(начало + timedelta(days=10))' },
+    { id:"strftime", sig:'.strftime("%d.%m.%Y")', lesson:"datetime",
+      what:"дата в привычном виде. %d день, %m месяц, %Y год",
+      code:'from datetime import date\nprint(date(2026, 3, 8).strftime("%d.%m.%Y"))' },
+    { id:"defaultdict", sig:"defaultdict(list)", lesson:"collections",
+      what:"словарь, который сам заводит пустое значение для нового ключа",
+      code:'from collections import defaultdict\nпо_букве = defaultdict(list)\nfor слово in ["кот", "ёж", "кит"]:\n    по_букве[слово[0]].append(слово)\nprint(dict(по_букве))' },
+    { id:"combinations", sig:"itertools.combinations(что, по сколько)", lesson:"itertools",
+      what:"все сочетания без повторов: порядок внутри пары не важен",
+      code:'import itertools\nprint(list(itertools.combinations(["кот", "ёж", "кит"], 2)))' },
+    { id:"product", sig:"itertools.product(a, b)", lesson:"itertools",
+      what:"все пары из двух наборов — вложенный цикл одной строкой",
+      code:'import itertools\nfor буква, число in itertools.product("кс", [1, 2]):\n    print(буква, число)' },
+    { id:"open-read", sig:'with open(имя, encoding="utf-8")', lesson:"files-read",
+      what:'читает файл построчно. Без encoding="utf-8" русские буквы поедут',
+      data:{ "звери.txt": "кот\nёж\nкит\n" },
+      code:'with open("звери.txt", encoding="utf-8") as f:\n    for строка in f:\n        print(строка.strip())' },
+    { id:"open-write", sig:'open(имя, "w", encoding="utf-8")', lesson:"files-write",
+      what:'«w» стирает файл и пишет заново, «a» дописывает в конец. Перенос строки пиши сам',
+      code:'with open("итог.txt", "w", encoding="utf-8") as f:\n    f.write("первая\\n")\n    f.write("вторая\\n")\n\nwith open("итог.txt", encoding="utf-8") as f:\n    print(f.read().strip())' },
+    { id:"csv", sig:"csv.DictReader(файл)", lesson:"csv",
+      what:'таблица строками-словарями, ключи — названия столбцов. Для csv нужен ещё newline=""',
+      data:{ "оценки.csv": "имя,балл\nАня,9\nБоря,7\n" },
+      code:'import csv\nwith open("оценки.csv", encoding="utf-8", newline="") as f:\n    for строка in csv.DictReader(f):\n        print(строка["имя"], строка["балл"])' },
+    { id:"pathlib", sig:'Path("папка") / "файл"', lesson:"pathlib",
+      what:"путь собирают косой чертой, а не склейкой строк",
+      code:'from pathlib import Path\nп = Path("данные") / "отчёт.txt"\nprint(п)\nprint(п.name, п.suffix)' }
   ]
 }
 ];
