@@ -37,7 +37,7 @@ const markup = index.slice(bodyStart, scriptStart).trim();
 /* порядок важен: движок → рантайм → программа → контент → приложение */
 const scripts = ["js/engine-mini.js", "js/runtime.js", "js/curriculum.js",
                  "js/games.js", "js/warmups.js", "js/ailab.js", "js/projects.js",
-                 "js/cloud-config.js", "js/cloud.js"];
+                 "js/cheatsheet.js", "js/cloud-config.js", "js/cloud.js"];
 
 const contentDir = path.join(root, "content");
 const contentFiles = fs.readdirSync(contentDir)

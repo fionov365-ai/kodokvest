@@ -19,7 +19,8 @@ var BADGES = [
   { id:"world1",  em:"🌱", name:"Мир пройден",    desc:"все уроки одного мира" },
   { id:"builder", em:"🏗", name:"Строитель",      desc:"собрал проект целиком" },
   { id:"week",    em:"🔥", name:"Неделя подряд",  desc:"7 дней занятий подряд" },
-  { id:"month",   em:"🏅", name:"Месяц подряд",   desc:"30 дней занятий подряд" }
+  { id:"month",   em:"🏅", name:"Месяц подряд",   desc:"30 дней занятий подряд" },
+  { id:"again",   em:"🔁", name:"Закрепил",       desc:"5 уроков закреплены повтором" }
 ];
 /* Бейджи за длинный стрик. Щит уже держит серию, но награды за неё не было:
    ребёнок видел растущее число и всё. Порогов два — один достижимый, второй
@@ -61,7 +62,7 @@ var ADMIN_CODE = "kodokvest-2026";
    ============================================================ */
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
-                     "days","daily","shields","projects"];
+                     "days","daily","shields","projects","review"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 var KEEP_ON_RESET = ["games"];
 
@@ -442,6 +443,92 @@ function setStars(id, k){
   save();
 }
 
+/* ============================================================
+   РАБОТА НАД ОШИБКАМИ: интервальный повтор
+   Тут не «нерешённое» — нерешённых уроков в этом списке не бывает.
+   Тут пройденное, которое далось дорого: с подсказками, с показанным
+   решением, с десятком попыток или не на три звезды. Такой урок
+   возвращается через два дня, потом через неделю, потом через три —
+   и после третьего чистого повтора уходит совсем («закреплено»).
+   Сбился на повторе — счётчик обнуляется, урок вернётся послезавтра.
+
+   Данные для этого копились с самого начала (S.log: attempts, hints,
+   shown, solvedAt) — но никуда не шли. Новое здесь только одно:
+   S.review = { "id-урока": { n: сколько раз закреплён, at: когда } }.
+   ============================================================ */
+var REVIEW_STEPS = [2, 7, 21];      /* через сколько дней звать на повтор */
+var REVIEW_HARD = 3;                /* с этого числа попыток урок считается трудным */
+var REVIEW_BADGE_AT = 5;            /* столько закреплённых — бейдж */
+
+function reviewState(id){
+  S.review = S.review || {};
+  var r = S.review[id];
+  if (!r || typeof r !== "object"){ r = { n:0, at:0 }; S.review[id] = r; }
+  if (typeof r.n !== "number") r.n = 0;
+  if (typeof r.at !== "number") r.at = 0;
+  return r;
+}
+/* закреплён — значит прошёл все промежутки чисто и из списка ушёл */
+function reviewGraduated(id){
+  var r = (S.review || {})[id];
+  return !!r && r.n >= REVIEW_STEPS.length;
+}
+/* почему урок стоит повторить — фразой для ребёнка, или null.
+   Порядок веток от дорогого к дешёвому: сначала называем главную причину. */
+function reviewWhy(id){
+  if (!solved(id)) return null;
+  var g = S.log[id] || {}, st = starsOf(id);
+  if (g.shown) return "решение было показано";
+  if ((g.hints || 0) > 0)
+    return (g.hints === 1 ? "нужна была подсказка" : "подсказок: " + g.hints);
+  if ((g.attempts || 0) >= REVIEW_HARD) return "попыток: " + g.attempts;
+  if (st < 3) return "не с первого раза";
+  return null;
+}
+/* когда урок снова попросится на повтор */
+function reviewDueAt(id){
+  var r = reviewState(id), g = S.log[id] || {};
+  var base = r.at || g.solvedAt || g.last || 0;
+  var days = REVIEW_STEPS[Math.min(r.n, REVIEW_STEPS.length - 1)];
+  return base + days * 864e5;
+}
+/* все уроки, за которыми ещё числится долг: созревшие впереди, дальше по сроку */
+function reviewList(){
+  var out = [];
+  CURRICULUM.forEach(function(w){
+    w.lessons.forEach(function(l){
+      if (!solved(l.id) || reviewGraduated(l.id)) return;
+      var why = reviewWhy(l.id);
+      if (!why && !(S.review || {})[l.id]) return;
+      out.push({ lesson:l, why: why || "закрепляем", at: reviewDueAt(l.id) });
+    });
+  });
+  out.sort(function(a, b){ return a.at - b.at; });
+  return out;
+}
+function reviewDue(){
+  var now = Date.now();
+  return reviewList().filter(function(x){ return x.at <= now; });
+}
+function reviewGraduatedCount(){
+  var n = 0;
+  Object.keys(S.review || {}).forEach(function(k){ if (reviewGraduated(k)) n++; });
+  return n;
+}
+/* итог повтора. Чисто — шаг вперёд, со спотыканием — счётчик в ноль.
+   Первое прохождение урока сюда тоже приходит: если оно было чистым,
+   записи не заводим вовсе, чтобы S.review не распухал пустышками. */
+function reviewAfterLesson(id){
+  var had = (S.review || {})[id];
+  if (!had && !reviewWhy(id)) return;
+  var r = reviewState(id);
+  var clean = session.attempts === 1 && !session.hints && !session.shown;
+  r.n = clean ? Math.min(r.n + 1, REVIEW_STEPS.length) : 0;
+  r.at = Date.now();
+  if (reviewGraduatedCount() >= REVIEW_BADGE_AT) award("again");
+  save();
+}
+
 function starsOf(id){ return S.stars[id] || 0; }
 function solved(id){ return S.stars[id] !== undefined; }
 function totalStars(){ var n = 0; for (var k in S.stars) n += S.stars[k]; return n; }
@@ -495,6 +582,15 @@ function refreshTop(){
       : (s > 0
           ? (s + " " + plural(s, "день", "дня", "дней") + " подряд — открой задачу дня")
           : "Задача дня и дни подряд");
+  }
+  var ba = document.getElementById("btn-again");
+  if (ba){
+    var n = reviewDue().length;
+    ba.textContent = n ? ("🔁 Повторить · " + n) : "🔁 Повторить";
+    ba.classList.toggle("due", n > 0);
+    ba.title = n
+      ? (n + " " + plural(n, "урок ждёт", "урока ждут", "уроков ждут") + " повтора")
+      : "Уроки, которые дались тяжело, вернутся сюда сами";
   }
   var bw = document.getElementById("btn-who");
   if (bw){
@@ -620,6 +716,18 @@ function mergeProgress(a, b){
       done: maxN(pa.done, pb.done),
       code: pf.code || po.code || null
     };
+  });
+
+  /* повторы: n — это «сколько раз закрепил», результат, поэтому берём больший.
+     Дата последнего повтора тоже большая: раньше срока звать незачем, а вот
+     звать повторно то, что уже закреплено на другом устройстве, — обидно. */
+  out.review = {};
+  var rids = {};
+  Object.keys(a.review || {}).forEach(function(k){ rids[k] = 1; });
+  Object.keys(b.review || {}).forEach(function(k){ rids[k] = 1; });
+  Object.keys(rids).forEach(function(k){
+    var ra = (a.review || {})[k] || {}, rb = (b.review || {})[k] || {};
+    out.review[k] = { n: maxN(ra.n, rb.n), at: maxN(ra.at, rb.at) };
   });
 
   var ids = {};
@@ -1913,6 +2021,7 @@ function winLesson(l, body){
   lg.stars = Math.max(lg.stars || 0, stars);
   if (!lg.solvedAt) lg.solvedAt = Date.now();
   lg.last = Date.now();
+  reviewAfterLesson(l.id);   /* трудный урок встаёт в очередь на повтор */
   markActiveToday();   /* пройденный урок держит дневной стрик живым */
   save(); refreshTop();
 
@@ -1928,7 +2037,7 @@ function winLesson(l, body){
     '<p>' + (stars === 3 ? "С первой попытки и без подсказок."
           : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
-    takeShieldNote() +
+    takeShieldNote() + reviewNote(l.id) +
     '<div class="winxp">+' + gained + ' XP</div><div class="winrow">' +
       (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
             : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
@@ -2756,6 +2865,159 @@ function winWarmup(w){
    ============================================================ */
 function ailabList(){ return (window.AILAB || []); }
 function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
+
+/* ================= шпаргалка: оверлей поверх любого экрана =================
+   Отдельным экраном её делать нельзя: чаще всего она нужна посреди урока,
+   а уход со страницы урока стирает написанный код. Поэтому — оверлей.
+   Вывод примеров не хранится в файле, а считается движком и запоминается
+   на время сессии: так справочник не может разойтись с тем, что ребёнок
+   получит у себя, и при этом не пересчитывает 86 программ на каждую букву
+   в поиске. */
+var sheetOut = {};
+function sheetItems(){ return window.CHEATSHEET || []; }
+function sheetLearned(it){ return solved(it.lesson) || (S.admin && S.admin.unlockAll); }
+function sheetRun(it){
+  if (sheetOut[it.id] === undefined){
+    var r = Runtime.get("mini").run(it.code, {});
+    sheetOut[it.id] = r.error ? ("ошибка: " + r.error.msg) : r.output.replace(/\n+$/, "");
+  }
+  return sheetOut[it.id];
+}
+function sheetRender(){
+  var qEl = document.getElementById("sheetq"), allEl = document.getElementById("sheetall");
+  var box = document.getElementById("sheetbody");
+  if (!box) return;
+  var q = (qEl && qEl.value || "").trim().toLowerCase();
+  var all = !!(allEl && allEl.checked);
+  var h = "", shown = 0, locked = 0;
+  sheetItems().forEach(function(g){
+    var items = g.items.filter(function(it){
+      var open = sheetLearned(it);
+      if (!open) locked++;
+      if (!open && !all) return false;
+      if (!q) return true;
+      return (it.sig + " " + it.what + " " + it.code + " " + g.group).toLowerCase().indexOf(q) >= 0;
+    });
+    if (!items.length) return;
+    h += '<div class="shgroup"><h4>' + esc(g.group) + '</h4>';
+    items.forEach(function(it){
+      shown++;
+      var l = CURRICULUM.byId(it.lesson), open = sheetLearned(it);
+      h += '<div class="shitem' + (open ? "" : " soon") + '">' +
+        '<div class="shsig"><code>' + esc(it.sig) + '</code>' +
+        (open ? '' : '<span class="shsoon">ещё не проходили</span>') + '</div>' +
+        '<p class="shwhat">' + esc(it.what) + '</p>' +
+        '<div class="shcode"><pre>' + esc(it.code) + '</pre>' +
+        '<pre class="shout">' + esc(sheetRun(it)) + '</pre></div>' +
+        '<div class="shfrom">урок ' + l.num + " · " + esc(l.title) + '</div></div>';
+    });
+    h += '</div>';
+  });
+  if (!shown){
+    h = '<p class="shempty">' + (q
+      ? 'По запросу «' + esc(q) + '» ничего не нашлось.'
+      : 'Пока пусто: пройди первые уроки, и команды появятся здесь сами.') +
+      (locked && !all ? ' Спрятано ' + locked + ' ' + plural(locked, "команда", "команды", "команд") +
+        ' из ещё не пройденных уроков — включи «показать всё».' : '') + '</p>';
+  } else if (locked && !all){
+    h += '<p class="shempty">Спрятано ' + locked + ' ' + plural(locked, "команда", "команды", "команд") +
+      ' из ещё не пройденных уроков. Включи «показать всё», если интересно заглянуть вперёд.</p>';
+  }
+  box.innerHTML = h;
+  box.scrollTop = 0;
+}
+function openSheet(){
+  var el = document.getElementById("sheet");
+  if (!el) return;
+  el.hidden = false;
+  sheetRender();
+  var q = document.getElementById("sheetq");
+  if (q) q.focus();
+}
+function closeSheet(){
+  var el = document.getElementById("sheet");
+  if (el) el.hidden = true;
+}
+function sheetIsOpen(){
+  var el = document.getElementById("sheet");
+  return !!el && !el.hidden;
+}
+
+/* ================= экран: работа над ошибками ================= */
+function reviewNote(id){
+  var r = (S.review || {})[id];
+  if (!r || !r.at) return "";
+  if (reviewGraduated(id))
+    return '<p class="revnote">🔁 Закреплено: три чистых повтора. Больше этот урок повторять не попросит.</p>';
+  var d = REVIEW_STEPS[Math.min(r.n, REVIEW_STEPS.length - 1)];
+  return '<p class="revnote">🔁 Вернётся в «Повторить» через ' + d + ' ' + plural(d, "день", "дня", "дней") + '.</p>';
+}
+/* «через сколько» словами: список сроков читают глазами, а не календарём */
+function reviewWhen(at){
+  var d = Math.round((at - Date.now()) / 864e5);
+  if (d <= 0) return "пора";
+  if (d === 1) return "завтра";
+  return "через " + d + " " + plural(d, "день", "дня", "дней");
+}
+function screenReview(){
+  enterScreen();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var all = reviewList(), now = Date.now();
+  var due = all.filter(function(x){ return x.at <= now; });
+  var later = all.filter(function(x){ return x.at > now; });
+  var got = reviewGraduatedCount();
+
+  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div><h1>🔁 Повторить</h1></div>' +
+    '<div class="right"><span class="tag">' + (due.length ? "пора: " + due.length : "долгов нет") + '</span></div></div>' +
+    '<p class="lede">Урок, который дался тяжело, забывается первым. Сюда сами попадают те, где были ' +
+    'подсказки, показанное решение или много попыток. Каждый возвращается сначала через два дня, ' +
+    'потом через неделю, потом через три — и после трёх чистых повторов уходит совсем. ' +
+    'Звёзды за повтор не отнимаются: хуже, чем было, не станет.</p>';
+
+  if (!all.length && !got){
+    h += '<div class="card"><p>Пока повторять нечего — либо уроков пройдено мало, либо они дались с первого раза. ' +
+      'Как только урок потребует подсказки, он появится здесь сам.</p></div>';
+  }
+
+  if (due.length){
+    h += '<div class="sect"><h2>Пора повторить</h2><div class="line"></div><span class="cnt">' + due.length + '</span></div>' +
+      '<div class="revlist">' + due.map(revCard).join("") + '</div>';
+  }
+  if (later.length){
+    h += '<div class="sect"><h2>Ещё рано</h2><div class="line"></div><span class="cnt">' + later.length + '</span></div>' +
+      '<div class="revlist later">' + later.map(revCard).join("") + '</div>';
+  }
+  if (got){
+    h += '<div class="sect"><h2>Закреплено</h2><div class="line"></div><span class="cnt">' + got + '</span></div>' +
+      '<div class="card"><p>' + got + ' ' + plural(got, "урок", "урока", "уроков") + ' ' +
+      plural(got, "прошёл", "прошли", "прошли") + ' все три повтора и больше сюда не ' +
+      plural(got, "вернётся", "вернутся", "вернутся") + '.' +
+      (got < REVIEW_BADGE_AT ? ' До бейджа «Закрепил» осталось ' + (REVIEW_BADGE_AT - got) + '.' : '') +
+      '</p></div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll(".revcard").forEach(function(b){
+    b.onclick = function(){ openLesson(b.getAttribute("data-id")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function revCard(x){
+  var l = x.lesson, w = CURRICULUM.world(l.world);
+  var r = (S.review || {})[l.id] || { n:0 };
+  var dots = "";
+  for (var i = 0; i < REVIEW_STEPS.length; i++)
+    dots += '<span class="rdot' + (i < r.n ? " on" : "") + '"></span>';
+  return '<button class="revcard" data-id="' + l.id + '">' +
+    '<span class="rvicon">' + w.icon + '</span>' +
+    '<span class="rvbody"><span class="rvkicker">Мир ' + l.world + ' · урок ' + l.num + '</span>' +
+    '<b>' + esc(l.title) + '</b><span>' + esc(x.why) + '</span></span>' +
+    '<span class="rvright"><span class="rvwhen">' + reviewWhen(x.at) + '</span>' +
+    '<span class="rdots">' + dots + '</span></span></button>';
+}
 
 function screenAILab(){
   enterScreen();
@@ -3802,7 +4064,8 @@ var HASH_SCREENS = {
   "#today":   function(){ screenToday(); },
   "#account": function(){ screenAccount(); },
   "#viz":     function(){ screenViz(); },
-  "#ai":      function(){ screenAILab(); }
+  "#ai":      function(){ screenAILab(); },
+  "#again":   function(){ screenReview(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
@@ -3903,6 +4166,105 @@ function statsGridHTML(st){
       " (потрачено " + shieldsSpentIn(st.shields) + ")") +
     statBox("Бейджи", (st.badges || []).length + " из " + BADGES.length) +
     '</div>';
+}
+
+/* ---------- отчёт за неделю ----------
+   Панель наставника показывала кучу верных чисел и ни одной фразы: чтобы
+   понять, как идут дела, взрослому приходилось читать таблицу на сто строк.
+   Здесь то же самое, но человеческим языком и за последние семь дней.
+
+   Честность важнее красоты: посуточного учёта времени в прогрессе нет —
+   есть только время по каждому уроку. Поэтому в дне показано время тех
+   уроков, которые в этот день ПРОЙДЕНЫ, и подписано это именно так.
+   Придумывать точность, которой в данных нет, нельзя. */
+var WEEK_DAYS = 7;
+function weekReportHTML(st){
+  var lg = st.log || {}, sm = st.stars || {};
+  var covered = coveredDays(st.days, st.shields);
+  var today = dayKey(), keys = [];
+  for (var i = WEEK_DAYS - 1; i >= 0; i--) keys.push(shiftDay(today, -i));
+
+  /* уроки, разложенные по дню, в который их прошли */
+  var byDay = {}, weekSolved = 0, weekMs = 0;
+  Object.keys(lg).forEach(function(id){
+    var g = lg[id];
+    if (!g || !g.solvedAt || sm[id] === undefined) return;
+    var k = dayKey(new Date(g.solvedAt));
+    if (keys.indexOf(k) < 0) return;
+    (byDay[k] = byDay[k] || []).push({ id:id, log:g });
+    weekSolved++; weekMs += g.timeMs || 0;
+  });
+
+  var studied = keys.filter(function(k){ return activeIn(st.days, k); }).length;
+  var names = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+  var strip = keys.map(function(k){
+    var was = activeIn(st.days, k), shield = !was && !!(st.shields && st.shields[k]);
+    var n = (byDay[k] || []).length;
+    var d = new Date(k + "T12:00:00");
+    return '<div class="wrday' + (was ? " on" : (shield ? " shield" : "")) + (k === today ? " now" : "") + '">' +
+      '<span class="wrd">' + names[d.getDay()] + '</span>' +
+      '<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : "—")) + '</span>' +
+      '<span class="wrdate">' + d.getDate() + "." + (d.getMonth() + 1) + '</span></div>';
+  }).join("");
+
+  /* где буксовал: за эту же неделю, по цене решения */
+  var tough = [];
+  keys.forEach(function(k){
+    (byDay[k] || []).forEach(function(x){
+      var цена = (x.log.attempts || 0) + (x.log.hints || 0) * 2 + (x.log.shown ? 5 : 0);
+      if (цена >= 4) tough.push({ id:x.id, цена:цена, log:x.log });
+    });
+  });
+  tough.sort(function(a, b){ return b.цена - a.цена; });
+
+  /* последнее занятие, если на неделе его не было */
+  var lastDay = "";
+  Object.keys(st.days || {}).forEach(function(k){ if (k > lastDay) lastDay = k; });
+
+  var h = '<div class="card weekrep"><h3>📅 Что было за неделю</h3>';
+
+  if (!studied && !weekSolved){
+    h += '<p class="dim">За последние семь дней занятий не было. ' +
+      (lastDay ? 'Последнее — ' + lastDay.split("-").reverse().join(".") + '.'
+               : 'Занятий пока не было вовсе.') + '</p>';
+  } else {
+    h += '<p class="wrline"><b>' + studied + ' ' + plural(studied, "занятие", "занятия", "занятий") + '</b>, ' +
+      '<b>' + weekSolved + ' ' + plural(weekSolved, "урок", "урока", "уроков") + '</b>' +
+      (weekMs ? ', <b>' + fmtMins(weekMs) + '</b> за этими уроками' : '') + '. ' +
+      'Дней подряд: <b>' + streakCurrentIn(covered) + '</b>.</p>';
+  }
+
+  h += '<div class="wrstrip">' + strip + '</div>' +
+    '<p class="dim">В клетке — сколько уроков пройдено в этот день. ' +
+    '«·» — занимались, но урок не закончили, 🛡 — день закрыт щитом, «—» — пропуск.</p>';
+
+  if (tough.length){
+    h += '<div class="wrtough"><b>Тяжело далось:</b><ul>' +
+      tough.slice(0, 3).map(function(t){
+        var l = CURRICULUM.byId(t.id);
+        var причины = [];
+        if (t.log.shown) причины.push("смотрел решение");
+        if (t.log.hints) причины.push(t.log.hints + " " + plural(t.log.hints, "подсказка", "подсказки", "подсказок"));
+        if (t.log.attempts > 2) причины.push(t.log.attempts + " " + plural(t.log.attempts, "попытка", "попытки", "попыток"));
+        return '<li>' + (l ? esc(l.title) : esc(t.id)) + ' — ' + причины.join(", ") + '</li>';
+      }).join("") + '</ul>' +
+      '<p class="dim">Эти уроки сами вернутся к ребёнку в разделе «Повторить».</p></div>';
+  } else if (weekSolved){
+    h += '<p class="dim">Все уроки этой недели дались без запинок.</p>';
+  }
+
+  /* что дальше — только для своего прогресса: у чужого нет замков этого устройства */
+  var next = null;
+  CURRICULUM.forEach(function(w){
+    if (next) return;
+    var ready = worldReadyLessons(w);
+    for (var i = 0; i < ready.length; i++) if (sm[ready[i].id] === undefined){ next = ready[i]; return; }
+  });
+  h += '<p class="wrnext">Дальше по программе: ' +
+    (next ? '<b>урок ' + next.num + " · " + esc(next.title) + '</b>' : '<b>все готовые уроки пройдены</b>') + '.</p>';
+
+  return h + '</div>';
 }
 
 /* ---------- таблица уроков по любому набору данных ---------- */
@@ -4008,6 +4370,7 @@ function screenAdmin(){
       '. Изменить здесь ничего нельзя, и на ваш собственный прогресс это не влияет.</p>' +
       '<div class="admrow"><button class="rbtn check" data-act="myown">← Вернуться к своему прогрессу</button></div>';
     h += statsGridHTML(viewState.data);
+    h += weekReportHTML(viewState.data);
     h += lessonTableHTML(viewState.data, false);
     h += '<div class="pager"><button class="bigbtn ghost" data-act="myown">← Свой прогресс</button>' +
       '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">Ко всем мирам</button></div>';
@@ -4021,6 +4384,7 @@ function screenAdmin(){
           'подключите сервер или выгрузите файл в самом низу страницы.') + '</p>';
 
     h += statsGridHTML(S);
+    h += weekReportHTML(S);
     h += serverCardHTML();
 
     h += '<div class="card"><h3>Быстрые действия</h3><div class="admrow">' +
@@ -4245,6 +4609,16 @@ document.getElementById("btn-sand").onclick = screenSandbox;
 (function(){ var b = document.getElementById("btn-today"); if (b) b.onclick = screenToday; })();
 (function(){ var b = document.getElementById("btn-who"); if (b) b.onclick = screenAccount; })();
 (function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
+(function(){ var b = document.getElementById("btn-again"); if (b) b.onclick = screenReview; })();
+(function(){
+  var b = document.getElementById("btn-sheet"); if (b) b.onclick = openSheet;
+  var x = document.getElementById("sheetclose"); if (x) x.onclick = closeSheet;
+  var q = document.getElementById("sheetq"); if (q) q.oninput = sheetRender;
+  var a = document.getElementById("sheetall"); if (a) a.onchange = sheetRender;
+  /* клик по затемнению закрывает, клик внутри окна — нет */
+  var el = document.getElementById("sheet");
+  if (el) el.onclick = function(e){ if (e.target === el) closeSheet(); };
+})();
 (function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
 (function(){ var b = document.getElementById("btn-ai"); if (b) b.onclick = screenAILab; })();
 document.getElementById("btn-focus").onclick = function(){
@@ -4252,7 +4626,10 @@ document.getElementById("btn-focus").onclick = function(){
   this.classList.toggle("on");
 };
 document.getElementById("win").onclick = function(e){ if (e.target === this) closeWin(); };
-window.addEventListener("keydown", function(e){ if (e.key === "Escape") closeWin(); });
+window.addEventListener("keydown", function(e){
+  if (e.key !== "Escape") return;
+  if (sheetIsOpen()) closeSheet(); else closeWin();
+});
 window.addEventListener("resize", function(){
   document.querySelectorAll("canvas.stage").forEach(function(c){
     if (c._lastTurtle) drawTurtle(c, c._lastTurtle);
@@ -4323,6 +4700,14 @@ window.__game = {
   mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
   blankProgress: blankProgress, ensureShape: ensureShape,
   clearResults: clearResults, clearAll: clearAll,
-  cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState
+  cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState,
+  screenReview: screenReview, reviewList: reviewList, reviewDue: reviewDue,
+  reviewAfterLesson: reviewAfterLesson, reviewNote: reviewNote,
+  reviewWhy: reviewWhy, reviewDueAt: reviewDueAt, reviewState: reviewState,
+  reviewGraduated: reviewGraduated, reviewGraduatedCount: reviewGraduatedCount,
+  REVIEW_STEPS: REVIEW_STEPS, REVIEW_HARD: REVIEW_HARD, REVIEW_BADGE_AT: REVIEW_BADGE_AT,
+  openSheet: openSheet, closeSheet: closeSheet, sheetIsOpen: sheetIsOpen,
+  sheetRender: sheetRender, sheetLearned: sheetLearned, sheetRun: sheetRun,
+  weekReportHTML: weekReportHTML, WEEK_DAYS: WEEK_DAYS
 };
 })();

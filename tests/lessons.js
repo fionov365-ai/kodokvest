@@ -32,6 +32,7 @@ eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/cheatsheet.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -451,6 +452,32 @@ const seenPR = {};
   });
 });
 
-console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps})`);
+/* Шпаргалка. Вывод примеров нигде не хранится — его считает движок в момент
+   показа, поэтому «неверного ответа» тут быть не может. Зато может быть
+   пример, который падает, молчит или ссылается на несуществующий урок:
+   ребёнок открыл бы справочник и увидел ошибку вместо объяснения. */
+let sheetItems = 0;
+const seenCS = {};
+(global.CHEATSHEET || []).forEach(g => {
+  if (!g.group || !String(g.group).trim()) say("[шпаргалка] группа без названия");
+  if (!Array.isArray(g.items) || !g.items.length)
+    return say(`[шпаргалка] в группе «${g.group}» нет записей`);
+  g.items.forEach(it => {
+    sheetItems++;
+    const tag = `[шпаргалка] ${it.id || "(без id)"}`;
+    ["id", "sig", "what", "code", "lesson"].forEach(f => {
+      if (!it[f] || !String(it[f]).trim()) say(`${tag}: пустое поле «${f}»`);
+    });
+    if (seenCS[it.id]) say(`${tag}: повтор id`);
+    seenCS[it.id] = 1;
+    if (!CURRICULUM.byId(it.lesson))
+      say(`${tag}: ссылается на урок «${it.lesson}», а такого урока нет`);
+    const r = MP.run(it.code || "", { stdin: [] });
+    if (r.error) say(`${tag}: пример падает — ${r.error.kind}: ${r.error.msg}`);
+    else if (!r.output || !r.output.trim()) say(`${tag}: пример ничего не печатает`);
+  });
+});
+
+console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps}), шпаргалка: ${sheetItems}`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);

@@ -25,6 +25,7 @@ eval(fs.readFileSync(path.join(root, "js/curriculum.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/cheatsheet.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -144,13 +145,23 @@ let projsteps = 0;
   });
 });
 
+/* Шпаргалка: пример показывают ребёнку как «вот так это работает», значит он
+   обязан работать так же, как настоящий python3. Примеры со случайностью
+   compare пропустит сам — они и должны каждый раз печатать разное. */
+let sheetChecked = 0;
+(global.CHEATSHEET || []).forEach(g => {
+  (g.items || []).forEach(it => {
+    if (compare("шпаргалка " + it.id, it.code, null, null, null) !== false) sheetChecked++;
+  });
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
 /* Осторожно с этой строкой: warmups/ailab/projsteps — это сколько таких штук
    ОТДАНО на сверку, а не сколько пропущено. Раньше они стояли в скобках после
    слова «пропущено» и читались как его расшифровка — выходило, будто разминки
    с python3 не сверяются вовсе. */
 console.log("\nсверено с python3: " + checked + " (из них разминок: " + warmups +
-            ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps +
+            ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ", шпаргалка: " + sheetChecked +
             "), пропущено как черепашка и случайность: " + skipped);
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 process.exit(bad ? 1 : 0);

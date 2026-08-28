@@ -1165,6 +1165,271 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* Остальные проекты. Механика у всех одна, а содержание разное — поэтому
+     каждый проект проходим по шагам эталонами. Раньше тест брал только
+     PROJECTS[0], и сломанный проект любого другого мира прошёл бы мимо. */
+  if (typeof g.openProject === "function" && PROJECTS.length > 1){
+    const savedUnlock2 = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = true;     /* замок уже проверен на первом проекте */
+    for (let pi = 1; pi < PROJECTS.length; pi++){
+      const proj = PROJECTS[pi], p0 = problems.length, tag = "[проект " + proj.id + "]";
+      g.state.projects = {};
+      g.openProject(proj.id);
+      await tick();
+      for (let i = 0; i < proj.steps.length; i++){
+        const st = studioOf();
+        if (!st){ bad(`${tag} шаг ${i+1} не открылся`); break; }
+
+        const startCode = st.editor.getCode();
+        if (i === 0 && startCode !== proj.steps[0].starter)
+          bad(`${tag} на первом шаге в редакторе не заготовка`);
+        if (i > 0 && startCode !== proj.steps[i-1].solution)
+          bad(`${tag} на шаге ${i+1} код не переехал с прошлого шага`);
+
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (won()){ bad(`${tag} шаг ${i+1} засчитан на неизменённом коде`); closeWin(); }
+
+        st.editor.setCode(proj.steps[i].solution);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()){ bad(`${tag} шаг ${i+1}: верное решение не засчитано — ` + msgText()); break; }
+
+        if (i < proj.steps.length - 1){
+          const nx = doc.getElementById("pnext");
+          if (!nx){ bad(`${tag} после шага ${i+1} нет кнопки следующего шага`); break; }
+          nx.click(); await tick();
+        } else {
+          const fin = doc.getElementById("pfin");
+          if (!fin){ bad(`${tag} после последнего шага нет выхода на финал`); break; }
+          fin.click(); await tick();
+        }
+      }
+      if (!g.projectDone(proj.id)) bad(`${tag} после всех шагов проект не отмечен собранным`);
+      if (problems.length === p0) projChecked++;
+      viewReset(g);
+    }
+    g.state.admin.unlockAll = savedUnlock2;
+  }
+
+  /* --- работа над ошибками: интервальный повтор --- */
+  let againChecked = 0;
+  if (typeof g.screenReview === "function"){
+    const p0 = problems.length;
+    const STEPS = g.REVIEW_STEPS;
+    const hard = "vars", easy = "math";        /* оба урока есть в первом мире */
+    const savedStars = JSON.parse(JSON.stringify(g.state.stars));
+    const savedLog = JSON.parse(JSON.stringify(g.state.log));
+    const savedXp = g.state.xp;
+    const savedBadges = g.state.badges.slice();
+    g.state.review = {}; g.state.stars = {}; g.state.log = {};
+
+    const logAs = (id, o) => {
+      g.state.log[id] = Object.assign(
+        { attempts:1, hints:0, shown:0, runs:1, timeMs:0, first:1, last:1, solvedAt:Date.now(), stars:3 }, o);
+    };
+    /* итог занятия подделываем через живой объект сессии — так же, как его
+       читает сам reviewAfterLesson после победы в уроке */
+    const finish = (id, clean) => {
+      const ses = g.getSession();
+      ses.attempts = clean ? 1 : 4; ses.hints = clean ? 0 : 1; ses.shown = false;
+      g.reviewAfterLesson(id);
+    };
+
+    /* урок, пройденный чисто, повторять не просят */
+    g.setStars(easy, 3); logAs(easy, {});
+    if (g.reviewWhy(easy)) bad("[повтор] чистый урок попал в список: " + g.reviewWhy(easy));
+
+    /* урок с подсказкой просится, но не раньше срока */
+    g.setStars(hard, 2); logAs(hard, { attempts:2, hints:1, stars:2 });
+    if (!g.reviewWhy(hard)) bad("[повтор] урок с подсказкой не попал в список");
+    if (g.reviewList().length !== 1) bad("[повтор] в списке не один урок, а " + g.reviewList().length);
+    if (g.reviewDue().length !== 0) bad("[повтор] урок позвали на повтор раньше срока");
+
+    /* срок подошёл — урок в списке «пора», и на экране есть его карточка */
+    g.state.log[hard].solvedAt = Date.now() - (STEPS[0] + 1) * 864e5;
+    if (g.reviewDue().length !== 1) bad("[повтор] созревший урок не попал в «пора повторить»");
+    g.screenReview();
+    await tick();
+    const card = doc.querySelector(".revcard");
+    if (!card) bad("[повтор] на экране нет карточки урока");
+    else if (card.getAttribute("data-id") !== hard)
+      bad("[повтор] на экране не тот урок: " + card.getAttribute("data-id"));
+    if (!/подсказк/i.test(doc.body.textContent))
+      bad("[повтор] на экране не написано, почему урок сюда попал");
+
+    /* чистый повтор двигает срок вперёд, грязный — сбрасывает в начало */
+    finish(hard, true);
+    if (g.reviewState(hard).n !== 1) bad("[повтор] чистый повтор не засчитан");
+    if (g.reviewDue().length !== 0) bad("[повтор] после повтора урок сразу зовут снова");
+    finish(hard, false);
+    if (g.reviewState(hard).n !== 0) bad("[повтор] сбой на повторе не обнулил счётчик");
+
+    /* три чистых повтора подряд — урок закреплён и из списка ушёл */
+    finish(hard, true); finish(hard, true); finish(hard, true);
+    if (!g.reviewGraduated(hard)) bad("[повтор] три чистых повтора не закрепили урок");
+    if (g.reviewList().some(x => x.lesson.id === hard))
+      bad("[повтор] закреплённый урок остался в списке");
+    if (!/Закреплено/.test(g.reviewNote(hard)))
+      bad("[повтор] в карточке победы не сказано, что урок закреплён");
+
+    /* бейдж за пять закреплённых */
+    const more = ["print-first", "fstrings", "for-range", "if-else"];
+    more.forEach(id => {
+      g.setStars(id, 2); logAs(id, { attempts:2, hints:1, stars:2 });
+      finish(id, true); finish(id, true); finish(id, true);
+    });
+    if (g.reviewGraduatedCount() < g.REVIEW_BADGE_AT)
+      bad("[повтор] закреплённых меньше, чем нужно для бейджа");
+    if (g.state.badges.indexOf("again") < 0) bad("[повтор] бейдж «Закрепил» не выдан");
+
+    /* слияние: «сколько раз закрепил» — результат, берём больший */
+    const mr = g.mergeProgress({ review:{ x:{ n:1, at:5 } }, savedAt:9 },
+                               { review:{ x:{ n:3, at:9 } }, savedAt:1 });
+    if (!mr.review || mr.review.x.n !== 3 || mr.review.x.at !== 9)
+      bad("[повтор] слияние откатило закреплённое: " + JSON.stringify(mr && mr.review));
+
+    /* смена ученика стирает и повторы тоже */
+    if (Object.keys(g.clearAll({ review:{ x:{ n:2, at:1 } } }).review).length)
+      bad("[повтор] смена ученика не стёрла повторы");
+
+    g.state.review = {}; g.state.stars = savedStars; g.state.log = savedLog;
+    g.state.xp = savedXp; g.state.badges = savedBadges;
+    if (problems.length === p0) againChecked++;
+    viewReset(g);
+  }
+
+  /* --- шпаргалка --- */
+  let sheetChecked = 0;
+  if (typeof g.openSheet === "function"){
+    const p0 = problems.length;
+    const CS = w.CHEATSHEET || [];
+    const total = CS.reduce((n, x) => n + (x.items || []).length, 0);
+    if (!total) bad("[шпаргалка] нет ни одной записи");
+
+    const savedStars = JSON.parse(JSON.stringify(g.state.stars));
+    const savedUnlock = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = false;
+
+    /* главное свойство шпаргалки: её открывают ПОСРЕДИ урока, и написанный
+       код от этого пропадать не должен. Отдельным экраном он бы пропал. */
+    g.openLesson("vars");
+    await tick();
+    const st = studioOf();
+    if (!st) bad("[шпаргалка] не открылся урок, на котором её проверяем");
+    else {
+      st.editor.setCode("мой_код = 1");
+      doc.getElementById("btn-sheet").click();
+      if (!g.sheetIsOpen()) bad("[шпаргалка] не открылась по кнопке");
+      /* именно в документе, а не «объект ещё жив»: сессия держит ссылку на
+         редактор и после того, как экран стёрт, — по ней поломку не увидеть */
+      if (!doc.getElementById("studio") || !doc.getElementById("studio").firstChild)
+        bad("[шпаргалка] снесла экран урока — а она обязана открываться поверх");
+      else if (studioOf().editor.getCode() !== "мой_код = 1")
+        bad("[шпаргалка] стёрла написанный код: " + JSON.stringify(studioOf().editor.getCode()));
+    }
+
+    /* показываем только пройденное; «показать всё» открывает остальное */
+    g.state.stars = { "print-first": 3 };
+    g.sheetRender();
+    const learned = CS.reduce((n, x) =>
+      n + x.items.filter(it => it.lesson === "print-first").length, 0);
+    let cards = doc.querySelectorAll("#sheetbody .shitem").length;
+    if (cards !== learned)
+      bad(`[шпаргалка] показано ${cards} записей, а пройден один урок с ${learned}`);
+    doc.getElementById("sheetall").checked = true;
+    g.sheetRender();
+    cards = doc.querySelectorAll("#sheetbody .shitem").length;
+    if (cards !== total) bad(`[шпаргалка] «показать всё» дало ${cards} из ${total}`);
+    if (!doc.querySelectorAll("#sheetbody .shitem.soon").length)
+      bad("[шпаргалка] непройденные записи ничем не помечены");
+
+    /* поиск сужает список, а не молчит */
+    const qEl = doc.getElementById("sheetq");
+    qEl.value = "словар"; g.sheetRender();
+    const found = doc.querySelectorAll("#sheetbody .shitem").length;
+    if (!found) bad("[шпаргалка] поиск по «словар» ничего не нашёл");
+    if (found >= total) bad("[шпаргалка] поиск ничего не отфильтровал");
+    qEl.value = "щщщ"; g.sheetRender();
+    if (doc.querySelectorAll("#sheetbody .shitem").length)
+      bad("[шпаргалка] по бессмысленному запросу что-то нашлось");
+    if (!/ничего не нашлось/.test(doc.getElementById("sheetbody").textContent))
+      bad("[шпаргалка] пустой поиск ничего не объясняет");
+    qEl.value = ""; doc.getElementById("sheetall").checked = false; g.sheetRender();
+
+    /* вывод примера считается движком, а не берётся из файла */
+    const any = CS[0].items[0];
+    if (!String(g.sheetRun(any)).trim())
+      bad("[шпаргалка] пример «" + any.id + "» показывается без вывода");
+
+    g.closeSheet();
+    if (g.sheetIsOpen()) bad("[шпаргалка] не закрылась");
+
+    g.state.stars = savedStars;
+    g.state.admin.unlockAll = savedUnlock;
+    if (problems.length === p0) sheetChecked++;
+    viewReset(g);
+  }
+
+  /* --- отчёт за неделю в панели наставника --- */
+  let weekChecked = 0;
+  if (typeof g.weekReportHTML === "function"){
+    const p0 = problems.length;
+    /* дата со сдвигом в днях, в полдень — как в самом приложении */
+    const dk = (off) => {
+      const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + off);
+      const p = x => (x < 10 ? "0" : "") + x;
+      return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+    };
+    const at = (off) => { const d = new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+off); return d.getTime(); };
+
+    /* пусто: отчёт обязан честно сказать, что занятий не было */
+    const empty = g.weekReportHTML({ stars:{}, log:{}, days:{}, shields:{} });
+    if (!/занятий не было/.test(empty)) bad("[отчёт] пустая неделя не названа пустой");
+
+    /* три занятия, три урока, один из них дался тяжело */
+    const st = {
+      stars: { "print-first":3, "text-vs-num":2, "vars":1 },
+      log: {
+        "print-first": { attempts:1, hints:0, shown:0, timeMs:5*60000, solvedAt: at(-4) },
+        "text-vs-num": { attempts:2, hints:0, shown:0, timeMs:7*60000, solvedAt: at(-2) },
+        "vars":        { attempts:6, hints:3, shown:1, timeMs:18*60000, solvedAt: at(0) }
+      },
+      days: { [dk(-4)]:1, [dk(-2)]:1, [dk(0)]:1 },
+      shields: { [dk(-1)]:1 }
+    };
+    const html = g.weekReportHTML(st);
+    if (!/3 занятия/.test(html)) bad("[отчёт] неверно посчитаны занятия за неделю");
+    if (!/3 урока/.test(html)) bad("[отчёт] неверно посчитаны уроки за неделю");
+    if (!/30 мин/.test(html)) bad("[отчёт] неверно сложено время за неделю");
+    if (!/Тяжело далось/.test(html)) bad("[отчёт] трудный урок не показан");
+    if (!/Переменные/.test(html)) bad("[отчёт] в трудных не тот урок");
+    if (/Первая команда/.test(html.split("Тяжело далось")[1] || ""))
+      bad("[отчёт] лёгкий урок попал в трудные");
+    if (!/смотрел решение/.test(html)) bad("[отчёт] не названа причина, почему урок был тяжёлым");
+    if (!/Дальше по программе/.test(html)) bad("[отчёт] не сказано, что дальше");
+    /* 🛡 есть и в подписи под полосой, поэтому мало искать сам значок:
+       проверяем и класс клетки, и что значков стало два — в легенде и в дне */
+    if (!/wrday shield/.test(html)) bad("[отчёт] день, закрытый щитом, не отмечен в полосе");
+    if ((html.match(/🛡/g) || []).length < 2) bad("[отчёт] в клетке щита нет значка щита");
+
+    /* урок, пройденный давно, в недельный счёт попадать не должен */
+    const old = g.weekReportHTML({
+      stars:{ "print-first":3 },
+      log:{ "print-first": { attempts:1, timeMs:60000, solvedAt: at(-30) } },
+      days:{ [dk(-30)]:1 }, shields:{} });
+    if (!/занятий не было/.test(old)) bad("[отчёт] занятие месячной давности сочли недельным");
+
+    /* отчёт есть и на самом экране панели */
+    g.adminUnlock();
+    g.screenAdmin();
+    await tick();
+    if (!doc.querySelector(".weekrep")) bad("[отчёт] в панели наставника его нет");
+
+    if (problems.length === p0) weekChecked++;
+    viewReset(g);
+  }
+
   /* --- щит для стрика --- */
   let shieldChecked = 0;
   if (typeof g.useShield === "function"){
@@ -1358,7 +1623,10 @@ function checkEncoding(){
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
   console.log(`щит для стрика: ${shieldChecked ? "да" : "нет"}`);
   console.log(`бейджи за стрик: ${streakBadgeChecked ? "да" : "нет"}`);
-  console.log(`проект в конце мира: ${projChecked ? "да" : "нет"}`);
+  console.log(`проектов пройдено по шагам: ${projChecked} из ${(w.PROJECTS || []).length}`);
+  console.log(`работа над ошибками: ${againChecked ? "да" : "нет"}`);
+  console.log(`шпаргалка: ${sheetChecked ? "да" : "нет"}`);
+  console.log(`отчёт за неделю: ${weekChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
