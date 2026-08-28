@@ -19896,12 +19896,30 @@ window.addEventListener("resize", function(){
   } catch(e){}
 })();
 
-/* грузим содержание всех миров до первой отрисовки — иначе на сайте
-   миры 2–5 мигают как «в работе», пока их файлы не приедут */
-allWorldsContent().then(function(){
-  if (!routeHash()){
-    if (needsRegister()) screenRegister();   /* сервер настроен, ученик ещё не выбран */
-    else screenWorlds();
+/* ================= первая отрисовка =================
+   Правило одно: с этого экрана нельзя уйти в пустоту. Раньше отрисовка висела
+   на `allWorldsContent().then(...)` без «catch», и любая беда с загрузкой
+   содержания (или ошибка в коде рядом) оставляла ребёнка перед ПУСТОЙ
+   страницей с одной шапкой — без единого слова о том, что случилось.
+   Такое уже случилось на живом сайте после обновления: браузер взял из кэша
+   старый скрипт к новой странице, старый код упал на кнопке, которой в новой
+   шапке больше нет, — и экран остался пустым.
+
+   Поэтому здесь три страховки:
+     1. `catch` у загрузки содержания — рисуем то, что есть;
+     2. `try/catch` вокруг самой отрисовки;
+     3. общий обработчик ошибок ниже: если экран так и остался пустым,
+        ребёнок видит человеческое сообщение и кнопку «Обновить», которая
+        чистит кэш и перезагружает страницу. */
+function bootRender(){
+  try {
+    if (!routeHash()){
+      if (needsRegister()) screenRegister();   /* сервер настроен, ученик ещё не выбран */
+      else screenWorlds();
+    }
+  } catch(e){
+    bootFallback(e);
+    throw e;                                   /* пусть попадёт и в консоль */
   }
   /* сервер подключаем в фоне: игра должна открываться сразу и работать без сети */
   if (cloudEnabled()){
@@ -19912,7 +19930,38 @@ allWorldsContent().then(function(){
       return cloudPush();
     }).catch(function(){ refreshTop(); });
   }
-});
+}
+/* Пустой экран — худшее, что может показать тренажёр: непонятно ни что
+   сломалось, ни что делать. Показываем словами и даём одну кнопку. */
+function bootFallback(err){
+  if (!app || (app.innerHTML || "").trim()) return;   /* что-то уже нарисовано */
+  app.innerHTML =
+    '<div class="note"><b>Страница не открылась до конца</b>' +
+    'Чаще всего это старый файл, застрявший в памяти браузера после обновления. ' +
+    'Нажми кнопку ниже — она почистит память и загрузит свежую версию. ' +
+    'Прогресс от этого не пропадёт.' +
+    (err && err.message ? '<br><span class="mono">' + esc(String(err.message)).slice(0, 200) + '</span>' : '') +
+    '</div><div class="pager"><button class="bigbtn" id="bootreload">Обновить страницу</button></div>';
+  var b = document.getElementById("bootreload");
+  if (b) b.onclick = function(){
+    b.textContent = "Обновляю…";
+    var done = function(){ try { location.reload(); } catch(e){} };
+    try {
+      if (window.caches && caches.keys)
+        caches.keys().then(function(ks){
+          return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+        }).then(done, done);
+      else done();
+    } catch(e){ done(); }
+  };
+}
+/* грузим содержание всех миров до первой отрисовки — иначе на сайте
+   миры 2–5 мигают как «в работе», пока их файлы не приедут. Не приехало —
+   всё равно рисуем: лучше карта с надписью «в работе», чем пустота. */
+allWorldsContent().then(bootRender, bootRender);
+/* Последняя сеть безопасности: любая необработанная ошибка при старте.
+   Если после неё экран пуст — объясняем и предлагаем обновиться. */
+window.addEventListener("error", function(e){ bootFallback(e && e.error); });
 window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds(); });
 
 /* ================= установка на домашний экран =================
@@ -19940,6 +19989,7 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
+  bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,

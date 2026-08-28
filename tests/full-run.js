@@ -3042,8 +3042,18 @@ function checkEncoding(){
         bad(`[PWA] в кэше sw.js записан несуществующий файл: ${u}`);
     });
     if (sw.indexOf("skipWaiting") < 0) bad("[PWA] новый worker не берёт управление — обновление зависнет");
+    /* Имя кэша обязано совпадать с версией выпуска. Пока оно не менялось,
+       старые файлы жили в кэше вечно: после 1.34.0 браузер подмешал старый
+       скрипт к новой странице, и экран остался пустым. */
+    const pkgVer = JSON.parse(readRoot("package.json")).version;
+    const swVer = (sw.match(/CACHE\s*=\s*"kodokvest-([^"]+)"/) || [])[1];
+    if (swVer !== pkgVer)
+      bad(`[PWA] кэш sw.js назван «${swVer}», а версия выпуска ${pkgVer} — старые файлы не почистятся`);
+    if (sw.indexOf('cache: "no-cache"') < 0)
+      bad("[PWA] worker берёт файлы из HTTP-кэша браузера — к новой странице приедет старый скрипт");
     /* сначала сеть: иначе ребёнок неделями сидел бы на старой версии */
-    if (!/fetch\(req\)/.test(sw)) bad("[PWA] стратегия не «сначала сеть»");
+    if (!/fetch\(freshRequest\(req\)\)/.test(sw)) bad("[PWA] стратегия не «сначала сеть»");
+    if (!/caches\.match\(req\)/.test(sw)) bad("[PWA] нет запасного пути из кэша — офлайн не работает");
     /* страница ссылается на манифест, а один файл — НЕ должен */
     if (idx.indexOf('rel="manifest"') < 0) bad("[PWA] в index.html нет ссылки на манифест");
     if (html.indexOf('rel="manifest"') >= 0)
@@ -3051,6 +3061,29 @@ function checkEncoding(){
     if (html.indexOf('rel="apple-touch-icon"') >= 0)
       bad("[PWA] в одном файле осталась ссылка на иконку с диска");
     if (problems.length === p0) pwaChecked++;
+  }
+
+  /* --- пустой экран невозможен --- */
+  let bootChecked = 0;
+  if (typeof g.bootFallback === "function"){
+    const p0 = problems.length;
+    /* Ошибка при старте не должна оставлять ребёнка перед пустой страницей:
+       на живом сайте так и вышло после 1.34.0 — браузер взял из кэша старый
+       скрипт к новой шапке, тот упал, и экран остался пустым. */
+    const app = doc.getElementById("app");
+    app.innerHTML = "";
+    g.bootFallback(new Error("проверка"));
+    if (!app.textContent.trim()) bad("[старт] пустой экран остался пустым");
+    if (!/Обновить/.test(app.textContent)) bad("[старт] нет кнопки «Обновить»");
+    if (!doc.getElementById("bootreload")) bad("[старт] кнопка обновления без обработчика");
+    /* и наоборот: если экран уже нарисован, подменять его нельзя */
+    g.screenWorlds();
+    await tick();
+    const before = app.innerHTML;
+    g.bootFallback(new Error("проверка"));
+    if (app.innerHTML !== before) bad("[старт] сообщение затёрло уже нарисованный экран");
+    if (problems.length === p0) bootChecked++;
+    viewReset(g);
   }
 
   /* --- устройство сайта: три вкладки и блоки на Главном --- */
@@ -3202,6 +3235,7 @@ function checkEncoding(){
   console.log(`галерея рисунков: ${galleryChecked ? "да" : "нет"}`);
   console.log(`установка на домашний экран: ${pwaChecked ? "да" : "нет"}`);
   console.log(`устройство сайта (вкладки и блоки): ${navChecked ? "да" : "нет"}`);
+  console.log(`защита от пустого экрана: ${bootChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

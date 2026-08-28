@@ -13,7 +13,11 @@
 
    Чужие адреса не трогаем вообще: облако прогресса и шрифты — не наше дело.
    ============================================================ */
-var CACHE = "kodokvest-v1";
+/* Имя кэша содержит ВЕРСИЮ выпуска, и это не украшение: пока имя не менялось,
+   старые файлы жили в кэше вечно и могли подмешаться к новой странице.
+   Теперь каждый выпуск заводит свой кэш, а старые чистятся в activate.
+   Версия обязана совпадать с package.json — на это есть проверка в тестах. */
+var CACHE = "kodokvest-1.35.0";
 
 /* Оболочка: то, без чего страница не откроется. Уроки (content/worldN.js)
    тоже здесь — иначе офлайн открылась бы карта миров без самих уроков. */
@@ -49,6 +53,14 @@ self.addEventListener("activate", function(e){
   );
 });
 
+/* Тот же запрос, но с требованием проверить свежесть у сервера.
+   Если браузер такой Request собрать не даст — идём как есть: лучше старый
+   ответ, чем никакого. */
+function freshRequest(req){
+  try { return new Request(req.url, { cache: "no-cache", credentials: "same-origin" }); }
+  catch(e){ return req; }
+}
+
 self.addEventListener("fetch", function(e){
   var req = e.request;
   if (req.method !== "GET") return;
@@ -57,7 +69,11 @@ self.addEventListener("fetch", function(e){
   if (url.origin !== self.location.origin) return;    /* облако и шрифты — мимо */
 
   e.respondWith(
-    fetch(req).then(function(res){
+    /* Просим у сети именно СВЕЖЕЕ. Обычный fetch внутри worker'а может быть
+       отвечен из HTTP-кэша браузера (GitHub Pages ставит max-age=600) — и
+       тогда к новой странице приедет старый скрипт. Ровно это и случилось
+       после выпуска 1.34.0: шапка новая, скрипт старый, экран пустой. */
+    fetch(freshRequest(req)).then(function(res){
       if (res && res.ok){
         var copy = res.clone();
         caches.open(CACHE).then(function(c){ c.put(req, copy); }).catch(function(){});
