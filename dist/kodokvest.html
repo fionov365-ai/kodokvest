@@ -10429,7 +10429,18 @@ var BADGES = [
   { id:"perfect", em:"💎", name:"Перфекционист",  desc:"5 раз по три звезды" },
   { id:"explorer",em:"🧪", name:"Исследователь",  desc:"10 запусков в песочнице" },
   { id:"world1",  em:"🌱", name:"Мир пройден",    desc:"все уроки одного мира" },
-  { id:"builder", em:"🏗", name:"Строитель",      desc:"собрал проект целиком" }
+  { id:"builder", em:"🏗", name:"Строитель",      desc:"собрал проект целиком" },
+  { id:"week",    em:"🔥", name:"Неделя подряд",  desc:"7 дней занятий подряд" },
+  { id:"month",   em:"🏅", name:"Месяц подряд",   desc:"30 дней занятий подряд" }
+];
+/* Бейджи за длинный стрик. Щит уже держит серию, но награды за неё не было:
+   ребёнок видел растущее число и всё. Порогов два — один достижимый, второй
+   как цель на лето. Серия считается по «закрытым» дням (занятие ИЛИ щит),
+   поэтому месяц не требует тридцати занятий без единого пропуска: щит
+   зарабатывается каждые 5 дней и закрывает дыры по ходу. */
+var STREAK_BADGES = [
+  { id:"week",  days: 7 },
+  { id:"month", days: 30 }
 ];
 var RANKS = [
   [0,"Новичок"], [150,"Ученик"], [400,"Кодер"], [700,"Инженер"],
@@ -10597,6 +10608,7 @@ function markActiveToday(){
   S.days[k] = 1;
   useShield();       /* вернулся после пропуска — щит закрывает вчерашнюю дыру */
   pruneDays();
+  awardStreak();
   save();
   try { refreshTop(); } catch(e){}
   return true;
@@ -10858,6 +10870,14 @@ function award(id){
   if (S.badges.indexOf(id) >= 0) return;
   S.badges.push(id); save(); toast(id);
 }
+/* Проверяем серию в двух местах: когда день засчитан здесь (markActiveToday)
+   и когда прогресс приехал с другого устройства (applyProgress). Второе не
+   лишнее: занимались на планшете, открыли на ноутбуке — бейдж должен быть
+   уже здесь, а не ждать следующего занятия. */
+function awardStreak(){
+  var n = streakCurrent();
+  STREAK_BADGES.forEach(function(b){ if (n >= b.days) award(b.id); });
+}
 function toast(id){
   var b = BADGES.filter(function(x){ return x.id === id; })[0];
   if (!b) return;
@@ -11047,6 +11067,7 @@ function applyProgress(data){
   var merged = mergeProgress(cloudSnapshot(), data);
   Object.keys(merged).forEach(function(k){ S[k] = merged[k]; });
   saveLocal();
+  awardStreak();     /* серия могла дорасти на другом устройстве */
 }
 
 function cloudEnabled(){
@@ -11729,14 +11750,176 @@ function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data, stdin){
   return null;
 }
 
+/* ================= живой разбор расхождения =================
+   Когда код падает, объяснение уже есть: движок свой, он видит настоящую
+   ошибку и говорит про неё по-русски и с номером строки. А вот когда код
+   НЕ падает, а просто отвечает не то, ребёнок до сих пор получал две
+   колонки «должно быть / получилось» и номер строки. Что именно не так —
+   ни слова. В самом злом случае (лишний пробел) колонки выглядят
+   одинаково, и ребёнок сидит над двумя как бы совпадающими текстами.
+
+   Здесь мы этим пользуемся: у нас на руках ОБА вывода, поэтому можно
+   назвать разницу словами. Разбор общий — его звинчивают и diffBlock
+   (уроки, «Ты и ИИ», проекты), и predictDiff (разминки, «угадай вывод»),
+   так что новый случай, добавленный сюда, появляется сразу везде.
+
+   Правило: молчать, если не уверены. Пустая строка в ответе — нормальный
+   результат, тогда остаётся прежняя механическая подсказка. Ложное
+   объяснение хуже отсутствующего: оно уводит от настоящей причины.
+   ============================================================ */
+
+/* Пробелы и табы сами по себе не видны, поэтому в колонках их показываем
+   значками. Только в том случае, когда разница ИМЕННО в них — иначе рябит. */
+function visSpaces(s){
+  return String(s).replace(/\t/g, "→").replace(/ /g, "·");
+}
+function squash(a){
+  return a.map(function(x){ return String(x).replace(/[\t ]+/g, " ").trim(); }).join("\n");
+}
+function sameLines(a, b){
+  return a.length === b.length && a.every(function(x, i){ return x === b[i]; });
+}
+function firstDiff(exp, got){
+  var n = Math.max(exp.length, got.length);
+  for (var i = 0; i < n; i++) if ((exp[i] || "") !== (got[i] || "")) return i;
+  return -1;
+}
+function numbersIn(s){
+  return (String(s).match(/-?\d+(?:\.\d+)?/g) || []);
+}
+
+/* Разница только в невидимом — говорим, в чём именно. Порядок проверок от
+   частого к редкому: лишний пробел на конце строки обычно приезжает из
+   print("...", x) рядом с ручным пробелом, двойной пробел внутри — из
+   print через запятую И плюс сразу. */
+function whyInvisible(exp, got, i){
+  var e = String(exp[i] || ""), g = String(got[i] || "");
+  if (/[\t ]$/.test(g) && !/[\t ]$/.test(e))
+    return "в конце строки " + (i + 1) + " у тебя лишний пробел";
+  if (/[\t ]$/.test(e) && !/[\t ]$/.test(g))
+    return "в конце строки " + (i + 1) + " не хватает пробела";
+  if (/^[\t ]/.test(g) && !/^[\t ]/.test(e))
+    return "в начале строки " + (i + 1) + " у тебя лишний пробел";
+  if (/[\t ]{2}/.test(g) && !/[\t ]{2}/.test(e))
+    return "внутри строки " + (i + 1) + " у тебя два пробела подряд вместо одного — так бывает, " +
+           "если печатать и через запятую, и со своим пробелом сразу: print(\"итого:\", n) уже ставит пробел сам";
+  if (/\t/.test(g) && !/\t/.test(e))
+    return "в строке " + (i + 1) + " у тебя табуляция там, где нужен пробел";
+  return "разница в строке " + (i + 1) + " только в пробелах";
+}
+
+/* Главный разбор. Возвращает { why, vis }: why — объяснение словами (или
+   пустая строка, если сказать нечего), vis — показывать ли пробелы значками.
+   emptyWhy задаёт caller: пустая правая сторона у урока значит «программа не
+   напечатала», а у разминки — «ребёнок ничего не написал», и путать их нельзя. */
+function whyDiffer(exp, got, emptyWhy){
+  exp = (exp || []).map(String); got = (got || []).map(String);
+  var none = { why: "", vis: false };
+
+  /* совсем ничего нет — это не «расхождение», это отсутствие ответа */
+  if (!got.length || (got.length === 1 && got[0] === "")){
+    if (emptyWhy && exp.length && !(exp.length === 1 && exp[0] === ""))
+      return { why: emptyWhy, vis: false };
+    return none;
+  }
+
+  var i = firstDiff(exp, got);
+
+  /* разница только в невидимом: показать её значками — половина дела */
+  if (squash(exp) === squash(got) && i >= 0)
+    return { why: "Всё совпадает, кроме невидимого: " + whyInvisible(exp, got, i) +
+                  ". Ниже пробелы показаны точками, табы — стрелками.", vis: true };
+
+  /* только регистр */
+  if (exp.join("\n").toLowerCase() === got.join("\n").toLowerCase() && i >= 0)
+    return { why: "Буквы все на месте, разница только в заглавных: нужно «" + exp[i] +
+                  "», а у тебя «" + got[i] + "». Для компьютера это разный текст.", vis: false };
+
+  /* те же строки, но не в том порядке */
+  if (exp.length === got.length && exp.length > 1 &&
+      sameLines(exp.slice().sort(), got.slice().sort()) && i >= 0)
+    return { why: "Все нужные строки есть, но порядок другой: на месте " + (i + 1) +
+                  " у тебя «" + got[i] + "», а должна быть «" + exp[i] +
+                  "». Порядок печати — это порядок команд, так что смотри, что у тебя выполняется раньше.", vis: false };
+
+  /* строк не столько, сколько надо */
+  if (exp.length !== got.length){
+    var lack = exp.length - got.length;
+    if (lack > 0){
+      var tail = sameLines(exp.slice(0, got.length), got)
+        ? " Первые " + got.length + " совпадают, не хватает как раз последних — их печатают ПОСЛЕ цикла, без отступа."
+        : "";
+      return { why: "Строк у тебя " + got.length + ", а нужно " + exp.length + "." + tail, vis: false };
+    }
+    var extra = sameLines(exp, got.slice(0, exp.length))
+      ? " Нужные идут первыми, а дальше лишние — похоже, печать попала внутрь цикла и повторилась."
+      : "";
+    return { why: "Строк у тебя " + got.length + ", а нужно " + exp.length + "." + extra, vis: false };
+  }
+
+  if (i < 0) return none;
+
+  var e = exp[i], g = got[i];
+
+  /* дробное вместо целого и наоборот: самая частая причина — / вместо // */
+  var eN = numbersIn(e), gN = numbersIn(g);
+  if (eN.length === gN.length && eN.length){
+    var floatMix = false, offByOne = 0, allShifted = eN.length > 0;
+    for (var k = 0; k < eN.length; k++){
+      var a = parseFloat(eN[k]), b = parseFloat(gN[k]);
+      if (a === b && eN[k] !== gN[k]) floatMix = true;
+      var d = b - a;
+      if (Math.abs(d) === 1){ if (offByOne === 0) offByOne = d; else if (offByOne !== d) allShifted = false; }
+      else if (a !== b) allShifted = false;
+    }
+    if (floatMix && eN.join() !== gN.join())
+      return { why: "Числа сходятся по величине, но записаны иначе: " + e + " против " + g +
+                    ". Целое и дробное — разные вещи: обычное деление / всегда даёт дробное (10 / 2 это 5.0), " +
+                    "а деление нацело // даёт целое.", vis: false };
+    if (allShifted && offByOne !== 0)
+      return { why: "Числа отличаются ровно на единицу" + (offByOne > 0 ? " в сторону больше" : " в сторону меньше") +
+                    ": нужно «" + e + "», а у тебя «" + g + "». Почти всегда это одно из двух: нумерация с нуля " +
+                    "или range, который до последнего числа не доходит.", vis: false };
+  }
+
+  /* напечатан сам список (словарь, кортеж) вместо его значений */
+  if (/^[\[({].*[\])}]$/.test(g.trim()) && !/^[\[({]/.test(e.trim()))
+    return { why: "Ты напечатал сам набор целиком — " + g + " — со скобками и кавычками, как его видит Python. " +
+                  "А нужны значения по отдельности: пройди по нему циклом или собери строку через join.", vis: false };
+
+  /* кавычки в выводе: печать repr вместо самого значения */
+  if (g.replace(/['"]/g, "") === e && g !== e)
+    return { why: "Значение верное, но напечатано в кавычках: «" + g + "» вместо «" + e +
+                  "». Кавычки появляются, когда печатают repr(...) или сам список, а не строку.", vis: false };
+
+  /* запятая как десятичный разделитель */
+  if (/\d,\d/.test(g) && g.replace(/(\d),(\d)/g, "$1.$2") === e)
+    return { why: "В Python дробная часть отделяется точкой, а не запятой: нужно «" + e + "».", vis: false };
+
+  return none;
+}
+
 function diffBlock(exp, got){
-  var n = Math.max(exp.length, got.length), bad = -1;
-  for (var i = 0; i < n; i++) if ((exp[i] || "") !== (got[i] || "")){ bad = i; break; }
+  var bad = firstDiff(exp, got);
   var head = bad < 0 ? "Строк должно быть " + exp.length + ", а получилось " + got.length + "."
                      : "Первое расхождение в строке " + (bad+1) + " вывода.";
-  return head + '<div class="cmp"><div><u>должно быть</u>' + esc(exp.slice(0,8).join("\n") || "(пусто)") +
-    (exp.length > 8 ? "\n…" : "") + '</div><div><u>получилось</u>' + esc(got.slice(0,8).join("\n") || "(пусто)") +
-    (got.length > 8 ? "\n…" : "") + '</div></div>';
+  var d = whyDiffer(exp, got,
+    "Твоя программа ничего не напечатала. Значит дело не в самих значениях, а в том, что до печати не дошло: " +
+    "проверь, есть ли в коде print и не спрятался ли он внутрь функции, которую никто не вызвал.");
+  if (d.why) head = d.why + " " + head;
+  return head + cmpBlock("должно быть", exp, "получилось", got, 8, d.vis);
+}
+
+/* Обе колонки рисуются одинаково, поэтому и код один: подписи, обрезка длинного
+   хвоста и — если разница только в невидимом — пробелы значками. */
+function cmpBlock(labelA, A, labelB, B, limit, vis){
+  function side(label, lines){
+    var text = lines.slice(0, limit).join("\n");
+    if (!text.length && lines.length <= 1) text = "(пусто)";
+    else if (vis) text = visSpaces(text);
+    return '<div><u>' + label + '</u>' + esc(text) + (lines.length > limit ? "\n…" : "") + '</div>';
+  }
+  return '<div class="cmp">' + side(labelA, A) + side(labelB, B) + '</div>';
 }
 
 /* ===== кнопка подсказки =====
@@ -12334,16 +12517,13 @@ function predictDiff(want, got, wantLabel, gotLabel){
   wantLabel = wantLabel || "на самом деле";
   gotLabel = gotLabel || "ты предсказал";
   var W = normPred(want).split("\n"), G = normPred(got).split("\n");
-  var n = Math.max(W.length, G.length), bad = -1;
-  for (var i = 0; i < n; i++) if ((W[i] || "") !== (G[i] || "")){ bad = i; break; }
+  var bad = firstDiff(W, G);
   var head = bad < 0
     ? "Строк должно быть " + W.length + ", а получилось " + G.length + "."
     : "Первое расхождение в строке " + (bad + 1) + ".";
-  return head + '<div class="cmp"><div><u>' + wantLabel + '</u>' +
-    esc(W.slice(0, 10).join("\n") || "(пусто)") + (W.length > 10 ? "\n…" : "") +
-    '</div><div><u>' + gotLabel + '</u>' +
-    esc(G.slice(0, 10).join("\n") || "(пусто)") + (G.length > 10 ? "\n…" : "") +
-    '</div></div>';
+  var d = whyDiffer(W, G, "Ты пока ничего не написал в поле ответа — напиши, что, по-твоему, напечатает программа, по строке на каждый print.");
+  if (d.why) head = d.why + " " + head;
+  return head + cmpBlock(wantLabel, W, gotLabel, G, 10, d.vis);
 }
 
 /* Рабочая станция разминки: слева программа только для чтения, снизу
@@ -14354,6 +14534,8 @@ window.__game = {
   projectOpen: projectOpen, projectStartCode: projectStartCode,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
   reviewTruth: reviewTruth,
+  whyDiffer: whyDiffer, diffBlock: diffBlock, predictDiff: predictDiff,
+  BADGES: BADGES, STREAK_BADGES: STREAK_BADGES, awardStreak: awardStreak,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },

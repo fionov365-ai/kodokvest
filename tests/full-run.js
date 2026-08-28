@@ -613,6 +613,80 @@ function checkEncoding(){
     }
   }
 
+  /* --- живой разбор расхождения ---
+     Когда код не падает, а отвечает не то, ребёнку раньше показывали только
+     две колонки и номер строки. Теперь разбор называет причину словами.
+     Проверяем две вещи: что причина названа верно И что разбор МОЛЧИТ, когда
+     сказать нечего. Второе не менее важно: ложное объяснение уводит от
+     настоящей причины, а «не знаю» оставляет прежнюю механическую подсказку. */
+  let whyChecked = 0;
+  if (typeof g.whyDiffer !== "function") bad("[разбор] whyDiffer не выставлен наружу");
+  else {
+    const cases = [
+      { name:"лишний пробел на конце", exp:["итого: 5"], got:["итого: 5 "],
+        want:["невидимо", "конце строки 1", "лишний пробел"], vis:true },
+      { name:"два пробела внутри", exp:["итого: 5"], got:["итого:  5"],
+        want:["невидимо", "два пробела подряд"], vis:true },
+      { name:"табуляция вместо пробела", exp:["а б"], got:["а\tб"],
+        want:["невидимо", "табуляция"], vis:true },
+      { name:"только регистр", exp:["Привет"], got:["привет"],
+        want:["заглавных", "Привет", "привет"], vis:false },
+      { name:"тот же набор, другой порядок", exp:["а","б","в"], got:["а","в","б"],
+        want:["порядок другой"], vis:false },
+      { name:"не хватает последней строки", exp:["1","2","итого: 3"], got:["1","2"],
+        want:["Строк у тебя 2", "нужно 3", "ПОСЛЕ цикла"], vis:false },
+      { name:"лишние строки из цикла", exp:["итого: 3"], got:["итого: 3","итого: 3","итого: 3"],
+        want:["Строк у тебя 3", "нужно 1", "внутрь цикла"], vis:false },
+      { name:"дробное вместо целого", exp:["2"], got:["2.0"],
+        want:["Целое и дробное", "//"], vis:false },
+      { name:"сдвиг на единицу", exp:["шаг 1"], got:["шаг 0"],
+        want:["на единицу", "нумерация с нуля"], vis:false },
+      { name:"напечатан список целиком", exp:["меч"], got:["['меч', 'щит']"],
+        want:["набор целиком", "циклом"], vis:false },
+      { name:"значение в кавычках", exp:["аня"], got:["'аня'"],
+        want:["в кавычках"], vis:false },
+      { name:"запятая в дробном", exp:["3.5"], got:["3,5"],
+        want:["точкой, а не запятой"], vis:false },
+      { name:"ничего не напечатано", exp:["итого: 5"], got:[""],
+        want:["ничего не напечатала"], vis:false, empty:"Твоя программа ничего не напечатала. Проверь print." },
+    ];
+    for (const c of cases){
+      const d = g.whyDiffer(c.exp, c.got, c.empty || "Твоя программа ничего не напечатала. Проверь print.");
+      if (!d.why){ bad(`[разбор] «${c.name}»: причина не названа вообще`); continue; }
+      const miss = c.want.filter(t => d.why.indexOf(t) < 0);
+      if (miss.length) bad(`[разбор] «${c.name}»: в объяснении нет ${JSON.stringify(miss)} — сказано: ${d.why.slice(0,120)}`);
+      else if (!!d.vis !== c.vis) bad(`[разбор] «${c.name}»: vis=${d.vis}, а ожидалось ${c.vis}`);
+      else whyChecked++;
+    }
+    /* Молчание там, где причина не опознаётся: разное по смыслу, ничего общего. */
+    const mute = [
+      { name:"совсем другой ответ", exp:["итого: 500"], got:["зелёный слон"] },
+      { name:"совпадает целиком",   exp:["а","б"],      got:["а","б"] },
+      { name:"обе стороны пустые",  exp:[""],           got:[""] },
+    ];
+    for (const c of mute){
+      const d = g.whyDiffer(c.exp, c.got, "пусто");
+      if (d.why) bad(`[разбор] «${c.name}»: разбор придумал причину, хотя не должен — ${d.why.slice(0,100)}`);
+      else whyChecked++;
+    }
+    /* Невидимую разницу мало назвать — её надо ПОКАЗАТЬ, иначе колонки
+       выглядят одинаково и объяснение звучит как издёвка. */
+    const html = g.diffBlock(["итого: 5"], ["итого: 5 "]);
+    if (html.indexOf("·") < 0)
+      bad("[разбор] при разнице в пробелах колонки не показывают пробелы значками");
+    else whyChecked++;
+    const plain = g.diffBlock(["итого: 5"], ["итого: 7"]);
+    if (plain.indexOf("·") >= 0)
+      bad("[разбор] пробелы показаны значками там, где разница не в них — рябит зря");
+    else whyChecked++;
+    /* Разминка про свою пустую сторону обязана говорить своими словами:
+       «программа ничего не напечатала» тут было бы неправдой. */
+    const pd = g.predictDiff("итого: 5", "");
+    if (pd.indexOf("ничего не написал") < 0)
+      bad("[разбор] у пустого предсказания текст не про ребёнка, а про программу");
+    else whyChecked++;
+  }
+
   /* --- разминки «угадай вывод»: правильное предсказание засчитывается,
          неправильное — нет --- */
   let warmupsChecked = 0;
@@ -1093,6 +1167,78 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- бейджи за длинный стрик ---
+     Щит серию держал, а награды за неё не было. Проверяем не только выдачу,
+     но и обратное: за короткую серию бейджа быть не должно, иначе награда
+     ничего не значит. И что серия, доросшая на другом устройстве, приносит
+     бейдж при слиянии, а не ждёт следующего занятия. */
+  let streakBadgeChecked = 0;
+  if (Array.isArray(g.STREAK_BADGES) && g.STREAK_BADGES.length){
+    const p0 = problems.length;
+    const dk = (off) => {
+      const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + off);
+      const p = x => (x < 10 ? "0" : "") + x;
+      return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+    };
+    /* серия из n дней, кончающаяся сегодня */
+    const runTo = (n) => {
+      const o = {};
+      for (let i = 0; i < n; i++) o[dk(-i)] = 1;
+      return o;
+    };
+    /* каждый бейдж обязан быть описан в BADGES, иначе toast промолчит
+       и ребёнок не узнает, что что-то получил */
+    for (const b of g.STREAK_BADGES)
+      if (!g.BADGES.filter(x => x.id === b.id).length)
+        bad(`[бейдж] ${b.id}: нет описания в BADGES — награда невидимая`);
+
+    for (const b of g.STREAK_BADGES){
+      /* на один день меньше порога — бейджа быть не должно */
+      g.state.badges = []; g.state.shields = {};
+      g.state.days = runTo(b.days - 1);
+      g.awardStreak();
+      if (g.state.badges.indexOf(b.id) >= 0)
+        bad(`[бейдж] ${b.id}: выдан за ${b.days - 1} дней, а порог ${b.days}`);
+
+      /* ровно порог — обязан появиться */
+      g.state.badges = []; g.state.days = runTo(b.days);
+      g.awardStreak();
+      if (g.state.badges.indexOf(b.id) < 0)
+        bad(`[бейдж] ${b.id}: не выдан за ${b.days} дней подряд`);
+
+      /* повторно не дублируется */
+      g.awardStreak();
+      if (g.state.badges.filter(x => x === b.id).length !== 1)
+        bad(`[бейдж] ${b.id}: продублировался при повторной проверке`);
+    }
+
+    /* прерванная серия того же размера бейджа не даёт: дни есть, подряд их нет */
+    const longest = g.STREAK_BADGES[g.STREAK_BADGES.length - 1];
+    g.state.badges = []; g.state.shields = {}; g.state.days = {};
+    for (let i = 0; i < longest.days + 6; i += 2) g.state.days[dk(-i)] = 1;  /* через день */
+    g.awardStreak();
+    if (g.state.badges.length)
+      bad("[бейдж] бейдж выдан за дни через день — серии там нет");
+
+    /* серия доросла на другом устройстве: слияние обязано принести бейдж */
+    const week = g.STREAK_BADGES[0];
+    g.state.badges = []; g.state.days = {}; g.state.shields = {};
+    g.applyProgress({ v: 2, days: runTo(week.days), stars: {}, log: {} });
+    if (g.state.badges.indexOf(week.id) < 0)
+      bad(`[бейдж] ${week.id}: серия приехала с другого устройства, а бейдж не выдан`);
+
+    /* занятие сегодня само доводит серию до порога и выдаёт бейдж */
+    g.state.badges = []; g.state.shields = {}; g.state.days = {};
+    for (let i = 1; i < week.days; i++) g.state.days[dk(-i)] = 1;  /* вчера и раньше */
+    g.markActiveToday();
+    if (g.state.badges.indexOf(week.id) < 0)
+      bad(`[бейдж] ${week.id}: занятие сегодня замкнуло серию, а бейдж не выдан`);
+
+    g.state.badges = []; g.state.days = {}; g.state.shields = {};
+    if (problems.length === p0) streakBadgeChecked++;
+    viewReset(g);
+  }
+
   /* --- регистрация по имени --- */
   let regChecked = 0;
   if (typeof g.slugFromName === "function"){
@@ -1130,10 +1276,12 @@ function checkEncoding(){
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
   console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}` +
               ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length})`);
+  console.log(`живой разбор расхождения: ${whyChecked} случаев`);
   console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
   console.log(`щит для стрика: ${shieldChecked ? "да" : "нет"}`);
+  console.log(`бейджи за стрик: ${streakBadgeChecked ? "да" : "нет"}`);
   console.log(`проект в конце мира: ${projChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
