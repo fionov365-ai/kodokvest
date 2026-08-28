@@ -21,23 +21,26 @@
 <div class="top">
   <div class="top-in">
     <div class="logo" id="logo"><span class="mark">🐍</span><b>Кодоквест</b></div>
+    <!-- Три вкладки вместо одиннадцати кнопок. Раньше в панели лежали рядом
+         и уроки, и игры, и шпаргалка, и профиль — одиннадцать равных кнопок,
+         из которых ребёнку не видно, что главное и с чего начинать. Теперь
+         слева «куда идти», справа «сколько сделано» и инструменты под рукой,
+         а «что там внутри» объясняет сам экран. -->
+    <nav class="tabs" aria-label="Разделы">
+      <button class="tab" id="tab-home" data-tab="home">🏠 Главное</button>
+      <button class="tab" id="tab-train" data-tab="train">🎯 Тренировки</button>
+      <button class="tab" id="tab-mine" data-tab="mine">🎒 Моё</button>
+    </nav>
     <div class="xpbox">
       <span class="lvlchip" id="rank">Новичок</span>
       <div class="xpbar"><i id="xpfill"></i></div>
       <span id="xptext">0 XP</span>
     </div>
     <span class="starcount" id="stars">★ 0</span>
-    <button class="tbtn" id="btn-map">Миры</button>
     <button class="tbtn streak" id="btn-today" title="Задача дня и дни подряд">🔥 Сегодня</button>
-    <button class="tbtn" id="btn-warm">Разминка</button>
-    <button class="tbtn again" id="btn-again" title="Уроки, которые дались тяжело">🔁 Повторить</button>
-    <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖 Шпаргалка</button>
-    <button class="tbtn" id="btn-viz">Визуализатор</button>
-    <button class="tbtn" id="btn-ai">Ты и ИИ</button>
-    <button class="tbtn" id="btn-games">Игры</button>
-    <button class="tbtn" id="btn-sand">Песочница</button>
-    <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">Фокус</button>
+    <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖</button>
     <button class="tbtn who" id="btn-who" title="Профиль">👤</button>
+    <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">⛶</button>
   </div>
 </div>
 

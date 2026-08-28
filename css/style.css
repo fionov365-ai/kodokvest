@@ -24,8 +24,15 @@ button{font-family:inherit}
 
 /* ---------- шапка ---------- */
 .top{position:sticky;top:0;z-index:60;background:rgba(13,16,32,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.top-in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:9px;margin-right:auto;cursor:pointer}
+.top-in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Панель ограничена 1080px и на широком экране НЕ становится шире, поэтому
+   влезать в одну строку она обязана всегда — иначе вторая строка съедает
+   у урока целый сантиметр экрана. Число опыта из панели убрано: ранг и
+   полоска говорят то же самое, а точная цифра висит подсказкой на ранге,
+   лежит в профиле и в панели наставника. Полоска уходит на телефоне. */
+#xptext{display:none}
+@media (max-width:900px){ .xpbar{display:none} }
+.logo{display:flex;align-items:center;gap:9px;cursor:pointer}
 .logo .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:16px;flex:none}
 .logo b{font-family:'Fredoka';font-size:19px;font-weight:600}
 .xpbox{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--soft)}
@@ -36,6 +43,77 @@ button{font-family:inherit}
 .tbtn{border:1px solid var(--line2);background:var(--panel);color:var(--soft);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
 .tbtn:hover{color:var(--ink);border-color:var(--acc);background:var(--panel2)}
 .tbtn.on{background:var(--acc);color:#fff;border-color:transparent}
+
+/* ---------- полоска «что дальше» на первом уроке ---------- */
+.howbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:0 0 -4px;
+  padding:10px 15px;border:1px dashed var(--line2);border-radius:12px;
+  background:rgba(0,224,184,.06);font-size:13px;color:var(--soft)}
+.howbar>b{color:var(--acc2)}
+.howbar span b{color:var(--ink)}
+
+/* ---------- Главное: блок «Сейчас» и карточки разделов ---------- */
+.hero.now .nowkicker{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc2);font-weight:700;margin-bottom:6px}
+.hero.now h1{font-size:30px}
+.nowhints{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12.5px;color:var(--faint)}
+.howto{margin-top:18px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:18px 20px}
+.howto h3{margin:0 0 10px;font-size:17px}
+.howto ol{margin:0;padding-left:20px;color:var(--soft);font-size:14.5px}
+.howto li{margin-bottom:6px}
+.howto .dim{margin:10px 0 0;font-size:13px}
+.hubgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.hubcard{display:flex;flex-direction:column;gap:4px;text-align:left;cursor:pointer;color:inherit;
+  border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:15px 16px;transition:.15s}
+.hubcard:hover{border-color:var(--acc);transform:translateY(-2px);background:var(--panel2)}
+.hubcard.more{border-style:dashed;background:transparent}
+.hubem{font-size:26px;line-height:1.1}
+.hubcard b{font-size:15.5px}
+.hubwhy{font-size:13px;color:var(--soft);line-height:1.45}
+.hubstat{font-size:11.5px;color:var(--faint);margin-top:2px}
+
+/* ---------- экран «Тренировки» ---------- */
+.trainlist{display:flex;flex-direction:column;gap:12px}
+.traincard{display:flex;align-items:flex-start;gap:14px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--panel);padding:16px 18px}
+.traincard .trainbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.traincard b{font-size:17px}
+.traincard p{margin:0;color:var(--soft);font-size:14px}
+.trainwhen{font-size:12.5px;color:var(--acc2)}
+.traincard .bigbtn{flex:none;align-self:center}
+@media (max-width:620px){
+  .traincard{flex-wrap:wrap}
+  .traincard .bigbtn{width:100%}
+}
+
+/* ---------- вкладки: три раздела верхнего уровня ---------- */
+/* Панель раньше была плоским списком из одиннадцати кнопок, и по ней нельзя
+   было понять, что уроки — главное, а игры и визуализатор — вокруг. Три
+   вкладки задают порядок: учиться → тренироваться → своё. */
+/* Распорка стоит на вкладках: слева «куда идти», справа прогресс и
+   инструменты. Раньше её держал логотип, и последняя кнопка панели
+   уезжала на вторую строку даже на широком экране. */
+.tabs{display:flex;gap:3px;padding:3px;margin-right:auto;
+  border:1px solid var(--line);border-radius:12px;background:var(--sunken)}
+/* Отступы у вкладок посчитаны, а не подобраны на глаз: панель шире 1044px
+   переносится на вторую строку, а вторая строка панели съедает у урока
+   целый сантиметр экрана. */
+.tab{border:0;background:transparent;color:var(--soft);border-radius:9px;padding:7px 11px;
+  font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.on{background:var(--acc);color:#fff;box-shadow:0 6px 16px -8px rgba(124,92,255,.9)}
+@media (max-width:640px){
+  /* На телефоне панель складывается в ДВЕ строки: сверху значок, звёзды и
+     инструменты, снизу вкладки во всю ширину. Ради этого убираем то, без чего
+     на маленьком экране можно жить: слово «Кодоквест» рядом со значком
+     (значок и так ведёт на главную), название ранга (полоски опыта тут тоже
+     нет) и «фокус» — он про то, чтобы спрятать лишнее на большом экране. */
+  .tab{flex:1;padding:8px 4px;font-size:12.5px}
+  .tabs{width:100%;order:9;margin-right:0}
+  .logo{margin-right:auto}
+  .logo b{display:none}
+  .lvlchip{display:none}
+  .starsmall{display:none}
+  #btn-focus{display:none}
+}
 
 .wrap{max-width:1080px;margin:0 auto;padding:26px 18px 90px}
 

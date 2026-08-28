@@ -3053,6 +3053,120 @@ function checkEncoding(){
     if (problems.length === p0) pwaChecked++;
   }
 
+  /* --- устройство сайта: три вкладки и блоки на Главном --- */
+  let navChecked = 0;
+  if (typeof g.screenTrain === "function"){
+    const p0 = problems.length;
+    /* Панель: три вкладки и четыре инструмента, и ничего больше. Раньше тут
+       лежали одиннадцать равных кнопок — из них не было видно, что главное. */
+    const tabs = [...doc.querySelectorAll(".tabs .tab")].map(b => b.getAttribute("data-tab"));
+    if (tabs.join(",") !== "home,train,mine")
+      bad("[устройство] вкладки не те: " + tabs.join(","));
+    ["btn-today", "btn-sheet", "btn-who", "btn-focus"].forEach(id => {
+      if (!doc.getElementById(id)) bad("[устройство] пропал инструмент " + id);
+    });
+    if (doc.querySelectorAll(".top-in .tbtn").length > 4)
+      bad("[устройство] в панели снова больше четырёх кнопок — она опять станет свалкой");
+
+    /* Вкладка светится по тому, где мы находимся, а не по последнему клику */
+    const active = () => [...doc.querySelectorAll(".tab.on")].map(b => b.getAttribute("data-tab")).join(",");
+    g.screenWorlds(); await tick();
+    if (active() !== "home") bad("[устройство] на Главном не светится «Главное»: " + active());
+    g.screenTrain(); await tick();
+    if (active() !== "train") bad("[устройство] на Тренировках светится не та вкладка: " + active());
+    g.screenGames(); await tick();
+    if (active() !== "train") bad("[устройство] игры — это «Тренировки», а светится: " + active());
+    g.screenViz(); await tick();
+    if (active() !== "train") bad("[устройство] визуализатор — это «Тренировки», а светится: " + active());
+    g.screenFolio(); await tick();
+    if (active() !== "mine") bad("[устройство] портфолио — это «Моё», а светится: " + active());
+    g.screenMyTasks(); await tick();
+    if (active() !== "mine") bad("[устройство] свои задания — это «Моё», а светится: " + active());
+    g.openLesson("print-first"); await tick();
+    if (active() !== "home") bad("[устройство] урок — это «Главное», а светится: " + active());
+    g.screenAccount(); await tick();
+    if (active() !== "") bad("[устройство] профиль не раздел, вкладка светиться не должна: " + active());
+
+    /* Главное отвечает на четыре вопроса подряд: что делать сейчас, как это
+       работает, где уроки, что тут ещё есть. */
+    g.state.stars = {}; g.state.log = {};
+    g.screenWorlds(); await tick();
+    const heads = () => [...doc.querySelectorAll(".sect h2")].map(x => x.textContent);
+    if (!doc.querySelector(".hero.now")) bad("[устройство] на Главном нет блока «Сейчас»");
+    if (!doc.getElementById("go-next")) bad("[устройство] нет главной кнопки «начать/продолжить»");
+    if (!doc.querySelector(".howto")) bad("[устройство] новичку не объяснили, как устроен урок");
+    const want = ["Уроки", "Тренировки", "Моё", "Достижения"];
+    if (heads().join(",") !== want.join(","))
+      bad("[устройство] блоки Главного не те: " + heads().join(","));
+    /* пять тренировок и два раздела «Моё» — в один клик с Главного */
+    if (doc.querySelectorAll("[data-train]").length !== 5)
+      bad("[устройство] на Главном не пять карточек тренировок");
+    ["gofolio", "gomine", "go-train", "go-today"].forEach(id => {
+      if (!doc.getElementById(id)) bad("[устройство] с Главного не попасть: " + id);
+    });
+
+    /* Объяснение «как устроен урок» — только новичку: место дороже. */
+    g.setStars("print-first", 3);
+    g.screenWorlds(); await tick();
+    if (doc.querySelector(".howto"))
+      bad("[устройство] объяснение для новичка осталось после первого пройденного урока");
+    if (!/Продолжить/.test((doc.getElementById("go-next") || {}).textContent || ""))
+      bad("[устройство] у продолжающего кнопка не «Продолжить»");
+
+    /* Полоска «что дальше» на уроке — тоже один раз в жизни */
+    g.state.stars = {};
+    g.openLesson("print-first"); await tick();
+    if (!doc.querySelector(".howbar")) bad("[устройство] на первом уроке нет полоски «что дальше»");
+    g.setStars("print-first", 3);
+    g.openLesson("print-first"); await tick();
+    if (doc.querySelector(".howbar"))
+      bad("[устройство] полоска «что дальше» осталась после первого пройденного урока");
+
+    /* Экран «Тренировки»: пять разделов, у каждого сказано зачем и когда */
+    g.screenTrain(); await tick();
+    const cards = doc.querySelectorAll(".traincard");
+    if (cards.length !== 5) bad("[устройство] на «Тренировках» " + cards.length + " карточек вместо пяти");
+    cards.forEach(c => {
+      if (!c.querySelector(".trainwhen")) bad("[устройство] у тренировки не сказано, когда сюда заходить");
+      if (!c.querySelector("p").textContent.trim()) bad("[устройство] у тренировки пустое объяснение");
+    });
+    /* карточки правда открывают свои экраны */
+    const byId = {};
+    g.trainCards().forEach(c => { byId[c.id] = c; });
+    for (const id of ["warm", "games", "ai", "sand", "viz"]){
+      if (!byId[id] || typeof byId[id].go !== "function")
+        bad("[устройство] тренировка «" + id + "» никуда не ведёт");
+    }
+    g.screenTrain(); await tick();
+    doc.querySelector('.traincard [data-train="games"]').click();
+    await tick();
+    if (!/Игры/.test(doc.querySelector(".lvlhead h1").textContent))
+      bad("[устройство] карточка «Игры» открыла не игры");
+
+    /* «Моё» — одно место для всего сделанного руками */
+    g.state.gallery = {}; g.state.mytasks = {};
+    g.gallerySave("# Дом\nforward(50)\n");
+    g.myTaskSave({ title:"Считалка", goal:"Напечатай числа от 1 до 3.", code:"print(1)", lines:["1"] });
+    g.screenFolio(); await tick();
+    const mineHeads = [...doc.querySelectorAll(".sect h2")].map(x => x.textContent);
+    ["Готовые программы", "Мои рисунки", "Свои задания", "Сертификаты"].forEach(t => {
+      if (mineHeads.indexOf(t) < 0) bad("[устройство] в «Моём» нет раздела «" + t + "»");
+    });
+    if (!doc.querySelector("[data-tasklink]")) bad("[устройство] из «Моего» нельзя скопировать ссылку на задание");
+
+    /* Ни один раздел не потерялся: у каждого остался свой адрес */
+    ["#today", "#warmup", "#games", "#ai", "#viz", "#again", "#folio", "#mine", "#train"].forEach(hash => {
+      if (!/^#/.test(hash)) return;
+      w.location.hash = hash;
+    });
+    await tick();
+    if (!doc.getElementById("app").textContent.trim())
+      bad("[устройство] адрес #train ничего не открыл");
+    try { w.history.replaceState(null, "", "/kodokvest/"); } catch(e){}
+    if (problems.length === p0) navChecked++;
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -3087,6 +3201,7 @@ function checkEncoding(){
   console.log(`пересказ программы: ${storyChecked ? "да" : "нет"}`);
   console.log(`галерея рисунков: ${galleryChecked ? "да" : "нет"}`);
   console.log(`установка на домашний экран: ${pwaChecked ? "да" : "нет"}`);
+  console.log(`устройство сайта (вкладки и блоки): ${navChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

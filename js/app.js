@@ -581,12 +581,27 @@ function toast(id){
   setTimeout(function(){ el.classList.add("out"); }, 3000);
   setTimeout(function(){ el.remove(); }, 3600);
 }
+/* Какая вкладка наверху светится. Пишется в enterScreen (и вручную там, где
+   экран заходит через claimScreen — на уроке и в проекте), читается здесь. */
+var curTab = "home";
 function refreshTop(){
-  document.getElementById("rank").textContent = rankName();
+  document.querySelectorAll(".tabs .tab").forEach(function(b){
+    b.classList.toggle("on", b.getAttribute("data-tab") === curTab);
+  });
+  /* Ранг, полоска и число опыта — три вида одного и того же. Число в панели
+     показываем только когда для него есть место (см. #xptext в стилях), но
+     писать его продолжаем всегда: оно висит подсказкой на самой полоске и
+     нужно тестам как единственный видимый счётчик опыта. */
+  var rank = document.getElementById("rank");
+  rank.textContent = rankName();
+  rank.title = "Ранг «" + rankName() + "», опыт " + S.xp + " XP";
   document.getElementById("xptext").textContent = S.xp + " XP";
   document.getElementById("xpfill").style.width = Math.min(100, S.xp / nextRankXp() * 100) + "%";
   var done = Object.keys(S.stars).length;
-  document.getElementById("stars").textContent = "★ " + totalStars() + " · " + done + "/" + CURRICULUM.total;
+  /* На телефоне из счётчика остаются только звёзды: доля пройденных уроков
+     и так стоит крупно на Главном, а панель обязана уложиться в две строки. */
+  document.getElementById("stars").innerHTML = "★ " + totalStars() +
+    '<span class="starsmall"> · ' + done + "/" + CURRICULUM.total + '</span>';
   var bt = document.getElementById("btn-today");
   if (bt){
     var s = streakCurrent();
@@ -612,8 +627,11 @@ function refreshTop(){
   }
   var bw = document.getElementById("btn-who");
   if (bw){
+    /* Имя раньше стояло прямо на кнопке, и панель из-за него переносилась на
+       вторую строку у длинных имён. Имя видно на самом экране профиля,
+       а здесь достаточно значка и подсказки. */
     var nm = myName();
-    bw.textContent = nm ? ("👤 " + nm) : "👤";
+    bw.textContent = "👤";
     bw.title = nm ? ("Профиль: " + nm) : "Профиль";
   }
 }
@@ -2509,9 +2527,71 @@ function wireHint(hints, onTake){
   };
 }
 
-/* ================= экран: миры ================= */
+/* ================= экран: Главное =================
+   Раньше это был «экран миров»: герой, пять карточек, бейджи. А сверху, в
+   панели, лежали одиннадцать равных кнопок — уроки, игры, шпаргалка, профиль
+   вперемешку. Ребёнку из этого не было видно ни того, что главное, ни того,
+   с чего начинать, ни того, зачем нужен каждый раздел.
+
+   Теперь экран отвечает по порядку на четыре вопроса:
+     1. Что делать сейчас?            — блок «Сейчас», одна большая кнопка.
+     2. Как вообще проходят уроки?    — блок «Как это работает», только новичку.
+     3. Где уроки?                    — блок «Уроки», пять миров.
+     4. Что тут ещё есть и зачем?     — «Тренировки» и «Моё», у каждой карточки
+                                        одна строка «зачем это».
+   ============================================================ */
+
+/* Следующий непройденный урок из готовых. Нужен и «Сейчас», и старой
+   кнопке «Продолжить». */
+function nextLesson(){
+  var next = null;
+  CURRICULUM.forEach(function(w){
+    if (next) return;
+    var ready = worldReadyLessons(w);
+    for (var i = 0; i < ready.length; i++) if (!solved(ready[i].id)){ next = ready[i]; return; }
+  });
+  return next;
+}
+/* Карточки тренировок: один список на два экрана — короткий ряд на Главном
+   и подробный на «Тренировках». `why` — это ответ на «зачем мне это», а не
+   описание: описание ребёнок и так увидит внутри. */
+function trainCards(){
+  var warmOpen = (typeof warmupsOpen === "function") ? warmupsOpen().length : 0;
+  var warmAll = (window.WARMUPS || []).length;
+  var warmDone = Object.keys(S.warmups || {}).length;
+  var aiAll = (window.AILAB || []).length, aiDone = Object.keys(S.ailab || {}).length;
+  var gAll = gamesList().length;
+  return [
+    { id:"warm", em:"🧩", title:"Разминка", go: screenWarmups,
+      why: "Короткие задачки на пять минут: угадать вывод, собрать программу из блоков, предсказать память.",
+      when: "Когда есть пять минут, а на урок настроя нет.",
+      /* Разминки открываются по прогрессу: пока уроков нет, открытых ноль —
+         и «0 из 0 разгадано» выглядело бы поломкой, а не замком. */
+      stat: !warmAll ? "" : (warmOpen
+        ? warmDone + " из " + warmOpen + " открытых разгадано"
+        : "откроются после первых уроков") },
+    { id:"games", em:"🎮", title:"Игры", go: screenGames,
+      why: "Настоящие маленькие игры, и у каждой виден код — его можно менять прямо во время игры.",
+      when: "Когда хочется поиграть, а не учиться.",
+      stat: gAll + " " + plural(gAll, "игра", "игры", "игр") },
+    { id:"ai", em:"🤖", title:"Ты и ИИ", go: screenAILab,
+      why: "Упражнения про то, как командовать ИИ и проверять его: он ошибается, и это надо уметь замечать.",
+      when: "Когда хочется понять, кто тут главный — ты или ИИ.",
+      stat: aiAll ? aiDone + " из " + aiAll + " пройдено" : "" },
+    { id:"sand", em:"🎨", title:"Песочница", go: screenSandbox,
+      why: "Пустой лист без заданий и проверок: пиши что угодно, рисуй черепашкой, ломай и чини.",
+      when: "Когда есть своя идея.",
+      stat: "рисунок можно сохранить в галерею" },
+    { id:"viz", em:"🔍", title:"Визуализатор", go: screenViz,
+      why: "Программа по шагам: видно память, ссылки и что изменилось. И пересказ словами, что она сделала.",
+      when: "Когда код работает не так, как ты думал.",
+      stat: "можно разобрать и свой код с урока" }
+  ];
+}
+
 function screenWorlds(){
-  enterScreen();
+  enterScreen("home");
+  session = { id:null, attempts:0, hints:0, shown:false };
   /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
      только на сайте с раздельными файлами), догружаем всё и перерисовываем —
      иначе готовые миры показались бы как «в работе». */
@@ -2521,15 +2601,58 @@ function screenWorlds(){
     });
   }
   var doneTotal = Object.keys(S.stars).length;
-  var h = '<div class="hero">' +
-    '<h1>Кодоквест</h1>' +
-    '<p>Настоящий Python прямо в браузере: код выполняется, рисует и объясняет ошибки понятными словами. Путь из ста уроков — от первой команды до собственного проекта.</p>' +
+  var name = myName();
+  var next = nextLesson();
+  var streak = streakCurrent();
+  var dues = reviewDue().length;
+  var dailyOk = dailyDone(dayKey());
+
+  /* ===== блок «Сейчас»: одна главная кнопка и три подсказки рядом ===== */
+  var h = '<div class="hero now">' +
+    '<div class="nowtop"><div>' +
+      '<div class="nowkicker">' + (doneTotal ? "продолжаем" : "с чего начать") + '</div>' +
+      '<h1>' + (name ? esc(name) + ", " : "") +
+        (doneTotal
+          ? (next ? "дальше — урок " + next.num : "все готовые уроки пройдены")
+          : "привет! Это тренажёр Python") + '</h1>' +
+      '<p>' + (doneTotal
+        ? (next ? esc(next.title) + " — " + esc(next.sub) + "." : "Осталось повторение и проекты.")
+        : "Пишешь код — он тут же работает: считает, рисует и объясняет ошибки понятными словами. " +
+          "Сто уроков по порядку, от первой команды до своего проекта.") + '</p>' +
+    '</div></div>' +
     '<div class="row">' +
-      '<button class="bigbtn" id="go-next">' + (doneTotal ? "Продолжить" : "Начать путь") + '</button>' +
-      '<button class="bigbtn ghost" id="go-sand">Свободное рисование</button>' +
+      (next ? '<button class="bigbtn" id="go-next">▶ ' + (doneTotal ? "Продолжить" : "Начать первый урок") + '</button>'
+            : '<button class="bigbtn" id="go-next">К списку уроков</button>') +
+      '<button class="bigbtn ghost" id="go-today">🔥 ' +
+        (streak > 0 ? streak + " " + plural(streak, "день", "дня", "дней") + " подряд" : "Сегодня") + '</button>' +
+      (dues ? '<button class="bigbtn ghost" id="go-again">🔁 Повторить · ' + dues + '</button>' : '') +
+    '</div>' +
+    '<div class="nowhints">' +
+      '<span>' + (dailyOk ? "✓ задача дня сделана" : "· задача дня ещё ждёт") + '</span>' +
+      '<span>' + (dues ? "· " + dues + " " + plural(dues, "урок ждёт", "урока ждут", "уроков ждут") + " повтора"
+                       : "· долгов по повторению нет") + '</span>' +
+      '<span>· шпаргалка 📖 наверху открывается прямо посреди урока</span>' +
     '</div></div>';
 
-  h += '<div class="sect"><h2>Пять миров</h2><div class="line"></div><span class="cnt">' + doneTotal + ' из ' + CURRICULUM.total + '</span></div><div class="worlds">';
+  /* ===== как это работает: только пока ни один урок не пройден ===== */
+  if (!doneTotal){
+    h += '<div class="howto"><h3>Как устроен урок</h3><ol>' +
+      '<li><b>Читаешь примеры сверху.</b> У каждого есть кнопка «▶ Запустить пример» — код выполнится тут же, ' +
+      'а «→ В редактор» перенесёт его вниз, чтобы поменять и попробовать своё.</li>' +
+      '<li><b>Смотришь задачу</b> — она в рамке «🎯 Твоя задача», списком требований.</li>' +
+      '<li><b>Пишешь код в редакторе</b> и жмёшь «▶ Запустить»: видно, что программа напечатала, ' +
+      'а рядом со строками — что каждая сделала.</li>' +
+      '<li><b>Жмёшь «✓ Проверить».</b> Если что-то не так, тренажёр покажет, чем твой ответ отличается от нужного.</li>' +
+      '</ol><p class="dim">Три звезды дают за урок, пройденный с первой попытки и без подсказок. ' +
+      'Подсказки есть всегда — они стоят одну звезду, и это не страшно.</p></div>';
+  }
+
+  /* ===== уроки ===== */
+  h += '<div class="sect"><h2>Уроки</h2><div class="line"></div><span class="cnt">' +
+    doneTotal + ' из ' + CURRICULUM.total + '</span></div>' +
+    '<p class="dim">Это главное в тренажёре: сто уроков по порядку, пять миров по двадцать. ' +
+    'Уроки открываются один за другим — сдал, открылся следующий. В конце каждого мира ' +
+    'свой проект и сертификат.</p><div class="worlds">';
   CURRICULUM.forEach(function(w){
     var ready = worldReadyLessons(w);
     var done = ready.filter(function(l){ return solved(l.id); }).length;
@@ -2551,67 +2674,130 @@ function screenWorlds(){
   });
   h += '</div>';
 
-  h += '<div class="sect"><h2>Достижения</h2><div class="line"></div></div><div class="badges">';
+  /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
+  h += '<div class="sect"><h2>Тренировки</h2><div class="line"></div>' +
+    '<span class="cnt">вне сотни уроков</span></div>' +
+    '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
+    'Звёзд они не дают, но день занятий засчитывают.</p>' +
+    '<div class="hubgrid">' +
+    trainCards().map(function(c){
+      return '<button class="hubcard" data-train="' + c.id + '">' +
+        '<span class="hubem">' + c.em + '</span>' +
+        '<b>' + esc(c.title) + '</b>' +
+        '<span class="hubwhy">' + esc(c.when) + '</span>' +
+        (c.stat ? '<span class="hubstat">' + esc(c.stat) + '</span>' : '') +
+        '</button>';
+    }).join("") +
+    '<button class="hubcard more" id="go-train"><span class="hubem">→</span>' +
+    '<b>Все тренировки</b><span class="hubwhy">С объяснением, что зачем.</span></button>' +
+    '</div>';
+
+  /* ===== моё ===== */
+  var pjAll = projectsList(), pjDone = 0;
+  pjAll.forEach(function(p){ if (projectDone(p.id)) pjDone++; });
+  var ctAll = certList(), ctDone = 0;
+  ctAll.forEach(function(c){ if (c.ready) ctDone++; });
+  var pics = galleryList().length, mine = myTasksList().length;
+  h += '<div class="sect"><h2>Моё</h2><div class="line"></div>' +
+    '<span class="cnt">' + (pjDone + pics + mine) + ' ' +
+    plural(pjDone + pics + mine, "работа", "работы", "работ") + '</span></div>' +
+    '<div class="projcard' + (pjDone || pics ? " done" : "") + '">' +
+    '<span class="pjemoji">🎒</span>' +
+    '<span class="pjbody"><span class="pjkicker">сделано своими руками</span>' +
+    '<b>Портфолио</b>' +
+    '<span>программы из проектов, рисунки и сертификаты — всё в одном месте, можно показать и распечатать</span>' +
+    '<span class="pjnote">' + (pjDone || pics
+      ? "Программ: " + pjDone + " из " + pjAll.length + " · рисунков: " + pics +
+        " · сертификатов: " + ctDone + " из " + ctAll.length
+      : "Пока пусто: первая программа появится, когда будет собран проект первого мира.") +
+    '</span></span>' +
+    '<button class="bigbtn' + (pjDone || pics ? "" : " ghost") + '" id="gofolio">Открыть портфолио</button>' +
+    '</div>' +
+    '<div class="projcard' + (mine ? " done" : "") + '">' +
+    '<span class="pjemoji">✍️</span>' +
+    '<span class="pjbody"><span class="pjkicker">роль автора</span>' +
+    '<b>Своё задание</b>' +
+    '<span>придумай задачу сам и отправь её ссылкой другу — правильный ответ посчитает тренажёр</span>' +
+    '<span class="pjnote">' + (mine
+      ? "Своих заданий: " + mine
+      : "Составить задание труднее, чем решить: придётся объяснить задачу словами.") +
+    '</span></span>' +
+    '<button class="bigbtn' + (mine ? "" : " ghost") + '" id="gomine">Составить задание</button>' +
+    '</div>';
+
+  /* ===== достижения ===== */
+  h += '<div class="sect"><h2>Достижения</h2><div class="line"></div>' +
+    '<span class="cnt">' + S.badges.length + ' из ' + BADGES.length + '</span></div><div class="badges">';
   BADGES.forEach(function(b){
     h += '<div class="badge' + (S.badges.indexOf(b.id) >= 0 ? " got" : "") + '">' +
       '<span class="em">' + b.em + '</span><span><b>' + b.name + '</b><span>' + b.desc + '</span></span></div>';
   });
   h += '</div>';
 
-  /* Вход в портфолио стоит здесь, а не в верхней панели: панель и так
-     переполнена, а портфолио открывают редко и осознанно — показать. */
-  var pjAll = projectsList(), pjDone = 0;
-  pjAll.forEach(function(p){ if (projectDone(p.id)) pjDone++; });
-  var ctAll = certList(), ctDone = 0;
-  ctAll.forEach(function(c){ if (c.ready) ctDone++; });
-  h += '<div class="sect"><h2>Портфолио</h2><div class="line"></div>' +
-    '<span class="cnt">' + pjDone + ' из ' + pjAll.length + '</span></div>' +
-    '<div class="projcard' + (pjDone ? "" : " locked") + '">' +
-    '<span class="pjemoji">🎒</span>' +
-    '<span class="pjbody"><span class="pjkicker">вне сотни уроков</span>' +
-    '<b>Мои работы и сертификаты</b>' +
-    '<span>всё сделанное своими руками в одном месте — можно показать и распечатать</span>' +
-    '<span class="pjnote">' + (pjDone
-      ? "Готовых программ: " + pjDone + " из " + pjAll.length +
-        " · сертификатов: " + ctDone + " из " + ctAll.length
-      : "Пока пусто: первая программа появится, когда будет собран проект первого мира.") +
-    '</span></span>' +
-    '<button class="bigbtn' + (pjDone ? "" : " ghost") + '" id="gofolio">Открыть портфолио</button>' +
-    '</div>';
-
-  /* Вторая карточка того же вида — про роль автора, а не решателя. Стоит на
-     карте миров, а не в верхней панели, по той же причине, что и портфолио:
-     панель переполнена, а сюда заходят осознанно. */
-  var mine = myTasksList().length;
-  var solvedFriend = Object.keys(S.friendTasks || {}).length;
-  h += '<div class="projcard' + (mine ? " done" : "") + '">' +
-    '<span class="pjemoji">✍️</span>' +
-    '<span class="pjbody"><span class="pjkicker">вне сотни уроков</span>' +
-    '<b>Своё задание</b>' +
-    '<span>придумай задачу сам и отправь её ссылкой другу — тренажёр сам посчитает правильный ответ</span>' +
-    '<span class="pjnote">' + (mine || solvedFriend
-      ? "Своих заданий: " + mine + (solvedFriend ? " · чужих пройдено: " + solvedFriend : "")
-      : "Составить задание труднее, чем решить: придётся объяснить задачу словами.") +
-    '</span></span>' +
-    '<button class="bigbtn' + (mine ? "" : " ghost") + '" id="gomine">Составить задание</button>' +
-    '</div>';
-
   app.innerHTML = h;
-  document.getElementById("gofolio").onclick = screenFolio;
-  document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
-  document.getElementById("go-next").onclick = function(){
-    var next = null;
-    CURRICULUM.forEach(function(w){
-      if (next) return;
-      var ready = worldReadyLessons(w);
-      for (var i = 0; i < ready.length; i++) if (!solved(ready[i].id)){ next = ready[i]; return; }
-    });
+
+  var goNext = document.getElementById("go-next");
+  if (goNext) goNext.onclick = function(){
     if (next) openLesson(next.id); else screenWorld(1);
   };
-  document.getElementById("go-sand").onclick = screenSandbox;
+  document.getElementById("go-today").onclick = screenToday;
+  var ga = document.getElementById("go-again");
+  if (ga) ga.onclick = screenReview;
+  document.getElementById("go-train").onclick = screenTrain;
+  document.getElementById("gofolio").onclick = screenFolio;
+  document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
+  var cards = trainCards();
+  app.querySelectorAll("[data-train]").forEach(function(b){
+    var id = b.getAttribute("data-train");
+    b.onclick = function(){
+      for (var i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].go();
+    };
+  });
   app.querySelectorAll(".world").forEach(function(b){
     b.onclick = function(){ screenWorld(+b.getAttribute("data-w")); };
   });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= экран: Тренировки =================
+   Пять разделов вне сотни, каждый с ответом на «зачем мне это» и «когда сюда
+   заходить». Раньше они лежали в верхней панели пятью словами без объяснений:
+   «Разминка», «Игры», «Ты и ИИ», «Песочница», «Визуализатор» — и понять,
+   что из этого игра, а что учебный инструмент, было невозможно.
+   ============================================================ */
+function screenTrain(){
+  enterScreen("train");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
+    '<h1>🎯 Тренировки</h1></div></div>' +
+    '<p class="lede">Уроки — главное, а это то, куда заходят между ними. Звёзд тут не дают ' +
+    'и по порядку проходить не надо: выбирай по настроению. Но день занятий засчитывается ' +
+    'и здесь, так что серия не оборвётся.</p><div class="trainlist">';
+  trainCards().forEach(function(c){
+    h += '<div class="traincard"><span class="hubem">' + c.em + '</span>' +
+      '<div class="trainbody"><b>' + esc(c.title) + '</b>' +
+      '<p>' + esc(c.why) + '</p>' +
+      '<span class="trainwhen">Когда заходить: ' + esc(c.when).replace(/^Когда\s/, "") + '</span>' +
+      (c.stat ? '<span class="hubstat">' + esc(c.stat) + '</span>' : '') + '</div>' +
+      '<button class="bigbtn" data-train="' + c.id + '">Открыть</button></div>';
+  });
+  h += '</div>' +
+    '<div class="note"><b>Повторение живёт отдельно</b>Уроки, которые дались тяжело, ' +
+    'возвращаются сами в разделе «Повторить» — он на Главном, потому что это про уроки, ' +
+    'а не про отдых. Там же бестиарий ошибок: каждая ошибка, которую ты победил.</div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="toagain">🔁 Повторить</button></div>';
+  app.innerHTML = h;
+  var cards = trainCards();
+  app.querySelectorAll("[data-train]").forEach(function(b){
+    var id = b.getAttribute("data-train");
+    b.onclick = function(){
+      for (var i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].go();
+    };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("toagain").onclick = screenReview;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -2629,6 +2815,10 @@ function screenWorld(n){
 
     if (!ready.length)
       h += '<div class="note"><b>Этот мир ещё пишется</b>Ниже — план уроков, чтобы было видно дорогу. Уроки появятся волнами по десять.</div>';
+    else
+      h += '<p class="dim">Уроки проходят по порядку: следующий открывается, когда сдан предыдущий. ' +
+        'Звёзды показывают, как прошёл: три — с первой попытки без подсказок. ' +
+        'Пройденный урок можно открыть заново в любой момент, звёзды за это не отнимаются.</p>';
 
     h += '<div class="lessons">';
     w.lessons.forEach(function(l){
@@ -2673,7 +2863,7 @@ function screenWorld(n){
       '</div>';
     }
 
-    h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button><span class="sp"></span>' +
+    h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button><span class="sp"></span>' +
       (n < 5 ? '<button class="bigbtn ghost" id="wnext">Мир ' + (n+1) + ' →</button>' : '') + '</div>';
 
     app.innerHTML = h;
@@ -2772,7 +2962,7 @@ function draftApply(ed, saved){
    разметка ещё в документе — поэтому редактор можно дочитать.
 
    Песочница здесь же, и вот почему: её код сохранялся только по «Запустить» и по
-   нижней кнопке «Ко всем мирам». Ребёнок, ушедший кнопкой верхней панели, терял
+   нижней кнопке «На главную». Ребёнок, ушедший кнопкой верхней панели, терял
    написанное ровно так же, как терял его на уроке. */
 function draftFlush(){
   if (draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
@@ -2796,6 +2986,7 @@ function draftSchedule(){
 function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
+  curTab = "home";              /* урок — это «Главное», а не отдельный раздел */
   var seq = claimScreen();
   worldContent(l.world).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -2809,7 +3000,7 @@ function openLesson(id){
     var ready = worldReadyLessons(w);
     var pos = ready.indexOf(l);
 
-    var head = '<div class="crumbs"><span data-go="worlds">Миры</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
+    var head = '<div class="crumbs"><span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
       '<div class="lvlhead"><div><div class="idx">' + (l.boss ? "Босс мира " + w.n : "Урок " + l.num + " из 100") + '</div>' +
       '<h1>' + l.title + '</h1></div><div class="right">' +
       '<span class="tag">' + l.sub + '</span>' + (body.draw ? '<span class="tag draw">рисование</span>' : '') + '</div></div>' +
@@ -2858,9 +3049,22 @@ function openLesson(id){
       (prev ? '<button class="bigbtn ghost" data-open="' + prev.id + '">Назад</button>' : '') +
       (next ? '<button class="bigbtn ghost" data-open="' + next.id + '">Дальше →</button>' : '') + '</div>';
 
+    /* Первый урок в жизни: три строки о том, какая кнопка что делает. Дальше
+       полоска не показывается — она нужна ровно один раз, а место на экране
+       дороже. Условие «ни один урок ещё не пройден», а не «это первый урок»:
+       ребёнок может начать не с начала (панель наставника умеет снимать замки). */
+    var firstEver = Object.keys(S.stars).length === 0;
+    var howbar = firstEver
+      ? '<div class="howbar"><b>Что дальше:</b> ' +
+        '<span>«<b>▶ Запустить</b>» покажет, что делает код</span>' +
+        '<span>«<b>⏭ Шаг</b>» пройдёт по строкам</span>' +
+        '<span>«<b>✓ Проверить</b>» засчитает урок</span>' +
+        '<span>не получается — «<b>💡 Подсказка</b>» ниже</span></div>'
+      : "";
+
     app.innerHTML = head + theory + goal + bug +
       '<div class="draftnote" id="draftnote" hidden></div>' +
-      '<div id="studio"></div>' + hints + pager;
+      howbar + '<div id="studio"></div>' + hints + pager;
 
     /* Задание может состоять из нескольких файлов: главный плюс модули. */
     var taskFiles = body.task.files
@@ -3268,7 +3472,7 @@ function confetti(n){
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
-  enterScreen();
+  enterScreen("train");
   /* sandbox:true — метка для draftFlush: уход с этого экрана обязан сохранить код */
   session = { id:null, attempts:0, hints:0, shown:false, sandbox:true };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
@@ -3284,7 +3488,7 @@ function screenSandbox(){
     '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
     'Первая строка-комментарий станет названием.</span>' +
     '<div class="msg" id="picmsg"></div></div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   var studio = makeStudio({
     engine:"mini", draw:true, code: S.sandbox || SANDBOX_START,
@@ -3350,7 +3554,7 @@ function gamesList(){ return (window.GAMES || []); }
 function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
 
 function screenGames(){
-  enterScreen();
+  enterScreen("train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var gs = gamesList();
   var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
@@ -3363,7 +3567,7 @@ function screenGames(){
       '<b>' + esc(g.title) + (edited ? ' <span class="edittag">твоя версия</span>' : '') + '</b>' +
       '<span>' + esc(g.desc) + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ openGame(b.getAttribute("data-id")); };
@@ -3376,7 +3580,7 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
-  enterScreen();
+  enterScreen("train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
@@ -3700,7 +3904,7 @@ function runBlocksCheck(w, ed, showMsg){
    Ребёнок вводит имя → создаётся код и аккаунт. Либо входит по готовому коду.
    ============================================================ */
 function screenRegister(){
-  enterScreen();
+  enterScreen(null);
   session = { id:null, attempts:0, hints:0, shown:false };
   var h =
     '<div class="reghero"><span class="regmark">🐍</span>' +
@@ -3779,7 +3983,7 @@ function copyText(text, btn){
   oldWay();
 }
 function screenAccount(){
-  enterScreen();
+  enterScreen(null);
   session = { id:null, attempts:0, hints:0, shown:false };
   var code = myCode(), name = myName();
   var link = "";
@@ -3806,7 +4010,7 @@ function screenAccount(){
     '<div class="card"><h3>Портфолио</h3>' +
     '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
   var cc = document.getElementById("copycode");
@@ -3946,7 +4150,7 @@ function screenToday(){
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
     saved + banner + hero + taskCard + schedBox +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   var dopen = document.getElementById("dopen");
   if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
@@ -3961,7 +4165,7 @@ function screenToday(){
 }
 
 function screenWarmups(){
-  enterScreen();
+  enterScreen("train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
   var open = warmupsOpen();
@@ -3985,7 +4189,7 @@ function screenWarmups(){
                      : "Откроется после урока " + (les ? les.num + " «" + esc(les.title) + "»" : "из программы")) + '</span>' +
       '<span class="wtag">' + esc(w.tag) + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
@@ -3999,7 +4203,7 @@ function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
-  enterScreen();
+  enterScreen("train");
   var isDaily = !!(opts && opts.daily);
   session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
   /* из задачи дня «назад» и списки ведут на экран «Сегодня», а не в разминку */
@@ -4406,7 +4610,7 @@ function screenReview(){
 
   h += beastsHTML();
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".revcard").forEach(function(b){
     b.onclick = function(){ openLesson(b.getAttribute("data-id")); };
@@ -4430,7 +4634,7 @@ function revCard(x){
 }
 
 function screenAILab(){
-  enterScreen();
+  enterScreen("train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = ailabList();
   var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
@@ -4473,7 +4677,7 @@ function screenAILab(){
     '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
@@ -4491,7 +4695,7 @@ function openAILesson(id){
   var xs = ailabList();
   var x = xs.filter(function(e){ return e.id === id; })[0];
   if (!x) return screenAILab();
-  enterScreen();
+  enterScreen("train");
   session = { id:id, attempts:0, hints:0, shown:false };
   var pos = xs.indexOf(x);
   var next = pos < xs.length - 1 ? xs[pos+1] : null;
@@ -5406,7 +5610,7 @@ function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.
 function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
 
 function screenFolio(){
-  enterScreen();
+  enterScreen("mine");
   session = { id:null, attempts:0, hints:0, shown:false };
 
   var projects = projectsList();
@@ -5418,10 +5622,11 @@ function screenFolio(){
   var name = myName();
 
   var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
-    '<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Мои работы") + '</h1></div>' +
+    '<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Моё") + '</h1></div>' +
     '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
-    '<p class="lede">Здесь собрано всё сделанное своими руками: готовые программы и сертификаты. ' +
-    'Эту страницу можно показать кому угодно — родителям, учителю, друзьям.</p>';
+    '<p class="lede">Здесь собрано всё сделанное своими руками: программы из проектов, рисунки, ' +
+    'свои задания для друзей и сертификаты. Эту страницу можно показать кому угодно — ' +
+    'родителям, учителю, друзьям.</p>';
 
   h += '<div class="fstats">' +
     folioStat(lessonsDone + ' <i>из ' + CURRICULUM.total + '</i>', "уроков пройдено") +
@@ -5496,6 +5701,28 @@ function screenFolio(){
     }).join("") + '</div>';
   }
 
+  /* ===== свои задания ===== */
+  var tasks = myTasksList();
+  h += '<div class="sect"><h2>Свои задания</h2><div class="line"></div>' +
+    '<span class="cnt">' + tasks.length + '</span></div>';
+  if (!tasks.length){
+    h += '<div class="note"><b>Заданий пока нет</b>Придумать задачу труднее, чем решить: ' +
+      'придётся объяснить её словами тому, кто твоего кода не видит. ' +
+      '<button class="rbtn" id="folio-mine">Составить задание</button></div>';
+  } else {
+    h += '<div class="hubgrid">' + tasks.map(function(t){
+      return '<div class="hubcard"><span class="hubem">✍️</span>' +
+        '<b>' + esc(t.title) + '</b>' +
+        '<span class="hubwhy">' + esc(t.goal) + '</span>' +
+        '<span class="hubstat">' + fmtDay(t.at) + ' · ответ из ' + t.lines.length + ' ' +
+          plural(t.lines.length, "строки", "строк", "строк") + '</span>' +
+        '<div class="picbtns"><button class="rbtn sec" data-tasklink="' + t.id + '">Скопировать ссылку</button>' +
+        '<button class="rbtn sec" data-taskopen="' + t.id + '">Открыть</button></div></div>';
+    }).join("") + '</div>' +
+    '<p class="dim">Ссылку можно отправить кому угодно: задание целиком лежит внутри неё, ' +
+    'сервер для этого не нужен. Составить ещё одно — на экране «Своё задание».</p>';
+  }
+
   h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
     '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
     '<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
@@ -5511,7 +5738,7 @@ function screenFolio(){
   });
   h += '</div>';
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   app.innerHTML = h;
   app.querySelectorAll("[data-open]").forEach(function(b){
@@ -5551,6 +5778,20 @@ function screenFolio(){
   });
   app.querySelectorAll("[data-picdel]").forEach(function(b){
     b.onclick = function(){ galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
+  });
+  var fm = document.getElementById("folio-mine");
+  if (fm) fm.onclick = function(){ screenMyTasks(); };
+  app.querySelectorAll("[data-tasklink]").forEach(function(b){
+    b.onclick = function(){
+      var t = myTasksAll()[b.getAttribute("data-tasklink")];
+      if (t) copyText(taskLink(t), b);
+    };
+  });
+  app.querySelectorAll("[data-taskopen]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-taskopen"), t = myTasksAll()[id];
+      if (t) openFriendTask(t, { own:true, id:id });
+    };
   });
   app.querySelectorAll("[data-py]").forEach(function(b){
     b.onclick = function(){
@@ -5718,7 +5959,7 @@ function taskBuild(title, goal, code){
 
 /* ===== экран: мои задания ===== */
 function screenMyTasks(edit){
-  enterScreen();
+  enterScreen("mine");
   var list = myTasksList();
   var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
   var start = edit || draft || { title:"", goal:"", code:"" };
@@ -5769,7 +6010,7 @@ function screenMyTasks(edit){
       '<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
       '<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
   });
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
   var studio = makeStudio({
@@ -5864,7 +6105,7 @@ function screenMyTasks(edit){
    opts.own — это своё же задание, открытое «глазами друга»: проверка та же,
    но опыт за него не даётся (иначе задания составлялись бы ради XP). */
 function openFriendTask(t, opts){
-  enterScreen();
+  enterScreen("mine");
   opts = opts || {};
   var key = taskKey(t);
   var already = !!(S.friendTasks && S.friendTasks[key]);
@@ -5887,7 +6128,7 @@ function openFriendTask(t, opts){
 
   h += '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
   /* Код решателя сохраняется тем же механизмом, что черновики уроков: ключ
@@ -5956,14 +6197,14 @@ function winFriendTask(t, key, already, opts){
    на присланную ссылку и должен понять, что случилось, а не решить, что
    тренажёр сломался. */
 function screenTaskBroken(){
-  enterScreen();
+  enterScreen("mine");
   session = { id:null, attempts:0, hints:0, shown:false };
   app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
     '<h1>✍️ Задание не прочиталось</h1></div></div>' +
     '<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
     'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
     '<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
@@ -6493,7 +6734,7 @@ function vizDrawArrows(mem){
    жил сам по себе. С черновиками (draftFlush в claimScreen) уход безопасен:
    код урока сохраняется на переходе и возвращается на место. */
 function screenViz(opts){
-  enterScreen();
+  enterScreen("train");
   session = { id:null, attempts:0, hints:0, shown:false };
   opts = opts || {};
   var mine = !!opts.code;
@@ -6512,7 +6753,7 @@ function screenViz(opts){
     '</div><div id="vizstudio"></div>' +
     '<div class="pager">' +
       (opts.backTo ? '<button class="bigbtn" id="vizback">' + esc(opts.backTo.label) + '</button>' : '') +
-      '<button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+      '<button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
   var ed = makeEditor(opts.code || VIZ_EXAMPLES[0].code,
@@ -6663,7 +6904,11 @@ function vizPlayer(player, ed, rec){
    были выписаны в пятнадцати местах, и когда у визуализатора появился свой
    таймер, его туда не дописали — «Играть» продолжал перерисовывать плеер,
    уже выброшенный из документа. */
-function enterScreen(){
+/* tab — какая вкладка наверху должна светиться: "home" (по умолчанию),
+   "train", "mine" или null, если экран не принадлежит ни одному разделу
+   (профиль, регистрация, панель наставника). */
+function enterScreen(tab){
+  curTab = tab === undefined ? "home" : tab;
   stopTimer();
   vizStopPlay();
   clearAdminHash();
@@ -6722,7 +6967,8 @@ var HASH_SCREENS = {
   "#ai":      function(){ screenAILab(); },
   "#again":   function(){ screenReview(); },
   "#folio":   function(){ screenFolio(); },
-  "#mine":    function(){ screenMyTasks(); }
+  "#mine":    function(){ screenMyTasks(); },
+  "#train":   function(){ screenTrain(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
@@ -6782,7 +7028,7 @@ function adminGate(){
       '<input type="password" id="admcode" placeholder="код доступа" autocomplete="off" spellcheck="false">' +
       '<button class="rbtn check" id="admgo">Войти</button>' +
     '</div><div class="msg" id="admgatemsg"></div></div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="admback">← Ко всем мирам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="admback">← На главную</button></div>';
   var inp = document.getElementById("admcode");
   var msg = document.getElementById("admgatemsg");
   function tryIn(){
@@ -7090,7 +7336,7 @@ function screenAdmin(){
     h += weekReportHTML(viewState.data);
     h += lessonTableHTML(viewState.data, false);
     h += '<div class="pager"><button class="bigbtn ghost" data-act="myown">← Свой прогресс</button>' +
-      '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">Ко всем мирам</button></div>';
+      '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
   } else {
     /* ---------- обычный режим ---------- */
     h += '<div class="lvlhead"><div><div class="idx">служебный экран</div>' +
@@ -7138,7 +7384,7 @@ function screenAdmin(){
       '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
       '<div class="msg" id="admmsg"></div></div>';
 
-    h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← Ко всем мирам</button>' +
+    h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← На главную</button>' +
       '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
   }
 
@@ -7319,14 +7565,25 @@ function screenAdmin(){
 }
 
 /* ================= старт ================= */
-document.getElementById("btn-map").onclick = screenWorlds;
+/* Вкладки. Их всего три, и это весь верхний уровень: «Главное» (уроки и что
+   делать сейчас), «Тренировки» (всё, что вне сотни), «Моё» (сделанное своими
+   руками). Остальные кнопки панели — не разделы, а инструменты под рукой:
+   огонёк дня, шпаргалка, профиль, фокус.
+   Старые кнопки (Миры, Разминка, Игры…) убраны из панели, но экраны и адреса
+   остались: на них ведут карточки с экранов и хэши вроде #games. */
 document.getElementById("logo").onclick = screenWorlds;
-document.getElementById("btn-sand").onclick = screenSandbox;
-(function(){ var b = document.getElementById("btn-games"); if (b) b.onclick = screenGames; })();
+(function(){
+  var byTab = { home: screenWorlds, train: screenTrain, mine: screenFolio };
+  var nav = document.querySelector(".tabs");
+  if (nav) nav.addEventListener("click", function(e){
+    var b = e.target.closest(".tab");
+    if (!b) return;
+    var go = byTab[b.getAttribute("data-tab")];
+    if (go) go();
+  });
+})();
 (function(){ var b = document.getElementById("btn-today"); if (b) b.onclick = screenToday; })();
 (function(){ var b = document.getElementById("btn-who"); if (b) b.onclick = screenAccount; })();
-(function(){ var b = document.getElementById("btn-warm"); if (b) b.onclick = screenWarmups; })();
-(function(){ var b = document.getElementById("btn-again"); if (b) b.onclick = screenReview; })();
 (function(){
   var b = document.getElementById("btn-sheet"); if (b) b.onclick = openSheet;
   var x = document.getElementById("sheetclose"); if (x) x.onclick = closeSheet;
@@ -7345,12 +7602,13 @@ document.getElementById("btn-sand").onclick = screenSandbox;
   var el = document.getElementById("cert");
   if (el) el.onclick = function(e){ if (e.target === el) closeCert(); };
 })();
-(function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
-(function(){ var b = document.getElementById("btn-ai"); if (b) b.onclick = screenAILab; })();
-document.getElementById("btn-focus").onclick = function(){
-  document.body.classList.toggle("focus");
-  this.classList.toggle("on");
-};
+(function(){
+  var b = document.getElementById("btn-focus");
+  if (b) b.onclick = function(){
+    document.body.classList.toggle("focus");
+    b.classList.toggle("on");
+  };
+})();
 document.getElementById("win").onclick = function(e){ if (e.target === this) closeWin(); };
 window.addEventListener("keydown", function(e){
   if (e.key !== "Escape") return;
@@ -7432,6 +7690,7 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
+  screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
