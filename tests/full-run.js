@@ -890,6 +890,82 @@ function checkEncoding(){
         if (!dobj || dobj.kind !== "dict" || dobj.pairs[0].key !== "'м'")
           bad(`[виз] ключ словаря показан неверно: ${dobj && dobj.pairs && JSON.stringify(dobj.pairs[0])}`);
       }
+      /* ===== стек вызовов =====
+         Раньше heapSnapshot сваливал все области видимости в один список и
+         дедуплицировал имена: внутри функции ребёнок видел местную «ш» и никак
+         не мог узнать, что внешняя «ш» с другим значением всё ещё существует.
+         Теперь на каждый кадр свой список. */
+      if (typeof g.vizRecord === "function"){
+        const fr = g.vizRecord('def f(ш):\n    итог = ш * 2\n    return итог\n\n\nш = 7\nprint(f(3))\n');
+        const inside = fr.frames.filter(x => x.scopes && x.scopes.length > 1);
+        if (!inside.length) bad("[виз] внутри функции не появился отдельный кадр стека");
+        else {
+          const f0 = inside[inside.length - 1];
+          const glob = f0.scopes[0].vars.filter(v => v.name === "ш")[0];
+          const loc  = f0.scopes[1].vars.filter(v => v.name === "ш")[0];
+          if (!glob || !loc)
+            bad("[виз] «ш» видно не в обоих кадрах — внешняя переменная опять спрятана за местной");
+          else if (glob.cell.text === loc.cell.text)
+            bad(`[виз] в обоих кадрах «ш» одинаковая (${glob.cell.text}) — кадры не различаются`);
+          else if (f0.scopes[1].name !== "f")
+            bad(`[виз] кадр вызова назван «${f0.scopes[1].name}», а функция f`);
+          else vizChecked++;
+          /* локальная переменная не должна протекать в кадр программы */
+          if (f0.scopes[0].vars.filter(v => v.name === "итог").length)
+            bad("[виз] местная переменная функции попала в кадр главной программы");
+        }
+        /* рекурсия: кадров должно становиться столько, сколько вызовов */
+        const rc = g.vizRecord('def ф(n):\n    if n <= 1:\n        return 1\n    return n * ф(n - 1)\n\n\nprint(ф(4))\n');
+        const deepest = Math.max(...rc.frames.map(x => (x.scopes || []).length));
+        if (deepest < 5) bad(`[виз] на рекурсии глубиной 4 максимум кадров ${deepest}, а должно быть 5 (программа + 4 вызова)`);
+        else vizChecked++;
+      }
+
+      /* ===== что изменилось на шаге =====
+         Ползунок показывал состояние, но не изменение. Проверяем, что разбор
+         называет событие словами И что молчит, когда на шаге ничего не менялось:
+         пустая полоска лучше выдуманного «что-то поменялось». */
+      if (typeof g.vizDiff === "function"){
+        const rec = g.vizRecord('nums = []\nfor i in range(1, 3):\n    nums.append(i * i)\n\nprint(nums)\n');
+        const texts = [];
+        for (let k = 1; k < rec.frames.length; k++)
+          texts.push(g.vizDiff(rec.frames[k - 1], rec.frames[k]).text);
+        const all = texts.join(" ~ ");
+        for (const need of ["появилась переменная", "добавился элемент", "напечатано"])
+          if (all.indexOf(need) < 0) bad(`[виз] разбор шага ни разу не сказал «${need}»: ${all.slice(0, 200)}`);
+        /* один и тот же кадр сам с собой — менять нечего, разбор обязан молчать */
+        const same = g.vizDiff(rec.frames[1], rec.frames[1]);
+        if (same.text) bad(`[виз] разбор нашёл изменение там, где кадр не менялся: ${same.text}`);
+        /* пометки должны попадать в разметку, иначе подсветки не видно */
+        let marked = 0;
+        for (let k = 1; k < rec.frames.length; k++){
+          const d = g.vizDiff(rec.frames[k - 1], rec.frames[k]);
+          const html = g.vizMemoryHTML(rec.frames[k], d);
+          if (Object.keys(d.vars).length + Object.keys(d.cells).length + Object.keys(d.objs).length){
+            if (!/vzn|vzc/.test(html)) bad(`[виз] на шаге ${k + 1} есть изменения, а классов подсветки в разметке нет`);
+            else marked++;
+          } else if (/vzn|vzc/.test(html)) {
+            bad(`[виз] на шаге ${k + 1} изменений нет, а подсветка в разметке есть`);
+          }
+        }
+        if (!marked) bad("[виз] подсветка изменений не сработала ни на одном шаге");
+        else vizChecked++;
+
+        /* вход в функцию называется вместе с аргументом: на рекурсии без него
+           все шаги выглядят одинаково, а вся суть в том, с чем позвали */
+        const fr2 = g.vizRecord('def ф(n):\n    return n\n\n\nprint(ф(3))\n');
+        const entry = [];
+        for (let k = 1; k < fr2.frames.length; k++) entry.push(g.vizDiff(fr2.frames[k - 1], fr2.frames[k]).text);
+        const joined = entry.join(" ~ ");
+        if (joined.indexOf("вызвана функция") < 0) bad("[виз] вход в функцию не назван");
+        else if (joined.indexOf("n = 3") < 0) bad(`[виз] вход в функцию назван без аргумента: ${joined.slice(0, 150)}`);
+        else vizChecked++;
+      }
+
+      /* примеры с функциями обязаны быть: без них стек вызовов показать не на чем */
+      if (Array.isArray(g.VIZ_EXAMPLES) && !g.VIZ_EXAMPLES.filter(e => /\bdef\b/.test(e.code)).length)
+        bad("[виз] среди примеров нет ни одного с функцией");
+
       /* Кнопка «Играть» ставит интервал на 800 мс. Уход с экрана обязан его
          погасить: плеер просто выбрасывается из документа, а таймер сам не
          умирает — он продолжал бы перерисовывать невидимую разметку вечно,
@@ -1277,7 +1353,7 @@ function checkEncoding(){
   console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}` +
               ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length})`);
   console.log(`живой разбор расхождения: ${whyChecked} случаев`);
-  console.log(`визуализатор проверен: ${vizChecked ? "да" : "нет"}`);
+  console.log(`визуализатор проверен: ${vizChecked} проверок (стек вызовов, разбор шага, подсветка)`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
   console.log(`расписание занятий: ${schedChecked ? "да" : "нет"}`);
   console.log(`щит для стрика: ${shieldChecked ? "да" : "нет"}`);

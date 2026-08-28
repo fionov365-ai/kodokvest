@@ -3284,7 +3284,16 @@ var VIZ_EXAMPLES = [
   { title: "Обмен значений",
     code: 'x = 5\ny = 9\n\nx, y = y, x\n\nprint(x, y)\n' },
   { title: "Список списков",
-    code: 'matrix = [[1, 2], [3, 4]]\nrow = matrix[0]\nrow.append(99)\n\nprint(matrix)\n' }
+    code: 'matrix = [[1, 2], [3, 4]]\nrow = matrix[0]\nrow.append(99)\n\nprint(matrix)\n' },
+  /* Два примера с функциями. Раньше их тут не было вообще, и стек вызовов
+     показать было не на чем. Первый — про то, что «ш» в программе и «ш»
+     в функции это РАЗНЫЕ переменные с одним именем: плоский список их сливал,
+     а кадры показывают обе. Второй — рекурсия: коробок становится столько,
+     сколько вызовов, и видно, что ни один не закончился, пока не дошли до дна. */
+  { title: "Функция: свои переменные",
+    code: 'def площадь(ш, в):\n    итог = ш * в\n    return итог\n\n\nвсего = 0\nfor ш, в in [(3, 4), (5, 2)]:\n    всего = всего + площадь(ш, в)\n\nprint(всего)\n' },
+  { title: "Рекурсия: стек вызовов",
+    code: 'def факториал(n):\n    if n <= 1:\n        return 1\n    return n * факториал(n - 1)\n\n\nprint(факториал(4))\n' }
 ];
 var VIZ_COLORS = ["#7c5cff","#00e0b8","#ffc53d","#ff6b6b","#3ddc84","#4aa3ff","#e06bff","#ff9f45"];
 var VIZ_MAX_FRAMES = 800;
@@ -3323,20 +3332,149 @@ function vizRecord(code){
   while (true){
     var s = st.next();
     if (s.error){
-      var last = frames.length ? frames[frames.length - 1] : { vars: [], objects: {} };
-      frames.push({ line: s.error.line, output: s.output, vars: last.vars, objects: last.objects, error: s.error });
+      var last = frames.length ? frames[frames.length - 1] : { vars: [], scopes: [], objects: {} };
+      frames.push({ line: s.error.line, output: s.output, vars: last.vars,
+                    scopes: last.scopes, objects: last.objects, error: s.error });
       error = s.error; break;
     }
     if (s.done){
-      var h = MP.heapSnapshot(st.interp.global, idMap, skip);
-      frames.push({ line: 0, output: s.output, vars: h.vars, objects: h.objects, done: true });
+      var h = MP.heapSnapshot(st.interp.global, idMap, skip, []);
+      frames.push({ line: 0, output: s.output, vars: h.vars, scopes: h.scopes, objects: h.objects, done: true });
       break;
     }
-    var hs = MP.heapSnapshot(s.env, idMap, skip);
-    frames.push({ line: s.line, output: s.output, vars: hs.vars, objects: hs.objects });
+    var hs = MP.heapSnapshot(s.env, idMap, skip, s.stack || []);
+    frames.push({ line: s.line, output: s.output, vars: hs.vars, scopes: hs.scopes, objects: hs.objects });
     if (++guard >= VIZ_MAX_FRAMES){ truncated = true; break; }
   }
   return { frames: frames, error: error, truncated: truncated };
+}
+
+/* ===== что изменилось на этом шаге =====
+   Ползунок показывал состояние, но не изменение: ребёнок листал кадры и сам
+   искал глазами, что стало другим. На словаре из восьми ключей это работа
+   поиска отличий, а не понимания. Поэтому сравниваем предыдущий кадр с
+   текущим и делаем две вещи: подсвечиваем изменённое в разметке и говорим
+   фразой, что произошло.
+
+   Возвращаем { text, vars, cells, objs, scopes }:
+     text   — фраза для полоски над памятью (или пустая строка);
+     vars   — { "кадр:имя": "new"|"chg" };
+     cells  — { "идОбъекта:номерИлиКлюч": "new"|"chg" };
+     objs   — { "идОбъекта": "new" };
+     scopes — { номерКадра: "new" } — кадр вызова, появившийся на этом шаге.
+   Ключи строковые, потому что и номера, и ключи словаря приходят как текст. */
+function vizSame(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+
+function vizVarMap(scope){
+  var m = {};
+  (scope && scope.vars || []).forEach(function(v){ m[v.name] = v.cell; });
+  return m;
+}
+
+/* Короткая запись значения для фразы: ссылку на список показываем словом,
+   а не «→o3» — ребёнку нужен смысл, а не наш внутренний номер. */
+function vizShort(cell, objects){
+  if (!cell) return "";
+  if (cell.t !== "ref") return cell.text;
+  var o = objects && objects[cell.id];
+  if (!o) return "объект";
+  if (o.kind === "dict")
+    return "{" + o.pairs.map(function(p){ return p.key + ": " + vizShort(p.val, objects); }).join(", ") + "}";
+  var inner = (o.items || []).map(function(x){ return vizShort(x, objects); }).join(", ");
+  return o.kind === "list" ? "[" + inner + "]" : o.kind === "tuple" ? "(" + inner + ")" : "{" + inner + "}";
+}
+
+function vizDiff(prev, cur){
+  var out = { text: "", vars: {}, cells: {}, objs: {}, scopes: {} };
+  if (!prev || !cur) return out;
+  var say = [];
+
+  var ps = prev.scopes || [], cs = cur.scopes || [];
+
+  /* вошли в функцию или вышли из неё — это самое крупное событие шага.
+     Про вход говорим сразу С АРГУМЕНТАМИ: «вызвана факториал(n = 3)». Без них
+     на рекурсии все шаги выглядят одинаково, а вся суть как раз в том, с каким
+     числом позвали на этот раз. */
+  if (cs.length > ps.length){
+    for (var k = ps.length; k < cs.length; k++) out.scopes[k] = "new";
+    var entered = cs[cs.length - 1];
+    var args = (entered.vars || []).map(function(v){
+      return esc(v.name) + " = " + esc(vizShort(v.cell, cur.objects));
+    }).join(", ");
+    say.push("вызвана функция <b>" + esc(entered.name || "?") + "(" + args + ")</b>");
+  } else if (cs.length < ps.length){
+    /* Обратный путь рекурсии наш шагомер не показывает по одному: он выдаёт
+       шаг на КАЖДУЮ СТРОКУ, а возвраты из вложенных вызовов случаются внутри
+       одного выражения n * факториал(n - 1). Поэтому стек сворачивается сразу
+       на несколько кадров — и честнее сказать сколько, чем назвать один. */
+    var popped = ps.slice(cs.length).map(function(f){ return f.name || "?"; });
+    say.push(popped.length === 1
+      ? "функция <b>" + esc(popped[0]) + "</b> закончила работу"
+      : "закончились сразу " + popped.length + " вызова <b>" + esc(popped[popped.length - 1]) + "</b> — " +
+        "обратный путь рекурсии проходит внутри одного выражения, отдельного шага на него нет");
+  }
+
+  /* переменные: по кадрам, а не в одну свалку — иначе местная переменная
+     функции и внешняя с тем же именем сливаются в одно «изменение».
+     Кадры, появившиеся на этом шаге, целиком новые — их переменные помечаем,
+     но словами не перечисляем: про них уже сказано в строке вызова. */
+  for (var si = 0; si < cs.length; si++){
+    var fresh = si >= ps.length;
+    var before = fresh ? {} : vizVarMap(ps[si]);
+    var after = vizVarMap(cs[si]);
+    Object.keys(after).forEach(function(name){
+      var key = si + ":" + name;
+      if (before[name] === undefined){
+        out.vars[key] = "new";
+        if (!fresh && say.length < 3) say.push("появилась переменная <b>" + esc(name) + "</b> = " +
+          esc(vizShort(after[name], cur.objects)));
+      } else if (!vizSame(before[name], after[name])){
+        out.vars[key] = "chg";
+        if (say.length < 3) say.push("<b>" + esc(name) + "</b>: " +
+          esc(vizShort(before[name], prev.objects)) + " → " + esc(vizShort(after[name], cur.objects)));
+      }
+    });
+  }
+
+  /* куча: новые коробки и изменившиеся ячейки внутри старых */
+  Object.keys(cur.objects).forEach(function(id){
+    var a = prev.objects[id], b = cur.objects[id];
+    if (!a){ out.objs[id] = "new"; return; }
+    if (b.kind === "dict"){
+      var wasByKey = {};
+      a.pairs.forEach(function(p){ wasByKey[p.key] = p.val; });
+      b.pairs.forEach(function(p){
+        if (wasByKey[p.key] === undefined){
+          out.cells[id + ":" + p.key] = "new";
+          if (say.length < 3) say.push("в словарь добавился ключ <b>" + esc(p.key) + "</b>");
+        } else if (!vizSame(wasByKey[p.key], p.val)){
+          out.cells[id + ":" + p.key] = "chg";
+          if (say.length < 3) say.push("по ключу <b>" + esc(p.key) + "</b> стало " +
+            esc(vizShort(p.val, cur.objects)));
+        }
+      });
+    } else {
+      (b.items || []).forEach(function(it, ix){
+        var was = (a.items || [])[ix];
+        if (was === undefined){
+          out.cells[id + ":" + ix] = "new";
+          if (say.length < 3) say.push("добавился элемент <b>" + esc(vizShort(it, cur.objects)) + "</b>");
+        } else if (!vizSame(was, it)){
+          out.cells[id + ":" + ix] = "chg";
+          if (say.length < 3) say.push("элемент " + ix + " стал <b>" + esc(vizShort(it, cur.objects)) + "</b>");
+        }
+      });
+    }
+  });
+
+  /* напечатанное — тоже изменение, и часто единственное на шаге */
+  if (cur.output !== prev.output){
+    var add = String(cur.output).slice(String(prev.output).length).replace(/\n+$/, "");
+    if (add !== "" && say.length < 3) say.push("напечатано: <b>" + esc(add.split("\n").join(" ⏎ ")) + "</b>");
+  }
+
+  out.text = say.join(", ");
+  return out;
 }
 
 /* значение ячейки: скаляр или стрелка-ссылка на объект */
@@ -3347,15 +3485,22 @@ function vizCellHTML(cell){
   }
   return '<span class="vval">' + esc(cell.text) + '</span>';
 }
-function vizObjHTML(obj, names){
+/* mk — метка изменения ("new" | "chg" | undefined). Класс на самой ячейке,
+   а не на всей коробке: в словаре из восьми ключей важно, какой именно из них
+   поменялся, иначе подсветка не помогает, а мешает. */
+function vizMark(mk){ return mk ? " " + (mk === "new" ? "vzn" : "vzc") : ""; }
+
+function vizObjHTML(obj, names, marks){
   var c = vizColor(obj.id);
+  var cells = (marks && marks.cells) || {};
   var head = '<div class="vohead" style="color:' + c + '">' + vizKind(obj.kind) +
     (names && names.length ? ' <span class="vonames">' + names.map(esc).join(", ") + '</span>' : '') + '</div>';
   var body;
   if (obj.kind === "dict"){
     body = obj.pairs.length
       ? obj.pairs.map(function(p){
-          return '<div class="vopair"><span class="vokey">' + esc(p.key) + '</span>' +
+          return '<div class="vopair' + vizMark(cells[obj.id + ":" + p.key]) + '">' +
+                 '<span class="vokey">' + esc(p.key) + '</span>' +
                  '<span class="vosep">:</span>' + vizCellHTML(p.val) + '</div>';
         }).join("")
       : '<span class="voempty">пусто</span>';
@@ -3364,27 +3509,64 @@ function vizObjHTML(obj, names){
     var withIdx = obj.kind === "list" || obj.kind === "tuple";
     body = obj.items.length
       ? obj.items.map(function(it, i){
-          return '<div class="vocell">' + (withIdx ? '<span class="voidx">' + i + '</span>' : '') +
+          return '<div class="vocell' + vizMark(cells[obj.id + ":" + i]) + '">' +
+                 (withIdx ? '<span class="voidx">' + i + '</span>' : '') +
                  '<span class="voval">' + vizCellHTML(it) + '</span></div>';
         }).join("")
       : '<span class="voempty">пусто</span>';
     body = '<div class="vocells">' + body + '</div>';
   }
-  return '<div class="vizobj" data-id="' + obj.id + '" style="border-color:' + c + '">' + head + body + '</div>';
+  var objMark = marks && marks.objs && marks.objs[obj.id] ? " vzn" : "";
+  return '<div class="vizobj' + objMark + '" data-id="' + obj.id + '" style="border-color:' + c + '">' + head + body + '</div>';
 }
-function vizMemoryHTML(frame){
+
+/* Один кадр стека: имя функции (или «главная программа») и её переменные.
+   Кадр функции рисуется отдельной коробкой поверх программы — так видно, что
+   местная переменная живёт не там же, где внешняя, даже если имя одно. */
+function vizScopeHTML(scope, si, marks){
+  var vm = (marks && marks.vars) || {};
+  var rows = scope.vars.length
+    ? scope.vars.map(function(v){
+        return '<div class="vizvar' + vizMark(vm[si + ":" + v.name]) + '"><b>' + esc(v.name) + '</b>' +
+               '<span class="veq">=</span>' + vizCellHTML(v.cell) + '</div>';
+      }).join("")
+    : '<div class="vizempty">переменных пока нет</div>';
+  var isCall = si > 0;
+  var fresh = marks && marks.scopes && marks.scopes[si] ? " vzn" : "";
+  /* Имя функции НЕ переводим в верхний регистр (в отличие от подписи «главная
+     программа»): в Python имена регистрозависимы, и «ПЛОЩАДЬ» — это другое имя.
+     Подпись не должна врать про код. */
+  var title = isCall
+    ? '⤷ <span class="vsfn">' + esc(scope.name || "?") + '()</span>'
+    : "главная программа";
+  return '<div class="vizscope' + (isCall ? " call" : "") + fresh + '">' +
+         '<div class="vsname">' + title + '</div>' + rows + '</div>';
+}
+
+function vizMemoryHTML(frame, marks){
   var namesByObj = {};
   frame.vars.forEach(function(v){
     if (v.cell.t === "ref") (namesByObj[v.cell.id] = namesByObj[v.cell.id] || []).push(v.name);
   });
-  var varsHTML = frame.vars.length
-    ? frame.vars.map(function(v){
-        return '<div class="vizvar"><b>' + esc(v.name) + '</b><span class="veq">=</span>' + vizCellHTML(v.cell) + '</div>';
-      }).join("")
-    : '<div class="vizempty">переменных пока нет</div>';
+  /* Пока программа не заходила в функции, кадр один — рисуем как раньше,
+     без лишней рамки и заголовка: чрома не должно быть больше, чем данных. */
+  var scopes = frame.scopes && frame.scopes.length ? frame.scopes : null;
+  var varsHTML;
+  if (!scopes || scopes.length === 1){
+    var only = scopes ? scopes[0] : { vars: frame.vars };
+    var vm = (marks && marks.vars) || {};
+    varsHTML = only.vars.length
+      ? only.vars.map(function(v){
+          return '<div class="vizvar' + vizMark(vm["0:" + v.name]) + '"><b>' + esc(v.name) + '</b>' +
+                 '<span class="veq">=</span>' + vizCellHTML(v.cell) + '</div>';
+        }).join("")
+      : '<div class="vizempty">переменных пока нет</div>';
+  } else {
+    varsHTML = scopes.map(function(sc, si){ return vizScopeHTML(sc, si, marks); }).join("");
+  }
   var ids = Object.keys(frame.objects);
   var objsHTML = ids.length
-    ? ids.map(function(id){ return vizObjHTML(frame.objects[id], namesByObj[id]); }).join("")
+    ? ids.map(function(id){ return vizObjHTML(frame.objects[id], namesByObj[id], marks); }).join("")
     : '<div class="vizempty">списков и словарей пока нет</div>';
   return '<div class="vizvars">' + varsHTML + '</div>' +
          '<div class="vizheap">' + objsHTML + '</div>' +
@@ -3485,6 +3667,7 @@ function vizPlayer(player, ed, rec){
       '<span class="vizpos"></span>' +
     '</div>' +
     (rec.truncated ? '<div class="viznote">Программа длинная — показаны первые ' + frames.length + ' шагов.</div>' : '') +
+    '<div class="vizwhat" style="display:none"></div>' +
     '<div class="vizstage"><div class="vizcode"></div><div class="vizmem"></div></div>' +
     '<div class="vizerr" style="display:none"></div>' +
     '<div class="pane pout"><div class="ph">вывод к этому шагу</div><div class="console"></div></div>';
@@ -3493,6 +3676,7 @@ function vizPlayer(player, ed, rec){
   var memEl = player.querySelector(".vizmem");
   var conEl = player.querySelector(".console");
   var errEl = player.querySelector(".vizerr");
+  var whatEl = player.querySelector(".vizwhat");
   var slider = player.querySelector(".vizslider");
   var posEl = player.querySelector(".vizpos");
   var playBtn = player.querySelector('[data-v="play"]');
@@ -3508,8 +3692,16 @@ function vizPlayer(player, ed, rec){
   function render(){
     var f = frames[i];
     renderCode(f.line);
-    memEl.innerHTML = vizMemoryHTML(f);
+    /* Изменение считаем относительно ПРЕДЫДУЩЕГО кадра, а не относительно
+       того, откуда прыгнули ползунком: «что изменилось на этом шаге» должно
+       значить одно и то же, куда бы ребёнок ни ткнул на шкале. */
+    var marks = vizDiff(frames[i - 1], f);
+    memEl.innerHTML = vizMemoryHTML(f, marks);
     vizDrawArrows(memEl);
+    if (marks.text){
+      whatEl.style.display = "";
+      whatEl.innerHTML = '<span class="vwl">на этом шаге</span><span class="vwt">' + marks.text + '</span>';
+    } else whatEl.style.display = "none";
     conEl.innerHTML = f.output ? esc(f.output) : '<span class="empty">пока ничего не напечатано</span>';
     posEl.textContent = "шаг " + (i + 1) + " из " + frames.length +
       (f.error ? " · ошибка" : f.done ? " · конец" : "");
@@ -4117,6 +4309,7 @@ window.__game = {
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
   screenViz: screenViz, vizRecord: vizRecord, vizPlaying: vizPlaying, state: S, save: save,
+  vizDiff: vizDiff, vizMemoryHTML: vizMemoryHTML, VIZ_EXAMPLES: VIZ_EXAMPLES,
   openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,

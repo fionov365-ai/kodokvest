@@ -1634,6 +1634,12 @@ function Interp(opts){
   this.interactive = !!opts.interactive;
   if (opts.seed !== undefined && opts.seed !== null) this._seed = Math.trunc(opts.seed);
   this.modules = {};     // уже подключённые модули
+  /* Стек вызовов: [{name, env}], снизу вверх. Нужен визуализатору, чтобы
+     показать, ГДЕ мы находимся, когда программа зашла в функцию. Счётчика
+     this.depth для этого не хватает: он знает только глубину, а не имена
+     и не местные переменные каждого кадра. На выполнение стек не влияет —
+     это наблюдение, а не механика. */
+  this.stack = [];
   this.global = new Env(null);
   this.installBuiltins();
 }
@@ -2807,8 +2813,9 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
             { pymsg: "maximum recursion depth exceeded" });
     }
     var r;
+    this.stack.push({ name: fn.name, env: env });
     try { r = yield* this.runBlock(fn.body, env); }
-    finally { this.depth--; }
+    finally { this.depth--; this.stack.pop(); }
     return r && r.kind === "return" ? r.value : null;
   }
   raise("TypeError", "«" + (nameHint || pyRepr(fn)) + "» — не функция, её нельзя вызвать со скобками.", line,
@@ -4327,7 +4334,8 @@ function stepper(src, opts){
         CUR = I;
         var s = it.next();
         if (s.done) return { done: true, output: I.out.join("") };
-        return { done: false, line: s.value.line, env: s.value.env, output: I.out.join("") };
+        return { done: false, line: s.value.line, env: s.value.env,
+                 stack: I.stack.slice(), output: I.out.join("") };
       } catch (e){
         if (!e.pyKind) throw e;
         return { done: true, output: I.out.join(""), error: { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 } };
@@ -4364,8 +4372,16 @@ function snapshotVars(env, skip){
    если две переменные ссылаются на ОДИН список, id совпадёт — так видно
    алиасинг (b = a) и рисуются стрелки к одной коробке. Содержимое при этом
    каждый раз сериализуется заново (копией), поэтому позднейшие изменения
-   не портят уже снятые кадры. */
-function heapSnapshot(env, idMap, skip){
+   не портят уже снятые кадры.
+
+   Четвёртый аргумент stack — стек вызовов из Interp ([{name, env}], снизу
+   вверх). Если он передан, к снимку добавляется scopes: отдельный список
+   переменных на КАЖДЫЙ кадр, а не одна общая свалка. Это важно именно внутри
+   функции: плоский список (vars) прячет внешнюю переменную за местной с тем же
+   именем, и по нему нельзя понять, что переменных две. scopes показывает обе,
+   каждую в своём кадре. Куча (objects) при этом одна на весь снимок — так она
+   устроена и в настоящем Python. */
+function heapSnapshot(env, idMap, skip, stack){
   var objects = {};
   function cell(v){
     if (v === null || v === undefined) return { t:"val", type:"NoneType", text:"None" };
@@ -4396,19 +4412,46 @@ function heapSnapshot(env, idMap, skip){
     /* классы, объекты, функции-генераторы и прочее — как значение с текстом repr */
     return { t:"val", type: typeName(v), text: pyRepr(v) };
   }
+  /* какие имена показываем: не функции, не служебные, не встроенные */
+  function shown(v, k){
+    if (typeof v === "function" || v instanceof PyFunc) return false;   // функции — не данные
+    if (k.indexOf("__") === 0) return false;                           // служебные имена
+    if (skip && skip.indexOf(k) >= 0) return false;
+    return true;
+  }
+  /* переменные ОДНОГО окружения, без родителей — это и есть кадр */
+  function frameVars(e){
+    var out = [];
+    e.vars.forEach(function(v, k){ if (shown(v, k)) out.push({ name: k, cell: cell(v) }); });
+    return out;
+  }
+
   var seen = {}, vars = [], e = env;
   while (e){
     e.vars.forEach(function(v, k){
       if (seen[k]) return;
-      if (typeof v === "function" || v instanceof PyFunc) return;   // функции — не данные
-      if (k.indexOf("__") === 0) return;                            // служебные имена
-      if (skip && skip.indexOf(k) >= 0) return;
+      if (!shown(v, k)) return;
       seen[k] = 1;
       vars.push({ name: k, cell: cell(v) });
     });
     e = e.parent;
   }
-  return { vars: vars, objects: objects };
+
+  var res = { vars: vars, objects: objects };
+  if (stack){
+    /* Нижний кадр — сама программа. Дальше по одному на каждый вызов.
+       Порядок сохраняем как в стеке: снизу вверх, как читается «кто кого позвал». */
+    res.scopes = [{ name: null, vars: frameVars(globalOf(env)) }];
+    stack.forEach(function(f){ res.scopes.push({ name: f.name, vars: frameVars(f.env) }); });
+  }
+  return res;
+
+  /* самое внешнее окружение цепочки — глобальное */
+  function globalOf(e2){
+    var g = e2;
+    while (g && g.parent) g = g.parent;
+    return g || e2;
+  }
 }
 
 global.MiniPy = {

@@ -380,6 +380,34 @@ button{font-family:inherit}
 .voval .vval{color:inherit}
 .vref{display:inline-block;border:1px solid;border-radius:6px;padding:0 7px;font-weight:800;line-height:1.5}
 
+/* ---------- визуализатор: что изменилось на шаге и стек вызовов ---------- */
+/* Внимание: тут flex, поэтому текст фразы обязан лежать в одном .vwt.
+   Если положить его прямо в .vizwhat, каждый <b> станет flex-элементом и
+   фраза расползётся по зазорам — «всего: 0 → 12» превратится в «всего : 0 → 12». */
+.vizwhat{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;font-size:13.5px;color:var(--ink);
+  background:rgba(0,224,184,.09);border:1px solid #1c5a52;border-radius:12px;padding:9px 13px}
+.vizwhat .vwl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--acc2);flex:none;
+  padding-top:2px}
+.vizwhat .vwt{flex:1 1 auto;min-width:0}
+.vizwhat b{font-family:'JetBrains Mono',monospace;font-weight:600;color:#8ff0bb}
+/* Две метки: «новое» тёплая, «изменилось» бирюзовая. Разные цвета, потому что
+   это разные события: появилось имя или поменялось значение у прежнего. */
+.vzn{border-color:var(--gold) !important;box-shadow:0 0 0 2px rgba(255,197,61,.18)}
+.vzc{border-color:var(--acc2) !important;box-shadow:0 0 0 2px rgba(0,224,184,.16)}
+.vocell.vzn .voval,.vocell.vzc .voval{border-color:inherit}
+.vopair.vzn,.vopair.vzc{border:1px solid;border-radius:8px;padding:2px 5px;margin:-3px -6px}
+.vizscope{display:flex;flex-direction:column;gap:7px;border:1px dashed var(--line2);border-radius:12px;padding:9px 10px}
+.vizscope.call{border-style:solid;background:rgba(124,92,255,.07)}
+.vizscope .vsname{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+  font-weight:700;font-family:'JetBrains Mono',monospace}
+.vizscope.call .vsname{color:var(--acc)}
+.vizscope .vsfn{text-transform:none;letter-spacing:.02em;font-size:12px}
+.vizvars>.vizscope+.vizscope{margin-top:2px}
+@media (prefers-reduced-motion:no-preference){
+  .vzn,.vzc{animation:vzpop .35s cubic-bezier(.2,1.3,.4,1)}
+}
+@keyframes vzpop{from{transform:scale(.9)}to{transform:scale(1)}}
+
 .edit-area{position:relative;display:flex;min-height:190px}
 .gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
   user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
