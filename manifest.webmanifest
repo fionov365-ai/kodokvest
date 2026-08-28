@@ -1,0 +1,16 @@
+{
+  "name": "Кодоквест — Python для подростков",
+  "short_name": "Кодоквест",
+  "description": "Сто уроков Python в браузере: код запускается сразу, рисует и объясняет ошибки понятными словами.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0d1020",
+  "theme_color": "#0d1020",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

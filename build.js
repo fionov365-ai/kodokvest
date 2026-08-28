@@ -25,6 +25,13 @@ const headEnd = index.indexOf("</head>");
 if (headStart < 6 || headEnd < 0) throw new Error("в index.html не найден <head>");
 let head = index.slice(headStart, headEnd).trim();
 
+/* Ссылки на манифест и иконку из одного файла убираем: dist обещает
+   «всё внутри, ничего не грузится извне», а рядом с ним никакого
+   manifest.webmanifest нет — браузер сходил бы за ним впустую. Сам service
+   worker в одном файле и не регистрируется (проверка в js/app.js). */
+head = head.replace(/^[ \t]*<link rel="manifest"[^>]*>\n?/m, "")
+           .replace(/^[ \t]*<link rel="apple-touch-icon"[^>]*>\n?/m, "");
+
 const cssLink = '<link rel="stylesheet" href="css/style.css">';
 if (head.indexOf(cssLink) < 0) throw new Error("в <head> не найдена ссылка на css/style.css");
 head = head.replace(cssLink, "<style>\n" + css + "\n</style>");

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Кодоквест">
+  <!-- Иконка для домашнего экрана. Рисуется, а не берётся картинкой: SVG весит
+       меньше килобайта и не мылится ни на одном экране. Поля по краям нужны
+       для «maskable»: Android обрезает иконку кругом или квадратом с закруглением,
+       и всё важное обязано лежать в центральных 80%. -->
+  <rect width="512" height="512" rx="96" fill="#141a33"/>
+  <circle cx="256" cy="256" r="150" fill="#7c5cff" opacity=".22"/>
+  <text x="256" y="256" font-size="230" text-anchor="middle" dominant-baseline="central">🐍</text>
+</svg>

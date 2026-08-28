@@ -9,6 +9,12 @@
 <title>Кодоквест — Python для подростков</title>
 <meta name="description" content="Сто уроков Python в браузере: код запускается сразу, рисует и объясняет ошибки понятными словами.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+<!-- Установка на домашний экран и работа без сети. Ссылки на манифест и иконку
+     build.js из одного файла ВЫРЕЗАЕТ: тот файл обещает «ничего не грузится
+     извне», а неразрешимая ссылка это обещание бы нарушила. -->
+<meta name="theme-color" content="#0d1020">
+<meta name="apple-mobile-web-app-title" content="Кодоквест">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -308,9 +314,10 @@ button{font-family:inherit}
 .reghero h1{margin:6px 0 2px;font-size:27px}
 .reghero .lede{margin-left:auto;margin-right:auto}
 .reglbl{display:block;font-size:13px;color:var(--soft);font-weight:600;margin-bottom:6px}
-.reglbl input{display:block;width:100%;margin-top:6px;background:var(--sunken);border:1px solid var(--line2);
+.reglbl input,.reglbl textarea{display:block;width:100%;margin-top:6px;background:var(--sunken);border:1px solid var(--line2);
   color:var(--ink);border-radius:11px;padding:11px 13px;font-size:16px;font-family:inherit}
-.reglbl input:focus{outline:none;border-color:var(--acc)}
+.reglbl textarea{resize:vertical;line-height:1.5}
+.reglbl input:focus,.reglbl textarea:focus{outline:none;border-color:var(--acc)}
 .codebox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sunken);
   border:1px solid var(--line);border-radius:11px;padding:10px 12px}
 .codebox code{background:none;border:0;padding:0;color:#b9c6ff;font-size:14px;word-break:break-all;flex:1;min-width:0}
@@ -518,6 +525,13 @@ body.focus .lede{display:none}
   border-radius:5px;padding:0 5px;font-size:11.5px;font-family:'JetBrains Mono';color:var(--soft)}
 
 @media (max-width:640px){
+  /* На телефоне подсказка «Ctrl+Enter» бесполезна — клавиши Ctrl там нет, —
+     а место занимает. С пятой кнопкой («Разобрать») панель запуска на узком
+     экране выросла с двух строк до трёх, поэтому здесь она сжимается: тип
+     подсказки убран, а кнопки — плотнее. Проверено на 375px: пять кнопок
+     снова укладываются в две строки. */
+  .runbar .tip,.runbar .sp{display:none}
+  .runbar .rbtn{padding:8px 11px;font-size:13px}
   .wrap{padding:18px 12px 70px}
   .hero{padding:22px 18px;border-radius:18px}
   .hero h1{font-size:27px}
@@ -803,6 +817,100 @@ body.focus .lede{display:none}
 /* закрытая разминка: видно, что впереди есть ещё, и чем она откроется */
 .gamecard.locked{opacity:.55;cursor:default;border-style:dashed}
 .gamecard.locked:hover{transform:none}
+
+/* ---------- галерея рисунков ---------- */
+.savepic{display:flex;flex-direction:column;gap:7px;margin:14px 0 0}
+.savepic .tip{font-size:12.5px;color:var(--faint)}
+.savepic .rbtn{align-self:flex-start}
+.pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.pic{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
+.pic.broken{border-color:var(--bad)}
+.picart{display:block;width:100%;background:#070a16}
+.picbody{padding:10px 13px;display:flex;flex-direction:column;gap:3px}
+.picbody b{font-size:15px}
+.picsub{font-size:12px;color:var(--faint)}
+.picbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+@media (max-width:620px){ .pics{grid-template-columns:1fr} }
+
+/* ---------- пересказ программы словами (в визуализаторе) ---------- */
+.story{margin:12px 0 4px;padding:13px 16px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--panel)}
+.storyhead{font-family:'Fredoka','Inter',sans-serif;font-size:15px;margin-bottom:8px}
+.storylist{margin:0;padding-left:22px;color:var(--soft);font-size:14px}
+.storylist li{margin-bottom:3px}
+.storylist li.d1{margin-left:16px;color:var(--faint)}
+.storylist li.d2{margin-left:32px;color:var(--faint)}
+.storyerr{margin:8px 0 0;color:var(--bad);font-size:13.5px}
+.storynote{margin:9px 0 0;font-size:12.5px;color:var(--faint)}
+
+/* ---------- вопрос за ужином (в отчёте наставника) ---------- */
+.dinner{margin-top:14px;padding:12px 15px;border:1px solid var(--line2);border-radius:12px;
+  background:rgba(255,197,61,.07)}
+.dinner b{display:block;color:var(--gold);font-size:13px;margin-bottom:4px}
+.dinner p{margin:0 0 5px;font-size:14px}
+.dinner .dim{font-size:12.5px}
+
+/* ---------- панель символов: только на телефоне ---------- */
+/* За настоящей клавиатурой панель только мешает, поэтому по умолчанию её нет
+   вовсе, а появляется она в том же @media, где панель запуска сжимается. */
+.keybar{display:none}
+@media (max-width:640px){
+  .keybar{display:flex;flex-wrap:wrap;gap:5px;padding:7px 8px;
+    background:#0b1020;border-top:1px solid var(--line)}
+  .kbk{flex:none;min-width:34px;border:1px solid var(--line2);background:var(--panel2);
+    color:var(--ink);border-radius:8px;padding:7px 0;font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:700;cursor:pointer}
+  .kbk.wide{min-width:96px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--soft)}
+  .kbk:active{background:var(--acc);color:#fff;border-color:transparent}
+}
+
+/* ---------- разбор кода: что можно сделать чище ---------- */
+.lintlist{display:flex;flex-direction:column;gap:9px;margin:10px 0 4px}
+.lintone{display:flex;flex-direction:column;gap:2px;background:var(--sunken);
+  border:1px solid var(--line);border-left:3px solid var(--acc2);
+  border-radius:0 10px 10px 0;padding:9px 12px}
+.lintone .lintln{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--faint)}
+.lintone b{font-size:14px;color:var(--ink)}
+.lintone>span:last-child{font-size:13px;color:var(--soft)}
+.linttip{display:block;margin-top:6px;font-size:12px;color:var(--faint)}
+
+/* ---------- бестиарий ошибок ---------- */
+/* Три состояния зверя: не встречался (приглушён), встречался (обычный),
+   побеждён (зелёная рамка). Разметка одна — отличается только классом. */
+.beasts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.beast{display:flex;gap:12px;align-items:flex-start;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;opacity:.5;transition:.2s}
+.beast.met{opacity:1;border-color:var(--warn)}
+.beast.won{opacity:1;border-color:var(--ok);
+  box-shadow:0 0 0 1px rgba(61,220,132,.2),0 8px 20px -14px rgba(61,220,132,.6)}
+.beast .bem{font-size:24px;line-height:1.2;flex:none}
+.beast .bbody{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.beast .bbody b{font-size:15px}
+.beast .bkind{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--faint)}
+.beast .bwhat{font-size:13.5px;color:var(--soft)}
+.beast .bhow{font-size:12.5px;color:var(--faint)}
+.beast .bstat{flex:none;font-size:11.5px;color:var(--soft);text-align:right;white-space:nowrap}
+.beast.won .bstat{color:var(--ok);font-weight:700}
+.beast .bstat i{display:block;font-style:normal;color:var(--faint);font-weight:400;margin-top:3px}
+@media (max-width:620px){
+  .beasts{grid-template-columns:1fr}
+  .beast .bstat{display:none}
+}
+
+/* ---------- значения прямо в редакторе ---------- */
+/* Приписка живёт внутри подсветки, поэтому течёт по строке вместе с кодом:
+   никакой отдельной колонки нет, и разъехаться с текстом она не может. */
+.edit-scroll .wv{margin-left:14px;padding:1px 7px;border-radius:6px;
+  background:rgba(0,224,184,.10);border:1px solid rgba(0,224,184,.22);
+  color:var(--acc2);font-size:12px}
+
+/* ---------- цель по шагам: перышко у пройденного урока ---------- */
+.leanmark{margin-right:7px;font-size:14px;opacity:.9}
+.stepnote.lean{color:var(--acc2)}
+
+/* ---------- свои задания: форма автора ---------- */
+.tsteps{margin:8px 0 0;padding-left:20px;color:var(--soft)}
+.tsteps li{margin-bottom:4px}
 
 </style>
 
@@ -12080,7 +12188,11 @@ var BADGES = [
   { id:"builder", em:"🏗", name:"Строитель",      desc:"собрал проект целиком" },
   { id:"week",    em:"🔥", name:"Неделя подряд",  desc:"7 дней занятий подряд" },
   { id:"month",   em:"🏅", name:"Месяц подряд",   desc:"30 дней занятий подряд" },
-  { id:"again",   em:"🔁", name:"Закрепил",       desc:"5 уроков закреплены повтором" }
+  { id:"again",   em:"🔁", name:"Закрепил",       desc:"5 уроков закреплены повтором" },
+  { id:"lean",    em:"🪶", name:"Лёгкая рука",    desc:"5 уроков не дороже решения автора" },
+  { id:"beasts",  em:"🐉", name:"Укротитель",      desc:"6 разных ошибок побеждены" },
+  { id:"author",  em:"✍️", name:"Автор",          desc:"составил своё задание" },
+  { id:"guest",   em:"🤝", name:"Гость",          desc:"прошёл задание от друга" }
 ];
 /* Бейджи за длинный стрик. Щит уже держит серию, но награды за неё не было:
    ребёнок видел растущее число и всё. Порогов два — один достижимый, второй
@@ -12122,13 +12234,20 @@ var ADMIN_CODE = "kodokvest-2026";
    ============================================================ */
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
-                     "days","daily","shields","projects","review","drafts"];
+                     "days","daily","shields","projects","review","drafts",
+                     "mytasks","friendTasks","errs","gallery"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
-var KEEP_ON_RESET = ["games"];
+/* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
+   а не «набрал результатов». Сброс прогресса в панели наставника такое не
+   стирает — стирает только смена ученика. */
+var KEEP_ON_RESET = ["games","mytasks","gallery"];
 
 /* пустой прогресс: только структура, без данных */
 function blankProgress(){
-  var o = { v:2, badges:[], sandbox:null, name:"", schedule:{ days:[] } };
+  /* mytaskDraft — недособранное «своё задание» (название, условие, код).
+     Живёт рядом с sandbox и по той же причине: это не результат занятий,
+     а незаконченная работа ребёнка, и терять её на переходе нельзя. */
+  var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] } };
   PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
   PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
   return o;
@@ -12141,6 +12260,7 @@ function ensureShape(o){
   PROGRESS_NUMS.forEach(function(k){ if (typeof o[k] !== "number") o[k] = 0; });
   if (!Array.isArray(o.badges)) o.badges = [];
   if (typeof o.sandbox !== "string") o.sandbox = null;
+  if (!o.mytaskDraft || typeof o.mytaskDraft !== "object") o.mytaskDraft = null;
   if (typeof o.name !== "string") o.name = "";
   if (!o.schedule || typeof o.schedule !== "object") o.schedule = { days:[] };
   if (!Array.isArray(o.schedule.days)) o.schedule.days = [];
@@ -12158,7 +12278,7 @@ function clearResults(o){
 function clearAll(o){
   clearResults(o);
   KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
-  o.sandbox = null; o.name = ""; o.schedule = { days:[] };
+  o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
   return ensureShape(o);
 }
 
@@ -12773,6 +12893,39 @@ function mergeProgress(a, b){
     if (!out.games[k]) delete out.games[k];
   });
 
+  /* свои задания: по каждому это КОД плюс текст условия — сложить нельзя,
+     берём из более свежего сохранения, как свои версии игр. Задание,
+     составленное только на одном устройстве, при этом не теряется. */
+  out.mytasks = {};
+  Object.keys(mergeSet(a.mytasks, b.mytasks)).forEach(function(k){
+    out.mytasks[k] = (fresher.mytasks || {})[k] || (older.mytasks || {})[k] || null;
+    if (!out.mytasks[k]) delete out.mytasks[k];
+  });
+  /* пройденные чужие задания — множество ключей, объединяем: пройденное на
+     любом устройстве остаётся пройденным (и опыт за него не начислится второй раз) */
+  out.friendTasks = mergeSet(a.friendTasks, b.friendTasks);
+
+  /* бестиарий ошибок: по каждому типу берём БОЛЬШЕЕ, а не сумму — после
+     первого же обмена обе копии одинаковы, и сложение удваивало бы встречи
+     при каждом следующем (та же причина, что у попыток и времени в журнале). */
+  out.errs = {};
+  Object.keys(mergeSet(a.errs, b.errs)).forEach(function(k){
+    var x = (a.errs || {})[k] || {}, y = (b.errs || {})[k] || {};
+    out.errs[k] = { seen: maxN(x.seen, y.seen), beaten: maxN(x.beaten, y.beaten),
+                    at: maxN(x.at, y.at) };
+  });
+  /* недособранное задание — одна запись, как песочница: свежее побеждает */
+  out.mytaskDraft = fresher.mytaskDraft || older.mytaskDraft || null;
+
+  /* галерея рисунков: по каждому это КОД, поэтому как свои версии игр —
+     берём из более свежего сохранения, но рисунок, сделанный только на одном
+     устройстве, не теряем */
+  out.gallery = {};
+  Object.keys(mergeSet(a.gallery, b.gallery)).forEach(function(k){
+    out.gallery[k] = (fresher.gallery || {})[k] || (older.gallery || {})[k] || null;
+    if (!out.gallery[k]) delete out.gallery[k];
+  });
+
   /* черновики уроков: это КОД, и сложить две версии нельзя — берём из более
      свежего сохранения, как песочницу и как свои версии игр. Урок, который
      правили только на одном устройстве, при этом не теряется. */
@@ -12835,7 +12988,9 @@ function mergeProgress(a, b){
       stars:    maxN(x.stars, y.stars),
       /* рекорд по шагам — единственное поле журнала, где лучше МЕНЬШЕ.
          Ноль значит «рекорда нет», поэтому он не должен победить настоящий. */
-      bestSteps: minPos(x.bestSteps, y.bestSteps)
+      bestSteps: minPos(x.bestSteps, y.bestSteps),
+      /* цель по шагам взята — это результат, и на любом устройстве он остаётся */
+      lean:     maxN(x.lean, y.lean)
     };
   });
 
@@ -12961,6 +13116,29 @@ function hl(code){
     return m;
   });
 }
+/* Тройные кавычки вынесены в константы: их приходится искать в коде
+   ученика, а внутри строкового литерала в этом файле они читались бы
+   отвратительно. */
+var TRIPLE_D = '"' + '""';
+var TRIPLE_S = "'" + "''";
+/* Подсветка с приписками значений (см. «Значения прямо в редакторе»).
+   Без приписок код подсвечивается ОДНИМ куском — так строка в тройных
+   кавычках, растянутая на пять строк, красится целиком. С приписками
+   приходится идти построчно, и такая строка распалась бы на куски: поэтому
+   код с `"""` приписок не получает вовсе (это решает watchCompute). */
+function hlWatched(code, watch, cols){
+  if (!watch) return hl(code);
+  return code.split("\n").map(function(ln, i){
+    var w = watch[i + 1];
+    /* Влезает ли приписка в строку редактора? Если нет — молчим. Иначе
+       подсветка перенесла бы строку, а текстовое поле под ней нет: код
+       разъехался бы с курсором и выделением. cols = 0 значит «ширину
+       измерить не удалось» — тогда работает грубая оценка WATCH_LINE_MAX,
+       на которой приписка и так ставится только у коротких строк. */
+    if (w && cols && ln.length + w.length + 5 > cols) w = null;
+    return hl(ln) + (w ? '<span class="wv">' + esc(w) + '</span>' : "");
+  }).join("\n");
+}
 
 /* ================= холст ================= */
 function drawTurtle(canvas, turtle, progress){
@@ -13034,13 +13212,171 @@ var KIND_RU = {
   AssertionError:"Проверка не прошла", ImportError:"Не удалось подключить модуль",
   RecursionError:"Слишком глубокая рекурсия", StopIteration:"Значения закончились",
   NotImplementedError:"Ещё не написано", ArithmeticError:"Ошибка в вычислении",
-  LookupError:"Ничего не найдено", Exception:"Ошибка", BaseException:"Ошибка"
+  LookupError:"Ничего не найдено", Exception:"Ошибка", BaseException:"Ошибка",
+  /* Эти пять движок выбрасывает, а названия им забыли дать — и ребёнок видел
+     английское имя вместо человеческого. Нашлось проверкой бестиария:
+     она требует, чтобы у каждого зверя было имя по-русски. */
+  FileNotFoundError:"Файл не найден", UnboundLocalError:"Имя ещё без значения",
+  OSError:"Так с файлом нельзя", JSONDecodeError:"Это не похоже на JSON",
+  EOFError:"Ответы для input() кончились"
 };
 function errHTML(e){
   return '<b>' + (KIND_RU[e.kind] || e.kind) + (e.line ? ' — строка ' + e.line : '') + '</b>' + esc(e.msg);
 }
 
+/* ================= бестиарий ошибок =================
+   Движок и так объясняет каждое падение человеческим языком, но объяснение
+   живёт одно мгновение: прочитал, починил, забыл. Красный текст при этом
+   остаётся наказанием, хотя ошибка — самая обычная часть работы.
+
+   Здесь ошибка становится добычей. Каждый тип — карточка со тремя
+   состояниями: не встречал → встретил → победил. «Победил» ставится не за
+   встречу, а за ПОЧИНКУ: та же программа после правки запустилась без
+   ошибок. Показанное решение победу не даёт — чинил тогда не ребёнок.
+
+   Контента писать почти не пришлось: названия уже были в KIND_RU, а сам
+   разбор — в сообщениях движка. Здесь только «что это значит» и «как чинить»
+   одной строкой каждое.
+
+   Чего в бестиарии нет намеренно: `NotSupported` («здесь так нельзя») — это
+   ограничение тренажёра, а не ошибка ребёнка, и хвастаться победой над ним
+   нечестно.
+   ============================================================ */
+var ERR_BEASTS = [
+  { kind:"NameError", em:"👻",
+    what:"Имя, которого нет: опечатка или переменную ещё не создали.",
+    how:"Сверь написание с той строкой, где переменную создавали. И помни: текст без кавычек Python принимает за имя." },
+  { kind:"TypeError", em:"⚗️",
+    what:"Действие между несовместимыми типами — например, строка плюс число.",
+    how:"Реши, что здесь нужно: число превратить в текст через str(...) или текст в число через int(...)." },
+  { kind:"SyntaxError", em:"🧩",
+    what:"Python не понял саму запись: пропущена скобка, кавычка или двоеточие.",
+    how:"Смотри на строку из сообщения и на предыдущую: чаще всего не хватает закрывающей скобки или двоеточия в конце if, for и def." },
+  { kind:"IndentationError", em:"📐",
+    what:"Отступы не складываются в блок: Python по ним понимает, что внутри чего.",
+    how:"Все строки внутри if, for или def сдвинуты на четыре пробела правее заголовка — и одинаково." },
+  { kind:"IndexError", em:"🎯",
+    what:"Просишь элемент по номеру, которого в списке нет.",
+    how:"Последний номер — это len(список) - 1, а не len(список). В цикле надёжнее range(len(список))." },
+  { kind:"KeyError", em:"🔑",
+    what:"В словаре нет такого ключа.",
+    how:"Либо проверь заранее — if ключ in словарь, либо бери через словарь.get(ключ, «по умолчанию»)." },
+  { kind:"ValueError", em:"🧪",
+    what:"Тип подходит, а значение нет: int(\"пять\") — текст, но не число.",
+    how:"Проверь, что приходит на вход: пробелы, запятая вместо точки, пустая строка." },
+  { kind:"ZeroDivisionError", em:"➗",
+    what:"Делитель оказался нулём.",
+    how:"Проверь делитель до деления. Чаще всего это длина пустого списка — тогда нечего и делить." },
+  { kind:"AttributeError", em:"🧰",
+    what:"У этого типа такой команды нет: например, .append у строки.",
+    how:"Открой шпаргалку и посмотри, что умеет именно этот тип. Строку меняют не на месте, а через новое значение." },
+  { kind:"RuntimeError", em:"🌀",
+    what:"Программа не остановилась сама — движок прервал её.",
+    how:"В while должно меняться то, что стоит в условии. Проверь, что счётчик растёт (или список уменьшается)." },
+  { kind:"RecursionError", em:"🪆",
+    what:"Функция звала себя без конца.",
+    how:"Нужен случай, который возвращает ответ БЕЗ нового вызова, — и каждый вызов должен к нему приближаться." },
+  { kind:"FileNotFoundError", em:"📂",
+    what:"Файла с таким именем на диске нет.",
+    how:"Сверь имя вместе с расширением. Файлы урока показаны в панели «файлы на диске»." },
+  { kind:"ImportError", em:"📦",
+    what:"Не удалось подключить модуль или взять из него имя.",
+    how:"Сверь имя модуля и имя, которое из него берёшь. В тренажёре живут не все модули настоящего Python." }
+];
+var BEAST_BADGE_AT = 6;   /* столько разных побеждённых — и бейдж */
+
+function errsAll(){ S.errs = S.errs || {}; return S.errs; }
+function beastByKind(kind){
+  for (var i = 0; i < ERR_BEASTS.length; i++)
+    if (ERR_BEASTS[i].kind === kind) return ERR_BEASTS[i];
+  return null;
+}
+/* Встреча: пишем всегда, даже незнакомый тип. Показываем только тех, кто в
+   ERR_BEASTS, но копить полезно всё — по этому списку потом видно, чего
+   в бестиарии не хватает. */
+function errSeen(kind){
+  if (!kind) return;
+  var e = errsAll();
+  var r = e[kind] || (e[kind] = { seen:0, beaten:0, at:0 });
+  r.seen = (r.seen || 0) + 1;
+  r.at = Date.now();
+  save();
+}
+function errBeaten(kind){
+  if (!kind) return;
+  var e = errsAll();
+  var r = e[kind] || (e[kind] = { seen:1, beaten:0, at:0 });
+  if (!r.beaten){
+    r.beaten = 1; r.at = Date.now();
+    save();
+    if (beastsBeaten() >= BEAST_BADGE_AT) award("beasts");
+  }
+}
+function beastsBeaten(){
+  var e = errsAll(), n = 0;
+  ERR_BEASTS.forEach(function(b){ if (e[b.kind] && e[b.kind].beaten) n++; });
+  return n;
+}
+function beastsMet(){
+  var e = errsAll(), n = 0;
+  ERR_BEASTS.forEach(function(b){ if (e[b.kind] && e[b.kind].seen) n++; });
+  return n;
+}
+/* Разметка бестиария. Живёт на экране «Повторить», а не отдельным разделом:
+   этот экран и так про то, что далось тяжело, а верхняя панель переполнена. */
+function beastsHTML(){
+  var e = errsAll();
+  var beaten = beastsBeaten(), met = beastsMet();
+  var h = '<div class="sect"><h2>Бестиарий ошибок</h2><div class="line"></div>' +
+    '<span class="cnt">' + beaten + ' из ' + ERR_BEASTS.length + '</span></div>' +
+    '<p class="dim">Каждая ошибка — зверь. Встретил — зверь появился в списке; ' +
+    'починил программу сам — зверь побеждён. Показанное решение не считается: ' +
+    'чинил тогда не ты.' +
+    (beaten < BEAST_BADGE_AT
+      ? ' До бейджа «Укротитель» осталось ' + (BEAST_BADGE_AT - beaten) + '.'
+      : ' Бейдж «Укротитель» уже твой.') +
+    '</p><div class="beasts">';
+  ERR_BEASTS.forEach(function(b){
+    var r = e[b.kind] || null;
+    var state = (r && r.beaten) ? "won" : (r && r.seen ? "met" : "");
+    var tag = (r && r.beaten) ? "побеждён ✓" : (r && r.seen ? "встречался" : "не встречался");
+    h += '<div class="beast ' + state + '">' +
+      '<span class="bem">' + b.em + '</span>' +
+      '<span class="bbody"><b>' + esc(KIND_RU[b.kind] || b.kind) + '</b>' +
+      '<span class="bkind">' + esc(b.kind) + '</span>' +
+      '<span class="bwhat">' + esc(b.what) + '</span>' +
+      '<span class="bhow">Как чинить: ' + esc(b.how) + '</span></span>' +
+      '<span class="bstat">' + tag +
+      (r && r.seen > 1 ? '<i>встреч: ' + r.seen + '</i>' : '') + '</span></div>';
+  });
+  h += '</div>';
+  if (!met)
+    h += '<div class="note"><b>Пока чисто</b>Ни одной ошибки не встречалось. ' +
+         'Это ненадолго: ошибки — обычная часть работы, и каждая здесь объяснена заранее.</div>';
+  return h;
+}
+
 /* ================= редактор ================= */
+/* ===== панель символов: только для телефона =====
+   На мобильной клавиатуре двоеточие, кавычки и подчёркивание лежат на втором
+   и третьем экране, а отступ вообще негде взять — четыре пробела набирают
+   четырьмя нажатиями. Из-за этого писать код с телефона было почти нельзя,
+   хотя подросток именно там и живёт. Панель прячется на широких экранах
+   (см. @media в стилях): за настоящей клавиатурой она только мешает.
+
+   Скобки и кавычки вставляются ПАРОЙ, а курсор становится внутрь: это то,
+   что нужно в девяти случаях из десяти, а лишний знак удалить проще, чем
+   искать закрывающий. Пара пишется как "()", одиночный знак — как ":". */
+var KEYBAR_KEYS = ["()", '""', ":", "[]", ",", "=", "_", ".", "#", "+", "-", "*", "%"];
+var KEYBAR_TAB = "    ";
+/* В атрибут пишем НОМЕР ключа, а не сам знак: среди знаков есть кавычки, а
+   esc() экранирует только &, < и > — кавычка порвала бы разметку. Ту же
+   грабку уже находили на форме «своего задания». */
+var KEYBAR_HTML = '<div class="keybar">' +
+  KEYBAR_KEYS.map(function(k, i){
+    return '<button class="kbk" type="button" data-k="' + i + '">' + esc(k) + '</button>';
+  }).join("") +
+  '<button class="kbk wide" type="button" data-k="tab">⇥ отступ</button></div>';
 /* files — список файлов урока: [{ name:"main.py", code:"..." }, ...].
    Настоящих файлов в браузере нет, но для ученика всё выглядит как в жизни:
    вкладки сверху, import между файлами работает. */
@@ -13058,14 +13394,35 @@ function makeEditor(initial, label, files){
       esc(many ? files[0].name : (label || "твой код")) + '</span></div>' + tabs +
     '<div class="edit-area"><div class="gutter"></div><div class="edit-scroll">' +
       '<pre class="hl"></pre><textarea spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
-    '</div></div><div class="runbar"></div>';
+    '</div></div>' + KEYBAR_HTML + '<div class="runbar"></div>';
   var ta = box.querySelector("textarea"), pre = box.querySelector("pre.hl"), gut = box.querySelector(".gutter");
   var fileList = files && files.length ? files.map(function(f){ return { name:f.name, code:f.code || "" }; })
                                        : [{ name:"main.py", code: initial || "" }];
   var active = 0;
   ta.value = fileList[0].code;
+  /* Приписки значений: { номер строки: текст }. Держим в редакторе, потому что
+     рисует их подсветка. Любая правка их стирает — устаревшее значение рядом
+     с изменённой строкой было бы прямым врньём. */
+  box._watch = null;
+  /* Сколько знаков влезает в строку редактора. Ширину знака измеряем настоящим
+     шрифтом один раз и запоминаем: шрифт моноширинный, поэтому одного замера
+     хватает. Ноль значит «измерить не удалось» (редактор ещё не в документе
+     или это тест без раскладки) — hlWatched в этом случае решает по длине. */
+  function colsFit(){
+    if (!box._charW){
+      var probe = document.createElement("span");
+      probe.textContent = "0123456789";
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
+      pre.appendChild(probe);
+      box._charW = probe.getBoundingClientRect().width / 10;
+      probe.remove();
+    }
+    if (!box._charW) return 0;
+    var w = pre.clientWidth - 30;          /* отступы слева и справа */
+    return w > 0 ? Math.floor(w / box._charW) : 0;
+  }
   function sync(){
-    pre.innerHTML = hl(ta.value) + "\n";
+    pre.innerHTML = hlWatched(ta.value, box._watch, box._watch ? colsFit() : 0) + "\n";
     ta.style.height = "auto";
     ta.style.height = Math.max(190, ta.scrollHeight) + "px";
     var n = ta.value.split("\n").length, g = "";
@@ -13073,12 +13430,34 @@ function makeEditor(initial, label, files){
       g += '<i class="' + (i === box._errLine ? "err" : (i === box._curLine ? "cur" : "")) + '">' + i + '</i>';
     gut.innerHTML = g;
   }
+  /* Вставка символа с панели. Пишем прямо в текстовое поле и сами двигаем
+     курсор: setCode отправил бы его в конец программы, а человек в этот
+     момент стоит посреди строки. */
+  function insertKey(k){
+    var pair = k.length === 2, ins = (k === "tab") ? KEYBAR_TAB : k;
+    var a = ta.selectionStart, b = ta.selectionEnd;
+    ta.value = ta.value.slice(0, a) + ins + ta.value.slice(b);
+    var caret = a + (pair ? 1 : ins.length);   /* внутрь пары, иначе за знаком */
+    fileList[active].code = ta.value;
+    box._errLine = 0; box._curLine = 0; box._watch = null;
+    sync();
+    ta.focus();
+    ta.setSelectionRange(caret, caret);
+    if (box.onEdit) box.onEdit();
+  }
+  box.querySelector(".keybar").addEventListener("click", function(e){
+    var b = e.target.closest(".kbk");
+    if (!b) return;
+    var k = b.getAttribute("data-k");
+    insertKey(k === "tab" ? "tab" : KEYBAR_KEYS[+k]);
+  });
+
   /* onEdit — крючок для того, кто открыл редактор: экран урока вешает на него
      отложенное сохранение черновика. Программная подстановка кода (setCode,
      setFiles) его НЕ дёргает: там сохраняет тот, кто подставил. */
   box.onEdit = null;
   ta.addEventListener("input", function(){
-    box._errLine = 0; box._curLine = 0; sync();
+    box._errLine = 0; box._curLine = 0; box._watch = null; sync();
     if (box.onEdit) box.onEdit();
   });
   ta.addEventListener("keydown", function(e){
@@ -13107,7 +13486,7 @@ function makeEditor(initial, label, files){
     stash();
     active = i;
     ta.value = fileList[i].code;
-    box._errLine = 0; box._curLine = 0;
+    box._errLine = 0; box._curLine = 0; box._watch = null;
     box.querySelector(".lbl").textContent = fileList[i].name;
     box.querySelectorAll(".ftab").forEach(function(b, k){ b.className = "ftab" + (k === i ? " on" : ""); });
     sync();
@@ -13119,8 +13498,12 @@ function makeEditor(initial, label, files){
 
   box.setLine = function(n){ box._curLine = n; box._errLine = 0; sync(); };
   box.setError = function(n){ box._errLine = n; box._curLine = 0; sync(); };
+  box.setWatch = function(map){
+    box._watch = (map && Object.keys(map).length) ? map : null;
+    sync();
+  };
   box.getCode = function(){ stash(); return fileList[0].code; };
-  box.setCode = function(v){ ta.value = v; fileList[active].code = v; box._errLine = 0; box._curLine = 0; sync(); };
+  box.setCode = function(v){ ta.value = v; fileList[active].code = v; box._errLine = 0; box._curLine = 0; box._watch = null; sync(); };
   /* Все файлы, кроме главного: именно они уходят в движок как модули. */
   box.getSources = function(){
     stash();
@@ -13132,12 +13515,520 @@ function makeEditor(initial, label, files){
   box.setFiles = function(list){
     for (var i = 0; i < fileList.length && i < list.length; i++) fileList[i].code = list[i].code;
     ta.value = fileList[active].code;
-    box._errLine = 0; box._curLine = 0; sync();
+    box._errLine = 0; box._curLine = 0; box._watch = null; sync();
   };
   box.fileCount = fileList.length;
   box.focusEditor = function(){ ta.focus(); };
   setTimeout(sync, 0);
   return box;
+}
+
+/* ================= значения прямо в редакторе =================
+   После запуска рядом со строкой появляется то, что эта строка сделала:
+   «итог = 12», «×5  i = 4» (строка выполнилась пять раз, последнее значение
+   четыре) или «→ Привет!», если строка печатала. Идея простая: ребёнок
+   спрашивает «почему у меня ноль», глядя на код, — а ответ до сих пор лежал
+   в другом месте, в панели переменных пошагового режима.
+
+   Данные берутся вторым проходом по шагам. Это честно, а не «примерно»:
+   ГПСЧ движка детерминирован (`Interp.prototype.random` стартует с одного и
+   того же зерна), поэтому второй прогон той же программы даёт те же числа,
+   что и первый, — приписки не разойдутся с выводом в консоли.
+
+   Три ограничения, каждое из-за разметки или цены:
+     - код с тройными кавычками приписок не получает (см. hlWatched);
+     - длинную строку не подписываем: приписка отжала бы перенос в подсветке,
+       и она разъехалась бы с текстовым полем под ней;
+     - дорогую программу не считаем совсем — цену первый прогон уже назвал.
+   ============================================================ */
+var WATCH_MAX_STEPS = 4000;   /* дороже — приписок не будет вовсе */
+var WATCH_LINE_MAX  = 46;     /* длиннее строку не подписываем */
+var WATCH_VAL_MAX   = 26;     /* длиннее значение обрезаем */
+
+function watchCut(s){
+  /* перевод строки в приписке невозможен (она внутри одной строки кода),
+     поэтому пробелы сворачиваем в один, а хвост обрезаем */
+  s = String(s === null || s === undefined ? "" : s).replace(/\s+/g, " ").trim();
+  return s.length > WATCH_VAL_MAX ? s.slice(0, WATCH_VAL_MAX - 1) + "…" : s;
+}
+/* Снимок «имя → значение» одним плоским объектом: сравнивать надо соседние
+   шаги, а не рисовать память, поэтому дерева кучи здесь не нужно. */
+function watchSnap(eng, env, skip){
+  var out = {};
+  if (!env || !eng.snapshotVars) return out;
+  eng.snapshotVars(env, skip).forEach(function(v){ out[v.name] = v.value; });
+  return out;
+}
+/* Что сделала строка: сначала изменение переменной, иначе — напечатанное.
+   Молчим, когда сказать нечего: приписка на каждой строке превратилась бы
+   в шум, из которого ничего не видно (то же правило, что у живого разбора
+   расхождения и у полоски «на этом шаге» в визуализаторе). */
+function watchNote(prev, cur, printed){
+  var names = Object.keys(cur), changed = [];
+  for (var i = 0; i < names.length && changed.length < 2; i++){
+    var k = names[i];
+    if (prev[k] !== cur[k]) changed.push(k + " = " + watchCut(cur[k]));
+  }
+  if (changed.length) return changed.join(", ");
+  if (printed) return "→ " + watchCut(printed);
+  return "";
+}
+/* Один проход по шагам, из которого кормятся ДВЕ фишки: приписки значений
+   в редакторе и пересказ программы словами. Собираем по каждой строке:
+     note    — что изменилось (последний проход побеждает);
+     printed — что напечатано (весь текст за все проходы);
+     hits    — сколько раз строка выполнилась.
+   Раньше это жило внутри watchCompute, и пересказу пришлось бы повторить ту
+   же петлю — а две петли по шагам разошлись бы при первой же правке. */
+function stepFacts(eng, code, opts, maxSteps){
+  var out = { note:{}, printed:{}, hits:{}, error:null, truncated:false };
+  if (!eng || !eng.supportsStep || !eng.stepper || !eng.snapshotVars) return null;
+  var st;
+  try { st = eng.stepper(String(code || ""), opts || {}); }
+  catch(e){ if (!e.pyKind) throw e; return null; }   /* не запускается */
+  var skip = st.interp && st.interp.builtinNames;
+  var prev = null, prevLine = 0, prevOut = "";
+  var guard = 0, cap = maxSteps || WATCH_MAX_STEPS;
+  while (true){
+    if (guard++ >= cap){ out.truncated = true; break; }
+    var s;
+    try { s = st.next(); }
+    catch(e){ if (!e.pyKind) throw e; break; }
+    if (prev && prevLine > 0){
+      out.hits[prevLine] = (out.hits[prevLine] || 0) + 1;
+      var cur = watchSnap(eng, s.done ? (st.interp && st.interp.global) : s.env, skip);
+      var добавка = (s.output || "").slice(prevOut.length);
+      var note = watchNote(prev, cur, добавка);
+      if (note) out.note[prevLine] = note;
+      if (добавка) out.printed[prevLine] = (out.printed[prevLine] || "") + добавка;
+      prev = cur;
+    } else if (!s.done && !s.error){
+      prev = watchSnap(eng, s.env, skip);
+    }
+    if (s.error){ out.error = s.error; break; }
+    if (s.done) break;
+    prevLine = s.line; prevOut = s.output || "";
+  }
+  return out;
+}
+function watchCompute(eng, code, opts, ranSteps){
+  code = String(code || "");
+  if (code.indexOf(TRIPLE_D) >= 0 || code.indexOf(TRIPLE_S) >= 0) return null;
+  if (ranSteps && ranSteps > WATCH_MAX_STEPS) return null;
+  var facts = stepFacts(eng, code, opts, WATCH_MAX_STEPS);
+  if (!facts) return null;
+  var lines = code.split("\n"), out = {};
+  Object.keys(facts.note).forEach(function(k){
+    var n = +k;
+    /* Длинную строку не подписываем: приписка отжала бы перенос в подсветке,
+       и та разъехалась бы с текстовым полем под ней. */
+    if (!lines[n - 1] || lines[n - 1].length > WATCH_LINE_MAX) return;
+    var hits = facts.hits[n] || 1;
+    /* «×5» — строка выполнялась пять раз. Без этого «i = 4» в цикле читается
+       как «строка сработала один раз, и получилось 4». */
+    out[n] = (hits > 1 ? "×" + hits + "  " : "") + facts.note[n];
+  });
+  return out;
+}
+
+/* ================= разбор кода: что можно сделать чище =================
+   Единственная большая тема, которой в курсе не было вовсе, — рефакторинг.
+   Работающая программа и хорошая программа это разные вещи, но узнать об этом
+   ребёнку было негде: проверка говорит только «верно или нет».
+
+   Здесь код разбирается по-настоящему: парсер у нас свой, значит есть дерево,
+   и находки считаются по нему, а не поиском по тексту. «Найди в коде слово
+   sum» ошибается на комментариях и строках; дерево — нет.
+
+   Три правила, без которых эта затея принесла бы вред:
+
+   1. НЕ ПРЕДЛАГАТЬ НЕОБЪЯСНЁННОГО. У каждой находки есть поле after — урок,
+      после которого совет вообще имеет право появиться. Совет «возьми sum()»
+      на пятом уроке — это ровно та дыра, которую в курсе закрывали дважды
+      (см. «Порядок объяснений» в README).
+   2. НЕ РУГАТЬ. Разбор появляется только после того, как программа работает,
+      и говорит «можно чище», а не «плохо». Звёзды за него не отнимаются
+      и не добавляются: это не оценка.
+   3. НЕ ВРАТЬ. Каждое правило срабатывает только на форме, которую видно
+      целиком. Ни одно не говорит «наверное»: находка либо точная, либо её нет.
+      Поэтому правил мало и они узкие — лучше промолчать, чем придумать.
+
+   Проверять эти правила есть на чём: сто эталонных решений автора плюс шаги
+   проектов. Инструмент `npm run audit:lint` прогоняет разбор по всем ним —
+   если совет появляется на решении автора, это либо настоящий недосмотр
+   в курсе, либо ложная находка, и разбираться надо сразу.
+   ============================================================ */
+var LINT_MAX = 3;          /* больше трёх советов за раз — это уже придирки */
+var LINT_REPEAT_LINE = 3;  /* столько одинаковых строк — пора в цикл */
+var LINT_REPEAT_NUM  = 3;  /* столько раз одно число — пора дать ему имя */
+var LINT_LONG_FUNC   = 16; /* столько строк в функции — пора делить */
+
+/* Совет имеет право появиться, только когда нужное уже объясняли.
+   Урок из поля after проверяется по прогрессу — так же, как шпаргалка
+   решает, что показывать (sheetLearned). */
+function lintKnows(lesson){
+  if (!lesson) return true;
+  return solved(lesson) || !!(S.admin && S.admin.unlockAll);
+}
+
+/* Обход дерева. Идём по ВСЕМ полям узла, а не по списку известных имён:
+   дети лежат в body, targets, args, parts, clauses и ещё десятке полей, и
+   перечисление сломалось бы от каждого нового узла в парсере. */
+function astWalk(node, visit){
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)){
+    for (var i = 0; i < node.length; i++) astWalk(node[i], visit);
+    return;
+  }
+  /* visit вернул false — внутрь не идём. Нужно правилам, которые смотрят на
+     форму целиком: числа внутри списка данных, например, считать не надо. */
+  if (node.type && visit(node) === false) return;
+  /* Внутренность f-строки парсер оставляет ТЕКСТОМ ({code:"имя"}) и разбирает
+     её только при выполнении. Для разбора кода это была настоящая дыра:
+     имя, использованное лишь внутри f"…{имя}", выглядело неиспользованным —
+     и правило про лишние переменные ругалось на решения автора (нашлось
+     инструментом tests/lint-check.js на уроке про f-строки). Поэтому
+     разбираем такие куски сами и запоминаем разбор на самой части. */
+  if (node.type === "FStr" && node.parts){
+    for (var pi = 0; pi < node.parts.length; pi++){
+      var part = node.parts[pi];
+      if (!part) continue;
+      if (part._ast === undefined) part._ast = lintParseBit(part.code, node.line);
+      if (part._ast) astWalk(part._ast, visit);
+      /* Имя может стоять и в ФОРМАТЕ: f"{полоска:<{ширина}}" — ширина живёт
+         в спецификации, а не в самом куске. Без этого правило про лишние
+         переменные ругалось на примеры пятого мира (нашлось lint-check.js). */
+      if (part._spec === undefined){
+        part._spec = [];
+        String(part.spec || "").replace(/\{([^{}]*)\}/g, function(m, inner){
+          var bit = lintParseBit(inner, node.line);
+          if (bit) part._spec.push(bit);
+          return m;
+        });
+      }
+      for (var si = 0; si < part._spec.length; si++) astWalk(part._spec[si], visit);
+    }
+  }
+  var keys = Object.keys(node);
+  for (var k = 0; k < keys.length; k++){
+    var key = keys[k];
+    if (key === "type" || key === "line" || key.charAt(0) === "_") continue;
+    var v = node[key];
+    if (v && typeof v === "object") astWalk(v, visit);
+  }
+}
+function lintName(n){ return n && n.type === "Name" ? n.id : null; }
+/* Разобрать кусок f-строки. Номера строк внутри куска начинаются с единицы —
+   переносим их на строку самой f-строки, иначе находка укажет не туда. */
+function lintParseBit(src, line){
+  if (typeof src !== "string" || !src.trim()) return null;
+  var ast = null;
+  try { ast = window.MiniPy.parse(src); } catch(e){ return null; }
+  astWalk(ast, function(m){ m.line = line; });
+  return ast;
+}
+
+/* ===== правило: цикл, который складывает или считает ===== */
+function lintLoops(ast, out){
+  astWalk(ast, function(n){
+    if (n.type !== "For" || !n.body || n.body.length !== 1) return;
+    var v = lintName(n.target);
+    if (!v) return;
+    var st = n.body[0], acc = null, add = null;
+    if (st.type === "AugAssign" && st.op === "+"){
+      acc = lintName(st.target); add = st.value;
+    } else if (st.type === "Assign" && st.targets.length === 1 &&
+               lintName(st.targets[0]) && st.value.type === "BinOp" && st.value.op === "+"){
+      acc = lintName(st.targets[0]);
+      if (lintName(st.value.left) === acc) add = st.value.right;
+      else if (lintName(st.value.right) === acc) add = st.value.left;
+    }
+    if (!acc || !add) return;
+    var src = lintName(n.iter);
+    var what = src ? src : "список";
+    if (lintName(add) === v)
+      out.push({ line:n.line, after:"lists-first", rank:1, conflict:"for",
+        title:"Этот цикл — это sum()",
+        why:"Три строки складывают всё подряд. То же самое одной: " +
+             acc + " = sum(" + what + "). И шагов движка станет меньше — цена программы видна в победной карточке." });
+    else if (add.type === "Num" && add.value === 1 && src)
+      out.push({ line:n.line, after:"lists-first", rank:1, conflict:"for",
+        title:"Этот цикл считает, сколько элементов",
+        why:"Столько же скажет len: " + acc + " = len(" + src + ")." });
+  });
+}
+
+/* ===== правило: for i in range(len(...)), а сам i нужен только как номер ===== */
+function lintRangeLen(ast, out){
+  astWalk(ast, function(n){
+    if (n.type !== "For" || !n.iter) return;
+    var iv = lintName(n.target);
+    if (!iv || n.iter.type !== "Call" || lintName(n.iter.func) !== "range") return;
+    if (!n.iter.args || n.iter.args.length !== 1) return;
+    var inner = n.iter.args[0];
+    if (inner.type !== "Call" || lintName(inner.func) !== "len") return;
+    if (!inner.args || inner.args.length !== 1) return;
+    var seq = lintName(inner.args[0]);
+    if (!seq) return;
+    /* Считаем, все ли обращения к номеру — это seq[i]. Если номер нужен
+       ещё зачем-то (печатается, складывается), совет неверен: цикл по
+       элементам номер потеряет. */
+    var loads = 0, subs = 0;
+    astWalk(n.body, function(m){
+      if (m.type === "Name" && m.id === iv) loads++;
+      if (m.type === "Subscript" && lintName(m.value) === seq &&
+          m.index && lintName(m.index) === iv) subs++;
+    });
+    if (loads > 0 && loads === subs)
+      out.push({ line:n.line, after:"lists-first", rank:2, conflict:"range",
+        title:"Номер здесь не нужен",
+        why:"Внутри цикла номер используется только как " + seq + "[" + iv + "]. " +
+             "Значит можно идти по самим элементам: for элемент in " + seq + " — короче и не переставишь границы." });
+  });
+}
+
+/* ===== правило: переменная, которую никто не читает ===== */
+function lintUnused(ast, out){
+  var stores = {}, skip = [], loads = {}, classAssigns = [];
+  /* Поле класса (class Пёс: hp = 10) — это присваивание имени, но читают его
+     через self.hp, то есть как атрибут, а не как имя. Без этой оговорки
+     правило ругалось на решения автора в уроках про классы — нашлось
+     инструментом tests/lint-check.js. */
+  astWalk(ast, function(n){
+    if (n.type === "ClassDef" && n.body)
+      n.body.forEach(function(st){ if (st.type === "Assign") classAssigns.push(st); });
+  });
+  /* Сначала помечаем сами имена-получатели: только простое имя слева.
+     xs[i] = 5 и obj.attr = 5 не считаем присваиванием имени — там имя читают. */
+  astWalk(ast, function(n){
+    if (n.type === "Assign" && classAssigns.indexOf(n) < 0){
+      n.targets.forEach(function(t){
+        if (t.type === "Name"){ stores[t.id] = stores[t.id] || t.line; skip.push(t); }
+        /* Распаковка (low, high, avg = stats()) в правило не идёт: имя,
+           взятое из распаковки и не использованное, — это отдельная история
+           («поставь _»), и совет «переменная никому не нужна» тут только
+           путает. В skip кладём всё равно: это получатели, а не чтение. */
+        else if (t.type === "Tuple" && t.elts)
+          t.elts.forEach(function(x){ if (x.type === "Name") skip.push(x); });
+      });
+    }
+  });
+  astWalk(ast, function(n){
+    if (n.type === "Name" && skip.indexOf(n) < 0) loads[n.id] = 1;
+    /* f-строка разбирается парсером в настоящие узлы, поэтому имя внутри
+       {…} попадёт сюда само. Если это когда-нибудь изменится, правило начнёт
+       ругаться на используемые переменные — на это есть проверка в тестах. */
+  });
+  Object.keys(stores).forEach(function(name){
+    if (loads[name] || name === "_" || name.charAt(0) === "_") return;
+    out.push({ line:stores[name], after:null, rank:3,
+      title:"Переменная " + name + " никому не нужна",
+      why:"Она получает значение, и дальше её никто не читает. Либо это остаток от прошлой версии — удали, " +
+           "либо ты забыл её использовать, и тогда программа считает не то, что ты задумал." });
+  });
+}
+
+/* ===== правило: сравнение с True/False и с len(...) > 0 ===== */
+function lintConditions(ast, out){
+  /* Смотрим ТОЛЬКО проверки if и while. В assert сравнение с True — это
+     запись ожидания, и совет «пиши if имя:» там был бы не к месту: именно
+     так написаны решения урока про assert. Нашлось tests/lint-check.js. */
+  var tests = [];
+  astWalk(ast, function(n){
+    if ((n.type === "If" || n.type === "While") && n.test) tests.push(n.test);
+  });
+  astWalk(tests, function(n){
+    if (n.type !== "Compare") return;
+    var sides = [n.left, n.right];
+    for (var i = 0; i < 2; i++){
+      var c = sides[i], other = sides[1 - i];
+      if (c.type === "Const" && (c.value === true || c.value === false) &&
+          (n.op === "==" || n.op === "!=")){
+        var yes = (c.value === true) === (n.op === "==");
+        out.push({ line:n.line, after:"fn-varargs", rank:4,
+          title:"Сравнение с " + (c.value ? "True" : "False") + " лишнее",
+          why:"Условие и так проверяет правду или ложь. Пишут просто: " +
+               (yes ? "if имя:" : "if not имя:") + " — и читается это как обычная фраза." });
+        return;
+      }
+      if (c.type === "Num" && c.value === 0 && other.type === "Call" && lintName(other.func) === "len"){
+        /* Ноль слева или справа — разные условия, и перепутать их нельзя.
+           len(x) == 0 и 0 == len(x) значат «пусто»; len(x) != 0, len(x) > 0
+           и 0 < len(x) — «не пусто». Про >= и <= молчим: с нулём они всегда
+           верны или всегда ложны, и совет «пиши if имя:» был бы неправдой. */
+        var numRight = (i === 1);
+        var empty = n.op === "==";
+        var notEmpty = n.op === "!=" ||
+                       (n.op === ">" && numRight) ||   /* len(x) > 0 */
+                       (n.op === "<" && !numRight);    /* 0 < len(x) */
+        if (!empty && !notEmpty) return;
+        out.push({ line:n.line, after:"fn-varargs", rank:4,
+          title:"Длину с нулём сравнивать не нужно",
+          why:"Пустой список, пустая строка и ноль в условии сами считаются ложью. " +
+               (empty ? "«Пусто» пишут так: if not имя:" : "«Не пусто» пишут так: if имя:") });
+        return;
+      }
+    }
+  });
+}
+
+/* ===== правило: x = x + 1 ===== */
+function lintAug(ast, out){
+  astWalk(ast, function(n){
+    if (n.type !== "Assign" || n.targets.length !== 1) return;
+    var name = lintName(n.targets[0]);
+    if (!name || !n.value || n.value.type !== "BinOp") return;
+    if (["+","-","*"].indexOf(n.value.op) < 0) return;
+    if (lintName(n.value.left) !== name) return;
+    out.push({ line:n.line, after:"vars", rank:7,
+      title:"Короче: " + name + " " + n.value.op + "= …",
+      why:"Запись " + name + " = " + name + " " + n.value.op + " … пишут одним знаком: " +
+           name + " " + n.value.op + "= … . Смысл тот же, читать легче." });
+  });
+}
+
+/* ===== правило: одно и то же число три раза ===== */
+var LINT_DATA_NODES = ["List","Tuple","SetLit","Dict"];
+/* Черепашья программа — это сплошные длины и углы: forward(120), right(120).
+   Числа там данные рисунка, а не настройки, и просить для них имя бессмысленно
+   (правило ругалось на решения уроков про черепашку). Зато совет «три
+   одинаковые строки — это цикл» там как раз в точку, и он остаётся. */
+var LINT_DRAW_CALLS = ["forward","back","right","left","goto","circle","dot",
+                       "penup","pendown","home","speed"];
+function lintIsDraw(ast){
+  var draw = false;
+  astWalk(ast, function(n){
+    if (n.type === "Call" && n.func && n.func.type === "Name" &&
+        LINT_DRAW_CALLS.indexOf(n.func.id) >= 0) draw = true;
+  });
+  return draw;
+}
+function lintMagic(ast, out){
+  if (lintIsDraw(ast)) return;
+  var seen = {};
+  astWalk(ast, function(n){
+    /* Числа ВНУТРИ списка, кортежа, множества или словаря — это данные,
+       а не «магическая константа»: список оценок [5, 3, 4, 5, 2] не просит
+       имени для каждой пятёрки. Без этого правило ругалось на десяток
+       решений автора. */
+    if (LINT_DATA_NODES.indexOf(n.type) >= 0) return false;
+    if (n.type !== "Num") return;
+    /* Мелкие числа в коде живут честно: range(3), [0], делить на 4, а
+       десятка — это ещё и цифры (n % 10, n // 10) и проценты. Просить имя
+       стоит для настоящих настроек: 26 букв алфавита, 60 секунд, 1000 шагов. */
+    if (Math.abs(n.value) <= 10) return;
+    var k = String(n.value);
+    if (!seen[k]) seen[k] = { n:0, line:n.line };
+    seen[k].n++;
+  });
+  Object.keys(seen).forEach(function(k){
+    if (seen[k].n < LINT_REPEAT_NUM) return;
+    out.push({ line:seen[k].line, after:"vars", rank:6,
+      title:"Число " + k + " повторяется " + seen[k].n + " раза",
+      why:"Дай ему имя: MAX_HP = " + k + " (или как подходит по смыслу) — и меняй в одном месте, " +
+           "а не искать по всей программе." });
+  });
+}
+
+/* ===== правило: имена не по PEP 8 ===== */
+function lintNames(ast, out){
+  var bad = {};
+  var check = function(name, line){
+    if (!name || bad[name]) return;
+    if (/^[a-z][a-z0-9]*[A-Z]/.test(name)) bad[name] = line;
+  };
+  astWalk(ast, function(n){
+    if (n.type === "Assign") n.targets.forEach(function(t){ if (t.type === "Name") check(t.id, t.line); });
+    if (n.type === "FuncDef") check(n.name, n.line);
+  });
+  Object.keys(bad).forEach(function(name){
+    out.push({ line:bad[name], after:"pep8", rank:8,
+      title:"Имя " + name + " — не по-питоновски",
+      why:"В Python слова в имени разделяют подчёркиванием: " +
+           name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase() +
+           ". С большой буквы пишут только классы." });
+  });
+}
+
+/* ===== правило: слишком длинная функция ===== */
+function lintLongFunc(ast, out){
+  astWalk(ast, function(n){
+    if (n.type !== "FuncDef" || !n.body) return;
+    if (n.body.length < LINT_LONG_FUNC) return;
+    out.push({ line:n.line, after:"functions", rank:9,
+      title:"Функция " + n.name + " делает слишком много",
+      why:"В ней " + n.body.length + " шагов. Такую трудно проверить и назвать одним словом: " +
+           "вынеси из неё кусок в отдельную функцию со своим именем." });
+  });
+}
+
+/* ===== правило: три одинаковые строки =====
+   Это единственное правило по тексту, а не по дереву, и так и надо: речь
+   именно про повторение записи. Комментарии и пустые строки не считаем. */
+function lintRepeat(code, out){
+  var lines = String(code).split("\n"), seen = {};
+  lines.forEach(function(ln, i){
+    var t = ln.trim();
+    if (t.length < 12 || t.charAt(0) === "#") return;
+    if (!seen[t]) seen[t] = { n:0, line:i + 1 };
+    seen[t].n++;
+  });
+  Object.keys(seen).forEach(function(t){
+    if (seen[t].n < LINT_REPEAT_LINE) return;
+    out.push({ line:seen[t].line, after:"for-range", rank:5,
+      title:"Одна и та же строка " + seen[t].n + " раза",
+      why:"Повторение — работа для цикла: то, что меняется, положи в список и пройди по нему циклом. " +
+           "Тогда правка нужна в одном месте." });
+  });
+}
+
+/* Полный разбор. Возвращает список находок, уже отсортированный и урезанный;
+   пустой список значит «чисто» — это тоже ответ, и его надо показать. */
+/* opts:
+     all      — не смотреть на прогресс (для инструментов проверки);
+     needCode — требования урока (`check.needCode`). Совет, который спорит
+                с требованием, не показываем: если урок ТРЕБУЕТ цикл, «возьми
+                sum()» — это подстава, а не помощь. */
+function lintCode(code, opts){
+  opts = opts || {};
+  var out = [];
+  var ast = null;
+  try { ast = window.MiniPy.parse(String(code || "")); }
+  catch(e){ if (!e.pyKind) throw e; return null; }    /* не разбирается — сначала пусть заработает */
+  lintLoops(ast, out);
+  lintRangeLen(ast, out);
+  lintUnused(ast, out);
+  lintConditions(ast, out);
+  lintRepeat(code, out);
+  lintMagic(ast, out);
+  lintAug(ast, out);
+  lintNames(ast, out);
+  lintLongFunc(ast, out);
+  var need = (opts.needCode || []).join(" ").toLowerCase();
+  var open = out.filter(function(f){
+    if (!opts.all && !lintKnows(f.after)) return false;
+    if (f.conflict && need.indexOf(f.conflict) >= 0) return false;
+    return true;
+  });
+  open.sort(function(a, b){ return (a.rank - b.rank) || (a.line - b.line); });
+  return open.slice(0, opts.all ? open.length : LINT_MAX);
+}
+
+/* Разметка разбора для сообщения под редактором. */
+function lintHTML(found){
+  if (found === null)
+    return "<b>Сначала пусть заработает</b>Программа не разбирается — в ней ошибка записи. " +
+           "Нажми «Запустить», движок покажет, где именно.";
+  if (!found.length)
+    return "<b>Чисто</b>Разбор ничего не нашёл: ни лишних переменных, ни повторов, ни длинных функций. " +
+           "Так выглядит код, который не стыдно показать.";
+  return "<b>Работает — а можно чище</b>" +
+    '<div class="lintlist">' + found.map(function(f){
+      return '<div class="lintone"><span class="lintln">строка ' + f.line + '</span>' +
+        '<b>' + esc(f.title) + '</b><span>' + esc(f.why) + '</span></div>';
+    }).join("") + '</div>' +
+    '<span class="linttip">Это не оценка: звёзды за разбор не отнимаются. ' +
+    'Перепиши, если согласен, — и нажми разбор снова.</span>';
 }
 
 /* ================= рабочая станция ================= */
@@ -13151,9 +14042,14 @@ function makeStudio(cfg){
   ed.querySelector(".runbar").innerHTML =
     '<button class="rbtn" data-role="run">' + (cfg.play ? "▶ Новая игра" : "▶ Запустить") + '</button>' +
     (eng.supportsStep && !cfg.play ? '<button class="rbtn sec" data-role="step">⏭ Шаг</button>' : "") +
+    /* «Разобрать» — тот же шаговый прогон, но в визуализаторе: с коробками,
+       стрелками и перемоткой. Кнопка появляется только там, где разбор
+       осмыслен (cfg.viz задан вызывающим экраном). */
+    (cfg.viz && eng.supportsStep && !cfg.play ? '<button class="rbtn sec" data-role="viz" title="разобрать программу в визуализаторе">🔍 Разобрать</button>' : "") +
+    (cfg.lint && !cfg.play ? '<button class="rbtn sec" data-role="lint" title="что в этой программе можно сделать чище">🧹 Ревью</button>' : "") +
     '<button class="rbtn sec" data-role="reset">↺ Сброс</button>' +
     (cfg.restore ? '<button class="rbtn sec" data-role="restore">↩ Вернуть как было</button>' : "") +
-    (cfg.check ? '<button class="rbtn check" data-role="check">✓ Проверить</button>' : "") +
+    (cfg.check ? '<button class="rbtn check" data-role="check">' + (cfg.checkLabel || "✓ Проверить") + '</button>' : "") +
     '<span class="sp"></span><span class="tip"><span class="kbd">Ctrl</span>+<span class="kbd">Enter</span></span>';
 
   var side = document.createElement("div"); side.className = "side";
@@ -13241,7 +14137,7 @@ function makeStudio(cfg){
   }
 
   function doRun(){
-    hideMsg(); ed.setError(0); stepper = null; varsPane.style.display = "none";
+    hideMsg(); ed.setError(0); ed.setWatch(null); stepper = null; varsPane.style.display = "none";
     var t = eng.newTurtle ? eng.newTurtle() : null;
     var res = eng.run(ed.getCode(), { turtle: t, sources: ed.getSources(), files: dataFiles(cfg.data), stdin: wrap.getStdin() });
     setConsole(res.output);
@@ -13251,14 +14147,31 @@ function makeStudio(cfg){
       ed.setError(res.error.line);
       showMsg("bad", errHTML(res.error));
       wrap._hadError = true;
-    } else if (wrap._hadError){ award("fixer"); wrap._hadError = false; }
+      /* бестиарий: зверь встретился. Помним ЕГО тип — победа достанется
+         именно ему, а не тому, что упало три запуска назад. */
+      wrap._lastErr = res.error.kind;
+      errSeen(res.error.kind);
+    } else if (wrap._hadError){
+      award("fixer"); wrap._hadError = false;
+      /* Победа только если чинил сам: после «показать решение» в редакторе
+         код автора, и хвастаться нечем. */
+      if (!(session && session.shown)) errBeaten(wrap._lastErr);
+      wrap._lastErr = null;
+    }
     award("first");
+    /* Приписки значений считаются ТОЛЬКО у одного файла: номера строк
+       относятся к главному, а в редакторе может быть открыт другой. */
+    if (ed.fileCount === 1)
+      ed.setWatch(watchCompute(eng, ed.getCode(),
+        { sources: ed.getSources(), files: dataFiles(cfg.data), stdin: wrap.getStdin() },
+        res.steps));
     if (cfg.onRun) cfg.onRun(res);
     return res;
   }
 
   function doStep(){
     hideMsg();
+    ed.setWatch(null);          /* у пошагового режима своя панель переменных */
     if (!stepper){
       try {
         var t = eng.newTurtle ? eng.newTurtle() : null;
@@ -13267,6 +14180,7 @@ function makeStudio(cfg){
         if (!e.pyKind) throw e;
         ed.setError(e.pyLine);
         showMsg("bad", errHTML({ kind:e.pyKind, msg:e.pyMsg, line:e.pyLine }));
+        wrap._hadError = true; wrap._lastErr = e.pyKind; errSeen(e.pyKind);
         stepper = null; return;
       }
       varsPane.style.display = "";
@@ -13274,7 +14188,11 @@ function makeStudio(cfg){
     var st = stepper.s.next();
     setConsole(st.output);
     if (canvas) drawTurtle(canvas, stepper.t);
-    if (st.error){ ed.setError(st.error.line); showMsg("bad", errHTML(st.error)); stepper = null; return; }
+    if (st.error){
+      ed.setError(st.error.line); showMsg("bad", errHTML(st.error));
+      wrap._hadError = true; wrap._lastErr = st.error.kind; errSeen(st.error.kind);
+      stepper = null; return;
+    }
     if (st.done){
       ed.setLine(0);
       showMsg("warn", "<b>Программа закончилась</b>Нажми «Сброс», чтобы пройти шагами ещё раз.");
@@ -13288,7 +14206,7 @@ function makeStudio(cfg){
   }
 
   function doReset(){
-    stepper = null; ed.setLine(0); hideMsg();
+    stepper = null; ed.setLine(0); ed.setWatch(null); hideMsg();
     varsPane.style.display = "none";
     if (playPane) playPane.style.display = "none";
     con.innerHTML = '<span class="empty">пока пусто — нажми «Запустить»</span>';
@@ -13351,6 +14269,13 @@ function makeStudio(cfg){
     if (r === "run") cfg.play ? playStart() : doRun();
     else if (r === "move") playMove();
     else if (r === "step") doStep();
+    else if (r === "viz") cfg.viz({
+      code: ed.getCode(),
+      /* окружение отдаём целиком: без ответов для input() и без файлов на
+         диске разбор упал бы там, где обычный запуск работает */
+      env: { sources: ed.getSources(), files: dataFiles(cfg.data), stdin: wrap.getStdin() }
+    });
+    else if (r === "lint") wrap.lintShow();
     else if (r === "reset") doReset();
     else if (r === "restore"){
       if (cfg.restoreFiles) ed.setFiles(cfg.restoreFiles); else ed.setCode(cfg.restore);
@@ -13358,6 +14283,17 @@ function makeStudio(cfg){
     }
     else if (r === "check") cfg.check(ed, showMsg, canvas);
   });
+
+  /* Разбор кода. Живёт у станции, а не у экрана: звать его будет и кнопка
+     в панели запуска (песочница), и кнопка рядом с подсказками (урок) —
+     а показывать результат надо в одном месте, под редактором. */
+  wrap.lintShow = function(){
+    hideMsg();
+    var found = lintCode(ed.getCode(), { needCode: cfg.needCode });
+    showMsg(found && found.length ? "warn" : (found === null ? "bad" : "ok"), lintHTML(found));
+    return found;
+  };
+  wrap.lintFind = function(){ return lintCode(ed.getCode(), { needCode: cfg.needCode }); };
 
   if (hasData) showDisk(null);
   wrap.editor = ed; wrap.showMsg = showMsg; wrap.canvas = canvas; wrap.engine = eng;
@@ -13811,8 +14747,26 @@ function screenWorlds(){
     '<button class="bigbtn' + (pjDone ? "" : " ghost") + '" id="gofolio">Открыть портфолио</button>' +
     '</div>';
 
+  /* Вторая карточка того же вида — про роль автора, а не решателя. Стоит на
+     карте миров, а не в верхней панели, по той же причине, что и портфолио:
+     панель переполнена, а сюда заходят осознанно. */
+  var mine = myTasksList().length;
+  var solvedFriend = Object.keys(S.friendTasks || {}).length;
+  h += '<div class="projcard' + (mine ? " done" : "") + '">' +
+    '<span class="pjemoji">✍️</span>' +
+    '<span class="pjbody"><span class="pjkicker">вне сотни уроков</span>' +
+    '<b>Своё задание</b>' +
+    '<span>придумай задачу сам и отправь её ссылкой другу — тренажёр сам посчитает правильный ответ</span>' +
+    '<span class="pjnote">' + (mine || solvedFriend
+      ? "Своих заданий: " + mine + (solvedFriend ? " · чужих пройдено: " + solvedFriend : "")
+      : "Составить задание труднее, чем решить: придётся объяснить задачу словами.") +
+    '</span></span>' +
+    '<button class="bigbtn' + (mine ? "" : " ghost") + '" id="gomine">Составить задание</button>' +
+    '</div>';
+
   app.innerHTML = h;
   document.getElementById("gofolio").onclick = screenFolio;
+  document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
   document.getElementById("go-next").onclick = function(){
     var next = null;
     CURRICULUM.forEach(function(w){
@@ -13854,7 +14808,11 @@ function screenWorld(n){
         '<span class="lnum">' + l.num + '</span>' +
         '<span class="lbody"><b>' + l.title + (l.boss ? ' <span class="bosstag">босс</span>' : '') + '</b>' +
         '<span>' + l.sub + '</span></span>' +
-        '<span class="lright">' + (has ? '<span class="stars">' + stars + '</span>' : '<span class="soontag">скоро</span>') + '</span>' +
+        '<span class="lright">' +
+          /* перышко — цель по шагам взята: видно, где программа уже не дороже
+             решения автора, и где ещё есть куда переписывать */
+          ((S.log[l.id] && S.log[l.id].lean) ? '<span class="leanmark" title="программа уложилась в цену решения автора">🪶</span>' : '') +
+          (has ? '<span class="stars">' + stars + '</span>' : '<span class="soontag">скоро</span>') + '</span>' +
         '</button>';
     });
     h += '</div>';
@@ -13991,6 +14949,9 @@ function draftFlush(){
   try {
     if (!document.body.contains(s.studio)) return;
     if (s.sandbox){ S.sandbox = s.studio.editor.getCode(); save(); return; }
+    /* своё задание — это три поля сразу (название, условие, код), поэтому
+       экран сам отдаёт их одной функцией, а не только код редактора */
+    if (s.mytask && s.mytaskStash){ s.mytaskStash(); save(); return; }
     if (s.lesson && s.starter) draftSave(s.lesson, s.studio.editor.getFiles(), s.starter);
   } catch(e){}
 }
@@ -14051,10 +15012,14 @@ function openLesson(id){
         'кнопка «↩ Вернуть как было» вернёт исходный сломанный вариант.</span></div>'
       : "";
 
+    /* Кнопка разбора стоит здесь, а не в панели запуска: панель на уроке и так
+       из пяти кнопок, а разбор — про то же, про что подсказки: «помоги мне
+       посмотреть на свой код». Отличие сказано рядом: звёзды он не отнимает. */
     var hints = '<div class="hintbox">' +
       '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
       '<button class="rbtn sec" id="solbtn">Показать решение</button>' +
-      '<span class="tip">за подсказку теряется одна звезда</span></div><div class="hintout" id="hintout"></div>';
+      (body.task.files ? '' : '<button class="rbtn sec" id="lintbtn" title="что можно сделать чище">🧹 Ревью кода</button>') +
+      '<span class="tip">за подсказку теряется одна звезда, за ревью — нет</span></div><div class="hintout" id="hintout"></div>';
 
     var prev = pos > 0 ? ready[pos-1] : null, next = pos < ready.length-1 ? ready[pos+1] : null;
     var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← К списку уроков</button><span class="sp"></span>' +
@@ -14083,6 +15048,16 @@ function openLesson(id){
       restore: isFix ? body.task.starter : null,
       restoreFiles: isFix ? taskFiles : null,
       onRun: function(){ logOf(l.id).runs++; save(); },
+      /* Требования урока едут в разбор: совет, который спорит с требованием
+         («возьми sum()» там, где урок требует цикл), показывать нельзя. */
+      needCode: (body.task.check && body.task.check.needCode) || null,
+      /* Разбор своей программы. Многофайловому уроку его не даём: в
+         визуализаторе один редактор, и подсветка строки уехала бы в чужой
+         файл, как только выполнение зашло в модуль. */
+      viz: body.task.files ? null : function(o){
+        screenViz({ code: o.code, env: o.env,
+          backTo: { label: "← Вернуться в урок", go: function(){ openLesson(id); } } });
+      },
       check: function(ed, showMsg, canvas){ runCheck(l, body, ed, showMsg, canvas); }
     });
     document.getElementById("studio").appendChild(studio);
@@ -14135,6 +15110,13 @@ function openLesson(id){
       };
     });
 
+    var lintBtn = document.getElementById("lintbtn");
+    if (lintBtn) lintBtn.onclick = function(){
+      studio.lintShow();
+      /* проверка на наличие метода — не суеверие: в тестовом окружении
+         (jsdom) его нет, и без неё падал бы обработчик, а не прокрутка */
+      if (studio.scrollIntoView) studio.scrollIntoView({ behavior:"smooth", block:"center" });
+    };
     wireHint(body.task.hints, function(){ logOf(l.id).hints++; save(); });
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
@@ -14239,6 +15221,7 @@ function runCheck(l, body, ed, showMsg, canvas){
      карточке уже нет результата запуска. */
   session.steps = res.steps || 0;
   session.refSteps = stepsOfRef(body, refSrcs, stdin);
+  session.code = code;      /* для разбора «как чище» в победной карточке */
 
   /* «найди ошибку»: вывод верный — но код починен или написан заново? */
   if (body.task.type === "fix"){
@@ -14281,7 +15264,7 @@ function stepsShown(body){
 /* Строка про цену в победной карточке. Ругать за длинную программу нельзя:
    ребёнок только что её дописал и она работает. Поэтому говорим фактом, а
    «можно короче» — только когда разница действительно велика. */
-function stepsNote(l, body){
+function stepsNote(l, body, lean){
   if (!stepsShown(body)) return "";
   var mine = session.steps || 0, ref = session.refSteps || 0;
   if (!mine) return "";
@@ -14295,9 +15278,81 @@ function stepsNote(l, body){
   line += ".";
   if (prev && mine < prev) line += " <b>Твой рекорд был " + prev + " — побит.</b>";
   else if (prev && mine > prev) line += " Твой рекорд по этому уроку — " + prev + ".";
-  else if (ref && mine > ref * 2)
-    line += " Тот же ответ можно получить заметно короче — попробуй, когда захочешь.";
-  return line + "</p>";
+  line += "</p>";
+  return line + leanNote(lean, mine, ref);
+}
+/* Строка про цель. Ругать за промах нельзя — программа только что заработала,
+   и это главное. Поэтому промах звучит как открытое приглашение вернуться, а
+   не как двойка: звёзды за перепрохождение не отнимаются. */
+function leanNote(lean, mine, ref){
+  if (!lean || !lean.show) return "";
+  if (lean.shown)
+    return '<p class="stepnote">🎯 Цель «уложиться не дороже ' + ref + ' ' +
+      plural(ref, "шага", "шагов", "шагов") + '» на этот раз не считается: ' +
+      'в редакторе решение автора. Пройди урок сам — и цель будет твоей.</p>';
+  if (lean.hit)
+    return '<p class="stepnote lean">🪶 <b>Цель выполнена:</b> ' +
+      (mine === ref
+        ? 'ровно столько же, сколько у автора — ' + mine + ' ' + plural(mine, "шаг", "шага", "шагов") + '.'
+        : mine + ' ' + plural(mine, "шаг", "шага", "шагов") + ' вместо ' + ref + ' у автора — короче.') +
+      (lean.first ? ' <b>+' + lean.xp + ' XP</b> — за цель платят один раз на урок.' : '') + '</p>';
+  return '<p class="stepnote">🎯 <b>Цель:</b> уложиться в ' + ref + ' ' +
+    plural(ref, "шаг", "шага", "шагов") + ' — столько стоит решение автора. ' +
+    'Урок уже пройден, звёзды никуда не денутся: вернись и попробуй переписать короче, когда захочется.</p>';
+}
+
+/* ===== цель по шагам =====
+   Цена программы считалась и раньше, но говорилась фактом: «твоя программа —
+   340 шагов, решение автора — 120». Факт ничего не просит, и ребёнок шёл
+   дальше. Цель просит: «уложись не дороже решения автора».
+
+   Почему именно «не дороже», а не «короче»: эталон написан человеком и до
+   предела не выжат, поэтому цель достижима без трюков. А требование «меньше»
+   толкало бы к нечитаемым однострочникам — ровно к тому, от чего курс
+   отучает в уроке про PEP 8.
+
+   Надбавка даётся ОДИН раз на урок: цель — повод переписать программу, а не
+   источник опыта. Показанное решение цель не засчитывает: код автора, конечно,
+   уложился бы в цену автора, и медаль за это была бы обманом. */
+var LEAN_XP = 10;          /* разовая надбавка за попадание в цель */
+var LEAN_BADGE_AT = 5;     /* столько уроков в цель — и бейдж «Лёгкая рука» */
+
+function leanCount(){
+  var n = 0, log = S.log || {};
+  Object.keys(log).forEach(function(k){ if (log[k] && log[k].lean) n++; });
+  return n;
+}
+/* Считается ПЕРЕД сборкой победной карточки: надбавка должна попасть в опыт
+   до refreshTop, иначе полоска и карточка разошлись бы на 10 XP. */
+function leanAward(l, body){
+  var out = { show:false, mine:0, ref:0, hit:false, first:false, xp:0, shown:!!session.shown };
+  if (!stepsShown(body)) return out;
+  var mine = session.steps || 0, ref = session.refSteps || 0;
+  if (!mine || !ref) return out;
+  out.show = true; out.mine = mine; out.ref = ref;
+  if (out.shown) return out;                  /* решение показано — цель не в счёт */
+  out.hit = mine <= ref;
+  if (!out.hit) return out;
+  var lg = logOf(l.id);
+  if (!lg.lean){ lg.lean = 1; out.first = true; out.xp = LEAN_XP; S.xp += LEAN_XP; }
+  if (leanCount() >= LEAN_BADGE_AT) award("lean");
+  return out;
+}
+
+/* Сколько советов «как сделать чище» есть по только что зачтённому коду.
+   Сам разбор в победную карточку не выносим: она и без него из шести блоков,
+   а совет требует спокойного чтения. Поэтому здесь только приглашение. */
+function lintCount(l, body){
+  if (!session.code || (body.task && body.task.files)) return 0;
+  var found = lintCode(session.code,
+    { needCode: (body.task.check && body.task.check.needCode) || null });
+  return found ? found.length : 0;
+}
+function lintNote(n){
+  if (!n) return "";
+  return '<p class="stepnote">🧹 Программа работает — и её можно сделать чище: ' +
+    'разбор нашёл ' + n + ' ' + plural(n, "замечание", "замечания", "замечаний") +
+    '. Кнопка «Ревью кода» под редактором, звёзды за это не отнимаются.</p>';
 }
 
 function winLesson(l, body){
@@ -14315,6 +15370,8 @@ function winLesson(l, body){
   var w = CURRICULUM.world(l.world);
   if (worldReadyLessons(w).length === w.lessons.length &&
       w.lessons.every(function(x){ return solved(x.id); })) award("world1");
+  var lean = leanAward(l, body);   /* до save/refreshTop: надбавка идёт в тот же опыт */
+  var tidy = lintCount(l, body);   /* сколько советов «как чище» есть по этому коду */
   var lg = logOf(l.id);
   lg.stars = Math.max(lg.stars || 0, stars);
   if (!lg.solvedAt) lg.solvedAt = Date.now();
@@ -14335,8 +15392,8 @@ function winLesson(l, body){
     '<p>' + (stars === 3 ? "С первой попытки и без подсказок."
           : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
-    takeShieldNote() + reviewNote(l.id) + stepsNote(l, body) +
-    '<div class="winxp">+' + gained + ' XP</div><div class="winrow">' +
+    takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
+    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
       (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
             : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
       '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
@@ -14390,7 +15447,12 @@ function screenSandbox(){
     '<div class="card"><h3>Что можно позвать</h3><div class="ref">' +
       ref.map(function(x){ return "<span>" + esc(x) + "</span>"; }).join("") +
     '</div><p class="dim">Нажми на команду — она вставится в конец кода.</p></div>' +
-    '<div id="studio"></div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<div id="studio"></div>' +
+    '<div class="savepic"><button class="rbtn" id="topic">🖼 Сохранить рисунок в галерею</button>' +
+    '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
+    'Первая строка-комментарий станет названием.</span>' +
+    '<div class="msg" id="picmsg"></div></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
 
   var studio = makeStudio({
     engine:"mini", draw:true, code: S.sandbox || SANDBOX_START,
@@ -14399,6 +15461,13 @@ function screenSandbox(){
       S.sandbox = studio.editor.getCode();
       if (S.sandboxRuns >= 10) award("explorer");
       save();
+    },
+    lint: true,
+    /* Уход в разбор сохраняет код песочницы: draftFlush в claimScreen видит
+       метку sandbox и пишет S.sandbox — поэтому возврат ничего не теряет. */
+    viz: function(o){
+      screenViz({ code: o.code, env: o.env,
+        backTo: { label: "← Вернуться в песочницу", go: screenSandbox } });
     }
   });
   document.getElementById("studio").appendChild(studio);
@@ -14411,6 +15480,31 @@ function screenSandbox(){
       studio.editor.focusEditor();
     };
   });
+  document.getElementById("topic").onclick = function(){
+    var code = studio.editor.getCode();
+    var m = document.getElementById("picmsg");
+    var res = galleryDrawing(code);
+    if (!res || res.error){
+      m.className = "msg show bad";
+      m.innerHTML = res && res.error
+        ? "<b>Программа падает</b>Сначала пусть заработает: " + esc(res.error.msg)
+        : "<b>Не получилось</b>Черепашка в этом движке недоступна.";
+      return;
+    }
+    if (res.empty){
+      m.className = "msg show warn";
+      m.innerHTML = "<b>Рисунка нет</b>Программа не нарисовала ни линии, ни точки. " +
+        "Проверь, что вызываешь forward(...) и что карандаш опущен.";
+      return;
+    }
+    S.sandbox = code;
+    var id = gallerySave(code);
+    var t = (galleryAll()[id] || {}).title || "Рисунок";
+    m.className = "msg show ok";
+    m.innerHTML = "<b>«" + esc(t) + "» в галерее</b>Открыть, показать и скачать картинкой — " +
+      "в портфолио, раздел «Мои рисунки». Хранится программа, а не картинка: рисунок " +
+      "считается заново каждый раз, поэтому места занимает несколько строк.";
+  };
   document.getElementById("tomap").onclick = function(){ S.sandbox = studio.editor.getCode(); save(); screenWorlds(); };
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -15478,6 +16572,8 @@ function screenReview(){
       '</p></div>';
   }
 
+  h += beastsHTML();
+
   h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".revcard").forEach(function(b){
@@ -16168,6 +17264,149 @@ function screenProjectDone(id){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ================= галерея рисунков =================
+   Рисунок — единственный результат занятий, который хочется показать бабушке.
+   До сих пор он жил ровно до следующего запуска.
+
+   Храним НЕ картинку, а программу. Причины две, и обе серьёзные:
+   картинка в base64 — это десятки килобайт на каждый рисунок, а прогресс
+   целиком уезжает на сервер одним запросом; и главное — правило проекта:
+   результат не хранится, а вычисляется (так же не хранится вывод примеров
+   шпаргалки). Программа же занимает несколько строк, и рисунок из неё
+   получается тот же самый в любой момент.
+
+   PNG появляется в момент, когда его просят: холст уже нарисован, остаётся
+   toDataURL. Так «скачать картинку» работает, а прогресс остаётся маленьким.
+   ============================================================ */
+var GALLERY_MAX = 12;
+
+function galleryAll(){ S.gallery = S.gallery || {}; return S.gallery; }
+function galleryList(){
+  var g = galleryAll();
+  return Object.keys(g).map(function(k){
+    var x = g[k];
+    if (!x || typeof x.code !== "string" || !x.code.trim()) return null;
+    return { id:k, code:x.code, title:x.title || "Рисунок", at:x.at || 0 };
+  }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+/* Имя рисунка: первый комментарий программы, если он есть. Это не только
+   удобно — это ещё и повод писать комментарии. Иначе просто по счёту. */
+function galleryTitleOf(code, n){
+  var lines = String(code || "").split("\n");
+  for (var i = 0; i < lines.length; i++){
+    var t = lines[i].trim();
+    if (t.charAt(0) === "#"){
+      var name = t.replace(/^#+\s*/, "").slice(0, 40).trim();
+      if (name) return name;
+    }
+  }
+  return "Рисунок " + n;
+}
+function gallerySave(code){
+  var g = galleryAll();
+  var id = "g" + Date.now().toString(36);
+  g[id] = { code: String(code), title: galleryTitleOf(code, galleryList().length + 1), at: Date.now() };
+  var keys = Object.keys(g);
+  if (keys.length > GALLERY_MAX){
+    keys.sort(function(a, b){ return (g[a].at || 0) - (g[b].at || 0); });
+    keys.slice(0, keys.length - GALLERY_MAX).forEach(function(k){ delete g[k]; });
+  }
+  save();
+  return id;
+}
+function galleryDrop(id){ delete galleryAll()[id]; save(); }
+/* Нарисовала ли эта программа хоть одну линию или точку. */
+function galleryDrawing(code){
+  var eng = Runtime.get("mini");
+  var t = eng.newTurtle ? eng.newTurtle() : null;
+  if (!t) return null;
+  var res = eng.run(String(code || ""), { turtle: t });
+  if (res.error) return { error: res.error };
+  var turtle = res.turtle || t;
+  var n = (turtle.segs || []).length + (turtle.dots || []).length;
+  return n ? { turtle: turtle } : { empty: true };
+}
+/* Отдать картинку файлом. Отдельно от downloadText: тут уже готовая
+   data-ссылка от холста, оборачивать её в Blob незачем. */
+function downloadDataURL(name, url, btn){
+  try {
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    if (btn){
+      var t = btn.textContent;
+      btn.textContent = "Скачано ✓";
+      setTimeout(function(){ btn.textContent = t; }, 1500);
+    }
+    return true;
+  } catch(e){ return false; }
+}
+
+/* ================= забрать программу файлом =================
+   Портфолио умело показывать и копировать код, но не отдавать его. А «унести
+   с собой» — это и есть смысл проекта: файл можно положить на флешку, послать
+   бабушке, открыть в настоящем Python.
+
+   Файл получается сразу пригодным к запуску, и вот почему это не мелочь:
+   команды черепашки в тренажёре встроены, а в настоящем Python их надо
+   подключить. Поэтому рисующей программе дописываются первая строка
+   (`from turtle import *`) и последняя (`done()`, иначе окно закроется
+   мгновенно) — с честным комментарием, что это добавил тренажёр, а не
+   ребёнок. Всё остальное уезжает как есть.
+   ============================================================ */
+function pyFileName(title){
+  var base = translit(String(title || "")).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28);
+  return (base || "program") + ".py";
+}
+/* Рисует ли программа. Смотрим по дереву, а не по тексту: слово forward
+   в комментарии или в строке ничего не рисует. */
+function pyIsDraw(code){
+  try { return lintIsDraw(window.MiniPy.parse(String(code || ""))); }
+  catch(e){ return false; }
+}
+function pyFileText(title, code){
+  code = String(code || "");
+  var head = "# «" + String(title || "программа") + "» — программа из Кодоквеста.\n" +
+             "# Запустить у себя: сохрани файл рядом и набери в терминале\n" +
+             "#     python3 " + pyFileName(title) + "\n";
+  if (!pyIsDraw(code)) return head + "\n" + code.replace(/\s*$/, "") + "\n";
+  return head +
+    "#\n" +
+    "# В тренажёре команды черепашки встроены, а в настоящем Python их надо\n" +
+    "# подключить. Поэтому первую строку и последнюю добавил тренажёр:\n" +
+    "# без from turtle import * команд не будет, без done() окно закроется сразу.\n" +
+    "from turtle import *\n\n" +
+    code.replace(/\s*$/, "") + "\n\ndone()\n";
+}
+/* Отдать текст файлом. Blob — основной путь, data-ссылка — запасной:
+   в старых и урезанных браузерах URL.createObjectURL может не быть,
+   а промолчавшая кнопка хуже отсутствующей. */
+function downloadText(name, text, btn){
+  var done = function(){
+    if (!btn) return;
+    var t = btn.textContent;
+    btn.textContent = "Скачано ✓";
+    setTimeout(function(){ btn.textContent = t; }, 1500);
+  };
+  var a = document.createElement("a");
+  a.download = name;
+  try {
+    var url = URL.createObjectURL(new Blob([text], { type:"text/x-python;charset=utf-8" }));
+    a.href = url;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(e){} }, 2000);
+    done();
+    return true;
+  } catch(e){}
+  try {
+    a.href = "data:text/x-python;charset=utf-8," + encodeURIComponent(text);
+    document.body.appendChild(a); a.click(); a.remove();
+    done();
+    return true;
+  } catch(e2){}
+  return false;
+}
+
 /* ================= экран: портфолио и сертификаты =================
    Проектов шесть, и каждый — законченная программа, написанная ребёнком.
    По отдельности они разбросаны по мирам; здесь собраны в одном месте
@@ -16364,6 +17603,12 @@ function screenFolio(){
 
   if (!projects.length){
     h += '<div class="note"><b>Программ пока нет</b>Они появятся, когда будет собран первый проект.</div>';
+  } else {
+    h += '<p class="dim">Кнопка «Скачать .py» отдаёт готовый файл: сохрани его и набери ' +
+      'в терминале <code>python3 имя.py</code> — программа пойдёт в настоящем Python. ' +
+      'Рисующей программе тренажёр допишет первую строку <code>from turtle import *</code> ' +
+      'и последнюю <code>done()</code>: в тренажёре команды черепашки встроены, ' +
+      'а в настоящем Python их надо подключить.</p>';
   }
   projects.forEach(function(p){
     var st = projectState(p.id), done = projectDone(p.id), open = projectOpen(p);
@@ -16383,6 +17628,7 @@ function screenFolio(){
       h += '<pre class="fpcode">' + esc(code) + '</pre>' +
         '<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
         '<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
+        '<button class="rbtn sec" data-py="' + p.id + '">⬇ Скачать .py</button>' +
         '<span class="fplen">' + n + " " + plural(n, "строка", "строки", "строк") + '</span></div>';
     } else {
       h += '<div class="fpbtns">' + (open
@@ -16393,6 +17639,30 @@ function screenFolio(){
     }
     h += '</div>';
   });
+
+  /* ===== мои рисунки ===== */
+  var pics = galleryList();
+  h += '<div class="sect"><h2>Мои рисунки</h2><div class="line"></div>' +
+    '<span class="cnt">' + pics.length + '</span></div>';
+  if (!pics.length){
+    h += '<div class="note"><b>Рисунков пока нет</b>Нарисуй что-нибудь в песочнице ' +
+      'и нажми там «Сохранить рисунок в галерею». Хранится программа, а не картинка, ' +
+      'поэтому рисунок можно открыть и переделать в любой момент.</div>';
+  } else {
+    h += '<div class="pics">' + pics.map(function(x){
+      var n = x.code.replace(/\n+$/, "").split("\n").length;
+      return '<div class="pic" data-pic="' + x.id + '">' +
+        '<canvas class="picart"></canvas>' +
+        '<div class="picbody"><b>' + esc(x.title) + '</b>' +
+        '<span class="picsub">' + fmtDay(x.at) + ' · ' + n + ' ' +
+          plural(n, "строка", "строки", "строк") + '</span>' +
+        '<div class="picbtns">' +
+          '<button class="rbtn sec" data-png="' + x.id + '">⬇ PNG</button>' +
+          '<button class="rbtn sec" data-picopen="' + x.id + '">→ В песочницу</button>' +
+          '<button class="rbtn sec" data-picdel="' + x.id + '">Удалить</button>' +
+        '</div></div></div>';
+    }).join("") + '</div>';
+  }
 
   h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
     '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
@@ -16418,6 +17688,47 @@ function screenFolio(){
       if (projectDone(id)) screenProjectDone(id); else openProject(id);
     };
   });
+  /* Рисунки считаются заново: в прогрессе лежит программа, а не картинка.
+     Прогон честный, тем же движком, — значит и рисунок тот же самый. */
+  app.querySelectorAll(".pic").forEach(function(card){
+    var x = galleryAll()[card.getAttribute("data-pic")];
+    if (!x) return;
+    var res = galleryDrawing(x.code);
+    var cv = card.querySelector("canvas");
+    if (res && res.turtle) drawTurtle(cv, res.turtle);
+    else card.classList.add("broken");
+  });
+  app.querySelectorAll("[data-png]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-png");
+      var card = app.querySelector('.pic[data-pic="' + id + '"]');
+      var cv = card && card.querySelector("canvas");
+      var x = galleryAll()[id];
+      if (!cv || !x) return;
+      try { downloadDataURL(pyFileName(x.title).replace(/\.py$/, "") + ".png",
+                            cv.toDataURL("image/png"), b); } catch(e){}
+    };
+  });
+  app.querySelectorAll("[data-picopen]").forEach(function(b){
+    b.onclick = function(){
+      var x = galleryAll()[b.getAttribute("data-picopen")];
+      if (!x) return;
+      S.sandbox = x.code; save();
+      screenSandbox();
+    };
+  });
+  app.querySelectorAll("[data-picdel]").forEach(function(b){
+    b.onclick = function(){ galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
+  });
+  app.querySelectorAll("[data-py]").forEach(function(b){
+    b.onclick = function(){
+      var p = projectById(b.getAttribute("data-py"));
+      if (!p) return;
+      var st = projectState(p.id);
+      var code = st.code || p.steps[p.steps.length - 1].solution;
+      downloadText(pyFileName(p.title), pyFileText(p.title, code), b);
+    };
+  });
   app.querySelectorAll("[data-copy]").forEach(function(b){
     b.onclick = function(){
       var p = projectById(b.getAttribute("data-copy"));
@@ -16435,6 +17746,565 @@ function screenFolio(){
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= раздел: свои задания =================
+   Ребёнок перестаёт быть только решателем и становится автором: пишет
+   программу, а ожидаемый ответ ВЫЧИСЛЯЕТ движок — ровно как в разминке
+   «угадай вывод» и в вердиктах «Ты и ИИ». Условие ребёнок пишет словами:
+   именно это и есть упражнение, потому что автор задания обязан объяснить
+   задачу тому, кто его кода не видел.
+
+   Готовое задание уезжает ССЫЛКОЙ — другу, брату, родителю. Сервера для
+   этого не нужно: всё, что нужно решателю, лежит в самом адресе.
+
+   Что в ссылке: название, условие, ожидаемый вывод, имя автора.
+   Чего в ссылке НЕТ: программы автора. Пусть друг напишет свою — сойтись
+   должен ответ, а не буквы. Код остаётся у автора (S.mytasks), чтобы можно
+   было выдать ссылку заново или поправить задание.
+
+   Честно про защиту: base64 — это не шифр, а способ уложить русский текст в
+   адрес. Кто умеет его раскодировать, увидит ожидаемый вывод. Это обмен
+   заданиями между своими, а не олимпиада.
+   ============================================================ */
+var TASK_CODE_MAX = 2000;    /* программа длиннее — уже не задание для друга */
+var TASK_OUT_MAX  = 1500;    /* и ожидаемый вывод должен влезать в ссылку */
+var TASK_KEEP     = 20;      /* столько своих заданий держим в памяти */
+/* Случайность и input() запрещены не из вредности: у друга случайные числа
+   выпадут другие, а ответов для input() в ссылке нет — задание оказалось бы
+   непроходимым, и виноват был бы тренажёр. */
+var TASK_BAN = /\b(randint|choice|shuffle|sample|random|input)\s*\(/;
+
+/* base64 для адресной строки. btoa сам по себе умеет только «латиницу», а у
+   нас русский текст, поэтому сначала переводим строку в байты
+   (encodeURIComponent + unescape — приём, который работает во всех браузерах),
+   а потом убираем из результата символы, которые в адресе значат другое. */
+function b64urlEnc(str){
+  return btoa(unescape(encodeURIComponent(String(str))))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlDec(s){
+  var b = String(s).replace(/-/g, "+").replace(/_/g, "/");
+  while (b.length % 4) b += "=";
+  return decodeURIComponent(escape(atob(b)));
+}
+
+function taskPack(t){
+  return b64urlEnc(JSON.stringify({ v:1, t:t.title, g:t.goal, o:t.lines, a:t.author || "" }));
+}
+/* Разбор ссылки. Всё, что пришло снаружи, считаем испорченным, пока не
+   доказано обратное: ссылку могли обрезать в мессенджере или собрать руками. */
+function taskUnpack(s){
+  var o = null;
+  try { o = JSON.parse(b64urlDec(s)); } catch(e){ return null; }
+  if (!o || o.v !== 1) return null;
+  if (typeof o.t !== "string" || typeof o.g !== "string" || !Array.isArray(o.o)) return null;
+  if (!o.o.length || o.o.length > 200) return null;
+  for (var i = 0; i < o.o.length; i++) if (typeof o.o[i] !== "string") return null;
+  return { title: o.t.slice(0, 80), goal: o.g.slice(0, 600), lines: o.o,
+           author: typeof o.a === "string" ? o.a.slice(0, 24) : "" };
+}
+function taskLink(t){
+  var base = "";
+  try { base = location.origin + location.pathname; } catch(e){}
+  return base + "#task=" + taskPack(t);
+}
+/* Ключ чужого задания. Своего id в ссылке нет, поэтому считаем короткий хэш
+   от условия и ответа: одно и то же задание всегда даёт один ключ, и опыт за
+   него не начислится дважды, даже если ссылку открыть десять раз. */
+function taskKey(t){
+  var src = t.title + "\n" + t.goal + "\n" + t.lines.join("\n");
+  var h = 5381;
+  for (var i = 0; i < src.length; i++) h = ((h * 33) ^ src.charCodeAt(i)) >>> 0;
+  return "k" + h.toString(36);
+}
+
+function myTasksAll(){ S.mytasks = S.mytasks || {}; return S.mytasks; }
+/* Список для показа: только целые записи, свежие сверху. Битую запись (а она
+   может приехать со старой версии или из чужого файла прогресса) молча
+   пропускаем — падать из-за неё экран не должен. */
+function myTasksList(){
+  var d = myTasksAll();
+  return Object.keys(d).map(function(k){
+    var t = d[k];
+    if (!t || typeof t.title !== "string" || !Array.isArray(t.lines) || !t.lines.length) return null;
+    return { id:k, title:t.title, goal:t.goal || "", code:t.code || "",
+             lines:t.lines, at:t.at || 0, author:t.author || "" };
+  }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function myTaskSave(t){
+  var d = myTasksAll();
+  var id = t.id || ("t" + Date.now().toString(36));
+  d[id] = { title:t.title, goal:t.goal, code:t.code, lines:t.lines,
+            author:t.author || "", at: Date.now() };
+  var keys = Object.keys(d);
+  if (keys.length > TASK_KEEP){
+    keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+    keys.slice(0, keys.length - TASK_KEEP).forEach(function(k){ delete d[k]; });
+  }
+  save();
+  return id;
+}
+function myTaskDrop(id){ delete myTasksAll()[id]; save(); }
+
+/* ===== можно ли из этого сделать задание =====
+   Каждое правило — не придирка, а защита решателя: без него задание у друга
+   оказалось бы непроходимым или бессмысленным. */
+function taskProblem(title, goal, code){
+  title = String(title || "").trim();
+  goal = String(goal || "").trim();
+  if (!title) return "Заданию нужно название: по нему друг поймёт, что открыл.";
+  if (title.length > 60) return "Название слишком длинное — уложись в 60 знаков.";
+  if (goal.length < 15)
+    return "Условие слишком короткое. Друг не увидит твоей программы — он поймёт задачу только из этих слов.";
+  if (goal.length > 600) return "Условие слишком длинное — уложись в 600 знаков.";
+  if (!String(code || "").trim()) return "Программы нет. Задание — это твоё собственное решение: с него и вычисляется правильный ответ.";
+  if (String(code).length > TASK_CODE_MAX)
+    return "Программа длиннее " + TASK_CODE_MAX + " знаков — для задания другу это уже много.";
+  if (TASK_BAN.test(String(code)))
+    return "В задании нельзя случайность (randint, choice, shuffle) и input(): " +
+           "у друга выпали бы другие числа, и сверять было бы нечего.";
+  return null;
+}
+/* Собрать задание из формы. Правильный ответ НЕ вводится руками — его считает
+   движок, поэтому «автор ошибся в ожидаемом выводе» здесь невозможно. */
+function taskBuild(title, goal, code){
+  var problem = taskProblem(title, goal, code);
+  if (problem) return { problem: problem };
+  var res = Runtime.get("mini").run(code, {});
+  if (res.error) return { error: res.error };
+  var lines = res.lines || [];
+  if (!lines.length)
+    return { problem: "Программа ничего не напечатала. Задание проверяется по напечатанному — " +
+             "добавь print, иначе сверять будет нечего. Рисунок черепашки для задания пока не подходит." };
+  if (lines.join("\n").length > TASK_OUT_MAX)
+    return { problem: "Вывод слишком длинный: он целиком уезжает в ссылку, а она станет неподъёмной. " +
+             "Сделай программу поспокойнее — например, меньше повторов." };
+  return { task: { title: String(title).trim(), goal: String(goal).trim(),
+                   code: String(code), lines: lines, author: myName() || "" } };
+}
+
+/* ===== экран: мои задания ===== */
+function screenMyTasks(edit){
+  enterScreen();
+  var list = myTasksList();
+  var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
+  var start = edit || draft || { title:"", goal:"", code:"" };
+
+  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
+    '<h1>✍️ Своё задание</h1></div>' +
+    '<div class="right"><span class="tag">для друга</span></div></div>' +
+    '<p class="lede">Придумай задачу и отправь её ссылкой другу, брату или родителям. ' +
+    'Ты пишешь программу — тренажёр сам считает, что она печатает, и это становится правильным ответом. ' +
+    'Твоего кода в ссылке нет: другу придётся написать свою программу, сойтись должен ответ.</p>';
+
+  h += '<div class="card"><h3>Как это работает</h3>' +
+    '<ol class="tsteps"><li>Пишешь программу — такую, какой сам решил бы задачу.</li>' +
+    '<li>Пишешь условие словами: друг не увидит кода, только эти слова.</li>' +
+    '<li>Жмёшь «Собрать задание» — движок прогоняет программу и запоминает ответ.</li>' +
+    '<li>Копируешь ссылку и отправляешь. Друг откроет и будет решать.</li></ol>' +
+    '<p class="dim">Правило одно: без случайных чисел и без input(). У друга случайное выпало бы другое, ' +
+    'и проверить было бы нечего.</p></div>';
+
+  h += '<div class="card"><h3>Задание</h3>' +
+    /* Значения полей ставятся из JS, а не подставляются в разметку: esc()
+       экранирует только &, < и >, поэтому кавычка в названии вырвалась бы
+       из атрибута value и сломала форму. */
+    '<label class="reglbl">Название' +
+    '<input type="text" id="tttl" maxlength="60" autocomplete="off" placeholder="Например, Считалка до десяти"></label>' +
+    '<label class="reglbl">Условие — что должна делать программа' +
+    '<textarea id="tgoal" rows="3" maxlength="600" spellcheck="false" placeholder="Напечатай числа от 1 до 10, каждое с новой строки, а в конце их сумму."></textarea></label>' +
+    '</div>' +
+    /* Сообщения об ошибках показывает сама студия (её showMsg приходит в
+       check), поэтому отдельного места под них тут нет — только под готовую
+       ссылку. */
+    '<div id="studio"></div><div id="tout"></div>';
+
+  h += '<div class="sect"><h2>Мои задания</h2><div class="line"></div>' +
+    '<span class="cnt">' + list.length + '</span></div>';
+  if (!list.length){
+    h += '<div class="note"><b>Пока ни одного</b>Собери первое — оно появится здесь, и ссылку можно будет выдать снова в любой момент.</div>';
+  }
+  list.forEach(function(t){
+    var n = t.lines.length;
+    h += '<div class="fproj done"><div class="fptop"><span class="pjemoji">✍️</span>' +
+      '<div class="fpttl"><span class="pjkicker">' + fmtDay(t.at) + '</span>' +
+      '<b>' + esc(t.title) + '</b>' +
+      '<span class="fpsub">' + esc(t.goal) + '</span></div>' +
+      '<span class="fpstat ok">' + n + " " + plural(n, "строка", "строки", "строк") + ' ответа</span></div>' +
+      '<div class="fpbtns"><button class="rbtn" data-tlink="' + t.id + '">Скопировать ссылку</button>' +
+      '<button class="rbtn sec" data-topen="' + t.id + '">Открыть как друг</button>' +
+      '<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
+      '<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
+  });
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+
+  var studio = makeStudio({
+    engine: "mini",
+    code: start.code || '# программа-ответ: как ты сам решил бы свою задачу\nprint("привет")\n',
+    label: "твоя программа — с неё считается правильный ответ",
+    checkLabel: "📦 Собрать задание",
+    check: function(ed, showMsg){ taskPublish(ed, showMsg); }
+  });
+  document.getElementById("studio").appendChild(studio);
+
+  var ttl = document.getElementById("tttl"), tgoal = document.getElementById("tgoal");
+  ttl.value = start.title || "";
+  tgoal.value = start.goal || "";
+  function read(){
+    return { title: ttl.value, goal: tgoal.value, code: studio.editor.getCode() };
+  }
+  /* Уход с экрана не должен стирать начатое задание — ровно та же беда, что
+     когда-то была у песочницы и у уроков. Метка mytask говорит draftFlush,
+     что тут есть что сохранить, а stash отдаёт ему все три поля разом. */
+  session = { id:null, attempts:0, hints:0, shown:false, mytask:true, studio:studio,
+    mytaskStash: function(){
+      var v = read();
+      S.mytaskDraft = (v.title.trim() || v.goal.trim()) ? v : null;
+    } };
+  studio.editor.onEdit = draftSchedule;
+  ttl.addEventListener("input", draftSchedule);
+  tgoal.addEventListener("input", draftSchedule);
+
+  function taskPublish(ed, showMsg){
+    var v = read();
+    var built = taskBuild(v.title, v.goal, v.code);
+    if (built.problem){ showMsg("warn", "<b>Пока не задание</b>" + built.problem); return; }
+    if (built.error){
+      ed.setError(built.error.line);
+      showMsg("bad", "<b>Программа падает</b>Задание не может падать: сначала починим её.<br>" + errHTML(built.error));
+      return;
+    }
+    var id = myTaskSave(built.task);
+    S.mytaskDraft = null;
+    award("author");
+    markActiveToday();       /* составить задание — это занятие, стрик живёт */
+    save();
+    showMsg("ok", "<b>Задание готово</b>Правильный ответ посчитан движком — вот он. " +
+      "Ссылка ниже: отправь её тому, кого хочешь озадачить.");
+    var link = taskLink(built.task);
+    document.getElementById("tout").innerHTML =
+      '<div class="card"><h3>Правильный ответ (его посчитал движок)</h3>' +
+      '<pre class="fpcode">' + esc(built.task.lines.join("\n")) + '</pre>' +
+      '<h3>Ссылка для друга</h3><div class="codebox"><code id="tlink">' + esc(link) + '</code>' +
+      '<button class="rbtn sec" id="tcopy">Скопировать</button></div>' +
+      '<p class="dim">Ссылка длинная, потому что задание целиком лежит внутри неё — ни сервера, ни интернета для этого не нужно. ' +
+      'Твоей программы в ссылке нет.</p>' +
+      '<div class="fpbtns"><button class="rbtn" id="tselfcheck">Открыть как друг</button></div></div>';
+    document.getElementById("tcopy").onclick = function(){ copyText(link, this); };
+    document.getElementById("tselfcheck").onclick = function(){
+      openFriendTask(built.task, { own:true, id:id });
+    };
+    refreshTop();
+  }
+
+  app.querySelectorAll("[data-tlink]").forEach(function(b){
+    b.onclick = function(){
+      var t = myTasksAll()[b.getAttribute("data-tlink")];
+      if (t) copyText(taskLink(t), b);
+    };
+  });
+  app.querySelectorAll("[data-topen]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-topen"), t = myTasksAll()[id];
+      if (t) openFriendTask(t, { own:true, id:id });
+    };
+  });
+  app.querySelectorAll("[data-tedit]").forEach(function(b){
+    b.onclick = function(){
+      var t = myTasksAll()[b.getAttribute("data-tedit")];
+      if (t) screenMyTasks({ title:t.title, goal:t.goal, code:t.code });
+    };
+  });
+  app.querySelectorAll("[data-tdel]").forEach(function(b){
+    b.onclick = function(){
+      myTaskDrop(b.getAttribute("data-tdel"));
+      screenMyTasks();
+    };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ===== экран: решаем чужое задание =====
+   opts.own — это своё же задание, открытое «глазами друга»: проверка та же,
+   но опыт за него не даётся (иначе задания составлялись бы ради XP). */
+function openFriendTask(t, opts){
+  enterScreen();
+  opts = opts || {};
+  var key = taskKey(t);
+  var already = !!(S.friendTasks && S.friendTasks[key]);
+  /* Имя автора показываем как есть, без склонения: «задание от Аня» звучит
+     ломано, а склонять русские имена в коде — верный способ ошибиться. */
+  var who = t.author ? "автор — " + esc(t.author) : "задание от друга";
+
+  var h = '<div class="lvlhead"><div><div class="idx">' +
+    (opts.own ? "твоё задание глазами друга" : who) + '</div>' +
+    '<h1>✍️ ' + esc(t.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+    '<p class="lede">' + (opts.own
+      ? 'Так задание видит тот, кому ты отправил ссылку: условие есть, а твоей программы нет. Попробуй решить сам — заодно проверишь, всё ли понятно из условия.'
+      : 'Это задание придумал человек, а не тренажёр. Твоя задача — написать программу, которая печатает то же самое. ' +
+        'Правильный ответ уже посчитан у автора: сойтись должен вывод, а не буквы кода.') + '</p>';
+
+  h += '<div class="goal"><h3>🎯 Условие</h3><p>' + esc(t.goal) + '</p>' +
+    '<ul><li>Проверяется напечатанное: строк должно быть столько же и слово в слово.</li>' +
+    '<li>Как ты это сделаешь — твоё дело: у автора своя программа, у тебя может быть другая.</li></ul></div>';
+
+  h += '<div id="studio"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  app.innerHTML = h;
+
+  /* Код решателя сохраняется тем же механизмом, что черновики уроков: ключ
+     задания вместо id урока. Ушёл посмотреть шпаргалку — код на месте. */
+  var draftId = "task-" + key;
+  var starter = "# твоя программа\n";
+  var studio = makeStudio({
+    engine: "mini", code: starter, label: "твоя программа",
+    check: function(ed, showMsg){ friendCheck(ed, showMsg); }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session = { id:null, attempts:0, hints:0, shown:false, studio:studio,
+              lesson:draftId, starter:[{ name:"main.py", code:starter }] };
+  var d = draftGet(draftId);
+  if (d) draftApply(studio.editor, d.files);
+  studio.editor.onEdit = draftSchedule;
+
+  function friendCheck(ed, showMsg){
+    session.attempts++;
+    var res = Runtime.get("mini").run(ed.getCode(), {});
+    if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+    var got = res.lines, exp = t.lines;
+    if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; }))){
+      showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
+      return;
+    }
+    winFriendTask(t, key, already, opts);
+  }
+
+  document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+var FRIEND_XP = 20;   /* за чужое задание, один раз на задание */
+function winFriendTask(t, key, already, opts){
+  var gained = 0;
+  if (!opts.own && !already){
+    S.friendTasks = S.friendTasks || {};
+    S.friendTasks[key] = 1;
+    S.xp += FRIEND_XP; gained = FRIEND_XP;
+    award("guest");
+  }
+  markActiveToday();
+  save(); refreshTop();
+
+  var first = session.attempts === 1;
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (first ? "🎯" : "🤝") + '</div>' +
+    '<h2>' + (opts.own ? "Своё задание проходится" : "Задание пройдено") + '</h2>' +
+    '<p>' + (opts.own
+      ? "Вывод сошёлся — значит условие понятное и задание решаемо. Можно отправлять."
+      : "Вывод сошёлся с ответом автора" + (t.author ? " (" + esc(t.author) + ")" : "") +
+        ". Программа у тебя своя, а результат тот же — так и работают настоящие задачи.") + '</p>' +
+    (gained ? '<div class="winxp">+' + gained + ' XP</div>' : '') +
+    '<div class="winrow"><button class="bigbtn" id="fmine">✍️ Составить своё</button>' +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(first ? 3 : 1);
+  document.getElementById("fmine").onclick = function(){ closeWin(); screenMyTasks(); };
+  document.getElementById("wstay").onclick = closeWin;
+}
+
+/* Ссылка не открылась. Молча уводить на карту миров нельзя: ребёнок нажал
+   на присланную ссылку и должен понять, что случилось, а не решить, что
+   тренажёр сломался. */
+function screenTaskBroken(){
+  enterScreen();
+  session = { id:null, attempts:0, hints:0, shown:false };
+  app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
+    '<h1>✍️ Задание не прочиталось</h1></div></div>' +
+    '<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
+    'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
+    '<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+}
+
+/* ================= пересказ программы словами =================
+   Обратное направление: сто уроков ребёнок превращает замысел в код, а здесь
+   код превращается в русские фразы. Это ровно то умение, ради которого сделан
+   раздел «Ты и ИИ»: чтобы командовать ИИ, надо уметь сказать словами, что
+   должна делать программа.
+
+   Пересказ собирается из ДВУХ источников, и это важно:
+     - дерево (AST) даёт СТРУКТУРУ — что здесь цикл, а что описание функции;
+     - шаги прогона дают ФАКТЫ — сколько раз повторилось, что напечатало,
+       чему стало равно.
+   Поэтому в пересказе нет ни одного «наверное»: каждая фраза — про то, что
+   действительно произошло на этом запуске. Так и написано над списком, чтобы
+   ребёнок не принял пересказ за замысел: программа могла сделать не то, что
+   задумано, — как раз это и видно.
+
+   Живёт на экране визуализатора, над плеером: кнопка «Разобрать» на уроке
+   ведёт сюда, и получается два взгляда на один прогон — фразами и по шагам.
+   ============================================================ */
+var STORY_MAX_DEPTH = 2;    /* глубже не идём: пересказ должен читаться */
+var STORY_MAX_LINES = 24;   /* и не быть длиннее самой программы */
+
+function storyMaxLine(node){
+  var max = node.line || 0;
+  astWalk(node, function(m){ if (m.line > max) max = m.line; });
+  return max;
+}
+function storyRange(node){
+  var a = node.line || 0, b = storyMaxLine(node);
+  return b > a ? ("строки " + a + "–" + b) : ("строка " + a);
+}
+function storyTimes(n){
+  if (!n) return "ни разу не сработала";
+  if (n === 1) return "сработала один раз";
+  return "сработала " + n + " " + plural(n, "раз", "раза", "раз");
+}
+/* Имя того, что вызывают: print, sorted, черепашка, свой метод. */
+function storyCallName(node){
+  if (!node || node.type !== "Call" || !node.func) return null;
+  if (node.func.type === "Name") return node.func.id;
+  if (node.func.type === "Attribute") return node.func.attr;
+  return null;
+}
+function storyCut(s, n){
+  s = String(s === null || s === undefined ? "" : s).replace(/\s+/g, " ").trim();
+  n = n || 60;
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+/* Одна фраза про один оператор. null значит «сказать нечего» — служебные
+   строки в пересказ не идут, иначе он станет подстрочником. */
+function storyOne(st, facts, depth){
+  var hits = facts.hits[st.line] || 0;
+  var note = facts.note[st.line], printed = facts.printed[st.line];
+  var где = "строка " + st.line + ": ";
+  /* Строка, на которой прогон и оборвался. Говорим об этом прямо: иначе про
+     print(10 / 0) вышло бы «напечатал пустую строку» — а он не напечатал
+     ничего, он упал. */
+  if (facts.error && facts.error.line === st.line)
+    return { text: где + "здесь программа остановилась с ошибкой", body: null };
+
+  if (st.type === "FuncDef"){
+    var внутри = st.body && st.body.length ? (facts.hits[st.body[0].line] || 0) : 0;
+    var парам = (st.params || []).join(", ");
+    return { text: storyRange(st) + ": описал команду «" + st.name + "(" + парам + ")» — " +
+                   (внутри ? "её вызвали " + внутри + " " + plural(внутри, "раз", "раза", "раз")
+                           : "но её так и не вызвали"),
+             body: st.body, at: st.line };
+  }
+  if (st.type === "ClassDef")
+    return { text: storyRange(st) + ": описал вид объектов «" + st.name + "»", body: null };
+  if (st.type === "For"){
+    var сколько = st.body && st.body.length ? (facts.hits[st.body[0].line] || 0) : hits;
+    return { text: storyRange(st) + ": повторил " + сколько + " " +
+                   plural(сколько, "раз", "раза", "раз") + " — по одному на каждый элемент",
+             body: st.body };
+  }
+  if (st.type === "While"){
+    var кругов = st.body && st.body.length ? (facts.hits[st.body[0].line] || 0) : hits;
+    return { text: storyRange(st) + ": повторял, пока условие верно, — " + кругов + " " +
+                   plural(кругов, "круг", "круга", "кругов"), body: st.body };
+  }
+  if (st.type === "If"){
+    var взяли = st.body && st.body.length ? (facts.hits[st.body[0].line] || 0) : 0;
+    var текст = где + "проверил условие " + hits + " " + plural(hits, "раз", "раза", "раз") +
+                " — сработало " + взяли;
+    if (st.orelse && st.orelse.length){
+      var иначе = facts.hits[st.orelse[0].line] || 0;
+      текст += ", иначе-ветка — " + иначе;
+    }
+    return { text: текст, body: st.body };
+  }
+  if (st.type === "Assign" || st.type === "AnnAssign" || st.type === "AugAssign"){
+    if (!note) return null;
+    return { text: где + (hits > 1
+                    ? "менял значение " + hits + " " + plural(hits, "раз", "раза", "раз") + ", в конце "
+                    : "") + storyCut(note),
+             body: null };
+  }
+  if (st.type === "Return")
+    return { text: где + "вернул ответ (" + storyTimes(hits) + ")", body: null };
+  if (st.type === "Import" || st.type === "ImportFrom")
+    return { text: где + "подключил готовый набор команд", body: null };
+  if (st.type === "ExprStmt"){
+    var имя = storyCallName(st.value);
+    if (имя === "print"){
+      var сколько = hits > 1 ? "напечатал " + hits + " " + plural(hits, "раз", "раза", "раз") + ": "
+                            : "напечатал: ";
+      if (printed) return { text: где + сколько + storyCut(printed, 70), body: null };
+      /* Печать без текста бывает двух видов, и путать их нельзя: print()
+         печатает пустую строку, а print(функция(...)) печатает результат
+         вызова — только вывод в шагах достаётся не этой строке, а той,
+         внутри функции, где он случился. */
+      var сCall = false;
+      astWalk(st.value.args || [], function(m){ if (m.type === "Call") сCall = true; });
+      return { text: где + (сCall ? "напечатал результат вызова" : "напечатал пустую строку"),
+               body: null };
+    }
+    if (имя)
+      return { text: где + "вызвал «" + имя + "» (" + storyTimes(hits) + ")" +
+                     (printed ? ", напечаталось: " + storyCut(printed, 40) : ""), body: null };
+    return null;
+  }
+  if (st.type === "Pass" || st.type === "Break" || st.type === "Continue") return null;
+  /* Незнакомый оператор: лучше сказать честно «что-то сделал», чем выдумать. */
+  if (printed) return { text: где + "напечатал: " + storyCut(printed, 70), body: null };
+  if (note) return { text: где + storyCut(note), body: null };
+  return null;
+}
+
+function storyLines(body, facts, depth, out){
+  if (!body || depth > STORY_MAX_DEPTH) return out;
+  for (var i = 0; i < body.length && out.length < STORY_MAX_LINES; i++){
+    var one = storyOne(body[i], facts, depth);
+    if (!one) continue;
+    out.push({ text: one.text, depth: depth });
+    if (one.body) storyLines(one.body, facts, depth + 1, out);
+  }
+  return out;
+}
+
+/* Пересказ целиком. Возвращает { lines, error, empty } либо null, если
+   программа даже не разбирается. */
+function storyOf(code, env){
+  var eng = Runtime.get("mini");
+  var ast;
+  try { ast = window.MiniPy.parse(String(code || "")); }
+  catch(e){ if (!e.pyKind) throw e; return null; }
+  var facts = stepFacts(eng, code, env || {}, WATCH_MAX_STEPS);
+  if (!facts) return null;
+  var lines = storyLines(ast.body, facts, 0, []);
+  return { lines: lines, error: facts.error, truncated: facts.truncated };
+}
+function storyHTML(code, env){
+  var st = storyOf(code, env);
+  if (!st) return "";
+  if (!st.lines.length && !st.error) return "";
+  var h = '<div class="story"><div class="storyhead">📖 Что программа сделала — словами</div>' +
+    '<ol class="storylist">' +
+    st.lines.map(function(x){
+      return '<li class="d' + Math.min(2, x.depth) + '">' + esc(x.text) + '</li>';
+    }).join("") + '</ol>';
+  if (st.error)
+    h += '<p class="storyerr">…и на этом остановилась: ' +
+         esc((KIND_RU[st.error.kind] || st.error.kind) +
+             (st.error.line ? " (строка " + st.error.line + ")" : "")) + '.</p>';
+  h += '<p class="storynote">Это пересказ того, что программа <b>сделала</b> на этом запуске, ' +
+       'а не того, что задумано. Если фразы расходятся с твоим замыслом — вот и ошибка.</p></div>';
+  return h;
 }
 
 /* ================= экран: визуализатор (машина времени) =================
@@ -16489,10 +18359,16 @@ function vizKind(k){ return k === "list" ? "список" : k === "tuple" ? "к�
 /* Прогон программы с записью всех кадров. Каждый кадр:
    { line, output, vars, objects, error?, done? }. line — строка, которая
    вот-вот выполнится (её и подсвечиваем), состояние — ПЕРЕД ней. Последний
-   кадр (done) — итоговое состояние после конца программы. */
-function vizRecord(code){
+   кадр (done) — итоговое состояние после конца программы.
+
+   opts — то же окружение, что у обычного прогона: ответы для input(), файлы
+   на диске, подключённые модули. Раньше его тут не было вообще (стоял пустой
+   объект), потому что разбирали только свои примеры. Теперь на разбор уезжает
+   код С УРОКА, а урок может спрашивать input() — без ответов такая программа
+   падала бы на первой же строке, и виноват был бы визуализатор. */
+function vizRecord(code, opts){
   var MP = window.MiniPy, st;
-  try { st = MP.stepper(code, {}); }
+  try { st = MP.stepper(code, opts || {}); }
   catch(e){
     if (!e.pyKind) throw e;
     return { frames: [], error: { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 } };
@@ -16774,20 +18650,41 @@ function vizDrawArrows(mem){
   } catch(e){}
 }
 
-function screenViz(){
+/* opts (всё необязательное):
+     code   — программа, которую надо разобрать (иначе первый пример);
+     env    — окружение прогона: ответы для input(), файлы, модули;
+     backTo — { label, go } кнопка возврата туда, откуда пришли.
+
+   Разбор СВОЕГО кода — главное, зачем этот экран нужен на уроке: примеры
+   объясняют алиасинг вообще, а ребёнку надо понять свою программу. Раньше
+   уйти с урока было нельзя (написанный код терялся), поэтому визуализатор
+   жил сам по себе. С черновиками (draftFlush в claimScreen) уход безопасен:
+   код урока сохраняется на переходе и возвращается на место. */
+function screenViz(opts){
   enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
-  var h = '<div class="lvlhead"><div><div class="idx">загляни внутрь программы</div><h1>🔍 Визуализатор</h1></div></div>' +
-    '<p class="lede">Запусти программу по шагам и смотри, что происходит в памяти: переменные, списки и словари рисуются коробками, ' +
-    'а стрелки показывают, кто на что ссылается. Ползунком можно отматывать вперёд и назад — как в машине времени. ' +
-    'Это лучший способ понять, почему <code>b = a</code> меняет оба списка сразу.</p>' +
-    '<div class="vizex"><span>Примеры:</span> ' +
+  opts = opts || {};
+  var mine = !!opts.code;
+  var h = '<div class="lvlhead"><div><div class="idx">' +
+    (mine ? "разбор твоей программы" : "загляни внутрь программы") +
+    '</div><h1>🔍 Визуализатор</h1></div></div>' +
+    '<p class="lede">' + (mine
+      ? 'Это код из редактора урока — тот самый, что ты сейчас пишешь. Иди по шагам и смотри, что происходит в памяти: ' +
+        'переменные, списки и словари рисуются коробками, а стрелки показывают, кто на что ссылается. ' +
+        'Правки здесь на урок не влияют — там код остался как был.'
+      : 'Запусти программу по шагам и смотри, что происходит в памяти: переменные, списки и словари рисуются коробками, ' +
+        'а стрелки показывают, кто на что ссылается. Ползунком можно отматывать вперёд и назад — как в машине времени. ' +
+        'Это лучший способ понять, почему <code>b = a</code> меняет оба списка сразу.') + '</p>' +
+    '<div class="vizex"><span>' + (mine ? "Или разбери пример:" : "Примеры:") + '</span> ' +
       VIZ_EXAMPLES.map(function(e, i){ return '<button class="minibtn" data-ex="' + i + '">' + esc(e.title) + '</button>'; }).join("") +
     '</div><div id="vizstudio"></div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+    '<div class="pager">' +
+      (opts.backTo ? '<button class="bigbtn" id="vizback">' + esc(opts.backTo.label) + '</button>' : '') +
+      '<button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
 
-  var ed = makeEditor(VIZ_EXAMPLES[0].code, "программа для разбора");
+  var ed = makeEditor(opts.code || VIZ_EXAMPLES[0].code,
+                      mine ? "твой код с урока" : "программа для разбора");
   var box = document.createElement("div"); box.className = "vizbox";
   box.appendChild(ed);
   var bar = document.createElement("div"); bar.className = "runbar";
@@ -16799,22 +18696,35 @@ function screenViz(){
   document.getElementById("vizstudio").appendChild(box);
   session.studio = box;
 
-  function go(){ vizStart(player, ed); }
+  /* Окружение уезжает вместе с кодом урока, но живёт только пока код тот же:
+     подставили пример — ответы для input() от чужой программы только помешают. */
+  var env = opts.env || null;
+  function go(){ vizStart(player, ed, env); }
   bar.querySelector('[data-role="viz"]').onclick = go;
   ed.querySelector("textarea").addEventListener("keydown", function(e){
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); go(); }
   });
   app.querySelectorAll("[data-ex]").forEach(function(b){
-    b.onclick = function(){ ed.setCode(VIZ_EXAMPLES[+b.getAttribute("data-ex")].code); vizStart(player, ed); };
+    b.onclick = function(){
+      ed.setCode(VIZ_EXAMPLES[+b.getAttribute("data-ex")].code);
+      env = null;
+      vizStart(player, ed, env);
+    };
   });
+  var vb = document.getElementById("vizback");
+  if (vb) vb.onclick = function(){ opts.backTo.go(); };
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+  /* Пришли с урока — сразу показываем разбор: ребёнок нажал «разобрать»,
+     второе нажатие на этом экране было бы лишним шагом. */
+  if (mine) go();
 }
 
-function vizStart(player, ed){
+function vizStart(player, ed, env){
   vizStopPlay();                       /* прошлый прогон больше не тикает */
-  var rec = vizRecord(ed.getCode());
+  var rec = vizRecord(ed.getCode(), env);
+  player._story = storyHTML(ed.getCode(), env);   /* пересказ того же прогона */
   player.style.display = "";
   if (rec.error && !rec.frames.length){
     ed.setError(rec.error.line || 0);
@@ -16838,6 +18748,7 @@ function vizPlayer(player, ed, rec){
       '<span class="vizpos"></span>' +
     '</div>' +
     (rec.truncated ? '<div class="viznote">Программа длинная — показаны первые ' + frames.length + ' шагов.</div>' : '') +
+    (player._story || '') +
     '<div class="vizwhat" style="display:none"></div>' +
     '<div class="vizstage"><div class="vizcode"></div><div class="vizmem"></div></div>' +
     '<div class="vizerr" style="display:none"></div>' +
@@ -16978,10 +18889,20 @@ var HASH_SCREENS = {
   "#viz":     function(){ screenViz(); },
   "#ai":      function(){ screenAILab(); },
   "#again":   function(){ screenReview(); },
-  "#folio":   function(){ screenFolio(); }
+  "#folio":   function(){ screenFolio(); },
+  "#mine":    function(){ screenMyTasks(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
+  /* Задание из ссылки разбираем ДО приведения к нижнему регистру: base64
+     различает «A» и «a», и один приведённый к нижнему регистру символ
+     превратил бы работающую ссылку в «не прочиталось». */
+  var packed = /^#task=(.+)$/.exec(location.hash || "");
+  if (packed){
+    var got = taskUnpack(packed[1]);
+    if (got) openFriendTask(got, {}); else screenTaskBroken();
+    return true;
+  }
   var h = (location.hash || "").toLowerCase();
   if (HASH_SCREENS[h]){ HASH_SCREENS[h](); return true; }
   var ph = h.replace(/^#/, "");
@@ -17091,6 +19012,56 @@ function statsGridHTML(st){
    уроков, которые в этот день ПРОЙДЕНЫ, и подписано это именно так.
    Придумывать точность, которой в данных нет, нельзя. */
 var WEEK_DAYS = 7;
+/* ===== вопрос за ужином =====
+   Взрослому не нужен отчёт из двадцати цифр — ему нужен ОДИН вопрос, который
+   можно задать за столом. Причём такой, чтобы ответ показал понимание, а не
+   память: «объясни своими словами и покажи на примере».
+
+   Вопрос не написан руками сто раз, а берётся из шпаргалки: там у каждой
+   записи есть `sig` (как пишется) и `what` (что делает) — и то и другое уже
+   проверено тестами против настоящего python3. Берём только пройденное
+   (`sheetLearned`) и только за последние дни, чтобы вопрос был про свежее.
+
+   Выбор детерминирован по дате: за один вечер вопрос не меняется, сколько бы
+   раз взрослый ни открыл панель. Тот же приём, что у задачи дня. */
+function dinnerPickFrom(st, key){
+  var sm = (st && st.stars) || {}, lg = (st && st.log) || {};
+  var groups = (window.CHEATSHEET || []);
+  /* когда какой урок пройден — по этому и решаем, что «свежее» */
+  var pool = [];
+  groups.forEach(function(g){
+    (g.items || []).forEach(function(it){
+      if (sm[it.lesson] === undefined) return;              /* урок не пройден */
+      var when = (lg[it.lesson] && lg[it.lesson].solvedAt) || 0;
+      pool.push({ it: it, when: when, lesson: it.lesson });
+    });
+  });
+  if (!pool.length) return null;
+  /* сначала свежее: берём последнюю треть пройденного, но не меньше пяти */
+  pool.sort(function(a, b){ return b.when - a.when; });
+  var take = Math.max(5, Math.round(pool.length / 3));
+  var fresh = pool.slice(0, take);
+  var h = 0, s = String(key || dayKey());
+  for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+  return fresh[h % fresh.length];
+}
+function dinnerHTML(st){
+  var pick = dinnerPickFrom(st, dayKey());
+  if (!pick)
+    return '<div class="dinner"><b>🍽 Вопрос за ужином</b>' +
+      '<p>Появится, когда будет пройден первый урок: вопрос берётся из того, ' +
+      'что ребёнок уже прошёл.</p></div>';
+  var l = CURRICULUM.byId(pick.lesson);
+  return '<div class="dinner"><b>🍽 Вопрос за ужином</b>' +
+    '<p>Спроси: «что делает <code>' + esc(pick.it.sig) + '</code>?» — и попроси ' +
+    'показать на примере.</p>' +
+    '<p class="dim">Правильный ответ: ' + esc(pick.it.what) + '.' +
+    (l ? ' Это из урока «' + esc(l.title) + '».' : '') + '</p>' +
+    '<p class="dim">Если объяснит своими словами и покажет пример — понял. ' +
+    'Если пересказывает формулировку — стоит вернуться к этому уроку. ' +
+    'Вопрос меняется раз в день.</p></div>';
+}
+
 function weekReportHTML(st){
   var lg = st.log || {}, sm = st.stars || {};
   var covered = coveredDays(st.days, st.shields);
@@ -17177,6 +19148,7 @@ function weekReportHTML(st){
   h += '<p class="wrnext">Дальше по программе: ' +
     (next ? '<b>урок ' + next.num + " · " + esc(next.title) + '</b>' : '<b>все готовые уроки пройдены</b>') + '.</p>';
 
+  h += dinnerHTML(st);
   return h + '</div>';
 }
 
@@ -17563,6 +19535,12 @@ window.addEventListener("resize", function(){
   /* стрелки визуализатора нарисованы по реальным координатам — после
      изменения размера их надо пересчитать */
   document.querySelectorAll(".vizmem").forEach(function(m){ vizDrawArrows(m); });
+  /* приписки значений зависят от того, сколько знаков влезает в строку:
+     редактор стал уже — часть приписок обязана исчезнуть, иначе подсветка
+     съедет относительно текстового поля */
+  document.querySelectorAll(".editorbox").forEach(function(b){
+    if (b._watch && b.setWatch){ b._charW = 0; b.setWatch(b._watch); }
+  });
 });
 
 /* Ссылка вида .../kodokvest/?kid=misha-7f3a один раз задаёт код ученика
@@ -17597,6 +19575,28 @@ allWorldsContent().then(function(){
   }
 });
 window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds(); });
+
+/* ================= установка на домашний экран =================
+   Вкладка браузера — самое хрупкое место привычки: её закрывают и забывают.
+   С манифестом сайт ставится иконкой на домашний экран и открывается без
+   адресной строки, а service worker даёт офлайн (стратегия и причины —
+   в sw.js).
+
+   Три случая, когда регистрировать нельзя, и все три реальные:
+     - один файл (dist): он и так работает офлайн, а рядом с ним нет ни sw.js,
+       ни манифеста;
+     - открыто с диска (file://): браузер сам запрещает service worker;
+     - браузер без поддержки — тогда просто сайт, как раньше.
+   Честно про iPhone: «на экран Домой» там работает, а вот пуш-напоминаний
+   для веба нет — напоминания живут только внутри сайта (см. «Сегодня»). */
+(function(){
+  if (window.__SINGLE_FILE__) return;
+  try { if (location.protocol === "file:") return; } catch(e){ return; }
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(function(){});
+  });
+})();
 
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
@@ -17638,9 +19638,30 @@ window.__game = {
   openSheet: openSheet, closeSheet: closeSheet, sheetIsOpen: sheetIsOpen,
   sheetRender: sheetRender, sheetLearned: sheetLearned, sheetRun: sheetRun,
   weekReportHTML: weekReportHTML, WEEK_DAYS: WEEK_DAYS,
+  dinnerHTML: dinnerHTML, dinnerPickFrom: dinnerPickFrom,
+  storyOf: storyOf, storyHTML: storyHTML, stepFacts: stepFacts,
+  pyFileText: pyFileText, pyFileName: pyFileName, pyIsDraw: pyIsDraw,
+  galleryList: galleryList, gallerySave: gallerySave, galleryDrop: galleryDrop,
+  galleryTitleOf: galleryTitleOf, galleryDrawing: galleryDrawing, GALLERY_MAX: GALLERY_MAX,
+  downloadText: downloadText, KEYBAR_KEYS: KEYBAR_KEYS,
   draftGet: draftGet, draftSave: draftSave, draftDrop: draftDrop,
   draftApply: draftApply, draftFlush: draftFlush, pruneDrafts: pruneDrafts,
   DRAFT_MAX: DRAFT_MAX,
+  screenMyTasks: screenMyTasks, openFriendTask: openFriendTask,
+  screenTaskBroken: screenTaskBroken, taskBuild: taskBuild, taskProblem: taskProblem,
+  taskPack: taskPack, taskUnpack: taskUnpack, taskLink: taskLink, taskKey: taskKey,
+  myTasksList: myTasksList, myTaskSave: myTaskSave, myTaskDrop: myTaskDrop,
+  b64urlEnc: b64urlEnc, b64urlDec: b64urlDec, routeHash: routeHash,
+  leanAward: leanAward, leanCount: leanCount, leanNote: leanNote, STAR_XP: STAR_XP,
+  watchCompute: watchCompute, watchNote: watchNote, watchCut: watchCut,
+  lintCode: lintCode, lintHTML: lintHTML, lintKnows: lintKnows, astWalk: astWalk,
+  lintCount: lintCount, lintNote: lintNote,
+  LINT_MAX: LINT_MAX, LINT_LONG_FUNC: LINT_LONG_FUNC,
+  ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
+  errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
+  beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,
+  hlWatched: hlWatched, WATCH_MAX_STEPS: WATCH_MAX_STEPS, WATCH_LINE_MAX: WATCH_LINE_MAX,
+  LEAN_XP: LEAN_XP, LEAN_BADGE_AT: LEAN_BADGE_AT, FRIEND_XP: FRIEND_XP,
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
   openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,

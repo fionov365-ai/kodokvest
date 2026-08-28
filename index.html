@@ -6,6 +6,14 @@
 <title>Кодоквест — Python для подростков</title>
 <meta name="description" content="Сто уроков Python в браузере: код запускается сразу, рисует и объясняет ошибки понятными словами.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+<!-- Установка на домашний экран и работа без сети. Ссылки на манифест и иконку
+     build.js из одного файла ВЫРЕЗАЕТ: тот файл обещает «ничего не грузится
+     извне», а неразрешимая ссылка это обещание бы нарушила. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#0d1020">
+<meta name="apple-mobile-web-app-title" content="Кодоквест">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

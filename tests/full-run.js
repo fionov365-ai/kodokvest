@@ -2181,6 +2181,878 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- цель по шагам («уложись не дороже решения автора») --- */
+  let leanChecked = 0;
+  if (typeof g.leanAward === "function"){
+    const p0 = problems.length;
+    const CUR3 = w.CURRICULUM, C3 = w.CONTENT;
+    /* нужен урок, где цену вообще показывают: без черепашки и без случайности */
+    let target = null;
+    for (const wd of CUR3){
+      for (const l of wd.lessons){
+        const body = (C3["world" + wd.n] || {})[l.id];
+        if (!body || !body.task || !body.task.solution) continue;
+        if (!g.stepsShown(body)) continue;
+        target = { l, body }; break;
+      }
+      if (target) break;
+    }
+    if (!target) bad("[цель] не нашлось урока, где цену показывают");
+    else {
+      const { l, body } = target;
+      /* четыре урока «в цель» уже есть — пятый должен принести бейдж */
+      g.state.log = { f1:{ lean:1 }, f2:{ lean:1 }, f3:{ lean:1 }, f4:{ lean:1 } };
+      g.state.badges = g.state.badges.filter(x => x !== "lean");
+      g.setStars(l.id, 0);
+      const xpBefore = g.state.xp;
+      /* решение автора стоит ровно столько же, сколько решение автора, —
+         значит цель обязана засчитаться */
+      g.openLesson(l.id);
+      await tick();
+      let st = studioOf();
+      st.editor.setCode(body.task.solution);
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      if (!won()) bad("[цель] эталон не засчитан — " + msgText());
+      else {
+        const card = doc.getElementById("wincard").textContent;
+        if (!/Цель выполнена/.test(card)) bad("[цель] в победной карточке нет отметки о цели");
+        if (!g.state.log[l.id] || !g.state.log[l.id].lean)
+          bad("[цель] попадание в цель не записано в журнал");
+        /* опыт складывается из звёзд и надбавки за цель — обе части в одном месте */
+        const wantXp = xpBefore + g.STAR_XP[3] + g.LEAN_XP;
+        if (g.state.xp !== wantXp)
+          bad(`[цель] опыт после цели: было ${xpBefore}, стало ${g.state.xp}, ждали ${wantXp}` +
+              ` (${g.STAR_XP[3]} за три звезды и ${g.LEAN_XP} за цель)`);
+        if (g.leanCount() !== 5) bad("[цель] уроков в цель посчитано " + g.leanCount() + ", а не 5");
+        if (g.state.badges.indexOf("lean") < 0) bad("[цель] бейдж за пятый урок в цель не выдан");
+        closeWin();
+
+        /* второй раз тем же кодом — надбавка НЕ повторяется */
+        const xpTwice = g.state.xp;
+        g.openLesson(l.id);
+        await tick();
+        st = studioOf();
+        st.editor.setCode(body.task.solution);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (won()) closeWin();
+        if (g.state.xp !== xpTwice) bad("[цель] надбавка за цель начислена второй раз");
+      }
+
+      /* показанное решение цель не засчитывает: это код автора, а не ребёнка */
+      delete g.state.log[l.id];
+      g.setStars(l.id, 0);
+      g.openLesson(l.id);
+      await tick();
+      doc.getElementById("solbtn").click();
+      st = studioOf();
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      if (!won()) bad("[цель] урок с показанным решением не засчитан");
+      else {
+        if (g.state.log[l.id] && g.state.log[l.id].lean)
+          bad("[цель] цель засчитана за показанное решение");
+        if (!/не считается/.test(doc.getElementById("wincard").textContent))
+          bad("[цель] карточка не объяснила, почему цель не в счёт");
+        closeWin();
+      }
+    }
+    /* промах по цели зовёт вернуться, а не ругает */
+    const miss = g.leanNote({ show:true, hit:false, shown:false }, 300, 100);
+    if (!/Цель/.test(miss) || !/100/.test(miss)) bad("[цель] промах не назвал цель: " + miss);
+    /* слияние: попадание в цель остаётся при обмене с другим устройством */
+    const lm = g.mergeProgress({ log:{ x:{ lean:1 } }, savedAt:1 }, { log:{ x:{} }, savedAt:2 });
+    if (!lm.log.x || lm.log.x.lean !== 1) bad("[цель] слияние потеряло попадание в цель");
+    if (problems.length === p0) leanChecked++;
+    viewReset(g);
+  }
+
+  /* --- разбор своей программы в визуализаторе --- */
+  let ownVizChecked = 0;
+  if (typeof g.screenViz === "function"){
+    const p0 = problems.length;
+    const CUR4 = w.CURRICULUM, C4 = w.CONTENT;
+    let one = null, multi = null;
+    for (const wd of CUR4){
+      for (const l of wd.lessons){
+        const body = (C4["world" + wd.n] || {})[l.id];
+        if (!body || !body.task) continue;
+        if (body.task.files){ if (!multi) multi = l; }
+        else if (!one && !body.draw) one = l;
+      }
+    }
+    if (!one) bad("[разбор] не нашлось обычного урока без файлов");
+    else {
+      g.openLesson(one.id);
+      await tick();
+      let st = studioOf();
+      const vb = st.querySelector('[data-role="viz"]');
+      if (!vb) bad("[разбор] на уроке нет кнопки «Разобрать»");
+      else {
+        const mineCode = 'nums = [1, 2]\nnums.append(3)\nprint(nums)\n';
+        st.editor.setCode(mineCode);
+        vb.click();
+        await tick();
+        if (!doc.querySelector(".vizslider"))
+          bad("[разбор] разбор своего кода не запустился сам");
+        const ta = doc.querySelector("#vizstudio textarea");
+        if (!ta || ta.value !== mineCode)
+          bad("[разбор] в визуализатор уехал не код урока");
+        if (doc.querySelector(".vizplayer .msg.bad"))
+          bad("[разбор] разбор своего кода упал с ошибкой");
+        /* возврат на урок: код обязан вернуться — за это отвечают черновики */
+        const back = doc.getElementById("vizback");
+        if (!back) bad("[разбор] нет кнопки возврата на урок");
+        else {
+          back.click();
+          await tick();
+          st = studioOf();
+          if (!st) bad("[разбор] возврат не открыл урок");
+          else if (st.editor.getCode() !== mineCode)
+            bad("[разбор] после возврата код урока потерялся: " + JSON.stringify(st.editor.getCode().slice(0, 40)));
+        }
+      }
+    }
+    if (multi){
+      g.openLesson(multi.id);
+      await tick();
+      const st2 = studioOf();
+      if (st2 && st2.querySelector('[data-role="viz"]'))
+        bad("[разбор] кнопка «Разобрать» стоит на многофайловом уроке — подсветка строки уедет в чужой файл");
+    }
+    /* урок с ответами для input(): без них разбор упал бы там, где запуск работает */
+    let withStdin = null;
+    for (const wd of CUR4){
+      for (const l of wd.lessons){
+        const body = (C4["world" + wd.n] || {})[l.id];
+        if (body && body.task && !body.task.files && body.task.stdin && body.task.stdin.length){
+          withStdin = { l, body }; break;
+        }
+      }
+      if (withStdin) break;
+    }
+    if (withStdin){
+      const rec = g.vizRecord(withStdin.body.task.solution, { stdin: withStdin.body.task.stdin });
+      if (rec.error) bad("[разбор] урок с input() разобрался с ошибкой: " + rec.error.msg);
+      const bare = g.vizRecord(withStdin.body.task.solution, {});
+      if (!bare.error) bad("[разбор] урок с input() разобрался БЕЗ ответов — проверка бессмысленна");
+    }
+    if (problems.length === p0) ownVizChecked++;
+    viewReset(g);
+  }
+
+  /* --- свои задания: собрать, отдать ссылкой, решить чужое --- */
+  let taskChecked = 0;
+  if (typeof g.taskBuild === "function"){
+    const p0 = problems.length;
+    /* ссылка собирается и разбирается, а битую не принимаем */
+    const sample = { title:"Считалка", goal:"Напечатай числа от 1 до 3, каждое с новой строки.",
+                     lines:["1","2","3"], author:"Аня" };
+    const packed = g.taskPack(sample);
+    if (/[+/=]/.test(packed))
+      bad("[задание] в ссылке остались символы, которые адрес понимает по-своему");
+    const back = g.taskUnpack(packed);
+    if (!back || back.title !== sample.title || back.author !== "Аня" ||
+        back.lines.join("\n") !== sample.lines.join("\n"))
+      bad("[задание] ссылка разобралась не в то же задание: " + JSON.stringify(back));
+    if (g.taskUnpack("совсем не ссылка") !== null) bad("[задание] мусор принят за задание");
+    if (g.taskUnpack(packed.slice(0, -6)) !== null)
+      bad("[задание] обрезанная ссылка принята за целую");
+    if (g.taskKey(sample) !== g.taskKey(back))
+      bad("[задание] у одного и того же задания разные ключи");
+
+    /* правила: без них задание у друга было бы непроходимым */
+    const okGoal = "Напечатай числа от 1 до 3, каждое с новой строки.";
+    if (!g.taskBuild("Тест", okGoal, "import random\nprint(random.randint(1, 6))\n").problem)
+      bad("[задание] случайность пропущена в задание");
+    if (!g.taskBuild("Тест", okGoal, "имя = input()\nprint(имя)\n").problem)
+      bad("[задание] input() пропущен в задание");
+    if (!g.taskBuild("Тест", okGoal, "x = 1\n").problem)
+      bad("[задание] программа без печати пропущена");
+    if (!g.taskBuild("Тест", "коротко", "print(1)\n").problem)
+      bad("[задание] условие в одно слово пропущено");
+    if (!g.taskBuild("", okGoal, "print(1)\n").problem)
+      bad("[задание] задание без названия пропущено");
+    if (!g.taskBuild("Тест", okGoal, "print(нет_такой)\n").error)
+      bad("[задание] падающая программа пропущена");
+    const built = g.taskBuild("Тест", okGoal, "for i in range(1, 4):\n    print(i)\n");
+    if (!built.task || built.task.lines.join(",") !== "1,2,3")
+      bad("[задание] правильный ответ посчитан неверно: " + JSON.stringify(built));
+
+    /* экран автора: собрали задание — появилась ссылка и запись в списке */
+    g.state.mytasks = {};
+    g.state.friendTasks = {};
+    g.state.badges = g.state.badges.filter(x => x !== "author" && x !== "guest");
+    g.screenMyTasks();
+    await tick();
+    const ttl = doc.getElementById("tttl"), tgoal = doc.getElementById("tgoal");
+    if (!ttl || !tgoal) bad("[задание] на экране автора нет полей названия и условия");
+    else {
+      ttl.value = "Считалка"; tgoal.value = okGoal;
+      const st = doc.querySelector("#studio .studio") || doc.querySelector(".studio");
+      st.editor.setCode("for i in range(1, 4):\n    print(i)\n");
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      if (!doc.getElementById("tlink"))
+        bad("[задание] ссылка после сборки не показалась: " + msgText());
+      if (g.myTasksList().length !== 1)
+        bad("[задание] задание не сохранилось: записей " + g.myTasksList().length);
+      if (g.state.badges.indexOf("author") < 0) bad("[задание] бейдж автора не выдан");
+      if (g.state.mytaskDraft) bad("[задание] после сборки остался черновик");
+      const saved = g.myTasksList()[0];
+      if (g.taskLink(saved).indexOf("#task=") < 0) bad("[задание] ссылка без метки #task=");
+
+      /* Один заход «решаем задание»: если экрана нет, говорим об этом
+         проблемой и идём дальше, а не падаем — сломанная фича должна
+         попасть в отчёт, а не оборвать проверку. */
+      const solveTask = async function(code){
+        const sf = studioOf() || doc.querySelector(".studio");
+        if (!sf || !sf.editor){ bad("[задание] экран задания не открылся"); return false; }
+        sf.editor.setCode(code);
+        const btn = sf.querySelector('[data-role="check"]');
+        if (!btn){ bad("[задание] на экране задания нет кнопки проверки"); return false; }
+        btn.click();
+        await tick();
+        return true;
+      };
+
+      /* своё задание глазами друга: проверка работает, опыт не начисляется */
+      const xpOwn = g.state.xp;
+      g.openFriendTask(saved, { own:true });
+      await tick();
+      if (await solveTask("print(1)\nprint(2)\nprint(9)\n")){
+        if (won()) bad("[задание] неверный ответ засчитан");
+        if (!/должно быть|получилось|строк/.test(msgText()))
+          bad("[задание] расхождение не объяснено: " + msgText());
+        if (await solveTask("print(1)\nprint(2)\nprint(3)\n")){
+          if (!won()) bad("[задание] верный ответ не засчитан: " + msgText());
+          else closeWin();
+        }
+      }
+      if (g.state.xp !== xpOwn) bad("[задание] за своё же задание начислен опыт");
+
+      /* чужое задание: приезжает ссылкой, даёт опыт — но только один раз */
+      const xp0 = g.state.xp;
+      w.location.hash = "#task=" + packed;
+      await tick(); await tick();
+      if (!/Считалка/.test(doc.getElementById("app").textContent))
+        bad("[задание] ссылка не открыла задание");
+      if (await solveTask("print(1)\nprint(2)\nprint(3)\n")){
+        if (!won()) bad("[задание] чужое задание не засчитано: " + msgText());
+        else closeWin();
+        if (g.state.xp !== xp0 + g.FRIEND_XP)
+          bad(`[задание] опыт за чужое задание: было ${xp0}, стало ${g.state.xp}`);
+        if (g.state.badges.indexOf("guest") < 0) bad("[задание] бейдж «Гость» не выдан");
+      }
+      const xp1 = g.state.xp;
+      g.openFriendTask(back, {});
+      await tick();
+      if (await solveTask("print(1)\nprint(2)\nprint(3)\n")){
+        if (won()) closeWin();
+        if (g.state.xp !== xp1) bad("[задание] опыт за то же задание начислен второй раз");
+      }
+
+      /* испорченная ссылка объясняется, а не уводит молча на карту миров */
+      w.location.hash = "#task=" + "%%%";
+      await tick(); await tick();
+      if (!/не прочиталось|обрезали/.test(doc.getElementById("app").textContent))
+        bad("[задание] битая ссылка не объяснилась");
+      try { w.history.replaceState(null, "", "/kodokvest/"); } catch(e){}
+    }
+
+    /* Кавычка в названии не должна ломать форму: значения полей ставятся из
+       JS, потому что esc() экранирует только &, < и >. */
+    g.state.mytasks = {};
+    g.myTaskSave({ title: 'Задача "про кавычки"', goal: okGoal, code: "print(1)\n", lines:["1"] });
+    g.screenMyTasks({ title: 'Задача "про кавычки"', goal: okGoal, code: "print(1)\n" });
+    await tick();
+    const qttl = doc.getElementById("tttl");
+    if (!qttl || qttl.value !== 'Задача "про кавычки"')
+      bad("[задание] кавычка в названии сломала форму: " + (qttl && JSON.stringify(qttl.value)));
+    if (!/про кавычки/.test(doc.getElementById("app").textContent))
+      bad("[задание] задание с кавычкой не показалось в списке");
+
+    /* слияние: задания и пройденное чужое не теряются при обмене устройств */
+    const tm = g.mergeProgress(
+      { mytasks:{ a:{ title:"A", lines:["1"] } }, friendTasks:{ k1:1 }, savedAt:1 },
+      { mytasks:{ b:{ title:"B", lines:["2"] } }, friendTasks:{ k2:1 }, savedAt:2 });
+    if (!tm.mytasks.a || !tm.mytasks.b) bad("[задание] слияние потеряло задание одного из устройств");
+    if (!tm.friendTasks.k1 || !tm.friendTasks.k2) bad("[задание] слияние потеряло пройденное чужое задание");
+    /* сброс прогресса в панели наставника не стирает сделанное ребёнком */
+    const kept = g.clearResults({ mytasks:{ a:{ title:"A", lines:["1"] } }, stars:{ x:3 } });
+    if (!kept.mytasks || !kept.mytasks.a) bad("[задание] сброс прогресса стёр свои задания");
+    if (Object.keys(kept.stars).length) bad("[задание] сброс прогресса не стёр звёзды");
+    /* смена ученика — стирает: на устройстве другой ребёнок */
+    const wiped = g.clearAll({ mytasks:{ a:{ title:"A", lines:["1"] } } });
+    if (Object.keys(wiped.mytasks || {}).length) bad("[задание] смена ученика оставила чужие задания");
+    if (problems.length === p0) taskChecked++;
+    viewReset(g);
+  }
+
+  /* --- значения прямо в редакторе --- */
+  let watchChecked = 0;
+  if (typeof g.watchCompute === "function"){
+    const p0 = problems.length;
+    const eng = w.Runtime.get("mini");
+
+    /* Приписки обязаны совпадать с настоящим прогоном: считаются они вторым
+       проходом, и если ГПСЧ движка когда-нибудь перестанет быть
+       детерминированным, приписки разойдутся с выводом — вот эта проверка. */
+    const rnd = "import random\nx = random.randint(1, 100)\nprint(x)\n";
+    const r1 = eng.run(rnd, {});
+    const wm = g.watchCompute(eng, rnd, {}, r1.steps);
+    if (!wm || !wm[2]) bad("[приписки] у строки со случайным числом нет приписки");
+    else if (wm[2].indexOf(String(r1.lines[0])) < 0)
+      bad(`[приписки] приписка «${wm[2]}» разошлась с выводом «${r1.lines[0]}» — второй проход даёт другие числа`);
+
+    /* цикл: последнее значение плюс число проходов */
+    const loop = 'итог = 0\nfor i in range(1, 4):\n    итог = итог + i\n\nprint("сумма", итог)\n';
+    const wl = g.watchCompute(eng, loop, {}, eng.run(loop, {}).steps);
+    if (!wl) bad("[приписки] цикл не получил приписок");
+    else {
+      if (wl[1] !== "итог = 0") bad("[приписки] первая строка: " + wl[1]);
+      if (!/^×3\s+итог = 6$/.test(wl[3] || ""))
+        bad("[приписки] тело цикла должно быть «×3 итог = 6», а не «" + wl[3] + "»");
+      if ((wl[5] || "").indexOf("→ сумма 6") < 0)
+        bad("[приписки] строка с print не показала напечатанное: " + wl[5]);
+      if (wl[4]) bad("[приписки] пустая строка получила приписку: " + wl[4]);
+    }
+
+    /* ответы для input() уезжают в приписки: иначе программа падала бы */
+    const ask = 'имя = input()\nprint("привет,", имя)\n';
+    const wa = g.watchCompute(eng, ask, { stdin:["Аня"] }, 0);
+    if (!wa || (wa[1] || "").indexOf("Аня") < 0)
+      bad("[приписки] программа с input() не разобралась с ответами: " + JSON.stringify(wa));
+
+    /* тройные кавычки: приписок нет вовсе, иначе многострочная строка
+       распалась бы в подсветке на куски */
+    const tri = 's = "' + '""первая\nвторая"' + '""\nprint(len(s))\n';
+    if (g.watchCompute(eng, tri, {}, 0) !== null)
+      bad("[приписки] код с тройными кавычками получил приписки");
+
+    /* дорогая программа приписок не получает: цену уже назвал первый прогон */
+    if (g.watchCompute(eng, "print(1)\n", {}, g.WATCH_MAX_STEPS + 1) !== null)
+      bad("[приписки] дорогая программа всё равно считалась");
+
+    /* длинное значение обрезается, пробелы сворачиваются */
+    if (g.watchCut("а".repeat(80)).length > 30) bad("[приписки] длинное значение не обрезано");
+    if (g.watchCut(" два\n\nслова ") !== "два слова") bad("[приписки] пробелы не свёрнуты: " + JSON.stringify(g.watchCut(" два\n\nслова ")));
+    /* молчим, когда сказать нечего */
+    if (g.watchNote({ x:"1" }, { x:"1" }, "") !== "")
+      bad("[приписки] приписка появилась там, где ничего не изменилось");
+
+    /* разметка: приписка не ставится, когда не влезает в ширину редактора */
+    const wide = g.hlWatched("x = 1", { 1:"x = 1" }, 40);
+    const tight = g.hlWatched("x = 1", { 1:"x = 1" }, 8);
+    if (wide.indexOf("wv") < 0) bad("[приписки] приписка не отрисовалась при широком редакторе");
+    if (tight.indexOf("wv") >= 0)
+      bad("[приписки] приписка отрисована в узком редакторе — подсветка съедет с курсором");
+
+    /* живой урок: приписки появляются после запуска и исчезают от правки */
+    g.openLesson("print-first");
+    await tick();
+    const st = studioOf();
+    if (!st) bad("[приписки] урок не открылся");
+    else {
+      st.editor.setCode(loop);
+      st.querySelector('[data-role="run"]').click();
+      await tick();
+      const shown = st.querySelectorAll("pre.hl .wv").length;
+      if (!shown) bad("[приписки] после запуска приписок в разметке нет");
+      const ta = st.querySelector("textarea");
+      ta.value = ta.value + "\n";
+      ta.dispatchEvent(new w.Event("input", { bubbles:true }));
+      if (st.querySelectorAll("pre.hl .wv").length)
+        bad("[приписки] правка не стёрла приписки — они начали врать про изменённый код");
+      /* пошаговый режим показывает переменные сам, приписки там лишние */
+      st.editor.setCode(loop);
+      st.querySelector('[data-role="run"]').click();
+      await tick();
+      st.querySelector('[data-role="step"]').click();
+      await tick();
+      if (st.querySelectorAll("pre.hl .wv").length)
+        bad("[приписки] приписки остались в пошаговом режиме");
+    }
+    if (problems.length === p0) watchChecked++;
+    viewReset(g);
+  }
+
+  /* --- бестиарий ошибок --- */
+  let beastChecked = 0;
+  if (typeof g.beastsHTML === "function"){
+    const p0 = problems.length;
+    /* содержание: у каждого зверя есть название в KIND_RU и обе строки текста */
+    g.ERR_BEASTS.forEach(b => {
+      if (!g.KIND_RU[b.kind]) bad(`[бестиарий] у типа ${b.kind} нет русского названия в KIND_RU`);
+      if (!b.em || !b.what || !b.how) bad(`[бестиарий] у ${b.kind} не заполнены поля`);
+      if (!/\.$/.test(b.what) || !/\.$/.test(b.how)) bad(`[бестиарий] у ${b.kind} текст без точки`);
+    });
+    const kinds = g.ERR_BEASTS.map(b => b.kind);
+    if (new Set(kinds).size !== kinds.length) bad("[бестиарий] тип встречается дважды");
+    if (kinds.indexOf("NotSupported") >= 0)
+      bad("[бестиарий] NotSupported — ограничение тренажёра, а не ошибка ребёнка");
+    g.state.errs = {};
+    g.state.badges = g.state.badges.filter(x => x !== "beasts");
+
+    /* живой путь: сломал → зверь встретился; починил сам → побеждён */
+    g.openLesson("print-first");
+    await tick();
+    let st = studioOf();
+    st.editor.setCode("print(нет_такого)\n");
+    st.querySelector('[data-role="run"]').click();
+    await tick();
+    if (!(g.state.errs.NameError && g.state.errs.NameError.seen))
+      bad("[бестиарий] встреча с ошибкой не записана: " + JSON.stringify(g.state.errs));
+    if (g.state.errs.NameError && g.state.errs.NameError.beaten)
+      bad("[бестиарий] зверь побеждён до починки");
+    st.editor.setCode('print("ок")\n');
+    st.querySelector('[data-role="run"]').click();
+    await tick();
+    if (!(g.state.errs.NameError && g.state.errs.NameError.beaten))
+      bad("[бестиарий] починка не записана как победа");
+    if (g.beastsBeaten() !== 1) bad("[бестиарий] побеждённых посчитано " + g.beastsBeaten());
+
+    /* показанное решение победу не даёт: чинил не ребёнок */
+    g.state.errs = {};
+    g.openLesson("print-first");
+    await tick();
+    st = studioOf();
+    st.editor.setCode("print(опять_нет)\n");
+    st.querySelector('[data-role="run"]').click();
+    await tick();
+    doc.getElementById("solbtn").click();
+    st.querySelector('[data-role="run"]').click();
+    await tick();
+    if (g.state.errs.NameError && g.state.errs.NameError.beaten)
+      bad("[бестиарий] победа засчитана после «показать решение»");
+
+    /* бейдж за шесть разных */
+    g.state.errs = {};
+    g.state.badges = g.state.badges.filter(x => x !== "beasts");
+    g.ERR_BEASTS.slice(0, g.BEAST_BADGE_AT - 1).forEach(b => {
+      g.errSeen(b.kind); g.errBeaten(b.kind);
+    });
+    if (g.state.badges.indexOf("beasts") >= 0)
+      bad("[бестиарий] бейдж выдан раньше порога");
+    const last = g.ERR_BEASTS[g.BEAST_BADGE_AT - 1];
+    g.errSeen(last.kind); g.errBeaten(last.kind);
+    if (g.state.badges.indexOf("beasts") < 0) bad("[бестиарий] бейдж на пороге не выдан");
+    if (g.state.badges.filter(x => x === "beasts").length !== 1)
+      bad("[бестиарий] бейдж выдан дважды");
+    if (!g.BADGES.filter(x => x.id === "beasts").length)
+      bad("[бестиарий] бейджа «beasts» нет в списке достижений — он не покажется на карте");
+
+    /* экран «Повторить» показывает всех зверей и отмечает состояния */
+    g.state.errs = { NameError:{ seen:3, beaten:1, at:1 }, TypeError:{ seen:1, beaten:0, at:1 } };
+    g.screenReview();
+    await tick();
+    const cards = doc.querySelectorAll(".beast");
+    if (cards.length !== g.ERR_BEASTS.length)
+      bad(`[бестиарий] на экране ${cards.length} карточек вместо ${g.ERR_BEASTS.length}`);
+    if (doc.querySelectorAll(".beast.won").length !== 1)
+      bad("[бестиарий] побеждённый зверь не отмечен");
+    if (doc.querySelectorAll(".beast.met").length !== 1)
+      bad("[бестиарий] встреченный зверь не отмечен");
+    if (!/встреч: 3/.test(doc.getElementById("app").textContent))
+      bad("[бестиарий] число встреч не показано");
+
+    /* слияние: встречи берутся по максимуму, а не складываются */
+    const bm = g.mergeProgress(
+      { errs:{ NameError:{ seen:3, beaten:0, at:1 } }, savedAt:1 },
+      { errs:{ NameError:{ seen:2, beaten:1, at:2 }, KeyError:{ seen:1, beaten:0, at:2 } }, savedAt:2 });
+    if (!bm.errs.NameError || bm.errs.NameError.seen !== 3)
+      bad("[бестиарий] слияние сложило встречи вместо максимума: " + JSON.stringify(bm.errs.NameError));
+    if (!bm.errs.NameError.beaten) bad("[бестиарий] слияние потеряло победу");
+    if (!bm.errs.KeyError) bad("[бестиарий] слияние потеряло зверя с другого устройства");
+    if (problems.length === p0) beastChecked++;
+    viewReset(g);
+  }
+
+  /* --- разбор кода: что можно сделать чище --- */
+  let lintChecked = 0;
+  if (typeof g.lintCode === "function"){
+    const p0 = problems.length;
+    const all = { all:true };
+    const titles = (code, opts) => (g.lintCode(code, opts || all) || []).map(f => f.title).join(" | ");
+
+    /* Каждое правило обязано срабатывать на своей же грязи. Правило, которое
+       молчит всегда, выглядит работающим и не делает ничего. */
+    const DIRTY = [
+      ["sum", 'nums = [1, 2, 3]\nитог = 0\nfor n in nums:\n    итог = итог + n\nprint(итог)\n', /sum\(\)/],
+      ["len", 'nums = [1, 2, 3]\nсколько = 0\nfor n in nums:\n    сколько += 1\nprint(сколько)\n', /сколько элементов/],
+      ["range(len)", 'nums = [1, 2, 3]\nfor i in range(len(nums)):\n    print(nums[i])\n', /Номер здесь не нужен/],
+      ["лишняя переменная", 'нужное = 5\nлишнее = 10\nprint(нужное)\n', /лишнее никому не нужна/],
+      ["== True", 'готово = True\nif готово == True:\n    print("да")\n', /Сравнение с True/],
+      ["len() > 0", 'nums = [1]\nif len(nums) > 0:\n    print("есть")\n', /Длину с нулём/],
+      ["три строки", 'print("одна и та же строка")\nprint("одна и та же строка")\nprint("одна и та же строка")\n', /Одна и та же строка/],
+      ["магическое число", 'a = 60 * 2\nb = 60 * 3\nc = 60 * 4\nprint(a, b, c)\n', /Число 60/],
+      ["x = x + 1", 'счёт = 0\nсчёт = счёт + 1\nprint(счёт)\n', /счёт \+=/],
+      ["camelCase", 'myScore = 5\nprint(myScore)\n', /myScore/],
+      ["длинная функция", 'def всё():\n' + Array.from({length:17}, (_, i) => `    print(${i})`).join("\n") + '\n\n\nвсё()\n', /делает слишком много/]
+    ];
+    DIRTY.forEach(([name, code, want]) => {
+      const t = titles(code);
+      if (!want.test(t)) bad(`[ревью] правило «${name}» молчит на своей же грязи: ${t || "(тишина)"}`);
+    });
+
+    /* А это НЕ находки. Каждая строка — случай, на котором правило когда-то
+       ошибалось (все найдены инструментом tests/lint-check.js на решениях
+       автора) или ошиблось бы по неосторожности. Третий элемент — что именно
+       запрещено находить: там, где он есть, ДРУГИЕ находки законны (например
+       три одинаковые строки у черепашки — это честный совет «сделай цикл»). */
+    const CLEAN = [
+      ["имя только в f-строке", 'имя = "Аня"\nprint(f"привет, {имя}")\n'],
+      ["имя в формате f-строки", 'ширина = 10\nполоска = "###"\nprint(f"{полоска:<{ширина}}|")\n'],
+      ["поле класса читается через self", 'class Пёс:\n    hp = 10\n\n    def бей(self, урон):\n        self.hp = self.hp - урон\n        return self.hp\n\n\nп = Пёс()\nprint(п.бей(3))\n'],
+      ["числа внутри списка данных", 'оценки = [5, 3, 4, 5, 2, 5]\nprint(sum(оценки))\n'],
+      ["мелкие числа", 'for i in range(3):\n    print(i * 3, 3 + i)\n'],
+      ["сравнение с True в assert", 'def годен(x):\n    return x > 0\n\n\nassert годен(5) == True\nassert годен(-1) == False\nprint("ок")\n'],
+      ["длина сравнивается не с нулём", 'nums = [1, 2]\nif len(nums) > 1:\n    print("много")\n'],
+      [">= 0 не трогаем", 'nums = [1]\nif len(nums) >= 0:\n    print("всегда")\n'],
+      ["распаковка без всех имён", 'def пара():\n    return 1, 2, 3\n\n\nа, б, в = пара()\nprint(а)\n'],
+      ["номер нужен не только для среза", 'nums = [1, 2]\nfor i in range(len(nums)):\n    print(i + 1, nums[i])\n'],
+      ["черепашьи числа", 'color("red")\nforward(120)\nright(90)\nforward(60)\nright(90)\nforward(120)\nright(90)\nforward(60)\n'],
+      ["цикл с условием — это не sum()", 'nums = [1, 2, 3]\nитог = 0\nfor n in nums:\n    if n > 1:\n        итог = итог + n\nprint(итог)\n', /sum\(\)|сколько элементов/]
+    ];
+    CLEAN.forEach(([name, code, forbidden]) => {
+      const found = g.lintCode(code, all);
+      if (found === null){ bad(`[ревью] «${name}» не разобралось парсером`); return; }
+      if (forbidden){
+        if (forbidden.test(titles(code))) bad(`[ревью] ложная находка на «${name}»: ${titles(code)}`);
+      } else if (found.length) bad(`[ревью] ложная находка на «${name}»: ${titles(code)}`);
+    });
+
+    /* Совет не имеет права спорить с требованием урока. */
+    const loop = 'nums = [1, 2, 3]\nитог = 0\nfor n in nums:\n    итог = итог + n\nprint(итог)\n';
+    if (!/sum\(\)/.test(titles(loop, { all:true })))
+      bad("[ревью] совет про sum() пропал без требований");
+    if (/sum\(\)/.test(titles(loop, { all:true, needCode:["for"] })))
+      bad("[ревью] совет «возьми sum()» показан на уроке, который ТРЕБУЕТ цикл");
+
+    /* Совет не имеет права появиться раньше урока, где это объясняли. */
+    g.state.stars = {};
+    if (g.lintKnows("lists-first")) bad("[ревью] совет открыт до прохождения урока");
+    const early = g.lintCode(loop, {});
+    if (early.some(f => /sum\(\)/.test(f.title)))
+      bad("[ревью] sum() советуется до урока про списки");
+    g.setStars("lists-first", 3);
+    if (!g.lintKnows("lists-first")) bad("[ревью] совет закрыт после пройденного урока");
+    /* у каждого совета урок-гейт обязан существовать в программе */
+    const gates = {};
+    [loop, ...DIRTY.map(d => d[1])].forEach(code => {
+      (g.lintCode(code, all) || []).forEach(f => { if (f.after) gates[f.after] = 1; });
+    });
+    Object.keys(gates).forEach(id => {
+      if (!w.CURRICULUM.byId(id)) bad(`[ревью] правило ссылается на несуществующий урок «${id}»`);
+    });
+
+    /* Не больше трёх советов за раз: четвёртый — уже придирки. Считаем как
+       для ребёнка (без all), сняв замки по прогрессу — иначе часть советов
+       отсеется гейтом, и проверка ничего не проверит. */
+    g.state.admin.unlockAll = true;
+    const messy = 'aB = 100\ncD = 100\nлишнее = 100\nx = 0\nx = x + 1\nprint("одна и та же строка тут")\nprint("одна и та же строка тут")\nprint("одна и та же строка тут")\nprint(aB, cD, x)\n';
+    const many = g.lintCode(messy, {});
+    if (many.length < 2) bad("[ревью] на нарочно грязной программе нашлось меньше двух советов");
+    if (many.length > g.LINT_MAX) bad(`[ревью] советов ${many.length}, а больше ${g.LINT_MAX} показывать нельзя`);
+
+    /* Сломанный код разбору не подлежит: сначала пусть заработает. */
+    if (g.lintCode("print(", all) !== null) bad("[ревью] неразбираемый код не отклонён");
+    if (!/Сначала пусть заработает/.test(g.lintHTML(null))) bad("[ревью] нет сообщения про сломанный код");
+    if (!/Чисто/.test(g.lintHTML([]))) bad("[ревью] нет сообщения «чисто»");
+
+    /* Живой урок: кнопка есть, показывает разбор и не отнимает звёзд. */
+    g.state.admin.unlockAll = true;
+    g.openLesson("for-range");
+    await tick();
+    const st = studioOf();
+    const btn = doc.getElementById("lintbtn");
+    if (!btn) bad("[ревью] на уроке нет кнопки разбора");
+    else {
+      st.editor.setCode('счёт = 0\nсчёт = счёт + 1\nprint(счёт)\n');
+      btn.click();
+      await tick();
+      const m = doc.querySelector("#studio .msg");
+      if (!/можно чище/.test(m.textContent)) bad("[ревью] разбор ничего не показал: " + msgText());
+      if (!doc.querySelector("#studio .lintone")) bad("[ревью] находки не отрисовались списком");
+      st.editor.setCode("print(1)\n");
+      btn.click();
+      await tick();
+      if (!/Чисто/.test(doc.querySelector("#studio .msg").textContent))
+        bad("[ревью] на чистой программе разбор не сказал «чисто»");
+    }
+    /* многофайловый урок разбора не получает: имена живут в других файлах */
+    let multi = null;
+    for (const wd of w.CURRICULUM){
+      const c = w.CONTENT["world" + wd.n];
+      if (!c) continue;
+      for (const l of wd.lessons) if (c[l.id] && c[l.id].task && c[l.id].task.files){ multi = l; break; }
+      if (multi) break;
+    }
+    if (multi){
+      g.openLesson(multi.id);
+      await tick();
+      if (doc.getElementById("lintbtn"))
+        bad("[ревью] кнопка разбора стоит на многофайловом уроке — переменная из другого файла выглядит лишней");
+    }
+    /* приглашение в победной карточке — только когда находки есть */
+    if (g.lintNote(0) !== "") bad("[ревью] приглашение показано при нуле находок");
+    if (!/замечания|замечание|замечаний/.test(g.lintNote(2))) bad("[ревью] приглашение не назвало число находок");
+    if (problems.length === p0) lintChecked++;
+    viewReset(g);
+  }
+
+  /* --- панель символов на телефоне --- */
+  let keybarChecked = 0;
+  if (Array.isArray(g.KEYBAR_KEYS)){
+    const p0 = problems.length;
+    g.openLesson("print-first");
+    await tick();
+    const st = studioOf();
+    const keys = st.querySelectorAll(".kbk");
+    if (!keys.length) bad("[символы] панели символов нет в редакторе");
+    else if (keys.length !== g.KEYBAR_KEYS.length + 1)
+      bad(`[символы] кнопок ${keys.length}, а ключей ${g.KEYBAR_KEYS.length} плюс отступ`);
+    const ta = st.querySelector("textarea");
+    /* вставка идёт в позицию курсора, а не в конец программы */
+    st.editor.setCode("print()\n");
+    ta.selectionStart = ta.selectionEnd = 6;          /* между скобками */
+    /* в атрибуте лежит НОМЕР ключа: среди знаков есть кавычка, и писать её
+       в разметку значило бы порвать атрибут */
+    const quotes = [...keys].filter(b => g.KEYBAR_KEYS[+b.getAttribute("data-k")] === '""')[0];
+    if (!quotes) bad("[символы] нет кнопки с парой кавычек");
+    else quotes.click();
+    if (ta.value.indexOf('print("")') !== 0)
+      bad("[символы] пара кавычек вставилась не туда: " + JSON.stringify(ta.value));
+    if (ta.selectionStart !== 7)
+      bad("[символы] курсор не встал ВНУТРЬ пары: " + ta.selectionStart);
+    /* отступ — четыре пробела, а не табуляция: так пишет весь курс */
+    st.editor.setCode("");
+    ta.selectionStart = ta.selectionEnd = 0;
+    [...keys].filter(b => b.getAttribute("data-k") === "tab")[0].click();
+    if (ta.value !== "    ") bad("[символы] отступ вставил не четыре пробела: " + JSON.stringify(ta.value));
+    /* правка с панели считается правкой: черновик обязан сохраниться */
+    if (st.editor.getCode() !== "    ") bad("[символы] редактор не увидел вставку");
+    if (problems.length === p0) keybarChecked++;
+    viewReset(g);
+  }
+
+  /* --- забрать программу файлом (.py) --- */
+  let pyChecked = 0;
+  if (typeof g.pyFileText === "function"){
+    const p0 = problems.length;
+    if (g.pyFileName("Дракон в пещере") !== "drakon_v_peschere.py")
+      bad("[файл] имя файла не транслитерировано: " + g.pyFileName("Дракон в пещере"));
+    if (!/\.py$/.test(g.pyFileName(""))) bad("[файл] пустое имя дало файл без .py");
+    const plain = g.pyFileText("Счёт", 'print("привет")\n');
+    if (plain.indexOf('print("привет")') < 0) bad("[файл] программа потерялась");
+    if (plain.indexOf("python3") < 0) bad("[файл] нет подсказки, как запустить");
+    if (/turtle/.test(plain)) bad("[файл] обычной программе дописали черепашку");
+    const draw = g.pyFileText("Квадрат", 'forward(100)\nright(90)\n');
+    /* Ищем именно СТРОКУ КОДА, а не упоминание: в шапке файла есть и
+       объясняющий комментарий про from turtle import *, и на нём проверка
+       успокаивалась бы, даже если самой строки нет (поймано мутацией). */
+    const drawLines = draw.split("\n").map(x => x.trim());
+    if (drawLines.indexOf("from turtle import *") < 0)
+      bad("[файл] рисующей программе не дописан import черепашки — у себя она не запустится");
+    if (drawLines.indexOf("done()") < 0) bad("[файл] нет done() — окно закроется сразу");
+    if (draw.indexOf("добавил тренажёр") < 0)
+      bad("[файл] тренажёр дописал строки и не сказал об этом");
+    /* «forward» в комментарии или в строке ничего не рисует */
+    if (g.pyIsDraw('print("forward(100)")\n# forward(50)\n'))
+      bad("[файл] слово forward в строке принято за рисование");
+    if (!g.pyIsDraw('circle(30)\n')) bad("[файл] circle не опознан как рисование");
+    if (problems.length === p0) pyChecked++;
+    viewReset(g);
+  }
+
+  /* --- вопрос за ужином --- */
+  let dinnerChecked = 0;
+  if (typeof g.dinnerPickFrom === "function"){
+    const p0 = problems.length;
+    const empty = g.dinnerPickFrom({ stars:{}, log:{} }, "2026-01-01");
+    if (empty) bad("[ужин] вопрос нашёлся на пустом прогрессе");
+    if (!/Появится/.test(g.dinnerHTML({ stars:{}, log:{} })))
+      bad("[ужин] на пустом прогрессе нет объяснения, откуда возьмётся вопрос");
+    /* спрашиваем только про пройденное */
+    const st1 = { stars:{ "print-first":3 }, log:{ "print-first":{ solvedAt: 1000 } } };
+    const pick = g.dinnerPickFrom(st1, "2026-01-01");
+    if (!pick) bad("[ужин] вопрос не нашёлся на пройденном уроке");
+    else if (pick.lesson !== "print-first")
+      bad("[ужин] вопрос про непройденный урок: " + pick.lesson);
+    /* за один вечер вопрос не меняется */
+    const a = g.dinnerPickFrom(st1, "2026-05-05"), b = g.dinnerPickFrom(st1, "2026-05-05");
+    if (!a || !b || a.it.id !== b.it.id) bad("[ужин] вопрос меняется в пределах одного дня");
+    /* а по дням — меняется хотя бы иногда */
+    const many = { stars:{}, log:{} };
+    (w.CHEATSHEET || []).forEach(gr => (gr.items || []).forEach(it => {
+      many.stars[it.lesson] = 3;
+      many.log[it.lesson] = { solvedAt: 1000 + it.lesson.length };
+    }));
+    const seen = {};
+    for (let i = 1; i <= 12; i++){
+      const x = g.dinnerPickFrom(many, "2026-03-" + (i < 10 ? "0" + i : i));
+      if (x) seen[x.it.id] = 1;
+    }
+    if (Object.keys(seen).length < 2)
+      bad("[ужин] вопрос одинаковый во все дни — выбор не зависит от даты");
+    /* в отчёте наставника вопрос виден */
+    if (!/Вопрос за ужином/.test(g.weekReportHTML(st1)))
+      bad("[ужин] вопроса нет в недельном отчёте");
+    if (problems.length === p0) dinnerChecked++;
+  }
+
+  /* --- пересказ программы словами --- */
+  let storyChecked = 0;
+  if (typeof g.storyOf === "function"){
+    const p0 = problems.length;
+    const text = (code, env) => (g.storyOf(code, env || {}) || { lines:[] })
+      .lines.map(x => x.text).join(" ⏎ ");
+
+    const loop = 'оценки = [5, 4, 3]\nитог = 0\nfor n in оценки:\n    итог = итог + n\nprint("сумма", итог)\n';
+    const t1 = text(loop);
+    if (!/повторил 3 раза/.test(t1)) bad("[пересказ] число проходов цикла не названо: " + t1);
+    if (!/итог = 12/.test(t1)) bad("[пересказ] итог не назван: " + t1);
+    if (!/напечатал: сумма 12/.test(t1)) bad("[пересказ] напечатанное не названо: " + t1);
+
+    const fn = 'def площадь(ш, в):\n    return ш * в\n\n\nprint(площадь(3, 4))\n';
+    const t2 = text(fn);
+    if (!/описал команду «площадь\(ш, в\)»/.test(t2)) bad("[пересказ] функция не описана: " + t2);
+    if (!/вызвали 1 раз/.test(t2)) bad("[пересказ] число вызовов не названо: " + t2);
+    if (/пустую строку/.test(t2))
+      bad("[пересказ] печать результата вызова названа печатью пустой строки: " + t2);
+
+    const cond = 'for n in range(4):\n    if n % 2 == 0:\n        print(n)\n';
+    const t3 = text(cond);
+    if (!/сработало 2/.test(t3)) bad("[пересказ] ветки условия не посчитаны: " + t3);
+
+    const boom = 'n = 1\nprint(10 / 0)\n';
+    const t4 = text(boom);
+    if (!/остановилась с ошибкой/.test(t4)) bad("[пересказ] падение не названо: " + t4);
+    const st4 = g.storyOf(boom, {});
+    if (!st4.error) bad("[пересказ] ошибка не отдана наружу");
+
+    const ask = 'имя = input()\nprint("привет,", имя)\n';
+    if (!/Аня/.test(text(ask, { stdin:["Аня"] })))
+      bad("[пересказ] ответ на input() не попал в пересказ");
+
+    /* Пересказ — это про СДЕЛАННОЕ, и он обязан честно про это сказать */
+    const html = g.storyHTML(loop, {});
+    if (!/сделала/.test(html)) bad("[пересказ] нет оговорки «сделала, а не задумано»");
+    if (g.storyOf("print(", {}) !== null) bad("[пересказ] неразбираемый код не отклонён");
+    /* и виден в визуализаторе — там же, где шаги */
+    g.screenViz({ code: loop });
+    await tick();
+    if (!doc.querySelector(".story")) bad("[пересказ] в визуализаторе пересказа нет");
+    if (!doc.querySelector(".vizslider")) bad("[пересказ] пересказ вытеснил шаги");
+    if (problems.length === p0) storyChecked++;
+    viewReset(g);
+  }
+
+  /* --- галерея рисунков --- */
+  let galleryChecked = 0;
+  if (typeof g.gallerySave === "function"){
+    const p0 = problems.length;
+    g.state.gallery = {};
+    /* название берётся из первого комментария — это ещё и повод их писать */
+    if (g.galleryTitleOf("# Домик\nforward(50)\n", 1) !== "Домик")
+      bad("[галерея] название не взято из комментария");
+    if (g.galleryTitleOf("forward(50)\n", 3) !== "Рисунок 3")
+      bad("[галерея] нет запасного названия");
+    /* рисунок есть, рисунка нет, программа падает — три разных ответа */
+    const drawn = g.galleryDrawing('forward(100)\nright(90)\nforward(100)\n');
+    if (!drawn || !drawn.turtle) bad("[галерея] рисунок не опознан");
+    if (!(g.galleryDrawing('print("привет")\n') || {}).empty)
+      bad("[галерея] программа без линий принята за рисунок");
+    if (!(g.galleryDrawing("forward(нет_числа)\n") || {}).error)
+      bad("[галерея] падающая программа принята за рисунок");
+    /* хранится программа, а не картинка: в прогрессе только код */
+    const id = g.gallerySave('# Квадрат\nfor i in range(4):\n    forward(80)\n    right(90)\n');
+    const list = g.galleryList();
+    if (list.length !== 1) bad("[галерея] рисунок не сохранился");
+    else {
+      if (list[0].title !== "Квадрат") bad("[галерея] название не сохранилось: " + list[0].title);
+      if (/data:image/.test(JSON.stringify(g.state.gallery)))
+        bad("[галерея] в прогрессе оказалась картинка — он уезжает на сервер целиком");
+    }
+    /* больше GALLERY_MAX не копим: прогресс уходит на сервер одним запросом */
+    for (let i = 0; i < g.GALLERY_MAX + 3; i++) g.gallerySave("forward(" + (10 + i) + ")\n");
+    if (g.galleryList().length > g.GALLERY_MAX)
+      bad(`[галерея] рисунков ${g.galleryList().length}, а держим не больше ${g.GALLERY_MAX}`);
+    /* портфолио рисует холст на каждый рисунок и даёт скачать PNG */
+    g.state.gallery = {};
+    g.gallerySave("# Один\nforward(60)\nright(120)\nforward(60)\n");
+    g.screenFolio();
+    await tick();
+    if (doc.querySelectorAll(".pic").length !== 1) bad("[галерея] в портфолио нет карточки рисунка");
+    if (!doc.querySelector(".pic canvas")) bad("[галерея] холст рисунка не создан");
+    if (!doc.querySelector("[data-png]")) bad("[галерея] нет кнопки «скачать PNG»");
+    if (doc.querySelector(".pic.broken")) bad("[галерея] рисунок не нарисовался");
+    /* слияние и сброс: рисунок — работа ребёнка, а не результат занятий */
+    const gm = g.mergeProgress(
+      { gallery:{ a:{ code:"forward(1)", at:1 } }, savedAt:1 },
+      { gallery:{ b:{ code:"forward(2)", at:2 } }, savedAt:2 });
+    if (!gm.gallery.a || !gm.gallery.b) bad("[галерея] слияние потеряло рисунок одного из устройств");
+    const kept = g.clearResults({ gallery:{ a:{ code:"forward(1)" } }, stars:{ x:3 } });
+    if (!kept.gallery.a) bad("[галерея] сброс прогресса стёр рисунки");
+    const wiped = g.clearAll({ gallery:{ a:{ code:"forward(1)" } } });
+    if (Object.keys(wiped.gallery || {}).length) bad("[галерея] смена ученика оставила чужие рисунки");
+    if (problems.length === p0) galleryChecked++;
+    viewReset(g);
+  }
+
+  /* --- установка на домашний экран (манифест и service worker) --- */
+  let pwaChecked = 0;
+  {
+    const p0 = problems.length;
+    const readRoot = f => fs.readFileSync(path.join(root, f), "utf8");
+    let man = null;
+    try { man = JSON.parse(readRoot("manifest.webmanifest")); }
+    catch(e){ bad("[PWA] manifest.webmanifest не читается: " + e.message); }
+    if (man){
+      ["name", "short_name", "start_url", "scope", "display", "icons"].forEach(k => {
+        if (!man[k]) bad(`[PWA] в манифесте нет поля ${k}`);
+      });
+      if (man.display !== "standalone") bad("[PWA] display не standalone: " + man.display);
+      (man.icons || []).forEach(ic => {
+        if (!fs.existsSync(path.join(root, ic.src))) bad("[PWA] иконки нет на диске: " + ic.src);
+      });
+      if (!(man.icons || []).some(ic => ic.purpose && ic.purpose.indexOf("maskable") >= 0))
+        bad("[PWA] нет maskable-иконки — Android обрежет её как попало");
+    }
+    /* Главный инвариант: всё, что грузит страница, обязано лежать в кэше
+       service worker. Иначе новый файл появится, а офлайн тихо сломается. */
+    const sw = readRoot("sw.js");
+    const idx = readRoot("index.html");
+    const need = [];
+    idx.replace(/<script src="([^"]+)"/g, (m, u) => { need.push(u); return m; });
+    idx.replace(/<link rel="stylesheet" href="([^"]+)"/g, (m, u) => { need.push(u); return m; });
+    fs.readdirSync(path.join(root, "content"))
+      .filter(f => /^world\d+\.js$/.test(f))
+      .forEach(f => need.push("content/" + f));
+    need.forEach(u => {
+      if (sw.indexOf('"./' + u + '"') < 0)
+        bad(`[PWA] файл ${u} страница грузит, а в кэше sw.js его нет — офлайн сломается`);
+    });
+    /* и наоборот: в кэше не должно быть того, чего нет на диске */
+    const shell = [];
+    sw.replace(/"\.\/([^"]*)"/g, (m, u) => { shell.push(u); return m; });
+    shell.forEach(u => {
+      if (u && !fs.existsSync(path.join(root, u)))
+        bad(`[PWA] в кэше sw.js записан несуществующий файл: ${u}`);
+    });
+    if (sw.indexOf("skipWaiting") < 0) bad("[PWA] новый worker не берёт управление — обновление зависнет");
+    /* сначала сеть: иначе ребёнок неделями сидел бы на старой версии */
+    if (!/fetch\(req\)/.test(sw)) bad("[PWA] стратегия не «сначала сеть»");
+    /* страница ссылается на манифест, а один файл — НЕ должен */
+    if (idx.indexOf('rel="manifest"') < 0) bad("[PWA] в index.html нет ссылки на манифест");
+    if (html.indexOf('rel="manifest"') >= 0)
+      bad("[PWA] в одном файле осталась ссылка на манифест — он обещает «ничего извне»");
+    if (html.indexOf('rel="apple-touch-icon"') >= 0)
+      bad("[PWA] в одном файле осталась ссылка на иконку с диска");
+    if (problems.length === p0) pwaChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -2203,6 +3075,18 @@ function checkEncoding(){
   console.log(`черновики кода на уроке: ${draftChecked ? "да" : "нет"}`);
   console.log(`портфолио и сертификаты: ${folioChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
+  console.log(`цель по шагам: ${leanChecked ? "да" : "нет"}`);
+  console.log(`разбор своей программы: ${ownVizChecked ? "да" : "нет"}`);
+  console.log(`свои задания и ссылки: ${taskChecked ? "да" : "нет"}`);
+  console.log(`значения в редакторе: ${watchChecked ? "да" : "нет"}`);
+  console.log(`бестиарий ошибок: ${beastChecked ? "да" : "нет"}`);
+  console.log(`разбор кода (ревью): ${lintChecked ? "да" : "нет"}`);
+  console.log(`панель символов: ${keybarChecked ? "да" : "нет"}`);
+  console.log(`файл .py: ${pyChecked ? "да" : "нет"}`);
+  console.log(`вопрос за ужином: ${dinnerChecked ? "да" : "нет"}`);
+  console.log(`пересказ программы: ${storyChecked ? "да" : "нет"}`);
+  console.log(`галерея рисунков: ${galleryChecked ? "да" : "нет"}`);
+  console.log(`установка на домашний экран: ${pwaChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
