@@ -787,3 +787,7 @@ body.focus .lede{display:none}
   background:var(--sunken);color:var(--soft);font-size:13.5px}
 .draftnote[hidden]{display:none}
 .draftnote .rbtn{margin-left:auto}
+
+/* закрытая разминка: видно, что впереди есть ещё, и чем она откроется */
+.gamecard.locked{opacity:.55;cursor:default;border-style:dashed}
+.gamecard.locked:hover{transform:none}

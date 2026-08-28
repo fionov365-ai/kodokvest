@@ -1095,6 +1095,77 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- разминки открываются по прогрессу ---
+     Раньше разминки были открыты все сразу, и задачей дня ребёнку из Мира 1
+     могло выпасть упражнение про zip. Проверяем сам замок, а не разметку. */
+  let warmGateChecked = 0;
+  if (typeof g.warmupOpen === "function"){
+    const p0 = problems.length;
+    const savedStars = JSON.parse(JSON.stringify(g.state.stars));
+    const savedUnlock = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = false;
+
+    WARMUPS.forEach(x => {
+      if (x.lesson && !CUR.byId(x.lesson))
+        bad(`[замок разминки] ${x.id} ссылается на урок «${x.lesson}», а такого урока нет`);
+    });
+    const gated = WARMUPS.filter(x => x.lesson);
+    if (!gated.length) bad("[замок разминки] ни одна разминка не привязана к уроку — проверять нечего");
+
+    /* чистый прогресс: открыто не всё */
+    g.state.stars = {};
+    if (g.warmupsOpen().length === WARMUPS.length)
+      bad("[замок разминки] на пустом прогрессе открыты все — замка нет");
+
+    /* задача дня НИКОГДА не может оказаться закрытой */
+    g.state.stars = {}; g.state.stars[gated[0].lesson] = 3;
+    let leaked = null;
+    for (let i = 1; i <= 40 && !leaked; i++){
+      const pick = g.dailyPick("2031-01-" + (i < 10 ? "0" + i : i));
+      if (pick && !g.warmupOpen(pick)) leaked = pick.id;
+    }
+    if (leaked) bad("[замок разминки] задачей дня выпала закрытая разминка: " + leaked);
+    if (!g.dailyPick("2031-01-05"))
+      bad("[замок разминки] задача дня пропала, хотя одна разминка открыта");
+
+    /* совсем пустой прогресс: честное «пока нечего», а не закрытая задача */
+    g.state.stars = {};
+    if (g.dailyPick("2031-01-05"))
+      bad("[замок разминки] на пустом прогрессе выдана задача дня, читать которую нечем");
+    g.screenToday();
+    await tick();
+    if (!/появится/.test(doc.body.textContent))
+      bad("[замок разминки] экран «Сегодня» не объясняет, почему задачи дня нет");
+
+    /* урок пройден — своя разминка открылась */
+    const sample = gated[0];
+    if (g.warmupOpen(sample)) bad("[замок разминки] " + sample.id + " открыта до своего урока");
+    g.state.stars[sample.lesson] = 3;
+    if (!g.warmupOpen(sample)) bad("[замок разминки] " + sample.id + " не открылась после своего урока");
+
+    /* на экране закрытая видна замком и не нажимается */
+    g.state.stars = {};
+    g.screenWarmups();
+    await tick();
+    const lockedCard = doc.querySelector(".gamecard.locked");
+    if (!lockedCard) bad("[замок разминки] закрытые ничем не помечены на экране");
+    else {
+      if (!lockedCard.disabled) bad("[замок разминки] закрытую разминку можно открыть кнопкой");
+      if (!/Откроется после урока/.test(lockedCard.textContent))
+        bad("[замок разминки] не сказано, какой урок откроет закрытую разминку");
+    }
+
+    /* «Открыть все уроки» в панели наставника снимает и этот замок */
+    g.state.admin.unlockAll = true;
+    if (g.warmupsOpen().length !== WARMUPS.length)
+      bad("[замок разминки] «Открыть все уроки» не открывает разминки");
+
+    g.state.stars = savedStars;
+    g.state.admin.unlockAll = savedUnlock;
+    if (problems.length === p0) warmGateChecked = 1;
+    viewReset(g);
+  } else bad("[замок разминки] замка нет — warmupOpen не выведен наружу");
+
   /* --- задача дня и дневной стрик --- */
   let dailyChecked = 0;
   if (typeof g.dailyPick === "function"){
@@ -2113,6 +2184,7 @@ function checkEncoding(){
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
+  console.log(`замок разминок по прогрессу: ${warmGateChecked ? "да" : "нет"}`);
   console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}` +
               ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length},` +
               ` пойманных ИИ: ${catchChecked} из ${AILAB.filter(x => x.type === "catch").length})`);

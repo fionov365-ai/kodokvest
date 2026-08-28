@@ -800,6 +800,10 @@ body.focus .lede{display:none}
 .draftnote[hidden]{display:none}
 .draftnote .rbtn{margin-left:auto}
 
+/* закрытая разминка: видно, что впереди есть ещё, и чем она откроется */
+.gamecard.locked{opacity:.55;cursor:default;border-style:dashed}
+.gamecard.locked:hover{transform:none}
+
 </style>
 
 </head>
@@ -5716,6 +5720,11 @@ window.GAMES = [
    Это отдельный раздел рядом с «Играми»: он не входит в сотню уроков,
    прогресс по нему хранится отдельно (S.warmups) и не влияет на звёзды.
 
+   Поле lesson — урок, после которого разминка перестаёт быть загадкой.
+   До него она показана закрытой и не может выпасть задачей дня: упражнение
+   про zip ребёнку из Мира 1 читать просто нечем. Разминка без lesson открыта
+   всегда.
+
    Поле code — это программа, которую видит ребёнок и по которой считается
    правильный ответ. Она обязана:
      - работать без ошибок и что-то печатать (проверяет tests/lessons.js);
@@ -5728,6 +5737,7 @@ window.GAMES = [
 window.WARMUPS = [
 {
   id: "predict-order",
+  lesson: "vars",
   type: "predict",
   title: "Порядок важен",
   emoji: "🔮",
@@ -5751,6 +5761,7 @@ print(b)
 },
 {
   id: "predict-division",
+  lesson: "math",
   type: "predict",
   title: "Три вида деления",
   emoji: "➗",
@@ -5772,6 +5783,7 @@ print(2 ** 10)
 },
 {
   id: "predict-strings",
+  lesson: "text-vs-num",
   type: "predict",
   title: "Строки умеют умножаться",
   emoji: "🔤",
@@ -5793,6 +5805,7 @@ print(len(s * 3))
 },
 {
   id: "predict-loop",
+  lesson: "for-range",
   type: "predict",
   title: "Сумма в цикле",
   emoji: "🔁",
@@ -5814,6 +5827,7 @@ for n in range(1, 5):
 },
 {
   id: "predict-alias",
+  lesson: "lists-first",
   type: "predict",
   title: "Два имени, один список",
   emoji: "🎭",
@@ -5841,6 +5855,7 @@ print(len(a))
    что даёт такой же вывод, как code. Пустые строки в блоки не идут. */
 {
   id: "blocks-greeting",
+  lesson: "vars",
   type: "blocks",
   title: "Соберём приветствие",
   emoji: "🧩",
@@ -5861,6 +5876,7 @@ print(greeting)
 },
 {
   id: "blocks-append",
+  lesson: "list-ops",
   type: "blocks",
   title: "Список по порядку",
   emoji: "📝",
@@ -5882,6 +5898,7 @@ print(fruits)
 },
 {
   id: "blocks-sum",
+  lesson: "lists-first",
   type: "blocks",
   title: "Сумма из цикла",
   emoji: "🔢",
@@ -5903,6 +5920,7 @@ print(total)
 },
 {
   id: "blocks-countdown",
+  lesson: "while-loop",
   type: "blocks",
   title: "Обратный отсчёт",
   emoji: "🚀",
@@ -5925,6 +5943,7 @@ print("Пуск!")
 },
 {
   id: "blocks-maxfn",
+  lesson: "functions",
   type: "blocks",
   title: "Кто больше",
   emoji: "⚖️",
@@ -5948,6 +5967,7 @@ print(bigger(2, 5))
 },
 {
   id: "predict-enumerate",
+  lesson: "dict-loop",
   type: "predict",
   title: "Номер и значение",
   emoji: "🔢",
@@ -5972,6 +5992,7 @@ for н, дело in enumerate(задачи, start=1):
 },
 {
   id: "blocks-enumerate",
+  lesson: "dict-loop",
   type: "blocks",
   title: "Пронумерованное меню",
   emoji: "🍲",
@@ -5994,6 +6015,7 @@ print("Приятного аппетита")
 },
 {
   id: "predict-zip",
+  lesson: "tuples",
   type: "predict",
   title: "Зелий меньше, чем героев",
   emoji: "🧪",
@@ -6017,6 +6039,7 @@ print("героев:", len(герои))
 },
 {
   id: "blocks-zip",
+  lesson: "tuples",
   type: "blocks",
   title: "Чек из двух списков",
   emoji: "🧾",
@@ -6056,6 +6079,7 @@ print("Итого:", sum(цены))
    ============================================================ */
 {
   id: "mem-alias",
+  lesson: "lists-first",
   type: "memory",
   title: "Две ссылки, один список",
   emoji: "🧠",
@@ -6081,6 +6105,7 @@ print(len(покупки))
 
 {
   id: "mem-copy",
+  lesson: "slices",
   type: "memory",
   title: "А теперь копия",
   emoji: "🧬",
@@ -6106,6 +6131,7 @@ print(len(было), len(копия))
 
 {
   id: "mem-strings",
+  lesson: "str-methods",
   type: "memory",
   title: "Строку не переделать",
   emoji: "🪨",
@@ -6131,6 +6157,7 @@ print(громко)
 
 {
   id: "mem-break",
+  lesson: "break-cont",
   type: "memory",
   title: "Что успело накопиться",
   emoji: "🛑",
@@ -6160,6 +6187,7 @@ print(всего, сколько)
 
 {
   id: "mem-scope",
+  lesson: "scope",
   type: "memory",
   title: "Внутри функции своя память",
   emoji: "📦",
@@ -6186,6 +6214,63 @@ print(счёт)
     "Пятая строка уже выполнилась, и её результат записан в местный счёт."
   ],
   note: "У каждого вызова функции своя память — свой кадр. Имя счёт внутри и имя счёт снаружи не мешают друг другу: это две разные коробки, и внешняя всё это время цела, со своей десяткой. Именно поэтому последняя строка программы напечатает 10, а не 4. Визуализатор рисует кадры отдельными рамками — открой его на этой программе и посмотри сам."
+},
+{
+  id: "predict-anyall",
+  lesson: "comp-if",
+  type: "predict",
+  title: "Хотя бы один или все",
+  emoji: "🔎",
+  tag: "списки",
+  intro: "any и all отвечают на вопрос ко всему списку сразу. Последняя строка — про пустой список, и там ответ неожиданный.",
+  brief: "Прочитай программу и запиши, что она напечатает — по строке на каждый print.",
+  code:
+`оценки = [5, 4, 3]
+пусто = []
+print(all([о >= 3 for о in оценки]))
+print(any([о == 2 for о in оценки]))
+print(any([о > 4 for о in оценки]), all([о > 4 for о in оценки]))
+print(any([x > 0 for x in пусто]), all([x > 0 for x in пусто]))
+`,
+  hints: [
+    "Сначала посчитай сам список из True и False, а уже потом спрашивай any или all.",
+    "any — «хотя бы один True», all — «все True». Это or и and по всему списку.",
+    "Пустой список: искать в нём нечего. any не нашёл ни одного True — значит False. А all не нашёл ни одного False, и придраться ему не к чему."
+  ],
+  note: "Первые три строки простые: все оценки не ниже трёх, двойки нет, выше четырёх есть одна — значит any True, а all False. Интересна последняя. У пустого списка any даёт False, а all даёт True — и это не ошибка. all отвечает «я не нашёл ни одного нарушения», а в пустом списке нарушить нечего. Это ловушка: если список внезапно оказался пустым, проверка через all скажет «всё в порядке» — и промолчит о том, что проверять было нечего."
+},
+{
+  id: "predict-isinstance",
+  lesson: "inherit",
+  type: "predict",
+  title: "Кто он такой",
+  emoji: "🐕",
+  tag: "классы",
+  intro: "Пёс унаследован от Зверя. Вопрос в том, кем его считает Python — и в одну ли сторону это работает.",
+  brief: "Прочитай программу и запиши, что она напечатает — по строке на каждый print.",
+  code:
+`class Зверь:
+    def голос(self):
+        return "..."
+
+
+class Пёс(Зверь):
+    def голос(self):
+        return "гав"
+
+
+шарик = Пёс()
+print(шарик.голос())
+print(isinstance(шарик, Пёс), isinstance(шарик, Зверь))
+print(isinstance(Зверь(), Пёс))
+print(type(шарик).__name__, type(шарик) == Зверь)
+`,
+  hints: [
+    "У Пса свой голос — родительский он перекрыл.",
+    "isinstance спрашивает «того ли ты рода». Потомок — это и свой класс, и родительский сразу.",
+    "А вот наоборот не работает: обычный Зверь ничего не знает про Пса. И type() называет ровно один класс, без всякой родни."
+  ],
+  note: "Наследование работает в одну сторону. Пёс — это и Пёс, и Зверь: обе проверки True, и поэтому там, где ждут Зверя, Пёс подойдёт. Обратное неверно — Зверь Псом не является. Последняя строка про разницу между isinstance и type: type даёт ровно один класс, «Пёс», и сравнение type(шарик) == Зверь даёт False, хотя Пёс и правда зверь. Поэтому род проверяют через isinstance, а не через type."
 }
 ];
 
@@ -7564,6 +7649,9 @@ window.CHEATSHEET = [
     { id:"compare", sig:"== != < > <= >=", lesson:"if-else",
       what:"сравнение. Одно равно присваивает, два — сравнивают",
       code:'print(3 == 3, 3 != 3, 2 <= 2)' },
+    { id:"any-all", sig:"any(список), all(список)", lesson:"comp-if",
+      what:"«хотя бы один True» и «все True» — это or и and сразу по всему списку. У пустого: any False, all True",
+      code:'числа = [4, 7, 2]\nprint(any([n > 5 for n in числа]), all([n > 5 for n in числа]))\nprint(any([]), all([]))' },
     { id:"logic", sig:"and, or, not", lesson:"logic",
       what:"and — оба, or — хотя бы одно, not — наоборот",
       code:'возраст = 12\nprint(возраст > 10 and возраст < 15)\nprint(not возраст == 12)' },
@@ -7672,6 +7760,9 @@ window.CHEATSHEET = [
     { id:"none", sig:"None и is None", lesson:"fn-args",
       what:"«ничего». Сравнивают через is, а не через ==",
       code:'def найти(с, что):\n    for x in с:\n        if x == что:\n            return x\n    return None\n\n\nprint(найти([1, 2], 9) is None)' },
+    { id:"isinstance", sig:"isinstance(объект, Класс)", lesson:"inherit",
+      what:"того ли рода объект. Для потомка True и про свой класс, и про родительский — type() так не умеет",
+      code:'class Зверь:\n    pass\n\n\nclass Кот(Зверь):\n    pass\n\n\nмурка = Кот()\nprint(isinstance(мурка, Кот), isinstance(мурка, Зверь), isinstance(мурка, int))' },
     { id:"type", sig:"type(значение)", lesson:"text-vs-num",
       what:"что это вообще такое. Первое, что смотрят при странной ошибке",
       code:'print(type(7).__name__, type("7").__name__, type([]).__name__)' },
@@ -8978,7 +9069,10 @@ CONTENT.world2 = {
       demo:'words = ["кот", "барсук", "ёж", "самолёт", "кит"]\nprint([w for w in words if len(w) > 3])\nprint([w.upper() for w in words if w.startswith("к")])' },
     { h:"А это совсем другое",
       p:"<code>if ... else</code> <b>перед</b> <code>for</code> — не фильтр, а выбор значения. Элементов остаётся столько же, просто вместо каждого подставляется одно из двух. Сравни длины списков.",
-      demo:'nums = [1, 2, 3, 4]\nprint(["чёт" if n % 2 == 0 else "нечёт" for n in nums])\nprint([n for n in nums if n % 2 == 0])' }
+      demo:'nums = [1, 2, 3, 4]\nprint(["чёт" if n % 2 == 0 else "нечёт" for n in nums])\nprint([n for n in nums if n % 2 == 0])' },
+    { h:"Когда нужен не список, а ответ да или нет",
+      p:"Иногда вопрос другой: не «какие подходят», а «есть ли хоть один» или «все ли». Сделай включение из условий — получится список из <code>True</code> и <code>False</code>, — а потом спроси <code>any</code> (хотя бы один) или <code>all</code> (все). Это те же <code>or</code> и <code>and</code> из Мира 1, только сразу по всему списку.",
+      demo:'оценки = [5, 3, 4, 2]\nпроверки = [о >= 3 for о in оценки]\nprint(проверки)\nprint(any(проверки), all(проверки))\nprint(any([о == 2 for о in оценки]))' }
   ],
   task: {
     type:"code",
@@ -9880,7 +9974,7 @@ CONTENT.world3 = {
   lede: "Когда у нескольких классов много общего, общее выносят в один класс, а особенное оставляют в потомках. Это наследование.",
   theory: [
     { h:"Класс в скобках — родитель",
-      p:"Потомок получает все методы родителя бесплатно. Своего кода в нём столько, сколько нужно на отличия — иногда одна строка.",
+      p:"Потомок получает все методы родителя бесплатно. Своего кода в нём столько, сколько нужно на отличия — иногда одна строка. Последняя строка примера — про <code>isinstance(объект, Класс)</code>: он отвечает, того ли объект рода. Для потомка ответ <b>True и про свой класс, и про родительский</b> — в этом весь смысл наследования: где ждут родителя, подойдёт любой потомок. <code>type()</code> так не умеет, он называет ровно один класс.",
       demo:'class Hero:\n    def __init__(self, name, hp):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp} hp"\n\n\nclass Mage(Hero):\n    pass\n\n\nm = Mage("Аня", 8)\nprint(m.card())\nprint(isinstance(m, Mage), isinstance(m, Hero))' },
     { h:"Переопределение: свой метод вместо родительского",
       p:"Если у потомка есть метод с тем же именем, он побеждает. Родительский при этом не портится — у других потомков он работает как раньше.",
@@ -11485,8 +11579,8 @@ CONTENT.world5 = {
       p:"Города может не быть. Тогда <code>min</code> и <code>max</code> упадут на пустом списке, поэтому проверку «данных нет» ставят <b>первой</b>, до всех вычислений.",
       demo:'def сводка(дни):\n    if not дни:\n        return "данных нет"\n    return f"{len(дни)} дн., максимум {max(д[\'днём\'] for д in дни)}"\n\n\nprint(сводка([{"днём": 21}, {"днём": 24}]))\nprint(сводка([]))' },
 
-    { h:"Два вопроса ко всем данным сразу",
-      p:"<code>any</code> и <code>all</code> вместе с выражением-генератором отвечают на вопросы «хоть где-то?» и «везде ли?» одной строкой — без цикла и без флажков.",
+    { h:"Вспомним any и all — и что изменилось",
+      p:"Сами <code>any</code> и <code>all</code> знакомы с Мира 2: «хотя бы один» и «все». Но там внутри скобок стоял <b>список</b> из <code>True</code> и <code>False</code>, а здесь — <b>выражение-генератор</b>: те же слова без квадратных скобок. Разница не в ответе, а в том, что список целиком не строится: значения считаются по одному, и на первом же неподходящем <code>all</code> останавливается. На тысяче замеров это заметно.",
       demo:'температуры = [21, 24, 19, 15, 12, 17]\nprint("теплее 18 хотя бы раз:", any(t > 18 for t in температуры))\nprint("всегда выше нуля:", all(t > 0 for t in температуры))\nprint("везде теплее 18:", all(t > 18 for t in температуры))' }
   ],
   task:{
@@ -12206,7 +12300,13 @@ function takeShieldNote(){
    сервера. Берём её из уже проверенного пула разминок по хэшу даты, так что
    каждый день — новая, а порядок предсказуем. */
 function dailyPick(key){
-  var ws = warmupsList();
+  /* Только из открытых. Набор открытых растёт вместе с прогрессом, поэтому
+     задача одной и той же даты может смениться после пройденного урока —
+     это не страшно: выполненная задача помечена в S.daily и обратно не
+     вернётся. А если открытых нет вовсе (первые дни, уроков пройдено ноль),
+     честно возвращаем null: задача, которую нечем читать, хуже, чем её
+     отсутствие, и на экране «Сегодня» об этом написано прямым текстом. */
+  var ws = warmupsOpen();
   if (!ws.length) return null;
   key = key || dayKey();
   var h = 0;
@@ -14338,6 +14438,14 @@ function openGame(id){
    ============================================================ */
 function warmupsList(){ return (window.WARMUPS || []); }
 function warmupDone(id){ return !!(S.warmups && S.warmups[id]); }
+/* Разминка «откроется позже» — не каприз, а защита от бессмыслицы: упражнение
+   про zip ребёнку из Мира 1 читать нечем, а задача дня, которую нечем читать,
+   отбивает охоту заходить. Поле lesson — урок, после которого разминка
+   перестаёт быть загадкой; разминка без lesson открыта всегда. */
+function warmupOpen(w){
+  return !w || !w.lesson || solved(w.lesson) || !!(S.admin && S.admin.unlockAll);
+}
+function warmupsOpen(){ return warmupsList().filter(warmupOpen); }
 
 /* Сравнение предсказания с настоящим выводом. Хвостовые пробелы в каждой
    строке и пустые строки в конце не считаем — их ребёнок мог не набрать,
@@ -14800,7 +14908,10 @@ function screenToday(){
 
   var taskCard;
   if (!pick){
-    taskCard = '<div class="card"><p class="lede">Задача дня появится, когда подключены разминки.</p></div>';
+    /* Ноль открытых разминок — это нормальное начало пути, а не поломка */
+    taskCard = '<div class="card"><h3>🔥 Задача дня появится совсем скоро</h3>' +
+      '<p>Она берётся из разминок, а разминка открывается после урока, на котором ' +
+      'её можно прочитать. Пройди первые уроки Мира 1 — и задача дня появится тут сама.</p></div>';
   } else {
     var isBlocks = pick.type === "blocks";
     var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
@@ -14870,23 +14981,31 @@ function screenWarmups(){
   enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
-  var done = ws.filter(function(w){ return warmupDone(w.id); }).length;
+  var open = warmupsOpen();
+  var done = open.filter(function(w){ return warmupDone(w.id); }).length;
+  var locked = ws.length - open.length;
   var h = '<div class="lvlhead"><div><div class="idx">думай, потом проверяй</div><h1>🔮 Разминка</h1></div>' +
-    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + ws.length + '</span></div></div>' +
+    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + open.length + '</span></div></div>' +
     '<p class="lede">Короткие загадки «угадай вывод». Прочитай программу и запиши, что она напечатает, — до запуска. ' +
     'Это тренирует главное умение программиста: держать ход программы в голове. Звёзды тут не начисляются, ошибаться можно сколько угодно.</p>' +
     '<div class="gamegrid">';
   ws.forEach(function(w){
-    h += '<button class="gamecard" data-id="' + w.id + '">' +
-      '<span class="gemoji">' + w.emoji + '</span>' +
-      '<b>' + esc(w.title) + (warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
-      '<span>' + esc(w.intro) + '</span>' +
+    /* Закрытые не прячем, а показываем замком: видно, что впереди есть ещё,
+       и понятно, какой урок это откроет. Спрятанное просто не существует. */
+    var op = warmupOpen(w);
+    var les = op ? null : CURRICULUM.byId(w.lesson);
+    h += '<button class="gamecard' + (op ? "" : " locked") + '" data-id="' + w.id + '"' +
+      (op ? "" : " disabled") + '>' +
+      '<span class="gemoji">' + (op ? w.emoji : "🔒") + '</span>' +
+      '<b>' + esc(w.title) + (op && warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
+      '<span>' + (op ? esc(w.intro)
+                     : "Откроется после урока " + (les ? les.num + " «" + esc(les.title) + "»" : "из программы")) + '</span>' +
       '<span class="wtag">' + esc(w.tag) + '</span></button>';
   });
   h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
-    b.onclick = function(){ openWarmup(b.getAttribute("data-id")); };
+    b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
   });
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
@@ -17426,6 +17545,7 @@ window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
+  warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,

@@ -297,7 +297,13 @@ function takeShieldNote(){
    сервера. Берём её из уже проверенного пула разминок по хэшу даты, так что
    каждый день — новая, а порядок предсказуем. */
 function dailyPick(key){
-  var ws = warmupsList();
+  /* Только из открытых. Набор открытых растёт вместе с прогрессом, поэтому
+     задача одной и той же даты может смениться после пройденного урока —
+     это не страшно: выполненная задача помечена в S.daily и обратно не
+     вернётся. А если открытых нет вовсе (первые дни, уроков пройдено ноль),
+     честно возвращаем null: задача, которую нечем читать, хуже, чем её
+     отсутствие, и на экране «Сегодня» об этом написано прямым текстом. */
+  var ws = warmupsOpen();
   if (!ws.length) return null;
   key = key || dayKey();
   var h = 0;
@@ -2429,6 +2435,14 @@ function openGame(id){
    ============================================================ */
 function warmupsList(){ return (window.WARMUPS || []); }
 function warmupDone(id){ return !!(S.warmups && S.warmups[id]); }
+/* Разминка «откроется позже» — не каприз, а защита от бессмыслицы: упражнение
+   про zip ребёнку из Мира 1 читать нечем, а задача дня, которую нечем читать,
+   отбивает охоту заходить. Поле lesson — урок, после которого разминка
+   перестаёт быть загадкой; разминка без lesson открыта всегда. */
+function warmupOpen(w){
+  return !w || !w.lesson || solved(w.lesson) || !!(S.admin && S.admin.unlockAll);
+}
+function warmupsOpen(){ return warmupsList().filter(warmupOpen); }
 
 /* Сравнение предсказания с настоящим выводом. Хвостовые пробелы в каждой
    строке и пустые строки в конце не считаем — их ребёнок мог не набрать,
@@ -2891,7 +2905,10 @@ function screenToday(){
 
   var taskCard;
   if (!pick){
-    taskCard = '<div class="card"><p class="lede">Задача дня появится, когда подключены разминки.</p></div>';
+    /* Ноль открытых разминок — это нормальное начало пути, а не поломка */
+    taskCard = '<div class="card"><h3>🔥 Задача дня появится совсем скоро</h3>' +
+      '<p>Она берётся из разминок, а разминка открывается после урока, на котором ' +
+      'её можно прочитать. Пройди первые уроки Мира 1 — и задача дня появится тут сама.</p></div>';
   } else {
     var isBlocks = pick.type === "blocks";
     var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
@@ -2961,23 +2978,31 @@ function screenWarmups(){
   enterScreen();
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
-  var done = ws.filter(function(w){ return warmupDone(w.id); }).length;
+  var open = warmupsOpen();
+  var done = open.filter(function(w){ return warmupDone(w.id); }).length;
+  var locked = ws.length - open.length;
   var h = '<div class="lvlhead"><div><div class="idx">думай, потом проверяй</div><h1>🔮 Разминка</h1></div>' +
-    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + ws.length + '</span></div></div>' +
+    '<div class="right"><span class="tag">разгадано ' + done + ' из ' + open.length + '</span></div></div>' +
     '<p class="lede">Короткие загадки «угадай вывод». Прочитай программу и запиши, что она напечатает, — до запуска. ' +
     'Это тренирует главное умение программиста: держать ход программы в голове. Звёзды тут не начисляются, ошибаться можно сколько угодно.</p>' +
     '<div class="gamegrid">';
   ws.forEach(function(w){
-    h += '<button class="gamecard" data-id="' + w.id + '">' +
-      '<span class="gemoji">' + w.emoji + '</span>' +
-      '<b>' + esc(w.title) + (warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
-      '<span>' + esc(w.intro) + '</span>' +
+    /* Закрытые не прячем, а показываем замком: видно, что впереди есть ещё,
+       и понятно, какой урок это откроет. Спрятанное просто не существует. */
+    var op = warmupOpen(w);
+    var les = op ? null : CURRICULUM.byId(w.lesson);
+    h += '<button class="gamecard' + (op ? "" : " locked") + '" data-id="' + w.id + '"' +
+      (op ? "" : " disabled") + '>' +
+      '<span class="gemoji">' + (op ? w.emoji : "🔒") + '</span>' +
+      '<b>' + esc(w.title) + (op && warmupDone(w.id) ? ' <span class="edittag done">разгадано ✓</span>' : '') + '</b>' +
+      '<span>' + (op ? esc(w.intro)
+                     : "Откроется после урока " + (les ? les.num + " «" + esc(les.title) + "»" : "из программы")) + '</span>' +
       '<span class="wtag">' + esc(w.tag) + '</span></button>';
   });
   h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
-    b.onclick = function(){ openWarmup(b.getAttribute("data-id")); };
+    b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
   });
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
@@ -5517,6 +5542,7 @@ window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
+  warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,

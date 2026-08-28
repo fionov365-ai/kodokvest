@@ -443,7 +443,10 @@ CONTENT.world2 = {
       demo:'words = ["кот", "барсук", "ёж", "самолёт", "кит"]\nprint([w for w in words if len(w) > 3])\nprint([w.upper() for w in words if w.startswith("к")])' },
     { h:"А это совсем другое",
       p:"<code>if ... else</code> <b>перед</b> <code>for</code> — не фильтр, а выбор значения. Элементов остаётся столько же, просто вместо каждого подставляется одно из двух. Сравни длины списков.",
-      demo:'nums = [1, 2, 3, 4]\nprint(["чёт" if n % 2 == 0 else "нечёт" for n in nums])\nprint([n for n in nums if n % 2 == 0])' }
+      demo:'nums = [1, 2, 3, 4]\nprint(["чёт" if n % 2 == 0 else "нечёт" for n in nums])\nprint([n for n in nums if n % 2 == 0])' },
+    { h:"Когда нужен не список, а ответ да или нет",
+      p:"Иногда вопрос другой: не «какие подходят», а «есть ли хоть один» или «все ли». Сделай включение из условий — получится список из <code>True</code> и <code>False</code>, — а потом спроси <code>any</code> (хотя бы один) или <code>all</code> (все). Это те же <code>or</code> и <code>and</code> из Мира 1, только сразу по всему списку.",
+      demo:'оценки = [5, 3, 4, 2]\nпроверки = [о >= 3 for о in оценки]\nprint(проверки)\nprint(any(проверки), all(проверки))\nprint(any([о == 2 for о in оценки]))' }
   ],
   task: {
     type:"code",
