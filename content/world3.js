@@ -43,7 +43,9 @@ CONTENT.world3 = {
       "Скидка 10% значит, что платим 90%: умножить на (100 - discount) и разделить на 100",
       "Округление: return round(price * count * (100 - discount) / 100, 2)"
     ],
-    check:{ kind:"output" }
+    check:{ kind:"output",
+      needCode:["def "],
+      needMsg:"Задание про функцию: её нужно объявить через def и позвать." }
   }
 },
 
@@ -80,7 +82,9 @@ CONTENT.world3 = {
       "На приёме одна строка вместо трёх: low, high, spread = bounds(nums)",
       "Целиком: return min(nums), max(nums), max(nums) - min(nums)"
     ],
-    check:{ kind:"output" }
+    check:{ kind:"output",
+      needCode:["def "],
+      needMsg:"Задание про функцию: её нужно объявить через def и позвать." }
   }
 },
 
@@ -119,7 +123,9 @@ CONTENT.world3 = {
       "Последний вызов тратит 100 из 6 — значит копилка должна остаться прежней"
     ],
     check:{ kind:"output", noCode:["global"],
-            noMsg:"Смысл урока в том, чтобы обойтись без global: функция получает значение параметром и возвращает результат." }
+            noMsg:"Смысл урока в том, чтобы обойтись без global: функция получает значение параметром и возвращает результат.",
+      needCode:["def "],
+      needMsg:"Задание про функцию: её нужно объявить через def и позвать." }
   }
 },
 
@@ -195,7 +201,9 @@ CONTENT.world3 = {
       "len(nums), sum(nums), max(nums) — всё, что нужно для строки. Собери её f-строкой",
       "Для tag: sorted(props) даёт ключи по алфавиту, пары собираются включением, а склеивает их \"; \".join([...])"
     ],
-    check:{ kind:"output" }
+    check:{ kind:"output",
+      needCode:["def "],
+      needMsg:"Задание про функции: их нужно объявить через def." }
   }
 },
 
@@ -233,7 +241,9 @@ CONTENT.world3 = {
       "return n % 10 + digit_sum(n // 10)"
     ],
     check:{ kind:"output", noCode:["for","while"],
-            noMsg:"Задание про рекурсию: цифры нужно перебрать вызовами самой функции, а не циклом. Убери for и while." }
+            noMsg:"Задание про рекурсию: цифры нужно перебрать вызовами самой функции, а не циклом. Убери for и while.",
+      needCode:["def "],
+      needMsg:"Задание про рекурсию: функцию нужно объявить через def." }
   }
 },
 
@@ -270,7 +280,9 @@ CONTENT.world3 = {
       "Проверка «есть ли ключ» — знакомый оператор in: if sign not in table",
       "Достали функцию — сразу вызвали: return table[sign](a, b)"
     ],
-    check:{ kind:"output" }
+    check:{ kind:"output",
+      needCode:["def "],
+      needMsg:"Задание про функции как значения: их нужно объявить через def." }
   }
 },
 
@@ -587,7 +599,9 @@ CONTENT.world3 = {
       "add: сначала self.coins = self.coins + amount, потом return self.coins",
       "spend: если amount > self.coins — сразу return self.coins, ничего не меняя"
     ],
-    check:{ kind:"output" }
+    check:{ kind:"output",
+      needCode:["class "],
+      needMsg:"Задание про класс: его нужно объявить через class." }
   }
 },
 

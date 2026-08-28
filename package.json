@@ -1,6 +1,6 @@
 {
   "name": "kodokvest",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "private": true,
   "description": "Кодоквест — тренажёр Python для подростков",
   "scripts": {
@@ -10,7 +10,11 @@
     "test:lessons": "node tests/lessons.js",
     "test:full": "node build.js && node tests/full-run.js",
     "test:cloud": "node tests/cloud-function.js",
-    "test:content": "node tests/content-vs-python.js"
+    "test:content": "node tests/content-vs-python.js",
+    "audit": "node tests/audit.js && node tests/echo-check.js && node build.js && node tests/bypass-check.js",
+    "audit:lessons": "node tests/audit.js",
+    "audit:echo": "node tests/echo-check.js",
+    "audit:bypass": "node build.js && node tests/bypass-check.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"

@@ -52,7 +52,7 @@ window.CHEATSHEET = [
     { id:"str-mul", sig:'"-" * 10', lesson:"text-vs-num",
       what:"повторяет строку — так рисуют линии и полоски",
       code:'print("=" * 12)\nprint("#" * 3 + "." * 7)' },
-    { id:"len", sig:"len(что-то)", lesson:"str-methods",
+    { id:"len", sig:"len(что-то)", lesson:"fstrings",
       what:"длина строки, списка, словаря — числом",
       code:'print(len("Кодоквест"), len([1, 2, 3]))' },
     { id:"upper", sig:".upper() и .lower()", lesson:"str-methods",
@@ -64,7 +64,7 @@ window.CHEATSHEET = [
     { id:"split", sig:".split(разделитель)", lesson:"str-methods",
       what:"режет строку на список. Без разделителя режет по пробелам",
       code:'print("кот бегемот ёж".split())\nprint("а,б,в".split(","))' },
-    { id:"join", sig:'"разделитель".join(список)', lesson:"text-work",
+    { id:"join", sig:'"разделитель".join(список)', lesson:"str-methods",
       what:"склеивает список строк в одну строку. Обратное к split",
       code:'print(", ".join(["кот", "ёж", "сова"]))' },
     { id:"replace", sig:".replace(что, на что)", lesson:"str-methods",
@@ -76,7 +76,7 @@ window.CHEATSHEET = [
     { id:"str-slice", sig:"строка[2:5]", lesson:"text-work",
       what:"кусок строки: с 2-го знака по 5-й, не включая 5-й",
       code:'с = "кодоквест"\nprint(с[0], с[:3], с[-4:])' },
-    { id:"startswith", sig:".startswith() и .endswith()", lesson:"text-work",
+    { id:"startswith", sig:".startswith() и .endswith()", lesson:"str-methods",
       what:"проверяет начало и конец строки",
       code:'print("отчёт.txt".endswith(".txt"))' }
   ]
