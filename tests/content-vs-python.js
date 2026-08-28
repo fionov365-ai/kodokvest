@@ -101,11 +101,87 @@ CURRICULUM.forEach(w => {
   });
 });
 
+/* Кадры пошагового прогона и короткая запись значения — ровно то же, что
+   делают vizRecord() и vizShort() в игре. Совпадение с ними важно: ребёнок
+   потом увидит эти самые значения в визуализаторе. */
+function memFrames(code){
+  let st;
+  try { st = MP.stepper(code, {}); } catch (e){ return []; }
+  const idMap = new Map(), skip = st.interp && st.interp.builtinNames, out = [];
+  for (let g = 0; g < 5000; g++){
+    const s = st.next();
+    if (s.error || s.done) break;
+    const hs = MP.heapSnapshot(s.env, idMap, skip, s.stack || []);
+    out.push({ line: s.line, vars: hs.vars, objects: hs.objects });
+  }
+  return out;
+}
+function memShort(cell, objects){
+  if (!cell) return "";
+  if (cell.t !== "ref") return cell.text;
+  const o = objects && objects[cell.id];
+  if (!o) return "объект";
+  if (o.kind === "dict")
+    return "{" + o.pairs.map(p => p.key + ": " + memShort(p.val, objects)).join(", ") + "}";
+  const inner = (o.items || []).map(x => memShort(x, objects)).join(", ");
+  return o.kind === "list" ? "[" + inner + "]" : o.kind === "tuple" ? "(" + inner + ")" : "{" + inner + "}";
+}
+
 /* Разминки «угадай вывод»: правильный ответ ребёнку — это вывод программы,
    поэтому он обязан совпадать с настоящим python3 до знака. */
 let warmups = 0;
 (global.WARMUPS || []).forEach(w => {
   if (compare("разминка " + w.id, w.code, null, null, null) !== false) warmups++;
+});
+
+/* Разминки «предскажи память»: правильный ответ ребёнку — это ЗНАЧЕНИЯ
+   переменных в момент остановки, а их считает наш снимок кучи. Проверить
+   его настоящим Python можно так: вставить перед той же строкой печать
+   repr() каждой переменной. Строка stop выполняется ровно один раз (это
+   отдельно проверяет lessons.js), поэтому вставка ей строго равносильна.
+
+   Именно эта сверка и делает механику честной: без неё «правильный ответ»
+   зависел бы от того, как наш движок печатает списки и строки. */
+let memChecked = 0;
+(global.WARMUPS || []).filter(w => w.type === "memory").forEach(w => {
+  const frames = memFrames(w.code);
+  const hit = frames.filter(f => f.line === w.stop)[0];
+  if (!hit){ bad++; console.log("--- ПАМЯТЬ: " + w.id + " — строка " + w.stop + " не выполняется"); return; }
+
+  const mine = {};
+  for (const n of w.ask){
+    const v = hit.vars.filter(x => x.name === n)[0];
+    if (!v){ bad++; console.log("--- ПАМЯТЬ: " + w.id + " — нет переменной " + n); return; }
+    mine[n] = memShort(v.cell, hit.objects);
+  }
+
+  const lines = String(w.code).replace(/\n+$/, "").split("\n");
+  const indent = lines[w.stop - 1].match(/^\s*/)[0];
+  const ins = indent + "print(" + w.ask.map(n => "repr(" + n + ")").join(', "|", ') + ")";
+  const variant = lines.slice(0, w.stop - 1).concat([ins], lines.slice(w.stop - 1)).join("\n") + "\n";
+
+  fs.readdirSync(TMP).forEach(n => { try { fs.rmSync(path.join(TMP, n), { recursive:true, force:true }); } catch(e){} });
+  const f = path.join(TMP, "mem.py");
+  fs.writeFileSync(f, variant);
+  let out;
+  try { out = execFileSync("python3", [f], { encoding: "utf8", cwd: TMP }); }
+  catch (e){
+    bad++;
+    console.log("--- ПАМЯТЬ: " + w.id + " — python3 не выполнил проверку: " +
+                String(e.stderr || "").trim().split("\n").pop());
+    return;
+  }
+  const want = out.split("\n")[0].split(" | ");
+  let ok = true;
+  w.ask.forEach((n, i) => {
+    if (mine[n] !== want[i]){
+      ok = false; bad++;
+      console.log("--- ПАМЯТЬ: РАСХОЖДЕНИЕ " + w.id + " по «" + n + "»");
+      console.log("    python3: " + JSON.stringify(want[i]));
+      console.log("    движок : " + JSON.stringify(mine[n]));
+    }
+  });
+  if (ok) memChecked++;
 });
 
 /* Раздел «Ты и ИИ»: predict — ответ ребёнку это вывод code; code/fix —
@@ -121,7 +197,9 @@ let ailab = 0;
   /* review: вердикт вычисляется из четырёх запусков, и все четыре обязаны
      совпасть с настоящим python3. Иначе «правильный ответ» задания зависел бы
      от особенностей нашего мини-движка, а не от Python. */
-  if (x.type === "review"){
+  /* catch: то же самое и по той же причине. Здесь это ещё важнее — решает
+     ребёнок, и «поймал/не поймал» считается сравнением двух запусков. */
+  if (x.type === "review" || x.type === "catch"){
     if (compare("ты-и-ии " + x.id + " · код ИИ", x.code, null, null, null) !== false) ailab++;
     compare("ты-и-ии " + x.id + " · правильная версия", x.truth, null, null, null);
     compare("ты-и-ии " + x.id + " · код ИИ с probe", x.code + "\n" + x.probe, null, null, null);
@@ -140,8 +218,10 @@ let projsteps = 0;
   (p.steps || []).forEach((step, i) => {
     if (compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, null) !== false)
       projsteps++;
-    if (i === 0 && step.starter !== undefined)
-      compare("проект " + p.id + " · заготовка", step.starter, null, null, null);
+    /* заготовка любого шага, а не только первого: в проекте с ИИ-напарником
+       шаг начинается с его редакции, и ребёнок запускает её своими руками */
+    if (step.starter !== undefined)
+      compare("проект " + p.id + " · заготовка шага " + (i + 1), step.starter, null, null, null);
   });
 });
 
@@ -161,6 +241,7 @@ try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
    слова «пропущено» и читались как его расшифровка — выходило, будто разминки
    с python3 не сверяются вовсе. */
 console.log("\nсверено с python3: " + checked + " (из них разминок: " + warmups +
+            ", снимков памяти: " + memChecked +
             ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ", шпаргалка: " + sheetChecked +
             "), пропущено как черепашка и случайность: " + skipped);
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");

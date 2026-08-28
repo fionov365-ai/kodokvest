@@ -1388,3 +1388,41 @@ print("путь/к/файлу".rsplit("/", 1))
 строка = "/оценка?имя=аня&балл=5"
 путь, хвост = строка.split("?", 1)
 print(путь, хвост.split("&"))
+### re_compile
+import re
+СТРОКА = re.compile(r"(\d\d):(\d\d) (\w+) (.+)")
+ЧИСЛО = re.compile(r"\d+")
+журнал = "12:01 INFO вошла Аня\n12:07 ERROR нет файла карты"
+for строка in журнал.split("\n"):
+    m = СТРОКА.match(строка)
+    print(m.group(3), m.group(1) + ":" + m.group(2), m.group(4))
+print(ЧИСЛО.findall("аня 7, боря 12"))
+print(ЧИСЛО.sub("N", "аня 7, боря 12"))
+print(re.compile(r",\s*").split("аня, боря,витя"))
+print(ЧИСЛО.search("заказ 4512").group(0))
+print(ЧИСЛО.match("аня 7"))
+print(ЧИСЛО.fullmatch("4512").group(0))
+print(ЧИСЛО.pattern)
+print(ЧИСЛО)
+print(re.compile(r"[а-я]+", re.IGNORECASE).findall("Аня и Боря"))
+print(re.escape("2+2=4?"))
+### str_concat_implicit
+имя = "Аня"
+очки = 7
+print("раз" "два" "три")
+текст = (
+    "Первая часть, "
+    "вторая часть, "
+    "третья."
+)
+print(текст)
+письмо = (f"Привет, {имя}!\n"
+          f"У тебя {очки} очков.\n"
+          "Заходи ещё.")
+print(письмо)
+print("начало: " f"{очки * 2}" " — конец")
+print(len("аб" "вг"))
+print(("y" "z") * 2)
+"строка сама по себе"
+"вторая строка сама по себе"
+print("две отдельные строки — не склейка")

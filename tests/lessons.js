@@ -247,14 +247,28 @@ CURRICULUM.forEach(w => {
    что заполнены поля, без которых карточка развалится. */
 let warmups = 0;
 const seenIds = {};
+/* кадры пошагового прогона — то же, что vizRecord() в игре: по кадру на
+   строку, с именами переменных из снимка кучи */
+function memFrames(code){
+  let st;
+  try { st = MP.stepper(code, {}); } catch (e){ return []; }
+  const idMap = new Map(), skip = st.interp && st.interp.builtinNames, out = [];
+  for (let g = 0; g < 5000; g++){
+    const s = st.next();
+    if (s.error || s.done) break;
+    const hs = MP.heapSnapshot(s.env, idMap, skip, s.stack || []);
+    out.push({ line: s.line, vars: hs.vars, objects: hs.objects });
+  }
+  return out;
+}
 (global.WARMUPS || []).forEach(w => {
   warmups++;
   const id = w.id || "(без id)";
   if (!w.id) say(`[разминка] у разминки нет id`);
   else if (seenIds[w.id]) say(`[разминка] ${id}: повтор id`);
   seenIds[w.id] = 1;
-  if (w.type !== "predict" && w.type !== "blocks")
-    say(`[разминка] ${id}: type должен быть "predict" или "blocks", а он «${w.type}»`);
+  if (!["predict", "blocks", "memory"].includes(w.type))
+    say(`[разминка] ${id}: type должен быть predict/blocks/memory, а он «${w.type}»`);
   ["title", "emoji", "tag", "intro", "brief", "code", "note"].forEach(f => {
     if (!w[f] || !String(w[f]).trim()) say(`[разминка] ${id}: пустое поле «${f}»`);
   });
@@ -269,6 +283,36 @@ const seenIds = {};
     const lines = String(w.code || "").split("\n").filter(s => s.trim() !== "");
     if (lines.length < 3)
       say(`[разминка] ${id}: в blocks всего ${lines.length} строк — собирать нечего, нужно ≥3`);
+  }
+
+  /* «предскажи память»: правильный ответ не записан в задании, его считает
+     пошаговый прогон. Значит проверять надо не ответ, а саму постановку:
+     строка stop обязана выполниться РОВНО ОДИН раз (иначе «здесь» значит
+     разное), а все переменные из ask обязаны в этот момент существовать. */
+  if (w.type === "memory"){
+    const stop = w.stop;
+    if (typeof stop !== "number" || stop < 1)
+      return say(`[разминка] ${id}: у memory нет номера строки stop`);
+    if (!Array.isArray(w.ask) || !w.ask.length)
+      return say(`[разминка] ${id}: у memory нет списка переменных ask`);
+    const src = String(w.code).replace(/\n+$/, "").split("\n");
+    if (stop > src.length)
+      return say(`[разминка] ${id}: stop = ${stop}, а в программе ${src.length} строк`);
+    if (!src[stop - 1].trim() || src[stop - 1].trim()[0] === "#")
+      say(`[разминка] ${id}: строка ${stop} пустая или комментарий — на ней не замереть`);
+
+    const frames = memFrames(w.code);
+    const hits = frames.filter(f => f.line === stop);
+    if (hits.length !== 1)
+      return say(`[разминка] ${id}: строка ${stop} выполняется ${hits.length} раз, а должна ровно один — ` +
+                 `иначе «замерли здесь» значит разное`);
+    const seenName = {};
+    w.ask.forEach(n => {
+      if (seenName[n]) say(`[разминка] ${id}: переменная «${n}» в ask дважды`);
+      seenName[n] = 1;
+      if (!hits[0].vars.filter(v => v.name === n).length)
+        say(`[разминка] ${id}: переменной «${n}» на строке ${stop} ещё не существует`);
+    });
   }
 });
 
@@ -285,8 +329,8 @@ const seenAI = {};
   if (!x.id) say(`[ты-и-ии] у задания нет id`);
   else if (seenAI[x.id]) say(`[ты-и-ии] ${id}: повтор id`);
   seenAI[x.id] = 1;
-  if (!["predict", "code", "fix", "review"].includes(x.type))
-    say(`[ты-и-ии] ${id}: type должен быть predict/code/fix/review, а он «${x.type}»`);
+  if (!["predict", "code", "fix", "review", "catch"].includes(x.type))
+    say(`[ты-и-ии] ${id}: type должен быть predict/code/fix/review/catch, а он «${x.type}»`);
   ["title", "emoji", "tag", "intro", "brief", "note"].forEach(f => {
     if (!x[f] || !String(x[f]).trim()) say(`[ты-и-ии] ${id}: пустое поле «${f}»`);
   });
@@ -299,6 +343,49 @@ const seenAI = {};
     if (r.error) say(`[ты-и-ии] ${id}: программа падает — ${r.error.kind}: ${r.error.msg}`);
     else if (!r.output || !r.output.trim())
       say(`[ты-и-ии] ${id}: программа ничего не печатает — предсказывать нечего`);
+    return;
+  }
+
+  /* catch: «докажи, что код ИИ неправ». Единственного правильного ответа нет —
+     годится любая проверка, разводящая две версии. Поэтому проверять надо не
+     ответ ребёнка, а САМУ ЗАДАЧУ: она обязана быть решаемой и честной.
+
+     Два требования, и оба существенные:
+       run(code) === run(truth)                  баг СПРЯТАН за примером автора.
+         Иначе задания нет: расхождение видно сразу, ничего искать не нужно.
+       run(code+probe) !== run(truth+probe)      поймать вообще возможно.
+         probe — эталонная проверка; она не сверяется с ответом ребёнка,
+         а доказывает, что решение существует. */
+  if (x.type === "catch"){
+    for (const f of ["claim", "code", "truth", "probe"])
+      if (x[f] === undefined || !String(x[f]).trim())
+        return say(`[ты-и-ии] ${id}: у catch нет поля «${f}»`);
+    if (String(x.code).trim() === String(x.truth).trim())
+      return say(`[ты-и-ии] ${id}: truth дословно совпал с code — ловить нечего`);
+
+    const out = src => {
+      const r = MP.run(src, { stdin: [] });
+      return r.error ? "!" + r.error.kind + ": " + r.error.msg : r.output;
+    };
+    const own = out(x.code), tru = out(x.truth);
+    if (tru.startsWith("!"))
+      return say(`[ты-и-ии] ${id}: правильная версия (truth) падает — ${tru.slice(1)}`);
+    if (!own.trim())
+      say(`[ты-и-ии] ${id}: код ИИ ничего не печатает — запускать его бессмысленно`);
+    if (own !== tru)
+      say(`[ты-и-ии] ${id}: код ИИ расходится с правильным уже на своём примере — ` +
+          `тогда искать нечего, это review, а не catch`);
+
+    const mineP = out(x.code + "\n" + x.probe), truP = out(x.truth + "\n" + x.probe);
+    if (truP.startsWith("!"))
+      say(`[ты-и-ии] ${id}: эталонная проверка падает на правильной версии — ${truP.slice(1)}`);
+    else if (mineP === truP)
+      say(`[ты-и-ии] ${id}: эталонная проверка ничего не ловит — задание нерешаемо`);
+
+    /* заготовка редактора обязана быть «кодом ИИ плюс место для проверки»:
+       по ней игра отличает, что дописал ребёнок, а что было дано */
+    if (x.badLine !== undefined)
+      say(`[ты-и-ии] ${id}: badLine у catch не нужен — тут не тыкают в строку, а доказывают`);
     return;
   }
 
@@ -414,8 +501,9 @@ const seenPR = {};
   ["title", "emoji", "tagline", "intro", "finale"].forEach(f => {
     if (!p[f] || !String(p[f]).trim()) say(`[проект] ${id}: пустое поле «${f}»`);
   });
-  if (typeof p.world !== "number" || p.world < 1 || p.world > 5)
-    say(`[проект] ${id}: world должен быть числом 1..5, а он «${p.world}»`);
+  /* 0 — проект вне миров: у него нет карты мира, он живёт в своём разделе */
+  if (typeof p.world !== "number" || p.world < 0 || p.world > 5)
+    say(`[проект] ${id}: world должен быть числом 0..5, а он «${p.world}»`);
   if (!Array.isArray(p.steps) || p.steps.length < 2)
     return say(`[проект] ${id}: у проекта должно быть хотя бы два шага`);
 
@@ -437,10 +525,18 @@ const seenPR = {};
       say(`${tag}: вывод не отличается от прошлого шага — шаг ничего не добавляет`);
     prevOut = sol.output;
 
-    if (i === 0 && step.starter !== undefined){
+    /* Заготовка обязательна у первого шага. У остальных она НЕ обязательна, но
+       бывает: так устроен проект с ИИ-напарником, где шаг начинается не с кода
+       ребёнка, а с новой редакции от напарника. Требования к ней те же —
+       запускается и проверку НЕ проходит, иначе шага нет. */
+    if (step.starter !== undefined){
       const st = MP.run(step.starter, { stdin: [] });
       if (st.error) say(`${tag}: заготовка обязана запускаться, а падает — ${st.error.kind}: ${st.error.msg}`);
       else if (st.output === sol.output) say(`${tag}: заготовка уже даёт верный вывод — задания нет`);
+      /* редакция напарника обязана отличаться от того, что было на прошлом шаге:
+         иначе «он переписал программу» — неправда */
+      if (i > 0 && st.output === prevOut)
+        say(`${tag}: заготовка шага повторяет вывод прошлого шага — переписывать было нечего`);
     }
     (step.needCode || []).forEach(needle => {
       let ok; try { ok = codeHas(step.solution, needle); }

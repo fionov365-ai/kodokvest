@@ -274,6 +274,7 @@ defType("datetime.datetime", TYPES["datetime.date"], { module:"datetime" });
 defType("datetime.timedelta", TYPES.object, { module:"datetime" });
 defType("pathlib.Path", TYPES.object, { module:"pathlib" });
 defType("re.Match", TYPES.object, { module:"re" });
+defType("re.Pattern", TYPES.object, { module:"re" });
 defType("csvwriter", TYPES.object);
 
 /* Дерево исключений — как в настоящем Python, только короче.
@@ -1074,8 +1075,34 @@ Parser.prototype = {
   parseAtom: function(){
     var tk = this.peek(), line = tk.line;
     if (tk.t === "NUMBER"){ this.next(); return { type:"Num", value:tk.v.v, isFloat:tk.v.f, line:line }; }
-    if (tk.t === "STRING"){ this.next(); return { type:"Str", value:tk.v, line:line }; }
-    if (tk.t === "FSTRING"){ this.next(); return { type:"FStr", parts: parseFString(tk.v, line), line:line }; }
+    /* Соседние строковые литералы Python склеивает сам: "а" "б" — это "аб".
+       Внутри скобок куски можно разносить по строкам, и длинный текст обычно
+       так и пишут — столбиком, без плюсов и без join. Между разными строками
+       БЕЗ скобок этого не происходит: там лексер выдаёт NEWLINE, и второй
+       литерал сюда просто не попадает — как и в настоящем Python.
+       Если хоть один кусок f-строка, склейка тоже f-строка: части кусков
+       выстраиваются в один список. */
+    if (tk.t === "STRING" || tk.t === "FSTRING"){
+      var pieces = [];
+      while (this.at("STRING") || this.at("FSTRING")) pieces.push(this.next());
+      var anyF = false;
+      for (var pi = 0; pi < pieces.length; pi++) if (pieces[pi].t === "FSTRING") anyF = true;
+      if (!anyF){
+        var joined = "";
+        for (var pj = 0; pj < pieces.length; pj++) joined += pieces[pj].v;
+        return { type:"Str", value: joined, line:line };
+      }
+      var parts = [];
+      for (var pk = 0; pk < pieces.length; pk++){
+        var piece = pieces[pk];
+        if (piece.t === "STRING"){ if (piece.v !== "") parts.push({ text: piece.v }); }
+        else {
+          var sub = parseFString(piece.v, piece.line);
+          for (var pm = 0; pm < sub.length; pm++) parts.push(sub[pm]);
+        }
+      }
+      return { type:"FStr", parts: parts, line:line };
+    }
     if (tk.t === "NAME"){
       if (tk.v === "True"){ this.next(); return { type:"Const", value:true, line:line }; }
       if (tk.v === "False"){ this.next(); return { type:"Const", value:false, line:line }; }
@@ -1399,6 +1426,7 @@ function objRepr(o){
     return "datetime.timedelta(" + (bits.length ? bits.join(", ") : "0") + ")";
   }
   if (o.cls === TYPES["pathlib.Path"]) return "PosixPath('" + o.fields.get("__path__") + "')";
+  if (o.cls === TYPES["re.Pattern"]) return "re.compile(" + strRepr(o.rePattern) + ")";
   if (o.cls === TYPES["re.Match"]){
     var m = o.reMatch;
     return "<re.Match object; span=(" + m.index + ", " + (m.index + m[0].length) + "), match=" + strRepr(m[0]) + ">";
@@ -3522,30 +3550,27 @@ var BUILTIN_MODULES = {
   re: function(I){
     return {
       IGNORECASE: 2, I: 2, MULTILINE: 8, M: 8, DOTALL: 16, S: 16,
+      /* Скомпилированный шаблон — обычный объект движка со своим типом.
+         Настоящий Python компилирует ради скорости и ради того, чтобы шаблон
+         лежал в программе одним именем, а не повторялся в каждом вызове;
+         у нас пользы от скорости нет, а вот вторая половина — та же. */
+      compile: function(args, kw, line){
+        var src = pyStr(args[0]);
+        toJsRegex(src, args[1], line, false);   /* негодный шаблон падает сразу, как в Python */
+        var o = new PyObj(TYPES["re.Pattern"]);
+        o.rePattern = src;
+        o.reFlags = args.length > 1 ? args[1] : undefined;
+        return o;
+      },
+      escape: function(args, kw, line){
+        return pyStr(args[0]).replace(/[.^$*+?()[\]{}|\\\-#&~]/g, "\\$&");
+      },
       search: function(args, kw, line){ return reFind(args, line, false); },
       match: function(args, kw, line){ return reFind(args, line, true); },
       fullmatch: function(args, kw, line){ return reFind(args, line, true, true); },
-      findall: function(args, kw, line){
-        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
-        var text = pyStr(args[1]);
-        var out = [], m;
-        while ((m = rx.exec(text)) !== null){
-          if (m.length === 1) out.push(m[0]);
-          else if (m.length === 2) out.push(m[1] === undefined ? "" : m[1]);
-          else out.push(Tup(m.slice(1).map(function(x){ return x === undefined ? "" : x; })));
-          if (m[0] === "") rx.lastIndex++;
-        }
-        return out;
-      },
-      sub: function(args, kw, line){
-        var rx = toJsRegex(pyStr(args[0]), args[3], line, true);
-        var rep = pyStr(args[1]).replace(/\\(\d)/g, "$$$1");
-        return pyStr(args[2]).replace(rx, rep);
-      },
-      split: function(args, kw, line){
-        var rx = toJsRegex(pyStr(args[0]), args[2], line, true);
-        return pyStr(args[1]).split(rx).map(function(x){ return x === undefined ? "" : x; });
-      }
+      findall: function(args, kw, line){ return reFindall(pyStr(args[0]), pyStr(args[1]), args[2], line); },
+      sub: function(args, kw, line){ return reSub(pyStr(args[0]), args[1], pyStr(args[2]), args[3], line); },
+      split: function(args, kw, line){ return reSplit(pyStr(args[0]), pyStr(args[1]), args[2], line); }
     };
   },
 
@@ -3626,6 +3651,26 @@ function toJsRegex(pattern, flagsArg, line, global){
     raise("ValueError", "Непонятный шаблон: " + pattern + " (" + e.message + ")", line,
           { pymsg: "bad pattern" });
   }
+}
+function reFindall(pattern, text, flags, line){
+  var rx = toJsRegex(pattern, flags, line, true);
+  var out = [], m;
+  while ((m = rx.exec(text)) !== null){
+    if (m.length === 1) out.push(m[0]);
+    else if (m.length === 2) out.push(m[1] === undefined ? "" : m[1]);
+    else out.push(Tup(m.slice(1).map(function(x){ return x === undefined ? "" : x; })));
+    if (m[0] === "") rx.lastIndex++;
+  }
+  return out;
+}
+function reSub(pattern, repl, text, flags, line){
+  var rx = toJsRegex(pattern, flags, line, true);
+  var rep = pyStr(repl).replace(/\\(\d)/g, "$$$1");
+  return text.replace(rx, rep);
+}
+function reSplit(pattern, text, flags, line){
+  var rx = toJsRegex(pattern, flags, line, true);
+  return text.split(rx).map(function(x){ return x === undefined ? "" : x; });
 }
 function reFind(args, line, anchored, full){
   var src = pyStr(args[0]);
@@ -3721,6 +3766,21 @@ function moduleMethod(I, obj, name, line){
     };
     if (!P[name]) return undefined;
     return function(a, kw){ return P[name](a, kw); };
+  }
+
+  if (cls === TYPES["re.Pattern"]){
+    var pat = obj.rePattern, pflags = obj.reFlags;
+    if (name === "pattern") return pat;
+    var C = {
+      search:    function(a){ return reFind([pat, pyStr(a[0]), pflags], line, false); },
+      match:     function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true); },
+      fullmatch: function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true, true); },
+      findall:   function(a){ return reFindall(pat, pyStr(a[0]), pflags, line); },
+      sub:       function(a){ return reSub(pat, a[0], pyStr(a[1]), pflags, line); },
+      split:     function(a){ return reSplit(pat, pyStr(a[0]), pflags, line); }
+    };
+    if (!C[name]) return undefined;
+    return function(a){ return C[name](a); };
   }
 
   if (cls === TYPES["re.Match"]){

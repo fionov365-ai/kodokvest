@@ -416,7 +416,7 @@ function doLogout(){
 /* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
 function logOf(id){
   if (!S.log[id]) S.log[id] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0,
-                                first:null, last:null, solvedAt:null, stars:0 };
+                                first:null, last:null, solvedAt:null, stars:0, bestSteps:0 };
   return S.log[id];
 }
 function touchLog(id){
@@ -628,6 +628,13 @@ function mergeSet(a, b){
   return out;
 }
 
+/* наименьшее из двух положительных; ноль и пусто значат «нет значения» */
+function minPos(a, b){
+  a = +a || 0; b = +b || 0;
+  if (!a) return b || 0;
+  if (!b) return a;
+  return Math.min(a, b);
+}
 function mergeProgress(a, b){
   a = a || {}; b = b || {};
   var out = { v:2, stars:{}, badges:[], log:{} };
@@ -714,6 +721,9 @@ function mergeProgress(a, b){
     out.projects[k] = {
       step: maxN(pa.step, pb.step),
       done: maxN(pa.done, pb.done),
+      /* до какого шага напарник уже подставлял свою редакцию: берём дальний,
+         иначе после обмена она подставилась бы второй раз и затёрла правки */
+      aiAt: maxN(pa.aiAt, pb.aiAt),
       code: pf.code || po.code || null
     };
   });
@@ -744,7 +754,10 @@ function mergeProgress(a, b){
       first:    (x.first && y.first) ? Math.min(x.first, y.first) : (x.first || y.first || null),
       last:     maxN(x.last, y.last) || null,
       solvedAt: maxN(x.solvedAt, y.solvedAt) || null,
-      stars:    maxN(x.stars, y.stars)
+      stars:    maxN(x.stars, y.stars),
+      /* рекорд по шагам — единственное поле журнала, где лучше МЕНЬШЕ.
+         Ноль значит «рекорда нет», поэтому он не должен победить настоящий. */
+      bestSteps: minPos(x.bestSteps, y.bestSteps)
     };
   });
 
@@ -1988,6 +2001,13 @@ function runCheck(l, body, ed, showMsg, canvas){
 
   if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
 
+  /* Цена программы в шагах: сколько операций движок выполнил. Считать
+     отдельно ничего не надо — интерпретатор и так их считает ради защиты от
+     вечного цикла, а run() отдаёт число наружу. Запоминаем здесь: в победной
+     карточке уже нет результата запуска. */
+  session.steps = res.steps || 0;
+  session.refSteps = stepsOfRef(body, refSrcs, stdin);
+
   /* «найди ошибку»: вывод верный — но код починен или написан заново? */
   if (body.task.type === "fix"){
     var budget = chk.fixBudget || (editUnits(body.task.starter, body.task.solution) + 1);
@@ -2002,6 +2022,52 @@ function runCheck(l, body, ed, showMsg, canvas){
 }
 
 /* ================= победа ================= */
+/* ===== цена программы в шагах =====
+   Своя же машина считает: сколько операций выполнил интерпретатор. Это не
+   «сложность из учебника», а настоящее число, которое ребёнок сам двигает
+   вниз, переписывая цикл. Соревнование — со вчерашним собой, а не с другими:
+   рекорд хранится в S.log[id].bestSteps.
+
+   Черепашку и случайность считать бессмысленно (рисунок и seed делают число
+   произвольным), поэтому там цену не показываем. */
+function stepsOfRef(body, refSrcs, stdin){
+  try {
+    var r = Runtime.get("mini").run(body.task.solution, {
+      turtle: Runtime.get("mini").newTurtle ? Runtime.get("mini").newTurtle() : null,
+      sources: refSrcs, files: dataFiles(body.task.data), stdin: stdin
+    });
+    return r.error ? 0 : (r.steps || 0);
+  } catch (e){ return 0; }
+}
+function stepsShown(body){
+  if (!body || !body.task) return false;
+  if (body.draw) return false;                       /* черепашка: шаги зависят от длин линий */
+  var k = body.task.check && body.task.check.kind;
+  if (k === "turtle" || k === "custom") return false;
+  return /\b(randint|choice|shuffle|sample|random)\s*\(/.test(String(body.task.solution || "")) === false;
+}
+/* Строка про цену в победной карточке. Ругать за длинную программу нельзя:
+   ребёнок только что её дописал и она работает. Поэтому говорим фактом, а
+   «можно короче» — только когда разница действительно велика. */
+function stepsNote(l, body){
+  if (!stepsShown(body)) return "";
+  var mine = session.steps || 0, ref = session.refSteps || 0;
+  if (!mine) return "";
+  var lg = logOf(l.id);
+  var prev = lg.bestSteps || 0;
+  var record = !prev || mine < prev;
+  if (record) lg.bestSteps = mine;
+  var line = '<p class="stepnote">⚙️ Твоя программа — <b>' + mine + '</b> ' +
+    plural(mine, "шаг", "шага", "шагов") + " движка";
+  if (ref) line += ", решение автора — " + ref;
+  line += ".";
+  if (prev && mine < prev) line += " <b>Твой рекорд был " + prev + " — побит.</b>";
+  else if (prev && mine > prev) line += " Твой рекорд по этому уроку — " + prev + ".";
+  else if (ref && mine > ref * 2)
+    line += " Тот же ответ можно получить заметно короче — попробуй, когда захочешь.";
+  return line + "</p>";
+}
+
 function winLesson(l, body){
   var stars = session.shown ? 1 : (session.hints > 0 || session.attempts > 1 ? 2 : 3);
   var prev = starsOf(l.id), gained = 0;
@@ -2037,7 +2103,7 @@ function winLesson(l, body){
     '<p>' + (stars === 3 ? "С первой попытки и без подсказок."
           : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
-    takeShieldNote() + reviewNote(l.id) +
+    takeShieldNote() + reviewNote(l.id) + stepsNote(l, body) +
     '<div class="winxp">+' + gained + ' XP</div><div class="winrow">' +
       (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
             : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
@@ -2752,11 +2818,12 @@ function openWarmup(id, opts){
   var prev = isDaily ? null : (pos > 0 ? ws[pos-1] : null);
 
   var isBlocks = w.type === "blocks";
+  var isMemory = w.type === "memory";
   var crumbRoot = isDaily
     ? '<span data-go="back">Сегодня</span> › 🔥 Задача дня'
     : '<span data-go="back">Разминка</span>';
   var head = '<div class="crumbs">' + crumbRoot + ' › ' + w.emoji + ' ' + esc(w.title) + '</div>' +
-    '<div class="lvlhead"><div><div class="idx">' + (isBlocks ? "собери из блоков" : "угадай вывод") + '</div><h1>' + w.emoji + ' ' + esc(w.title) + '</h1></div>' +
+    '<div class="lvlhead"><div><div class="idx">' + (isBlocks ? "собери из блоков" : isMemory ? "предскажи память" : "угадай вывод") + '</div><h1>' + w.emoji + ' ' + esc(w.title) + '</h1></div>' +
     '<div class="right"><span class="tag">' + esc(w.tag) + '</span></div></div>' +
     '<p class="lede">' + esc(w.intro) + '</p>' +
     '<div class="goal"><h3>🎯 Твоя задача</h3><p>' + esc(w.brief) + '</p></div>';
@@ -2775,6 +2842,8 @@ function openWarmup(id, opts){
 
   var studio = isBlocks
     ? makeBlocksStudio({ code: w.code, check: function(ed, showMsg){ runBlocksCheck(w, ed, showMsg); } })
+    : isMemory
+    ? makeMemoryStudio({ w: w, check: function(ed, showMsg){ runMemoryCheck(w, ed, showMsg); } })
     : makePredictStudio({ code: w.code, check: function(ed, showMsg){ runPredictCheck(w, ed, showMsg); } });
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
@@ -2791,6 +2860,153 @@ function openWarmup(id, opts){
   });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ===== «Предскажи память» =====
+   Все тренажёры просят угадать ВЫВОД программы. Здесь спрашивают ПАМЯТЬ:
+   что лежит в переменных в тот момент, когда программа замерла перед
+   подсвеченной строкой. Печать тут ни при чём.
+
+   Так можно только со своим движком: нужен пошаговый прогон и снимок кучи.
+   Правильный ответ не записан в задании — его СЧИТАЕТ тот же снимок, который
+   потом рисует визуализатор. Значит вопрос и картинка не могут разойтись. */
+function memFrame(w){
+  var rec = vizRecord(w.code);
+  var hits = rec.frames.filter(function(f){ return f.line === w.stop; });
+  return hits.length ? hits[0] : null;
+}
+function memAnswers(w){
+  var f = memFrame(w), out = {};
+  if (!f) return out;
+  (w.ask || []).forEach(function(n){
+    var v = f.vars.filter(function(x){ return x.name === n; })[0];
+    out[n] = v ? vizShort(v.cell, f.objects) : null;
+  });
+  return out;
+}
+/* Сравнение мягкое там, где мягкость не врёт: кавычки любые, пробелы вокруг
+   запятых и скобок не важны. А вот пробел ВНУТРИ строки важен — поэтому
+   пробелы не выбрасываются целиком, а только приклеенные к знакам. */
+function memNorm(v){
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/[\u201c\u201d\u00ab\u00bb"]/g, "'")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s*([,:\[\]{}()])\s*/g, "$1");
+}
+function makeMemoryStudio(cfg){
+  var w = cfg.w;
+  var wrap = document.createElement("div");
+  wrap.className = "predict memq";
+
+  var lines = String(w.code).replace(/\n+$/, "").split("\n");
+  var codeHTML = lines.map(function(t, i){
+    var here = (i + 1) === w.stop;
+    return '<div class="mline' + (here ? " here" : "") + '">' +
+      '<span class="ln">' + (i + 1) + '</span>' +
+      '<code>' + (hl(t) || "&nbsp;") + '</code>' +
+      (here ? '<span class="mstop">⏸ замерли здесь</span>' : '') + '</div>';
+  }).join("");
+
+  var codeBox = document.createElement("div");
+  codeBox.className = "pcode";
+  codeBox.innerHTML = '<div class="ehead"><span class="dot"></span><span class="dot"></span>' +
+    '<span class="dot"></span><span class="lbl">программа — только читаем</span></div>' +
+    '<div class="mlines">' + codeHTML + '</div>';
+
+  var ansBox = document.createElement("div");
+  ansBox.className = "pane pans";
+  ansBox.innerHTML = '<div class="ph">что сейчас в памяти?</div><div class="pb"><div class="memrows">' +
+    (w.ask || []).map(function(n){
+      return '<label class="memrow"><b>' + esc(n) + '</b><span class="veq">=</span>' +
+        '<input type="text" class="memin" data-name="' + esc(n) + '" spellcheck="false" ' +
+        'autocapitalize="off" autocorrect="off" placeholder="значение"></label>';
+    }).join("") +
+    '</div><div class="stdinhint">Пиши так, как это напечатал бы print(значение): ' +
+    'список — в квадратных скобках, строка — в кавычках. Кавычки любые.</div></div>';
+
+  var runbar = document.createElement("div");
+  runbar.className = "runbar";
+  runbar.innerHTML = '<button class="rbtn check" data-role="check">✓ Проверить</button>' +
+    '<button class="rbtn sec" data-role="clear">↺ Очистить</button>' +
+    '<span class="sp"></span><span class="tip">сначала пройди программу в голове</span>';
+
+  var msg = document.createElement("div"); msg.className = "msg";
+  var memPane = document.createElement("div"); memPane.className = "pane pout"; memPane.style.display = "none";
+  memPane.innerHTML = '<div class="ph">память на самом деле</div><div class="pb"><div class="vizmem"></div></div>';
+
+  wrap.appendChild(codeBox); wrap.appendChild(ansBox);
+  wrap.appendChild(runbar); wrap.appendChild(msg); wrap.appendChild(memPane);
+
+  function showMsg(cls, html){ msg.className = "msg show " + cls; msg.innerHTML = html; }
+  wrap.showMsg = showMsg;
+  wrap.editor = {
+    /* «код» этой студии — ответы ребёнка: имя=значение по строке. Так их
+       умеет и прочитать проверка, и подставить кнопка «показать» в тестах. */
+    getCode: function(){
+      return [].map.call(wrap.querySelectorAll(".memin"), function(i){
+        return i.getAttribute("data-name") + "=" + i.value;
+      }).join("\n");
+    },
+    setCode: function(v){
+      var map = {};
+      String(v).split("\n").forEach(function(l){
+        var k = l.indexOf("=");
+        if (k > 0) map[l.slice(0, k).trim()] = l.slice(k + 1);
+      });
+      [].forEach.call(wrap.querySelectorAll(".memin"), function(i){
+        var n = i.getAttribute("data-name");
+        if (map[n] !== undefined) i.value = map[n];
+      });
+    },
+    focusEditor: function(){ var f = wrap.querySelector(".memin"); if (f) f.focus(); }
+  };
+  /* показать настоящую память — той же разметкой, что и визуализатор */
+  wrap.reveal = function(){
+    var f = memFrame(w);
+    if (!f) return;
+    memPane.style.display = "";
+    var box = memPane.querySelector(".vizmem");
+    box.innerHTML = vizMemoryHTML(f, null);
+    vizDrawArrows(box);
+  };
+
+  runbar.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-role") === "check") cfg.check(wrap.editor, showMsg);
+    else {
+      [].forEach.call(wrap.querySelectorAll(".memin"), function(i){ i.value = ""; });
+      msg.className = "msg"; memPane.style.display = "none";
+    }
+  });
+  wrap.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); cfg.check(wrap.editor, showMsg); }
+  });
+  return wrap;
+}
+
+function runMemoryCheck(w, ed, showMsg){
+  session.attempts++;
+  var right = memAnswers(w);
+  var vals = {};
+  String(ed.getCode()).split("\n").forEach(function(l){
+    var k = l.indexOf("=");
+    if (k > 0) vals[l.slice(0, k).trim()] = l.slice(k + 1);
+  });
+  var empty = w.ask.filter(function(n){ return !String(vals[n] || "").trim(); });
+  if (empty.length === w.ask.length){
+    showMsg("warn", "<b>Пока пусто</b>Заполни поля: что лежит в каждой переменной в этот момент.");
+    return;
+  }
+  var wrong = w.ask.filter(function(n){ return memNorm(vals[n]) !== memNorm(right[n]); });
+  if (!wrong.length){ session.studio.reveal(); winWarmup(w); return; }
+  /* Не называем правильное значение — иначе задание решается со второй
+     попытки без единой мысли. Называем только, ГДЕ разошлось. */
+  showMsg("bad", "<b>" + (wrong.length === w.ask.length ? "Пока мимо" : "Почти") + "</b>" +
+    (wrong.length === w.ask.length
+      ? "Ни одно значение не сошлось."
+      : "Сошлось не всё: неверно у " + wrong.map(function(n){ return "<code>" + esc(n) + "</code>"; }).join(", ") + ".") +
+    " Пройди программу строчка за строчкой сверху вниз и держи в голове, что меняется после каждой.");
 }
 
 function runPredictCheck(w, ed, showMsg){
@@ -3039,11 +3255,39 @@ function screenAILab(){
       '<span>' + esc(x.intro) + '</span>' +
       '<span class="wtag">' + esc(x.tag) + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+  h += '</div>';
+
+  /* Проект раздела: тот же вид карточки, что у проектов миров, — только
+     открывается он не по уроками мира, а по заданиям этого раздела. */
+  var aproj = projectOfWorld(0);
+  if (aproj){
+    var apopen = projectOpen(aproj), apdone = projectDone(aproj.id), apst = projectState(aproj.id);
+    h += '<div class="projcard' + (apopen ? "" : " locked") + (apdone ? " done" : "") + '">' +
+      '<span class="pjemoji">' + aproj.emoji + '</span>' +
+      '<span class="pjbody"><span class="pjkicker">Проект раздела · вне сотни уроков</span>' +
+      '<b>' + esc(aproj.title) + (apdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
+      '<span>' + esc(aproj.tagline) + '</span>' +
+      '<span class="pjnote">' + esc(apdone
+        ? "Собран целиком. Можно открыть, запустить и забрать код себе."
+        : (apopen
+            ? (apst.step > 0 ? "Начат: пройдено шагов " + apst.step + " из " + aproj.steps.length + "."
+                             : "Все задания раздела пройдены — можно браться за проект.")
+            : "Откроется, когда пройдёшь все задания этого раздела.")) + '</span></span>' +
+      (apopen ? '<button class="bigbtn" id="openaiproj">' +
+                  (apdone ? "Открыть" : (apst.step > 0 ? "Продолжить" : "Собрать проект")) + '</button>'
+              : '<span class="soontag">закрыт</span>') +
+    '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
   });
+  var aop = document.getElementById("openaiproj");
+  if (aop) aop.onclick = function(){
+    if (projectDone(aproj.id)) screenProjectDone(aproj.id); else openProject(aproj.id);
+  };
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -3062,9 +3306,11 @@ function openAILesson(id){
   var isPredict = x.type === "predict";
   var isFix = x.type === "fix";
   var isReview = x.type === "review";
+  var isCatch = x.type === "catch";
   var kindLabel = isPredict ? "угадай вывод"
                 : isFix ? "почини код ИИ"
-                : isReview ? "вынеси вердикт" : "напиши код";
+                : isReview ? "вынеси вердикт"
+                : isCatch ? "докажи ошибку" : "напиши код";
 
   var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
@@ -3072,7 +3318,8 @@ function openAILesson(id){
     '<p class="lede">' + esc(x.intro) + '</p>';
 
   var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини"
-                                       : isReview ? "⚖️ Задача: вынеси вердикт" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
+                                       : isReview ? "⚖️ Задача: вынеси вердикт"
+                                       : isCatch ? "🕵️ Задача: докажи, что код неправ" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
     (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
 
   var bug = isFix
@@ -3081,11 +3328,14 @@ function openAILesson(id){
     : isReview
     ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
       '<span class="claimtip">Никто не сказал тебе заранее, правда это или нет — в этом и задание. Код можно запускать и менять как угодно: дописывай свои проверки, подставляй свои данные. Вердикт ниже.</span></div>'
+    : isCatch
+    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
+      '<span class="claimtip">На своём примере код отвечает верно — иначе задания бы не было. Твоё дело найти ДРУГИЕ данные, на которых обещание перестаёт сбываться. Строки кода ИИ менять нельзя, дописывай свои снизу.</span></div>'
     : "";
 
   var hints = '<div class="hintbox">' +
     '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">Показать решение</button>') +
+    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">' + (isCatch ? "Показать готовую проверку" : "Показать решение") + '</button>') +
     '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
     '<div class="hintout" id="hintout"></div>';
 
@@ -3108,6 +3358,17 @@ function openAILesson(id){
       label: "код от ИИ — читай, запускай, пробуй свои данные",
       restore: x.code
     });
+  } else if (isCatch){
+    /* Код ИИ и проверка ребёнка живут в ОДНОМ редакторе, и это не лень.
+       Иначе «Запустить» ничего бы не запустило: проверка без функции — это
+       не программа. А чтобы код ИИ остался нетронутым, проверка при сдаче
+       сверяет первые строки с оригиналом и отказывает, если их правили. */
+    studio = makeStudio({
+      engine: "mini", code: catchStart(x),
+      label: "код от ИИ — не трогай его, дописывай проверку снизу",
+      restore: catchStart(x),
+      check: function(ed, showMsg){ runAICatch(x, ed, showMsg); }
+    });
   } else {
     studio = makeStudio({
       engine: "mini", code: x.starter,
@@ -3124,8 +3385,10 @@ function openAILesson(id){
   var solb = document.getElementById("solbtn");
   if (solb) solb.onclick = function(){
     session.shown = true;
-    studio.editor.setCode(x.solution);
-    studio.showMsg("warn", "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой и запусти. Звёзд в разделе нет — смотреть решение можно без потерь, но сначала попробуй сам.");
+    studio.editor.setCode(isCatch ? (catchStart(x) + x.probe) : x.solution);
+    studio.showMsg("warn", isCatch
+      ? "<b>Вот проверка, которая ловит ошибку</b>Запусти и сравни с обещанием ИИ. Своя проверка, если она тоже разводит две версии, засчитывается ничуть не хуже — эта просто одна из возможных."
+      : "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой и запусти. Звёзд в разделе нет — смотреть решение можно без потерь, но сначала попробуй сам.");
   };
   app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = function(){ screenAILab(); }; });
   app.querySelectorAll("[data-next]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-next")); }; });
@@ -3174,6 +3437,86 @@ function runAICheck(x, ed, showMsg){
     }
   }
   winAI(x);
+}
+
+/* ===== catch: докажи, что код ИИ неправ =====
+   Самый непохожий на остальные тип: у задания НЕТ единственного правильного
+   ответа. Ребёнок пишет свою проверку, а засчитывает её не сверка с эталоном,
+   а факт: на его данных код ИИ и правильная версия отвечают по-разному.
+   Проверок, которые годятся, бесконечно много — и это ровно то, чему тут учат.
+   Судит по-прежнему движок, без сети и без живого ИИ.
+
+   Что должно быть у записи: claim, code (баг СПРЯТАН — на своём примере код
+   отвечает верно), truth (правильная версия с тем же интерфейсом) и probe —
+   эталонная проверка. Она нужна не для сверки ответа, а для двух вещей:
+   кнопки «Показать готовую проверку» и теста, который убеждается, что поймать
+   ошибку вообще возможно. */
+function catchStart(x){
+  return String(x.code).replace(/\n+$/, "") +
+    "\n\n# ↓ ниже пиши свою проверку: вызови функцию своими данными и напечатай ответ\n";
+}
+function catchRun(src){
+  var res = Runtime.get("mini").run(src, {});
+  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
+}
+/* Проверка ребёнка — это всё, что он дописал НИЖЕ кода ИИ. Сравниваем построчно
+   и без хвостовых пробелов: невидимый пробел в конце строки не повод отказать. */
+function catchProbe(x, code){
+  var base = String(x.code).replace(/\n+$/, "").split("\n");
+  var cur = String(code).split("\n");
+  if (cur.length < base.length) return null;
+  for (var i = 0; i < base.length; i++)
+    if (cur[i].replace(/\s+$/, "") !== base[i].replace(/\s+$/, "")) return null;
+  return cur.slice(base.length).join("\n");
+}
+function catchProof(x, probe){
+  var got  = catchRun(x.code  + "\n" + probe).split("\n");
+  var want = catchRun(x.truth + "\n" + probe).split("\n");
+  while (got.length  && got[got.length-1]  === "") got.pop();
+  while (want.length && want[want.length-1] === "") want.pop();
+  return '<div class="proof"><u>Вот твоё доказательство</u>' + diffBlock(want, got) + '</div>';
+}
+function runAICatch(x, ed, showMsg){
+  session.attempts++;
+  var probe = catchProbe(x, ed.getCode());
+  if (probe === null){
+    showMsg("warn", "<b>Код ИИ изменён</b>Чинить его не надо — надо доказать, что он неправ. " +
+      "Нажми «↩ Вернуть как было» и дописывай свои строки СНИЗУ, ничего не трогая выше.");
+    return;
+  }
+  var body = probe.split("\n").filter(function(l){
+    var t = l.trim(); return t !== "" && t[0] !== "#";
+  }).join("\n");
+  if (!body){
+    showMsg("warn", "<b>Проверки пока нет</b>Внизу только комментарий. Допиши хотя бы одну строку: " +
+      "вызови функцию своими данными и напечатай, что она вернула.");
+    return;
+  }
+  var mine = catchRun(x.code + "\n" + probe);
+  var right = catchRun(x.truth + "\n" + probe);
+  /* Второй прогон — страховка от недетерминированности. Генератор случайных
+     чисел у нас засевается одинаково на каждый запуск, поэтому random обе
+     версии получат одинаковый и расхождения не дадут; а вот time.time()
+     между двумя запусками может перевалить через миллисекунду — и тогда
+     «расхождение» доказывало бы только то, что время идёт. */
+  if (mine !== catchRun(x.code + "\n" + probe) || right !== catchRun(x.truth + "\n" + probe)){
+    showMsg("warn", "<b>Так доказать нельзя</b>Твоя проверка при каждом запуске печатает разное " +
+      "(случайность или время). Тогда расхождение ничего не значит: оно было бы и у двух одинаковых программ. " +
+      "Возьми конкретные данные, которые ты выбрал сам.");
+    return;
+  }
+  if (right.charAt(0) === "!"){
+    showMsg("bad", "<b>Проверка сама не работает</b>На ПРАВИЛЬНОЙ версии функции твои строки падают: " +
+      esc(right.slice(1)) + ". Значит дело не в коде ИИ, а в самой проверке — почини её и попробуй снова.");
+    return;
+  }
+  if (mine === right){
+    showMsg("bad", "<b>Не поймала</b>На твоих данных код ИИ отвечает ровно то же, что и правильная версия — " +
+      "значит эти данные больное место не задевают. Ищи другие: думай, при каких значениях обещание " +
+      "«" + esc(x.claim) + "» может не сбыться.");
+    return;
+  }
+  winAI(x, catchProof(x, probe));
 }
 
 /* ===== review: вердикт вместо починки =====
@@ -3347,23 +3690,42 @@ function projectOfWorld(n){
 function projectState(id){
   S.projects = S.projects || {};
   var st = S.projects[id];
-  if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0 }; S.projects[id] = st; }
+  if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0, aiAt:-1 }; S.projects[id] = st; }
   if (typeof st.step !== "number") st.step = 0;
+  if (typeof st.aiAt !== "number") st.aiAt = -1;
   return st;
 }
 function projectDone(id){ return !!projectState(id).done; }
-/* проект открывается, когда все готовые уроки его мира пройдены */
+/* Проект открывается, когда все готовые уроки его мира пройдены.
+   world: 0 — это проект вне миров («Напарник» в разделе «Ты и ИИ»): у него
+   нет карты мира, поэтому и открывается он по своему разделу. */
 function projectOpen(p){
   if (S.admin && S.admin.unlockAll) return true;
+  if (p.world === 0){
+    var xs = ailabList();
+    return xs.length > 0 && xs.every(function(x){ return ailabDone(x.id); });
+  }
   var w = CURRICULUM.world(p.world);
   if (!w) return false;
   var ready = worldReadyLessons(w);
   return ready.length > 0 && ready.every(function(l){ return solved(l.id); });
 }
-/* стартовый код шага: своё с прошлого шага, иначе эталон прошлого шага */
+/* Стартовый код шага: своё с прошлого шага, иначе эталон прошлого шага.
+   Исключение — шаги, у которых есть свой starter. Такой шаг начинается не
+   с кода ребёнка, а с ПЕРЕПИСАННОЙ версии: в проекте с ИИ-напарником это
+   ровно то, что происходит в жизни — напарник отдал новую редакцию целиком,
+   и надо разобраться, что он там заодно сломал.
+
+   Подставляем такую версию ОДИН раз (запоминаем в st.aiAt): иначе ребёнок
+   ушёл на карту, вернулся — и его правки затёрлись бы ещё раз. */
 function projectStartCode(p, i){
   var st = projectState(p.id);
   if (i === 0) return st.code && st.step > 0 ? st.code : p.steps[0].starter;
+  var own = p.steps[i].starter;
+  if (own !== undefined && st.step === i && st.aiAt !== i){
+    st.code = own; st.aiAt = i; save();
+    return own;
+  }
   return st.code || p.steps[i-1].solution;
 }
 
@@ -3386,9 +3748,11 @@ function openProject(id, forceStep){
       return '<span class="pdot ' + cls + '" title="' + esc(s.title) + '">' + (k + 1) + '</span>';
     }).join("");
 
-    var head = '<div class="crumbs"><span data-go="world">Мир ' + p.world + '</span> › ' +
+    var where = p.world === 0 ? "🤖 Ты и ИИ" : "Мир " + p.world;
+    var kicker = p.world === 0 ? "Проект раздела «Ты и ИИ»" : "Проект мира " + p.world;
+    var head = '<div class="crumbs"><span data-go="world">' + esc(where) + '</span> › ' +
         p.emoji + ' ' + esc(p.title) + '</div>' +
-      '<div class="lvlhead"><div><div class="idx">Проект мира ' + p.world +
+      '<div class="lvlhead"><div><div class="idx">' + kicker +
         ' · шаг ' + (i + 1) + ' из ' + p.steps.length + '</div>' +
       '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
       '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
@@ -3398,7 +3762,9 @@ function openProject(id, forceStep){
     var goal = '<div class="goal"><h3>🎯 Шаг ' + (i + 1) + ': ' + esc(step.title) + '</h3>' +
       '<p>' + esc(step.brief) + '</p>' +
       (step.list ? '<ul>' + step.list.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>' : '') +
-      (i > 0 ? '<span class="bugtip">В редакторе — твой код с прошлого шага. Дописывай в него, а не начинай с нуля.</span>' : '') +
+      (i > 0 ? '<span class="bugtip">' + (step.starter !== undefined
+          ? 'В редакторе — НОВАЯ редакция от напарника, а не твой код. Он что-то добавил и мог заодно сломать сделанное раньше: сравни с тем, что было, и почини.'
+          : 'В редакторе — твой код с прошлого шага. Дописывай в него, а не начинай с нуля.') + '</span>' : '') +
       '</div>';
 
     var hints = '<div class="hintbox">' +
@@ -3407,7 +3773,8 @@ function openProject(id, forceStep){
       '<span class="tip">проект без звёзд — подсказки ничего не отнимают</span></div>' +
       '<div class="hintout" id="hintout"></div>';
 
-    var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← К миру ' + p.world + '</button></div>';
+    var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← ' +
+      (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
 
     app.innerHTML = head + goal + '<div id="studio"></div>' + hints + pager;
 
@@ -3427,7 +3794,7 @@ function openProject(id, forceStep){
       studio.showMsg("warn", "<b>Вот программа на конец этого шага</b>Прочитай её и запусти. Звёзд в проекте нет — смотреть можно без потерь, но сначала попробуй сам.");
     };
     app.querySelectorAll('[data-go="world"]').forEach(function(b){
-      b.onclick = function(){ screenWorld(p.world); };
+      b.onclick = function(){ if (p.world === 0) screenAILab(); else screenWorld(p.world); };
     });
     refreshTop();
     window.scrollTo({ top:0, behavior:"smooth" });
@@ -3495,16 +3862,19 @@ function screenProjectDone(id){
   var st = projectState(p.id);
   var code = st.code || p.steps[p.steps.length - 1].solution;
 
+  var where2 = p.world === 0 ? "🤖 Ты и ИИ" : "Мир " + p.world;
   app.innerHTML =
-    '<div class="crumbs"><span data-go="world">Мир ' + p.world + '</span> › ' + p.emoji + ' ' + esc(p.title) + '</div>' +
-    '<div class="lvlhead"><div><div class="idx">проект мира ' + p.world + ' собран</div>' +
+    '<div class="crumbs"><span data-go="world">' + esc(where2) + '</span> › ' + p.emoji + ' ' + esc(p.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' +
+    (p.world === 0 ? "проект раздела «Ты и ИИ» собран" : "проект мира " + p.world + " собран") + '</div>' +
     '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
     '<div class="right"><span class="tag">готово ✓</span></div></div>' +
     '<p class="lede">' + esc(p.finale) + '</p>' +
     '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
     '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
-    '<button class="bigbtn ghost" data-go="world">← К миру ' + p.world + '</button></div>';
+    '<button class="bigbtn ghost" data-go="world">← ' +
+    (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
 
   var studio = makeStudio({ engine: "mini", code: code, label: "твоя программа целиком" });
   document.getElementById("studio").appendChild(studio);
@@ -3518,11 +3888,11 @@ function screenProjectDone(id){
     try { yes = confirm("Начать проект заново? Пройденные шаги обнулятся, но код останется в редакторе."); } catch(e){}
     if (!yes) return;
     var s2 = projectState(p.id);
-    s2.step = 0; s2.done = 0;
+    s2.step = 0; s2.done = 0; s2.aiAt = -1;   /* редакции напарника подставятся заново */
     save(); openProject(p.id, 0);
   };
   app.querySelectorAll('[data-go="world"]').forEach(function(b){
-    b.onclick = function(){ screenWorld(p.world); };
+    b.onclick = function(){ if (p.world === 0) screenAILab(); else screenWorld(p.world); };
   });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -4691,7 +5061,9 @@ window.__game = {
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
-  reviewTruth: reviewTruth,
+  reviewTruth: reviewTruth, catchProbe: catchProbe, catchRun: catchRun, catchStart: catchStart,
+  memAnswers: memAnswers, memFrame: memFrame, memNorm: memNorm,
+  stepsNote: stepsNote, stepsShown: stepsShown, minPos: minPos,
   whyDiffer: whyDiffer, diffBlock: diffBlock, predictDiff: predictDiff,
   BADGES: BADGES, STREAK_BADGES: STREAK_BADGES, awardStreak: awardStreak,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,

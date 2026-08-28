@@ -713,6 +713,41 @@ function checkEncoding(){
   const codeLinesOf = c => String(c).replace(/\r/g, "").split("\n").filter(l => l.trim() !== "");
   for (const wm of WARMUPS){
     let good, wr;
+    if (wm.type === "memory"){
+      /* «предскажи память»: верный ответ считает сам движок из снимка кучи.
+         Проверяем и то, что ответ засчитывается, и что задание вообще имеет
+         смысл: подсвечена та самая строка, а поля — ровно по числу вопросов. */
+      const right = w.__game.memAnswers(wm);
+      const asLines = o => wm.ask.map(n => n + "=" + o[n]).join("\n");
+      w.__game.openWarmup(wm.id);
+      await tick();
+      const stm = studioOf();
+      if (!stm){ bad(`[разминки] ${wm.id}: разминка не открылась`); continue; }
+      if (doc.querySelectorAll(".memq .memin").length !== wm.ask.length)
+        bad(`[разминки] ${wm.id}: полей для ответа не столько, сколько переменных в ask`);
+      const here = [...doc.querySelectorAll(".memq .mline")].findIndex(l => l.classList.contains("here"));
+      if (here + 1 !== wm.stop)
+        bad(`[разминки] ${wm.id}: подсвечена строка ${here + 1}, а замереть надо на ${wm.stop}`);
+      if (doc.querySelector(".memq .vizmem") && doc.querySelector(".memq .pout").style.display !== "none")
+        bad(`[разминки] ${wm.id}: память показана до ответа — предсказывать нечего`);
+
+      good = await attemptWarmup(wm.id, asLines(right));
+      if (!good.ok) bad(`[разминки] ${wm.id}: верный ответ не засчитан — ${good.why}`);
+      /* та же память, но кавычки другие и пробелы иначе — обязано засчитаться */
+      const loose = {};
+      wm.ask.forEach(n => { loose[n] = String(right[n]).replace(/'/g, '"').replace(/, /g, ","); });
+      const soft = await attemptWarmup(wm.id, asLines(loose));
+      if (!soft.ok) bad(`[разминки] ${wm.id}: тот же ответ с другими кавычками не засчитан — ${soft.why}`);
+      /* одно значение испорчено — засчитываться не должно */
+      const spoiled = Object.assign({}, right);
+      spoiled[wm.ask[0]] = String(right[wm.ask[0]]) + "X";
+      wr = await attemptWarmup(wm.id, asLines(spoiled));
+      if (wr.ok) bad(`[разминки] ${wm.id}: неверное значение засчитано как верное`);
+      else if (!new RegExp(wm.ask[0]).test(wr.why) && wm.ask.length > 1)
+        bad(`[разминки] ${wm.id}: не сказано, в какой переменной ошибка — ${wr.why}`);
+      if (good.ok && !wr.ok) warmupsChecked++;
+      continue;
+    }
     if (wm.type === "blocks"){
       /* верно = разложить блоки в порядке code; неверно = порядок наоборот */
       good = await attemptWarmup(wm.id, wm.code);
@@ -828,8 +863,70 @@ function checkEncoding(){
     return true;
   }
 
+  /* catch: правильного ответа нет — есть требование к любому ответу. Поэтому
+     проверяем не «совпало с эталоном», а всё поведение механики: эталонная
+     проверка засчитывается, пустая — нет, бесполезная — нет, правка кода ИИ —
+     нет, а случайность отклоняется отдельным сообщением. */
+  let catchChecked = 0;
+  async function attemptCatch(x){
+    const g = w.__game;
+    const start = g.catchStart(x);
+    g.openAILesson(x.id);
+    await tick();
+    if (!doc.querySelector(".claimcard"))
+      return bad(`[ты-и-ии] ${x.id}: не показано обещание ИИ (claim)`);
+    const st = studioOf();
+    if (!st) return bad(`[ты-и-ии] ${x.id}: задание не открылось`);
+    if (st.editor.getCode() !== start)
+      return bad(`[ты-и-ии] ${x.id}: в редакторе не код ИИ с местом под проверку`);
+
+    /* задача обязана быть честной: на примере автора расхождения нет */
+    if (g.catchRun(x.code) !== g.catchRun(x.truth))
+      bad(`[ты-и-ии] ${x.id}: app видит расхождение уже на примере автора — искать нечего`);
+
+    const attempt = async (text) => {
+      st.editor.setCode(text);
+      st.querySelector('[data-role="check"]').click();
+      await tick();
+      const r = { ok: won(), why: msgText() };
+      if (r.ok) closeWin();
+      return r;
+    };
+
+    let r = await attempt(start);
+    if (r.ok) return bad(`[ты-и-ии] ${x.id}: пустая проверка засчитана`);
+    if (!/Проверки пока нет/.test(r.why))
+      bad(`[ты-и-ии] ${x.id}: про пустую проверку сказано непонятно — ${r.why}`);
+
+    r = await attempt(start + 'print("привет")\n');
+    if (r.ok) return bad(`[ты-и-ии] ${x.id}: проверка, ничего не ловящая, засчитана`);
+    if (!/Не поймала/.test(r.why))
+      bad(`[ты-и-ии] ${x.id}: про бесполезную проверку сказано непонятно — ${r.why}`);
+
+    /* Случайность победы не приносит. В нашем движке генератор засевается
+       одинаково на каждый запуск, поэтому обе версии получают одни и те же
+       числа и расхождения не возникает вовсе — но проверить это надо: иначе
+       достаточно было бы напечатать случайное число, чтобы «доказать» что
+       угодно. Сообщение при этом может быть любым из двух — важно, что не победа. */
+    r = await attempt(start + 'import random\nprint(random.randint(1, 1000000))\n');
+    if (r.ok) return bad(`[ты-и-ии] ${x.id}: победа за случайное число — так доказать нельзя`);
+
+    r = await attempt("# я тут всё переписал\n" + start.split("\n").slice(1).join("\n") + x.probe);
+    if (r.ok) return bad(`[ты-и-ии] ${x.id}: победа при изменённом коде ИИ`);
+    if (!/Код ИИ изменён/.test(r.why))
+      bad(`[ты-и-ии] ${x.id}: правка кода ИИ отклонена не по той причине — ${r.why}`);
+
+    r = await attempt(start + x.probe);
+    if (!r.ok) return bad(`[ты-и-ии] ${x.id}: эталонная проверка не засчитана — ${r.why}`);
+    return true;
+  }
+
   for (const x of AILAB){
     let good, wr;
+    if (x.type === "catch"){
+      if (await attemptCatch(x) === true){ ailabChecked++; catchChecked++; }
+      continue;
+    }
     if (x.type === "review"){
       if (await attemptReview(x) === true){ ailabChecked++; reviewChecked++; }
       continue;
@@ -1018,8 +1115,13 @@ function checkEncoding(){
         const st = studioOf();
         if (!st) bad("[сегодня] задача дня не открылась");
         else {
+          /* у каждого типа разминки свой «верный ответ»: у blocks это порядок
+             строк, у memory — значения переменных, у predict — вывод программы */
           const answer = pick.type === "blocks"
             ? pick.code
+            : pick.type === "memory"
+            ? (function(){ const r = g.memAnswers(pick);
+                           return pick.ask.map(n => n + "=" + r[n]).join("\n"); })()
             : w.Runtime.get("mini").run(pick.code, {}).output;
           st.editor.setCode(answer);
           st.querySelector('[data-role="check"]').click();
@@ -1180,11 +1282,16 @@ function checkEncoding(){
         const st = studioOf();
         if (!st){ bad(`${tag} шаг ${i+1} не открылся`); break; }
 
+        /* Обычный шаг начинается с кода, доехавшего с прошлого. Шаг со своей
+           заготовкой — с неё: так устроен проект с ИИ-напарником, где напарник
+           отдаёт новую редакцию целиком. Оба случая надо проверять, иначе
+           подмена кода прошла бы незамеченной. */
         const startCode = st.editor.getCode();
-        if (i === 0 && startCode !== proj.steps[0].starter)
-          bad(`${tag} на первом шаге в редакторе не заготовка`);
-        if (i > 0 && startCode !== proj.steps[i-1].solution)
-          bad(`${tag} на шаге ${i+1} код не переехал с прошлого шага`);
+        const wantStart = proj.steps[i].starter !== undefined
+          ? proj.steps[i].starter
+          : (i === 0 ? proj.steps[0].starter : proj.steps[i-1].solution);
+        if (startCode !== wantStart)
+          bad(`${tag} на шаге ${i+1} в редакторе не тот код, с которого шаг должен начинаться`);
 
         st.querySelector('[data-role="check"]').click();
         await tick();
@@ -1430,6 +1537,160 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- проект вне миров: «Напарник» в разделе «Ты и ИИ» --- */
+  let aiProjChecked = 0;
+  const aiProj = (w.PROJECTS || []).filter(p => p.world === 0)[0];
+  /* Проект вне миров опознаётся ровно по world === 0. Если у него окажется
+     номер настоящего мира, он молча уедет на карту этого мира и подвинет
+     оттуда родной проект — поэтому отсутствие такого проекта это поломка,
+     а не «нечего проверять». */
+  if (!aiProj) bad("[напарник] среди проектов нет ни одного с world = 0");
+  if (aiProj && typeof g.projectOfWorld === "function"){
+    const p0 = problems.length;
+    const savedUnlock = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = false;
+    g.state.ailab = {};
+    g.state.projects = {};
+
+    /* закрыт, пока не пройдены задания раздела — и карточка на экране закрытая */
+    if (g.projectOpen(aiProj)) bad("[напарник] проект открыт, хотя задания раздела не пройдены");
+    g.screenAILab();
+    await tick();
+    if (!doc.querySelector(".projcard.locked"))
+      bad("[напарник] на экране «Ты и ИИ» нет закрытой карточки проекта");
+    if (doc.getElementById("openaiproj")) bad("[напарник] кнопка открытия есть у закрытого проекта");
+
+    /* карта мира про него знать не должна: у него нет своего мира */
+    for (let n = 1; n <= 5; n++)
+      if (g.projectOfWorld(n) && g.projectOfWorld(n).id === aiProj.id)
+        bad(`[напарник] проект вне миров показан на карте мира ${n}`);
+
+    (w.AILAB || []).forEach(x => { g.state.ailab[x.id] = 1; });
+    if (!g.projectOpen(aiProj)) bad("[напарник] не открылся после всех заданий раздела");
+    g.screenAILab();
+    await tick();
+    if (!doc.getElementById("openaiproj")) bad("[напарник] нет кнопки открыть проект");
+
+    /* шаг с редакцией напарника: она подставляется, но ровно один раз */
+    doc.getElementById("openaiproj").click();
+    await tick();
+    const withStarter = aiProj.steps.findIndex((s2, i2) => i2 > 0 && s2.starter !== undefined);
+    if (withStarter < 0) bad("[напарник] ни один шаг не начинается с редакции напарника");
+    else {
+      for (let i = 0; i < withStarter; i++){
+        const st = studioOf();
+        st.editor.setCode(aiProj.steps[i].solution);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()){ bad(`[напарник] шаг ${i+1}: эталон не засчитан — ${msgText()}`); break; }
+        doc.getElementById("pnext").click();
+        await tick();
+      }
+      const stA = studioOf();
+      if (!stA) bad("[напарник] шаг с редакцией напарника не открылся");
+      else {
+        if (stA.editor.getCode() !== aiProj.steps[withStarter].starter)
+          bad("[напарник] в редакторе не редакция напарника");
+        if (!/редакция от напарника/.test(doc.body.textContent))
+          bad("[напарник] не сказано, что код в редакторе переписан напарником");
+        /* правки ребёнка не должны затираться при возврате на тот же шаг */
+        stA.editor.setCode(aiProj.steps[withStarter].starter + "\n# моя пометка\n");
+        g.state.projects[aiProj.id].code = aiProj.steps[withStarter].starter + "\n# моя пометка\n";
+        g.openProject(aiProj.id, withStarter);
+        await tick();
+        if (!/моя пометка/.test(studioOf().editor.getCode()))
+          bad("[напарник] возврат на шаг затёр правки ребёнка второй подстановкой");
+      }
+    }
+
+    /* «пройти заново» обязано сбросить и отметку о подстановке */
+    g.state.projects[aiProj.id] = { step: 4, code: "x", done: 1, aiAt: 2 };
+    const mgA = g.mergeProgress(
+      { projects:{ "project-ai": { step:1, done:0, aiAt:1, code:"a" } }, savedAt:1 },
+      { projects:{ "project-ai": { step:2, done:0, aiAt:2, code:"b" } }, savedAt:2 });
+    if (mgA.projects["project-ai"].aiAt !== 2)
+      bad("[напарник] слияние потеряло отметку о подставленной редакции");
+
+    g.state.admin.unlockAll = savedUnlock;
+    if (problems.length === p0) aiProjChecked++;
+    viewReset(g);
+  }
+
+  /* --- цена программы в шагах --- */
+  let stepsChecked = 0;
+  if (typeof g.stepsNote === "function"){
+    const p0 = problems.length;
+    const CUR2 = w.CURRICULUM, C2 = w.CONTENT;
+    /* берём обычный урок без черепашки и без случайности */
+    let target = null;
+    for (const wd of CUR2){
+      for (const l of wd.lessons){
+        const body = (C2["world" + wd.n] || {})[l.id];
+        if (!body || !body.task || !body.task.solution) continue;
+        if (!g.stepsShown(body)) continue;
+        target = { l, body }; break;
+      }
+      if (target) break;
+    }
+    if (!target) bad("[шаги] не нашлось ни одного урока, где цену вообще показывают");
+    else {
+      const { l, body } = target;
+      g.state.log = {};
+      g.setStars(l.id, 0);
+      g.openLesson(l.id);
+      await tick();
+      const st = studioOf();
+      if (!st) bad("[шаги] урок не открылся");
+      else {
+        st.editor.setCode(body.task.solution);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()) bad("[шаги] эталон не засчитан — " + msgText());
+        else {
+          const card = doc.getElementById("wincard").textContent;
+          if (!/шаг/.test(card)) bad("[шаги] в победной карточке нет цены программы");
+          const best = g.state.log[l.id] && g.state.log[l.id].bestSteps;
+          if (!best) bad("[шаги] рекорд по шагам не записан");
+          const real = w.Runtime.get("mini").run(body.task.solution, {}).steps;
+          if (best !== real) bad(`[шаги] записано ${best} шагов, а движок насчитал ${real}`);
+          closeWin();
+
+          /* тот же урок ещё раз тем же кодом: рекорд не должен «улучшиться» */
+          g.openLesson(l.id);
+          await tick();
+          const st2 = studioOf();
+          st2.editor.setCode(body.task.solution);
+          st2.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()) closeWin();
+          if (g.state.log[l.id].bestSteps !== real)
+            bad("[шаги] повтор тем же кодом сдвинул рекорд");
+        }
+      }
+      /* слияние: рекорд — единственное поле журнала, где меньше значит лучше */
+      if (g.minPos(0, 7) !== 7 || g.minPos(9, 0) !== 9 || g.minPos(9, 7) !== 7)
+        bad("[шаги] minPos считает рекорд неверно");
+      const ms = g.mergeProgress(
+        { log:{ x:{ bestSteps: 40 } }, savedAt:1 },
+        { log:{ x:{ bestSteps: 12 } }, savedAt:2 });
+      if (!ms.log.x || ms.log.x.bestSteps !== 12)
+        bad("[шаги] слияние потеряло лучший рекорд: " + JSON.stringify(ms.log.x));
+      const ms2 = g.mergeProgress(
+        { log:{ x:{ bestSteps: 40 } }, savedAt:1 },
+        { log:{ x:{} }, savedAt:2 });
+      if (!ms2.log.x || ms2.log.x.bestSteps !== 40)
+        bad("[шаги] слияние с пустым рекордом обнулило настоящий");
+
+      /* где цену показывать нельзя — черепашка и случайность */
+      if (g.stepsShown({ draw: true, task: { solution: "print(1)" } }))
+        bad("[шаги] цена показана в уроке с черепашкой — там она зависит от длины линий");
+      if (g.stepsShown({ task: { solution: "import random\nprint(random.randint(1, 6))" } }))
+        bad("[шаги] цена показана там, где программа со случайностью");
+    }
+    if (problems.length === p0) stepsChecked++;
+    viewReset(g);
+  }
+
   /* --- щит для стрика --- */
   let shieldChecked = 0;
   if (typeof g.useShield === "function"){
@@ -1616,7 +1877,8 @@ function checkEncoding(){
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
   console.log(`«Ты и ИИ» прогнано: ${ailabChecked} из ${AILAB.length}` +
-              ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length})`);
+              ` (из них вердиктов: ${reviewChecked} из ${AILAB.filter(x => x.type === "review").length},` +
+              ` пойманных ИИ: ${catchChecked} из ${AILAB.filter(x => x.type === "catch").length})`);
   console.log(`живой разбор расхождения: ${whyChecked} случаев`);
   console.log(`визуализатор проверен: ${vizChecked} проверок (стек вызовов, разбор шага, подсветка)`);
   console.log(`задача дня и стрик: ${dailyChecked ? "да" : "нет"}`);
@@ -1626,6 +1888,8 @@ function checkEncoding(){
   console.log(`проектов пройдено по шагам: ${projChecked} из ${(w.PROJECTS || []).length}`);
   console.log(`работа над ошибками: ${againChecked ? "да" : "нет"}`);
   console.log(`шпаргалка: ${sheetChecked ? "да" : "нет"}`);
+  console.log(`цена программы в шагах: ${stepsChecked ? "да" : "нет"}`);
+  console.log(`проект с ИИ-напарником: ${aiProjChecked ? "да" : "нет"}`);
   console.log(`отчёт за неделю: ${weekChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
