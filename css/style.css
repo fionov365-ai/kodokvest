@@ -698,3 +698,85 @@ body.focus .lede{display:none}
   .memrow>b{min-width:0}
   .mline .mstop{display:none}
 }
+
+/* ---------- портфолио: готовые программы и сертификаты ---------- */
+.fstats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 4px}
+.fstat{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:14px 16px;text-align:center;box-shadow:var(--sh)}
+.fstat b{display:block;font-family:'Fredoka','Inter',sans-serif;font-size:26px;line-height:1.1;color:var(--acc2)}
+.fstat b i{font-style:normal;font-size:15px;color:var(--faint)}
+.fstat span{display:block;margin-top:3px;font-size:12.5px;color:var(--soft)}
+
+.fproj{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  box-shadow:var(--sh);padding:15px 17px;margin-bottom:12px}
+.fproj.done{border-color:var(--ok)}
+.fproj.locked{border-style:dashed;opacity:.7}
+.fptop{display:flex;align-items:center;gap:13px}
+.fpttl{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.fpttl b{font-family:'Fredoka','Inter',sans-serif;font-size:18px}
+.fpsub{color:var(--soft);font-size:13.5px}
+.fpstat{flex:none;font-size:12px;color:var(--faint);border:1px solid var(--line2);
+  border-radius:99px;padding:2px 10px;white-space:nowrap}
+.fpstat.ok{color:var(--ok);border-color:var(--ok)}
+.fpcode{margin:12px 0 0;padding:11px 13px;border-radius:11px;background:var(--code);
+  border:1px solid var(--line);font-size:12.5px;line-height:1.55;color:var(--ink);
+  white-space:pre;overflow:auto;max-height:280px}
+.fpbtns{display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap}
+.fplen{color:var(--faint);font-size:12px}
+
+.certs{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.certcard{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:13px;
+  border:1px dashed var(--line2);background:var(--panel);opacity:.65}
+.certcard.got{opacity:1;border-style:solid;border-color:var(--gold);
+  box-shadow:0 0 0 1px rgba(255,197,61,.22),0 10px 24px -16px rgba(255,197,61,.7)}
+.cticon{font-size:26px;line-height:1;flex:none}
+.ctbody{flex:1;min-width:0;display:flex;flex-direction:column}
+.ctbody b{font-size:14.5px}
+.ctbody>span{color:var(--faint);font-size:12.5px}
+.certcard .rbtn{flex:none}
+
+/* ---------- сертификат: лист бумаги поверх страницы ---------- */
+.cert{position:fixed;inset:0;z-index:70;background:rgba(6,8,20,.78);
+  display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto}
+.cert[hidden]{display:none}
+.certwrap{width:min(760px,100%)}
+.certsheet{background:#fdfaf1;color:#26201a;border:2px solid #c9b26a;border-radius:6px;
+  padding:44px 46px 32px;text-align:center;box-shadow:0 24px 60px -20px rgba(0,0,0,.8);
+  background-image:radial-gradient(600px 240px at 50% 0%, #fffdf6 0%, #fdfaf1 70%)}
+.certmark{font-family:'Fredoka','Inter',sans-serif;font-size:15px;letter-spacing:.16em;
+  text-transform:uppercase;color:#8a7434}
+.certkind{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:30px;
+  letter-spacing:.04em;color:#26201a}
+.certname{margin-top:22px;font-family:'Fredoka','Inter',sans-serif;font-size:38px;line-height:1.2;
+  color:#1c2b6b;word-break:break-word}
+.certrule{width:220px;height:2px;margin:16px auto 0;background:#c9b26a}
+.certwhat{margin-top:18px;font-size:16px;line-height:1.65;max-width:46ch;
+  margin-left:auto;margin-right:auto;color:#3b332a}
+.certwhat b{color:#26201a}
+.certlist{display:block;margin-top:8px;font-size:13.5px;color:#6a5c48}
+.certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
+.certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
+  justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}
+.certbar{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+
+@media (max-width:720px){
+  .fstats{grid-template-columns:repeat(2,1fr)}
+  .certs{grid-template-columns:1fr}
+  .certsheet{padding:30px 22px 24px}
+  .certkind{font-size:23px}
+  .certname{font-size:29px}
+}
+
+/* Печать: на бумагу уходит только лист сертификата. Всё остальное — сайт,
+   шапка, кнопки самого оверлея — скрыто. Если сертификат не открыт,
+   печатать нечего, и это честнее, чем выплюнуть тёмную страницу. */
+@media print{
+  body{background:#fff !important}
+  body>*{display:none !important}
+  body>.cert:not([hidden]){display:block !important;position:static;padding:0;
+    background:#fff;overflow:visible}
+  .certwrap{width:auto}
+  .certbar{display:none !important}
+  .certsheet{box-shadow:none;border-radius:0;background:#fff;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+}

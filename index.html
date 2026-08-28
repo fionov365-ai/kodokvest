@@ -50,6 +50,19 @@
     <div class="sheetbody" id="sheetbody"></div>
   </div>
 </div>
+<!-- Сертификат — тоже оверлей, но по другой причине, чем шпаргалка: его
+     ПЕЧАТАЮТ, а печать берёт документ целиком. Лист лежит поверх страницы,
+     а в @media print всё остальное скрыто, и на бумагу уходит только он. -->
+<div class="cert" id="cert" hidden>
+  <div class="certwrap" role="dialog" aria-label="Сертификат">
+    <div class="certbox" id="certbox"></div>
+    <div class="certbar">
+      <button class="bigbtn" id="certprint">🖨 Распечатать или сохранить в PDF</button>
+      <button class="bigbtn ghost" id="certclose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <canvas id="confetti"></canvas>
 
 <script src="js/engine-mini.js"></script>

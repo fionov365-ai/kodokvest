@@ -711,6 +711,88 @@ body.focus .lede{display:none}
   .mline .mstop{display:none}
 }
 
+/* ---------- портфолио: готовые программы и сертификаты ---------- */
+.fstats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 4px}
+.fstat{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:14px 16px;text-align:center;box-shadow:var(--sh)}
+.fstat b{display:block;font-family:'Fredoka','Inter',sans-serif;font-size:26px;line-height:1.1;color:var(--acc2)}
+.fstat b i{font-style:normal;font-size:15px;color:var(--faint)}
+.fstat span{display:block;margin-top:3px;font-size:12.5px;color:var(--soft)}
+
+.fproj{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  box-shadow:var(--sh);padding:15px 17px;margin-bottom:12px}
+.fproj.done{border-color:var(--ok)}
+.fproj.locked{border-style:dashed;opacity:.7}
+.fptop{display:flex;align-items:center;gap:13px}
+.fpttl{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.fpttl b{font-family:'Fredoka','Inter',sans-serif;font-size:18px}
+.fpsub{color:var(--soft);font-size:13.5px}
+.fpstat{flex:none;font-size:12px;color:var(--faint);border:1px solid var(--line2);
+  border-radius:99px;padding:2px 10px;white-space:nowrap}
+.fpstat.ok{color:var(--ok);border-color:var(--ok)}
+.fpcode{margin:12px 0 0;padding:11px 13px;border-radius:11px;background:var(--code);
+  border:1px solid var(--line);font-size:12.5px;line-height:1.55;color:var(--ink);
+  white-space:pre;overflow:auto;max-height:280px}
+.fpbtns{display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap}
+.fplen{color:var(--faint);font-size:12px}
+
+.certs{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.certcard{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:13px;
+  border:1px dashed var(--line2);background:var(--panel);opacity:.65}
+.certcard.got{opacity:1;border-style:solid;border-color:var(--gold);
+  box-shadow:0 0 0 1px rgba(255,197,61,.22),0 10px 24px -16px rgba(255,197,61,.7)}
+.cticon{font-size:26px;line-height:1;flex:none}
+.ctbody{flex:1;min-width:0;display:flex;flex-direction:column}
+.ctbody b{font-size:14.5px}
+.ctbody>span{color:var(--faint);font-size:12.5px}
+.certcard .rbtn{flex:none}
+
+/* ---------- сертификат: лист бумаги поверх страницы ---------- */
+.cert{position:fixed;inset:0;z-index:70;background:rgba(6,8,20,.78);
+  display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto}
+.cert[hidden]{display:none}
+.certwrap{width:min(760px,100%)}
+.certsheet{background:#fdfaf1;color:#26201a;border:2px solid #c9b26a;border-radius:6px;
+  padding:44px 46px 32px;text-align:center;box-shadow:0 24px 60px -20px rgba(0,0,0,.8);
+  background-image:radial-gradient(600px 240px at 50% 0%, #fffdf6 0%, #fdfaf1 70%)}
+.certmark{font-family:'Fredoka','Inter',sans-serif;font-size:15px;letter-spacing:.16em;
+  text-transform:uppercase;color:#8a7434}
+.certkind{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:30px;
+  letter-spacing:.04em;color:#26201a}
+.certname{margin-top:22px;font-family:'Fredoka','Inter',sans-serif;font-size:38px;line-height:1.2;
+  color:#1c2b6b;word-break:break-word}
+.certrule{width:220px;height:2px;margin:16px auto 0;background:#c9b26a}
+.certwhat{margin-top:18px;font-size:16px;line-height:1.65;max-width:46ch;
+  margin-left:auto;margin-right:auto;color:#3b332a}
+.certwhat b{color:#26201a}
+.certlist{display:block;margin-top:8px;font-size:13.5px;color:#6a5c48}
+.certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
+.certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
+  justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}
+.certbar{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+
+@media (max-width:720px){
+  .fstats{grid-template-columns:repeat(2,1fr)}
+  .certs{grid-template-columns:1fr}
+  .certsheet{padding:30px 22px 24px}
+  .certkind{font-size:23px}
+  .certname{font-size:29px}
+}
+
+/* Печать: на бумагу уходит только лист сертификата. Всё остальное — сайт,
+   шапка, кнопки самого оверлея — скрыто. Если сертификат не открыт,
+   печатать нечего, и это честнее, чем выплюнуть тёмную страницу. */
+@media print{
+  body{background:#fff !important}
+  body>*{display:none !important}
+  body>.cert:not([hidden]){display:block !important;position:static;padding:0;
+    background:#fff;overflow:visible}
+  .certwrap{width:auto}
+  .certbar{display:none !important}
+  .certsheet{box-shadow:none;border-radius:0;background:#fff;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
 </style>
 
 </head>
@@ -757,6 +839,19 @@ body.focus .lede{display:none}
     <div class="sheetbody" id="sheetbody"></div>
   </div>
 </div>
+<!-- Сертификат — тоже оверлей, но по другой причине, чем шпаргалка: его
+     ПЕЧАТАЮТ, а печать берёт документ целиком. Лист лежит поверх страницы,
+     а в @media print всё остальное скрыто, и на бумагу уходит только он. -->
+<div class="cert" id="cert" hidden>
+  <div class="certwrap" role="dialog" aria-label="Сертификат">
+    <div class="certbox" id="certbox"></div>
+    <div class="certbar">
+      <button class="bigbtn" id="certprint">🖨 Распечатать или сохранить в PDF</button>
+      <button class="bigbtn ghost" id="certclose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <canvas id="confetti"></canvas>
 
 <script>
@@ -12471,6 +12566,9 @@ function mergeProgress(a, b){
       /* до какого шага напарник уже подставлял свою редакцию: берём дальний,
          иначе после обмена она подставилась бы второй раз и затёрла правки */
       aiAt: maxN(pa.aiAt, pb.aiAt),
+      /* дата сборки — РАННЯЯ из двух: проект собран тогда, когда собран
+         впервые, а не когда об этом узнало второе устройство */
+      doneAt: minPos(pa.doneAt, pb.doneAt),
       code: pf.code || po.code || null
     };
   });
@@ -13452,7 +13550,29 @@ function screenWorlds(){
   });
   h += '</div>';
 
+  /* Вход в портфолио стоит здесь, а не в верхней панели: панель и так
+     переполнена, а портфолио открывают редко и осознанно — показать. */
+  var pjAll = projectsList(), pjDone = 0;
+  pjAll.forEach(function(p){ if (projectDone(p.id)) pjDone++; });
+  var ctAll = certList(), ctDone = 0;
+  ctAll.forEach(function(c){ if (c.ready) ctDone++; });
+  h += '<div class="sect"><h2>Портфолио</h2><div class="line"></div>' +
+    '<span class="cnt">' + pjDone + ' из ' + pjAll.length + '</span></div>' +
+    '<div class="projcard' + (pjDone ? "" : " locked") + '">' +
+    '<span class="pjemoji">🎒</span>' +
+    '<span class="pjbody"><span class="pjkicker">вне сотни уроков</span>' +
+    '<b>Мои работы и сертификаты</b>' +
+    '<span>всё сделанное своими руками в одном месте — можно показать и распечатать</span>' +
+    '<span class="pjnote">' + (pjDone
+      ? "Готовых программ: " + pjDone + " из " + pjAll.length +
+        " · сертификатов: " + ctDone + " из " + ctAll.length
+      : "Пока пусто: первая программа появится, когда будет собран проект первого мира.") +
+    '</span></span>' +
+    '<button class="bigbtn' + (pjDone ? "" : " ghost") + '" id="gofolio">Открыть портфолио</button>' +
+    '</div>';
+
   app.innerHTML = h;
+  document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("go-next").onclick = function(){
     var next = null;
     CURRICULUM.forEach(function(w){
@@ -14335,19 +14455,26 @@ function screenRegister(){
 /* ================= экран: профиль ученика =================
    Показывает имя, код ученика и ссылку-вход для другого устройства, даёт выйти.
    ============================================================ */
+/* Копирование в буфер. Раньше отказ современного способа (а браузер отказывает
+   легко: нет разрешения, страница во фрейме, нет жеста) приводил к тишине —
+   ребёнок жал кнопку, и не менялось ничего. Теперь отказ ПАДАЕТ на старый способ
+   через невидимое поле, и надпись на кнопке меняется в обоих случаях. */
 function copyText(text, btn){
   var done = function(){ if (btn){ var t = btn.textContent; btn.textContent = "Скопировано ✓"; setTimeout(function(){ btn.textContent = t; }, 1500); } };
+  var oldWay = function(){
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove(); done();
+    } catch(e2){}
+  };
   try {
     if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(done, function(){});
+      navigator.clipboard.writeText(text).then(done, oldWay);
       return;
     }
   } catch(e){}
-  try {
-    var ta = document.createElement("textarea");
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand("copy"); ta.remove(); done();
-  } catch(e2){}
+  oldWay();
 }
 function screenAccount(){
   enterScreen();
@@ -14374,6 +14501,9 @@ function screenAccount(){
     '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
     'Прогресс на сервере при этом не удаляется.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
+    '<div class="card"><h3>Портфолио</h3>' +
+    '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
   app.innerHTML = h;
 
@@ -14381,6 +14511,7 @@ function screenAccount(){
   if (cc) cc.onclick = function(){ copyText(code, cc); };
   var cl = document.getElementById("copylink");
   if (cl) cl.onclick = function(){ copyText(link, cl); };
+  document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("logout").onclick = function(){
     var yes = true;
     try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
@@ -15437,7 +15568,7 @@ function projectOfWorld(n){
 function projectState(id){
   S.projects = S.projects || {};
   var st = S.projects[id];
-  if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0, aiAt:-1 }; S.projects[id] = st; }
+  if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0, aiAt:-1, doneAt:0 }; S.projects[id] = st; }
   if (typeof st.step !== "number") st.step = 0;
   if (typeof st.aiAt !== "number") st.aiAt = -1;
   return st;
@@ -15576,7 +15707,9 @@ function winProjectStep(p, i, code){
   st.code = code;
   if (i + 1 > st.step) st.step = i + 1;
   var last = st.step >= p.steps.length;
-  if (last && !st.done){ st.done = 1; award("builder"); }
+  /* doneAt ставится ОДИН раз: это дата на сертификате, и она не должна
+     переписываться, если проект потом откроют заново. */
+  if (last && !st.done){ st.done = 1; st.doneAt = st.doneAt || Date.now(); award("builder"); }
   markActiveToday();          /* шаг проекта держит дневной стрик живым */
   save();
 
@@ -15619,6 +15752,7 @@ function screenProjectDone(id){
     '<p class="lede">' + esc(p.finale) + '</p>' +
     '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
+    '<button class="bigbtn ghost" id="pfolio">🎒 Все мои работы</button>' +
     '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
     '<button class="bigbtn ghost" data-go="world">← ' +
     (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
@@ -15630,6 +15764,7 @@ function screenProjectDone(id){
   document.getElementById("tosand").onclick = function(){
     S.sandbox = studio.editor.getCode(); save(); screenSandbox();
   };
+  document.getElementById("pfolio").onclick = screenFolio;
   document.getElementById("pagain").onclick = function(){
     var yes = true;
     try { yes = confirm("Начать проект заново? Пройденные шаги обнулятся, но код останется в редакторе."); } catch(e){}
@@ -15641,6 +15776,275 @@ function screenProjectDone(id){
   app.querySelectorAll('[data-go="world"]').forEach(function(b){
     b.onclick = function(){ if (p.world === 0) screenAILab(); else screenWorld(p.world); };
   });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ================= экран: портфолио и сертификаты =================
+   Проектов шесть, и каждый — законченная программа, написанная ребёнком.
+   По отдельности они разбросаны по мирам; здесь собраны в одном месте
+   вместе со сводкой и сертификатами. Это единственный экран, сделанный
+   не для занятий, а для ПОКАЗА: родителям, учителю, кому угодно.
+
+   Про сертификат важно одно: он выдаётся не за «прошёл уроки», а за уроки
+   ПЛЮС собранный проект мира. Сертификат без сделанной вещи — бумажка,
+   и ребёнок это чувствует раньше взрослых.
+
+   Своего прогресса раздел не заводит: и сводка, и сертификаты считаются
+   из S.stars, S.log и S.projects. Единственная добавка — projects[id].doneAt,
+   дата сборки проекта: без неё дата на сертификате менялась бы при каждом
+   открытии, а такому «документу» грош цена.
+   ============================================================ */
+
+function worldSolvedCount(n){
+  var w = CURRICULUM.world(n), c = 0;
+  if (w) w.lessons.forEach(function(l){ if (solved(l.id)) c++; });
+  return c;
+}
+function worldStars(n){
+  var w = CURRICULUM.world(n), s = 0;
+  if (w) w.lessons.forEach(function(l){ s += starsOf(l.id); });
+  return s;
+}
+function worldWhole(n){
+  var w = CURRICULUM.world(n);
+  return !!w && w.lessons.length > 0 && worldSolvedCount(n) === w.lessons.length;
+}
+
+/* сертификат мира: все уроки мира пройдены И проект мира собран */
+function certWorldReady(n){
+  var p = projectOfWorld(n);
+  return worldWhole(n) && !!p && projectDone(p.id);
+}
+function certCourseReady(){
+  if (!CURRICULUM.length) return false;
+  for (var i = 0; i < CURRICULUM.length; i++)
+    if (!certWorldReady(CURRICULUM[i].n)) return false;
+  return true;
+}
+/* дата выдачи: самое позднее из «последний урок мира пройден» и «проект собран».
+   Дату берём из журнала, а не из текущего дня — иначе сертификат «переписывался»
+   бы при каждом открытии. */
+function certWorldAt(n){
+  var w = CURRICULUM.world(n), t = 0;
+  if (!w) return 0;
+  w.lessons.forEach(function(l){
+    var g = S.log[l.id] || {};
+    if ((g.solvedAt || 0) > t) t = g.solvedAt;
+  });
+  var p = projectOfWorld(n);
+  if (p){ var d = projectState(p.id).doneAt || 0; if (d > t) t = d; }
+  return t;
+}
+function certCourseAt(){
+  var t = 0;
+  CURRICULUM.forEach(function(w){ var x = certWorldAt(w.n); if (x > t) t = x; });
+  return t;
+}
+/* чего не хватает до сертификата — словами, без «выполнено 60%» */
+function certWorldNeed(n){
+  var w = CURRICULUM.world(n), p = projectOfWorld(n), bits = [];
+  var left = w ? w.lessons.length - worldSolvedCount(n) : 0;
+  if (left > 0) bits.push(left + " " + plural(left, "урок", "урока", "уроков"));
+  if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
+  return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
+}
+function certCourseNeed(){
+  var left = 0;
+  CURRICULUM.forEach(function(w){ if (!certWorldReady(w.n)) left++; });
+  return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
+}
+
+function certList(){
+  var out = [];
+  CURRICULUM.forEach(function(w){
+    out.push({
+      id: "world" + w.n, kind: w.n, icon: w.icon,
+      title: "Мир " + w.n + ": " + w.title,
+      ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
+    });
+  });
+  out.push({
+    id: "course", kind: "course", icon: "🏆", title: "Курс пройден целиком",
+    ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
+  });
+  return out;
+}
+
+function fmtDay(ts){
+  if (!ts) return "—";
+  var d = new Date(ts), p = function(x){ return (x < 10 ? "0" : "") + x; };
+  return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
+}
+
+/* Текст сертификата написан безлично («пройден», а не «прошёл»): курс учат
+   и мальчики, и девочки, а угадывать род по имени — плохая идея. */
+function certBodyHTML(kind){
+  var course = kind === "course";
+  var w = course ? null : CURRICULUM.world(kind);
+  var p = course ? null : projectOfWorld(kind);
+  var at = course ? certCourseAt() : certWorldAt(kind);
+  var stars = 0, top = 0, what = "";
+
+  if (course){
+    CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
+    top = CURRICULUM.total * 3;
+    var names = [];
+    CURRICULUM.forEach(function(x){
+      var pr = projectOfWorld(x.n);
+      if (pr) names.push("«" + pr.title + "»");
+    });
+    what = 'Курс «Кодоквест» пройден целиком: <b>' + CURRICULUM.total + " " +
+      plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
+      plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
+      (names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
+  } else {
+    stars = worldStars(kind);
+    top = (w ? w.lessons.length : 0) * 3;
+    what = 'Мир ' + kind + ' «' + esc(w ? w.title : "") + '» пройден полностью: <b>' +
+      (w ? w.lessons.length : 0) + " из " + (w ? w.lessons.length : 0) + '</b> ' +
+      plural(w ? w.lessons.length : 0, "урок", "урока", "уроков") +
+      (p ? ', проект «' + esc(p.title) + '» собран' : '') + '.';
+  }
+
+  var name = myName();
+  return '<div class="certsheet">' +
+    '<div class="certmark">🐍 Кодоквест</div>' +
+    '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
+    '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
+    '<div class="certrule"></div>' +
+    '<div class="certwhat">' + what + '</div>' +
+    '<div class="certstars">★ ' + stars + ' из ' + top + '</div>' +
+    '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
+    '<span>Python с нуля · без установки · в браузере</span></div>' +
+  '</div>';
+}
+
+/* Сертификат живёт ОВЕРЛЕЕМ, как шпаргалка: его печатают, а печать берёт
+   документ целиком. В @media print всё, кроме листа, скрыто. */
+function openCert(kind){
+  var el = document.getElementById("cert"), box = document.getElementById("certbox");
+  if (!el || !box) return;
+  box.innerHTML = certBodyHTML(kind);
+  el.hidden = false;
+}
+function closeCert(){
+  var el = document.getElementById("cert");
+  if (el) el.hidden = true;
+}
+function certIsOpen(){
+  var el = document.getElementById("cert");
+  return !!el && !el.hidden;
+}
+
+function folioStat(value, label){
+  return '<div class="fstat"><b>' + value + '</b><span>' + label + '</span></div>';
+}
+/* где живёт проект: у пяти это мир, у «Напарника» — раздел «Ты и ИИ».
+   Подпись и фраза про замок разные: «Мир 2» в подпись годится, а во фразу
+   «откроется, когда будет пройден …» с разделом получалось косноязычие. */
+function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.world; }
+function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
+
+function screenFolio(){
+  enterScreen();
+  session = { id:null, attempts:0, hints:0, shown:false };
+
+  var projects = projectsList();
+  var built = 0;
+  projects.forEach(function(p){ if (projectDone(p.id)) built++; });
+  var certs = certList(), gotCerts = 0;
+  certs.forEach(function(c){ if (c.ready) gotCerts++; });
+  var lessonsDone = Object.keys(S.stars).length;
+  var name = myName();
+
+  var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
+    '<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Мои работы") + '</h1></div>' +
+    '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+    '<p class="lede">Здесь собрано всё сделанное своими руками: готовые программы и сертификаты. ' +
+    'Эту страницу можно показать кому угодно — родителям, учителю, друзьям.</p>';
+
+  h += '<div class="fstats">' +
+    folioStat(lessonsDone + ' <i>из ' + CURRICULUM.total + '</i>', "уроков пройдено") +
+    folioStat("★ " + totalStars(), "звёзд собрано") +
+    folioStat(built + ' <i>из ' + projects.length + '</i>', "программ готово") +
+    folioStat(gotCerts + ' <i>из ' + certs.length + '</i>', "сертификатов") +
+    '</div>';
+
+  h += '<div class="sect"><h2>Готовые программы</h2><div class="line"></div>' +
+    '<span class="cnt">' + built + ' из ' + projects.length + '</span></div>';
+
+  if (!projects.length){
+    h += '<div class="note"><b>Программ пока нет</b>Они появятся, когда будет собран первый проект.</div>';
+  }
+  projects.forEach(function(p){
+    var st = projectState(p.id), done = projectDone(p.id), open = projectOpen(p);
+    var where = projectWhere(p);
+    var stat = done ? "собрана ✓"
+             : (st.step > 0 ? "шагов " + st.step + " из " + p.steps.length
+                            : (open ? "можно собирать" : "закрыта"));
+    h += '<div class="fproj' + (done ? " done" : (open ? "" : " locked")) + '">' +
+      '<div class="fptop"><span class="pjemoji">' + p.emoji + '</span>' +
+      '<div class="fpttl"><span class="pjkicker">' + esc(where) + '</span>' +
+      '<b>' + esc(p.title) + '</b>' +
+      '<span class="fpsub">' + esc(p.tagline) + '</span></div>' +
+      '<span class="fpstat' + (done ? " ok" : "") + '">' + stat + '</span></div>';
+    if (done){
+      var code = st.code || p.steps[p.steps.length - 1].solution;
+      var n = code.replace(/\n+$/, "").split("\n").length;
+      h += '<pre class="fpcode">' + esc(code) + '</pre>' +
+        '<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
+        '<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
+        '<span class="fplen">' + n + " " + plural(n, "строка", "строки", "строк") + '</span></div>';
+    } else {
+      h += '<div class="fpbtns">' + (open
+        ? '<button class="rbtn" data-open="' + p.id + '">' +
+            (st.step > 0 ? "Продолжить" : "Собрать") + '</button>'
+        : '<span class="soontag">откроется, когда будет пройден ' + esc(projectGate(p)) + '</span>') +
+        '</div>';
+    }
+    h += '</div>';
+  });
+
+  h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
+    '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
+    '<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
+    'проект мира. Его можно распечатать или сохранить в PDF.</p><div class="certs">';
+  certs.forEach(function(c){
+    h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
+      '<span class="cticon">' + c.icon + '</span>' +
+      '<span class="ctbody"><b>' + esc(c.title) + '</b>' +
+      '<span>' + (c.ready ? "Выдан " + fmtDay(c.at) : esc(c.need)) + '</span></span>' +
+      (c.ready ? '<button class="rbtn" data-cert="' + c.id + '">Показать</button>'
+               : '<span class="soontag">пока нет</span>') +
+      '</div>';
+  });
+  h += '</div>';
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← Ко всем мирам</button></div>';
+
+  app.innerHTML = h;
+  app.querySelectorAll("[data-open]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-open");
+      if (projectDone(id)) screenProjectDone(id); else openProject(id);
+    };
+  });
+  app.querySelectorAll("[data-copy]").forEach(function(b){
+    b.onclick = function(){
+      var p = projectById(b.getAttribute("data-copy"));
+      if (!p) return;
+      var st = projectState(p.id);
+      copyText(st.code || p.steps[p.steps.length - 1].solution, b);
+    };
+  });
+  app.querySelectorAll("[data-cert]").forEach(function(b){
+    b.onclick = function(){
+      var v = b.getAttribute("data-cert");
+      openCert(v === "course" ? "course" : +v.replace("world", ""));
+    };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -16182,7 +16586,8 @@ var HASH_SCREENS = {
   "#account": function(){ screenAccount(); },
   "#viz":     function(){ screenViz(); },
   "#ai":      function(){ screenAILab(); },
-  "#again":   function(){ screenReview(); }
+  "#again":   function(){ screenReview(); },
+  "#folio":   function(){ screenFolio(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
@@ -16736,6 +17141,15 @@ document.getElementById("btn-sand").onclick = screenSandbox;
   var el = document.getElementById("sheet");
   if (el) el.onclick = function(e){ if (e.target === el) closeSheet(); };
 })();
+(function(){
+  var x = document.getElementById("certclose"); if (x) x.onclick = closeCert;
+  /* Печать — это window.print(): браузер сам предложит и принтер, и «Сохранить
+     в PDF». Своего экспорта не делаем — он был бы хуже штатного. */
+  var pr = document.getElementById("certprint");
+  if (pr) pr.onclick = function(){ try { window.print(); } catch(e){} };
+  var el = document.getElementById("cert");
+  if (el) el.onclick = function(e){ if (e.target === el) closeCert(); };
+})();
 (function(){ var b = document.getElementById("btn-viz"); if (b) b.onclick = screenViz; })();
 (function(){ var b = document.getElementById("btn-ai"); if (b) b.onclick = screenAILab; })();
 document.getElementById("btn-focus").onclick = function(){
@@ -16745,7 +17159,9 @@ document.getElementById("btn-focus").onclick = function(){
 document.getElementById("win").onclick = function(e){ if (e.target === this) closeWin(); };
 window.addEventListener("keydown", function(e){
   if (e.key !== "Escape") return;
-  if (sheetIsOpen()) closeSheet(); else closeWin();
+  if (certIsOpen()) closeCert();
+  else if (sheetIsOpen()) closeSheet();
+  else closeWin();
 });
 window.addEventListener("resize", function(){
   document.querySelectorAll("canvas.stage").forEach(function(c){
@@ -16827,7 +17243,14 @@ window.__game = {
   REVIEW_STEPS: REVIEW_STEPS, REVIEW_HARD: REVIEW_HARD, REVIEW_BADGE_AT: REVIEW_BADGE_AT,
   openSheet: openSheet, closeSheet: closeSheet, sheetIsOpen: sheetIsOpen,
   sheetRender: sheetRender, sheetLearned: sheetLearned, sheetRun: sheetRun,
-  weekReportHTML: weekReportHTML, WEEK_DAYS: WEEK_DAYS
+  weekReportHTML: weekReportHTML, WEEK_DAYS: WEEK_DAYS,
+  screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
+  openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
+  certWorldReady: certWorldReady, certCourseReady: certCourseReady,
+  certWorldAt: certWorldAt, certCourseAt: certCourseAt,
+  certWorldNeed: certWorldNeed, certCourseNeed: certCourseNeed,
+  worldWhole: worldWhole, worldStars: worldStars, worldSolvedCount: worldSolvedCount,
+  fmtDay: fmtDay
 };
 })();
 

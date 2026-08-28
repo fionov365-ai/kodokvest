@@ -1319,6 +1319,121 @@ function checkEncoding(){
     g.state.admin.unlockAll = savedUnlock2;
   }
 
+  /* --- портфолио и сертификаты ---
+     Сертификат — обещание, поэтому проверяем в первую очередь не разметку,
+     а условие выдачи: уроки мира ПЛЮС собранный проект. Отдельно проверяем,
+     что дата выдачи берётся из журнала, а не из сегодняшнего дня: иначе
+     распечатанный вчера лист и распечатанный сегодня расходились бы. */
+  let folioChecked = 0;
+  if (typeof g.screenFolio === "function"){
+    const p0 = problems.length;
+    const savedStars = JSON.parse(JSON.stringify(g.state.stars));
+    const savedProjects = JSON.parse(JSON.stringify(g.state.projects));
+    const savedLog = JSON.parse(JSON.stringify(g.state.log));
+    const savedName = g.state.name;
+
+    /* дату сборки записывает настоящий проход проекта, а не тест: проекты
+       выше пройдены по шагам, и последний из них остался в прогрессе */
+    const lastId = PROJECTS.length ? PROJECTS[PROJECTS.length - 1].id : null;
+    const live = lastId ? savedProjects[lastId] : null;
+    if (!live || !live.doneAt)
+      bad("[портфолио] после настоящей сборки проекта не записана дата — дата на сертификате будет плыть");
+
+    const w1 = CUR.world(1), proj1 = g.projectOfWorld(1);
+    if (!proj1) bad("[портфолио] у первого мира нет проекта — проверять сертификат нечем");
+    g.state.name = "Аня";
+
+    /* пусто: ни программ, ни сертификатов */
+    g.state.stars = {}; g.state.projects = {}; g.state.log = {};
+    g.screenFolio();
+    await tick();
+    if (!doc.querySelector(".fstats")) bad("[портфолио] сводка не отрисовалась");
+    if (!doc.querySelector(".certs")) bad("[портфолио] раздел сертификатов не отрисовался");
+    if (doc.querySelector(".fpcode")) bad("[портфолио] показан код несобранного проекта");
+    if (doc.querySelector(".certcard.got")) bad("[портфолио] сертификат выдан на пустом прогрессе");
+    if (g.certWorldReady(1)) bad("[сертификат] мир 1 выдан без единого урока");
+    if (!g.certWorldNeed(1)) bad("[сертификат] не сказано, чего не хватает до сертификата");
+
+    /* все уроки мира пройдены, но проект НЕ собран — сертификата всё ещё нет */
+    w1.lessons.forEach(l => { g.state.stars[l.id] = 3; g.state.log[l.id] = { solvedAt: 1000 }; });
+    if (!g.worldWhole(1)) bad("[сертификат] мир не считается пройденным, хотя пройдены все его уроки");
+    if (g.certWorldReady(1))
+      bad("[сертификат] выдан без собранного проекта — сертификат без сделанной вещи это бумажка");
+
+    /* проект собран — сертификат появляется */
+    if (proj1){
+      g.state.projects[proj1.id] =
+        { step: proj1.steps.length, done:1, aiAt:-1, doneAt:2000, code:"print('моя программа')" };
+      if (!g.certWorldReady(1)) bad("[сертификат] не выдан, хотя уроки пройдены и проект собран");
+      if (g.certWorldAt(1) !== 2000)
+        bad("[сертификат] дата выдачи не самая поздняя из уроков и проекта: " + g.certWorldAt(1));
+      if (g.certWorldNeed(1)) bad("[сертификат] выданный сертификат всё ещё чего-то требует");
+    }
+    if (g.certCourseReady()) bad("[сертификат] курс выдан, когда пройден один мир из пяти");
+
+    g.screenFolio();
+    await tick();
+    const pre = doc.querySelector(".fpcode");
+    if (!pre) bad("[портфолио] код собранной программы не показан");
+    else if (pre.textContent.indexOf("моя программа") < 0)
+      bad("[портфолио] показан не тот код: " + pre.textContent.slice(0, 60));
+    if (!doc.querySelector(".certcard.got")) bad("[портфолио] выданный сертификат не отмечен полученным");
+
+    const certBtn = doc.querySelector('[data-cert="world1"]');
+    if (!certBtn) bad("[портфолио] нет кнопки показа выданного сертификата");
+    else {
+      certBtn.click();
+      await tick();
+      if (!g.certIsOpen()) bad("[сертификат] лист не открылся");
+      const t = (doc.getElementById("certbox") || {}).textContent || "";
+      if (t.indexOf("Аня") < 0) bad("[сертификат] на листе нет имени ученика");
+      if (!/Мир 1/.test(t)) bad("[сертификат] на листе не назван мир");
+      if (!/\d\d\.\d\d\.\d{4}/.test(t)) bad("[сертификат] на листе нет даты выдачи");
+      if (!/★/.test(t)) bad("[сертификат] на листе нет звёзд");
+      const cl = doc.getElementById("certclose");
+      if (!cl) bad("[сертификат] нет кнопки закрытия"); else cl.click();
+      await tick();
+      if (g.certIsOpen()) bad("[сертификат] лист не закрылся");
+    }
+
+    /* сертификат за весь курс: все пять миров и все пять проектов миров */
+    CUR.forEach(wx => wx.lessons.forEach(l => {
+      g.state.stars[l.id] = 3; g.state.log[l.id] = { solvedAt: 1000 };
+    }));
+    PROJECTS.forEach(pr => {
+      g.state.projects[pr.id] =
+        { step: pr.steps.length, done:1, aiAt:-1, doneAt:3000, code:"print(1)" };
+    });
+    if (!g.certCourseReady()) bad("[сертификат] курс не выдан, хотя пройдены все миры и собраны все проекты");
+    g.openCert("course");
+    await tick();
+    const ct = (doc.getElementById("certbox") || {}).textContent || "";
+    if (ct.indexOf(String(CUR.total)) < 0)
+      bad("[сертификат] в сертификате за курс не названо число уроков");
+    g.closeCert();
+
+    /* дата сборки при слиянии — РАННЯЯ: проект собран тогда, когда собран
+       впервые, а не когда об этом узнало второе устройство */
+    const mp = g.mergeProgress(
+      { projects:{ x:{ step:2, done:1, doneAt:500, code:"a" } }, savedAt:1 },
+      { projects:{ x:{ step:2, done:1, doneAt:900, code:"b" } }, savedAt:2 });
+    if (mp.projects.x.doneAt !== 500)
+      bad("[сертификат] слияние взяло не раннюю дату сборки: " + mp.projects.x.doneAt);
+
+    /* печать: на бумагу должен уходить только лист. Правило одно, и если его
+       убрать, распечатается вся тёмная страница целиком */
+    if (html.indexOf("body>.cert:not([hidden])") < 0)
+      bad("[сертификат] в стилях нет правила печати — на бумагу уйдёт вся страница");
+
+    g.state.stars = savedStars; g.state.projects = savedProjects;
+    g.state.log = savedLog; g.state.name = savedName;
+    viewReset(g);
+    await tick();
+    if (!doc.getElementById("gofolio")) bad("[портфолио] на карте миров нет входа в портфолио");
+    if (problems.length === p0) folioChecked = 1;
+    viewReset(g);
+  } else bad("[портфолио] раздела нет — screenFolio не выведен наружу");
+
   /* --- работа над ошибками: интервальный повтор --- */
   let againChecked = 0;
   if (typeof g.screenReview === "function"){
@@ -1891,6 +2006,7 @@ function checkEncoding(){
   console.log(`цена программы в шагах: ${stepsChecked ? "да" : "нет"}`);
   console.log(`проект с ИИ-напарником: ${aiProjChecked ? "да" : "нет"}`);
   console.log(`отчёт за неделю: ${weekChecked ? "да" : "нет"}`);
+  console.log(`портфолио и сертификаты: ${folioChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
