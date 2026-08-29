@@ -3090,16 +3090,19 @@ function checkEncoding(){
   let navChecked = 0;
   if (typeof g.screenTrain === "function"){
     const p0 = problems.length;
-    /* Панель: три вкладки и четыре инструмента, и ничего больше. Раньше тут
-       лежали одиннадцать равных кнопок — из них не было видно, что главное. */
+    /* Панель: три вкладки и пять инструментов, и ничего больше. Раньше тут
+       лежали одиннадцать равных кнопок — из них не было видно, что главное.
+       Пятым инструмент стал в 1.36.0: «?» отвечает «что это за экран и что
+       тут делать» для любого экрана, и такого ответа раньше не было нигде,
+       кроме Главного у новичка. Шестого быть не должно. */
     const tabs = [...doc.querySelectorAll(".tabs .tab")].map(b => b.getAttribute("data-tab"));
     if (tabs.join(",") !== "home,train,mine")
       bad("[устройство] вкладки не те: " + tabs.join(","));
-    ["btn-today", "btn-sheet", "btn-who", "btn-focus"].forEach(id => {
+    ["btn-today", "btn-sheet", "btn-who", "btn-focus", "btn-help"].forEach(id => {
       if (!doc.getElementById(id)) bad("[устройство] пропал инструмент " + id);
     });
-    if (doc.querySelectorAll(".top-in .tbtn").length > 4)
-      bad("[устройство] в панели снова больше четырёх кнопок — она опять станет свалкой");
+    if (doc.querySelectorAll(".top-in .tbtn").length > 5)
+      bad("[устройство] в панели снова больше пяти кнопок — она опять станет свалкой");
 
     /* Вкладка светится по тому, где мы находимся, а не по последнему клику */
     const active = () => [...doc.querySelectorAll(".tab.on")].map(b => b.getAttribute("data-tab")).join(",");
@@ -3200,6 +3203,159 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- помощь «?», оформление и поиск урока --- */
+  /* Помощь обязана отвечать про ТОТ экран, где человек стоит: одинаковый
+     текст на всех экранах — это отсутствие помощи, а не помощь. Поэтому
+     проверяем не «окно открылось», а «на разных экранах разные заголовки». */
+  let helpChecked = 0, themeChecked = 0, searchChecked = 0;
+  if (typeof g.openHelp === "function"){
+    const p0 = problems.length;
+    const hbox = doc.getElementById("helpwrap");
+    const htitle = doc.getElementById("helptitle");
+    const hbtn = doc.getElementById("btn-help");
+    if (!hbox || !htitle || !hbtn) bad("[помощь] в разметке нет кнопки «?» или окна");
+    if (g.helpIsOpen()) bad("[помощь] окно открыто, хотя никто его не звал");
+
+    /* у каждого экрана есть свой текст, и он не пустой */
+    const places = ["home","world","lesson","train","sand","games","game","today","warm","warmup",
+                    "review","ai","ailesson","project","projectdone","folio","mytasks","friendtask",
+                    "viz","account","register","guide","admin","stars","worlds","tools"];
+    places.forEach(k => {
+      const e = g.HELP[k];
+      if (!e) return bad("[помощь] нет текста для места «" + k + "»");
+      if (!e.t || !e.h) bad("[помощь] пустая подсказка для «" + k + "»");
+    });
+
+    const titleNow = async (open) => {
+      g.closeHelp();
+      open(); await tick();
+      hbtn.click(); await tick();
+      if (!g.helpIsOpen()) bad("[помощь] кнопка «?» не открыла окно");
+      return htitle.textContent;
+    };
+    const tHome = await titleNow(() => g.screenWorlds());
+    const tViz  = await titleNow(() => g.screenViz());
+    const tLes  = await titleNow(() => g.openLesson("print-first"));
+    const tFol  = await titleNow(() => g.screenFolio());
+    if (new Set([tHome, tViz, tLes, tFol]).size !== 4)
+      bad("[помощь] на разных экранах один и тот же текст: " + [tHome, tViz, tLes, tFol].join(" / "));
+    if (!/Визуализатор/i.test(tViz)) bad("[помощь] в визуализаторе подсказка не про него: " + tViz);
+    if (!/Урок/i.test(tLes)) bad("[помощь] на уроке подсказка не про урок: " + tLes);
+
+    /* кружок «?» у заголовка ведёт в свою тему, а не туда же, куда кнопка */
+    g.closeHelp();
+    g.screenWorlds(); await tick();
+    const circle = doc.querySelector('.sect [data-help="stars"]');
+    if (!circle) bad("[помощь] у «Достижений» нет кружка «?»");
+    else {
+      circle.click(); await tick();
+      if (!g.helpIsOpen()) bad("[помощь] кружок «?» не открыл окно");
+      if (!/Звёзды/i.test(htitle.textContent))
+        bad("[помощь] кружок у «Достижений» открыл не про звёзды: " + htitle.textContent);
+    }
+    /* Esc закрывает помощь, а не роняет её поверх шпаргалки */
+    const esc = new w.KeyboardEvent("keydown", { key:"Escape", bubbles:true });
+    w.dispatchEvent(esc);
+    if (g.helpIsOpen()) bad("[помощь] Esc не закрыл окно");
+    if (problems.length === p0) helpChecked++;
+  }
+
+  if (typeof g.themeSet === "function"){
+    const p0 = problems.length;
+    /* Тема по умолчанию светлая: тёмный фон тяжело читать днём, и это был
+       прямой запрос. Тёмная остаётся — но только по выбору. */
+    if (g.themeGet() !== "light") bad("[оформление] тема по умолчанию не светлая: " + g.themeGet());
+    g.themeSet("dark");
+    if (doc.documentElement.getAttribute("data-theme") !== "dark")
+      bad("[оформление] тёмная тема не встала на страницу");
+    if (w.localStorage.getItem("kodokvest_theme") !== "dark")
+      bad("[оформление] выбор темы не запомнился");
+    const meta = doc.querySelector('meta[name="theme-color"]');
+    if (meta && meta.getAttribute("content") !== "#0d1020")
+      bad("[оформление] цвет строки браузера не поехал за темой");
+    /* Цвета не должны стоять в правилах жёстко: иначе светлой темы
+       не может существовать в принципе. Сверяем по стилям самого файла. */
+    /* комментарии выкидываем: в них цвета УПОМИНАЮТСЯ (как раз рассказом о
+       том, почему так больше нельзя), и проверка ловила бы сама себя */
+    const cssText = [...doc.querySelectorAll("style")].map(s => s.textContent).join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    if (!/:root\[data-theme="dark"\]/.test(cssText))
+      bad("[оформление] в стилях нет блока тёмной темы");
+    ["#0f1428", "#0b1020", "#080b18", "#070a16"].forEach(hex => {
+      const re = new RegExp("background:\\s*" + hex);
+      if (re.test(cssText)) bad("[оформление] тёмный цвет " + hex + " снова вбит прямо в правило");
+    });
+    g.themeSet("light");
+    if (doc.documentElement.getAttribute("data-theme") !== "light")
+      bad("[оформление] светлая тема не вернулась");
+    if (problems.length === p0) themeChecked++;
+  }
+
+  if (typeof g.lessonSearch === "function"){
+    const p0 = problems.length;
+    if (!g.lessonSearch("черепашка").length) bad("[поиск] «черепашка» ничего не нашла");
+    if (!g.lessonSearch("словар").length) bad("[поиск] «словар» ничего не нашла");
+    if (g.lessonSearch("ц").length) bad("[поиск] одна буква уже что-то ищет — так выдача бессмысленна");
+    if (g.lessonSearch("щщщщ").length) bad("[поиск] нашлось то, чего нет");
+    if (g.lessonSearch("черепашка").length > 8) bad("[поиск] выдача не ограничена");
+
+    /* Замки должны быть НА МЕСТЕ: панель наставника в проверках выше их
+       снимала, а весь смысл этой проверки — что поиск замок не обходит. */
+    const admWas = g.state.admin;
+    g.state.admin = {};
+    g.state.stars = {}; g.state.log = {};
+    g.screenWorlds(); await tick();
+    const inp = doc.getElementById("lq");
+    if (!inp) bad("[поиск] на Главном нет строки поиска");
+    else {
+      inp.value = "черепашка";
+      inp.dispatchEvent(new w.Event("input", { bubbles:true }));
+      await tick();
+      const rows = doc.querySelectorAll("#lsfound .lsrow");
+      if (!rows.length) bad("[поиск] строка поиска ничего не показала");
+      /* Закрытый урок из выдачи не прячем (иначе это ложь «такого нет»),
+         но и открыть его отсюда нельзя — порядок уроков держит весь курс. */
+      const locked = [...rows].filter(r => r.classList.contains("lock"));
+      if (!locked.length)
+        bad("[поиск] в самом начале курса все найденные уроки почему-то открыты");
+      locked.forEach(r => {
+        if (r.hasAttribute("data-open"))
+          bad("[поиск] из поиска можно открыть закрытый урок — порядок курса обходится");
+      });
+      inp.value = "щщщщ";
+      inp.dispatchEvent(new w.Event("input", { bubbles:true }));
+      await tick();
+      if (!doc.querySelector("#lsfound .lsnone"))
+        bad("[поиск] на пустую выдачу ничего не сказано");
+    }
+    g.state.admin = admWas;
+    if (problems.length === p0) searchChecked++;
+    viewReset(g);
+  }
+
+  /* --- полная инструкция --- */
+  let guideChecked = 0;
+  if (typeof g.screenGuide === "function"){
+    const p0 = problems.length;
+    g.screenGuide(); await tick();
+    const txt = doc.getElementById("app").textContent;
+    if (!/Как пользоваться/.test(txt)) bad("[инструкция] экран не открылся");
+    ["Первый час", "Кнопки наверху", "Звёзды", "Когда не получается", "Для родителя"].forEach(x => {
+      if (txt.indexOf(x) < 0) bad("[инструкция] нет раздела «" + x + "»");
+    });
+    if (!doc.querySelector("#guidetheme [data-theme-set]"))
+      bad("[инструкция] нет переключателя темы");
+    /* вкладка на инструкции не светится: это не раздел, а справка */
+    if (doc.querySelector(".tab.on")) bad("[инструкция] подсветилась вкладка, хотя это не раздел");
+    w.location.hash = "#help";
+    g.routeHash(); await tick();
+    if (!/Как пользоваться/.test(doc.getElementById("app").textContent))
+      bad("[инструкция] адрес #help её не открыл");
+    try { w.history.replaceState(null, "", "/kodokvest/"); } catch(e){}
+    if (problems.length === p0) guideChecked++;
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -3235,6 +3391,10 @@ function checkEncoding(){
   console.log(`галерея рисунков: ${galleryChecked ? "да" : "нет"}`);
   console.log(`установка на домашний экран: ${pwaChecked ? "да" : "нет"}`);
   console.log(`устройство сайта (вкладки и блоки): ${navChecked ? "да" : "нет"}`);
+  console.log(`подсказка «?» по экранам: ${helpChecked ? "да" : "нет"}`);
+  console.log(`светлая и тёмная тема: ${themeChecked ? "да" : "нет"}`);
+  console.log(`поиск по урокам: ${searchChecked ? "да" : "нет"}`);
+  console.log(`полная инструкция: ${guideChecked ? "да" : "нет"}`);
   console.log(`защита от пустого экрана: ${bootChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);

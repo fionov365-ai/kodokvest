@@ -12,26 +12,81 @@
 <!-- Установка на домашний экран и работа без сети. Ссылки на манифест и иконку
      build.js из одного файла ВЫРЕЗАЕТ: тот файл обещает «ничего не грузится
      извне», а неразрешимая ссылка это обещание бы нарушила. -->
-<meta name="theme-color" content="#0d1020">
+<meta name="theme-color" content="#f1f4fc" id="themecolor">
 <meta name="apple-mobile-web-app-title" content="Кодоквест">
 <meta name="mobile-web-app-capable" content="yes">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
+/* ============================================================
+   ЦВЕТА: две темы, и обе описаны ОДНИМ набором переменных.
+   Раньше тема была одна — тёмная, — и половина цветов стояла прямо в
+   правилах («background:#0f1428»). Из-за этого светлой темы не могло
+   существовать в принципе: жёсткий цвет не переопределить.
+   Теперь любой цвет, который меняется между темами, живёт здесь.
+
+   По умолчанию тема СВЕТЛАЯ. Тёмный фон читается тяжело при дневном свете
+   и на плохих экранах, а тренажёр открывают чаще днём. Тому, кто любит
+   тёмную, она в один клик: «?» наверху → «Оформление».
+   Выбор темы НЕ синхронизируется с сервером: это настройка устройства,
+   как и снятые замки, — на телефоне может быть светлая, на ноутбуке тёмная.
+   ============================================================ */
 :root{
+  /* --- светлая (по умолчанию) --- */
+  --bg:#f1f4fc; --bg2:#ffffff; --panel:#ffffff; --panel2:#f5f7fe; --sunken:#eef1fa;
+  --line:#dde3f1; --line2:#c3cbe4; --ink:#1a1f3d; --soft:#4a5372; --faint:#79819d;
+  --acc:#5a41e0; --acc-lt:#7c5cff; --acc2:#00806c; --acc2-lt:#00a68c;
+  --gold:#b07d00; --ok:#16814a; --bad:#cf3838; --warn:#b5730a;
+  --code:#ffffff;
+  --k:#8a2ec0;--s:#227a2e;--n:#c04a12;--c:#8f96b0;--f:#1f56c8;--d:#9a6a00;
+  --glow1:#e7e9ff; --glow2:#ddf1ee;
+  --topbg:rgba(255,255,255,.9);
+  --herobg:linear-gradient(150deg,#e9e6ff,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#eef0ff,#e5f4f5);
+  --bar:#f5f7fd; --bar2:#eef1fa; --res:#f7f9ff; --gut:#f5f7fd; --gutink:#a9b1cb;
+  --outink:#24304f; --stage:#ffffff; --panehead:#f4f6fd;
+  --scrim:rgba(24,28,54,.42); --modal:linear-gradient(160deg,#ffffff,#f1f4ff);
+  --sunk2:rgba(26,31,61,.06); --onacc:#ffffff; --onacc2:#ffffff;
+  --codeink:#4b3ea8; --dot:#ccd3e7; --goldline:#e5d09a; --acc2line:#9ad9cd;
+  --okbg:rgba(22,129,74,.10); --okline:#a8dcbe; --okink:#0f5f36;
+  --badbg:rgba(207,56,56,.08); --badline:#f0b9b9; --badink:#a52626;
+  --warnbg:rgba(181,115,10,.10); --warnline:#e8cf9c; --warnink:#8a5806;
+  --bugbg:linear-gradient(150deg,#fdeef3,#f7eefb); --bugline:#eec2d1; --bugink:#9c2b4d;
+  --claimbg:linear-gradient(150deg,#eef2fd,#f2f0fe); --claimink:#2a4c8f;
+  --sh:0 1px 2px rgba(28,35,80,.06),0 14px 32px -22px rgba(28,35,80,.45);
+  --shbig:0 24px 60px -20px rgba(28,35,80,.4);
+  --r:16px;
+}
+:root[data-theme="dark"]{
   --bg:#0d1020; --bg2:#141a33; --panel:#181f3d; --panel2:#1f2749; --sunken:#0a0d1c;
   --line:#2a3360; --line2:#3b4680; --ink:#eef1ff; --soft:#a6b0dd; --faint:#6f7ab0;
-  --acc:#7c5cff; --acc2:#00e0b8; --gold:#ffc53d; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffab3d;
+  --acc:#7c5cff; --acc-lt:#9d7bff; --acc2:#00e0b8; --acc2-lt:#00c9a7;
+  --gold:#ffc53d; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffab3d;
   --code:#0a0d1c;
   --k:#c792ea;--s:#c3e88d;--n:#f78c6c;--c:#5f6a9e;--f:#82aaff;--d:#ffcb6b;
-  --r:16px; --sh:0 2px 6px rgba(0,0,0,.35),0 18px 40px -22px rgba(0,0,0,.9);
+  --glow1:#1d2350; --glow2:#17303f;
+  --topbg:rgba(13,16,32,.86);
+  --herobg:linear-gradient(150deg,#201c4d,#152a44);
+  --goalbg:linear-gradient(150deg,#1b2450,#182a45);
+  --bar:#0f1428; --bar2:#0c1122; --res:#0b1020; --gut:#080b18; --gutink:#3f4877;
+  --outink:#cfe3ff; --stage:#070a16; --panehead:#141a33;
+  --scrim:rgba(6,8,18,.82); --modal:linear-gradient(160deg,#1d2350,#16304a);
+  --sunk2:rgba(0,0,0,.3); --onacc:#ffffff; --onacc2:#04231e;
+  --codeink:#b9c6ff; --dot:#39406e; --goldline:#6b551f; --acc2line:#1c5a52;
+  --okbg:rgba(61,220,132,.12); --okline:#1e5c3c; --okink:#8ff0bb;
+  --badbg:rgba(255,107,107,.1); --badline:#6b2a2a; --badink:#ffb3b3;
+  --warnbg:rgba(255,171,61,.1); --warnline:#6b4d1f; --warnink:#ffd79a;
+  --bugbg:linear-gradient(150deg,#3a2030,#2b1c36); --bugline:#6d2f42; --bugink:#ffd0dc;
+  --claimbg:linear-gradient(150deg,#1d2b4a,#1a2340); --claimink:#9fd0ff;
+  --sh:0 2px 6px rgba(0,0,0,.35),0 18px 40px -22px rgba(0,0,0,.9);
+  --shbig:0 30px 80px -20px #000;
 }
 *{box-sizing:border-box}
 body{
   margin:0;
   background:
-    radial-gradient(1200px 600px at 15% -10%, #1d2350 0%, transparent 60%),
-    radial-gradient(900px 500px at 90% 0%, #17303f 0%, transparent 55%),
+    radial-gradient(1200px 600px at 15% -10%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, var(--glow2) 0%, transparent 55%),
     var(--bg);
   color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:16px;line-height:1.6;
   -webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh;
@@ -41,7 +96,7 @@ h1,h2,h3{font-family:'Fredoka','Inter',sans-serif;letter-spacing:.005em}
 button{font-family:inherit}
 
 /* ---------- шапка ---------- */
-.top{position:sticky;top:0;z-index:60;background:rgba(13,16,32,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top{position:sticky;top:0;z-index:60;background:var(--topbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .top-in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* Панель ограничена 1080px и на широком экране НЕ становится шире, поэтому
    влезать в одну строку она обязана всегда — иначе вторая строка съедает
@@ -54,13 +109,13 @@ button{font-family:inherit}
 .logo .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:16px;flex:none}
 .logo b{font-family:'Fredoka';font-size:19px;font-weight:600}
 .xpbox{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--soft)}
-.lvlchip{background:linear-gradient(135deg,var(--acc),#a97bff);color:#fff;font-weight:700;font-size:12px;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.lvlchip{background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);font-weight:700;font-size:12px;padding:3px 10px;border-radius:99px;white-space:nowrap}
 .xpbar{width:110px;height:8px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);overflow:hidden}
 .xpbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc2),var(--acc));transition:width .6s cubic-bezier(.2,.8,.3,1)}
 .starcount{color:var(--gold);font-weight:700;font-size:13.5px;white-space:nowrap}
 .tbtn{border:1px solid var(--line2);background:var(--panel);color:var(--soft);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
 .tbtn:hover{color:var(--ink);border-color:var(--acc);background:var(--panel2)}
-.tbtn.on{background:var(--acc);color:#fff;border-color:transparent}
+.tbtn.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 
 /* ---------- полоска «что дальше» на первом уроке ---------- */
 .howbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:0 0 -4px;
@@ -117,7 +172,7 @@ button{font-family:inherit}
 .tab{border:0;background:transparent;color:var(--soft);border-radius:9px;padding:7px 11px;
   font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
 .tab:hover{color:var(--ink)}
-.tab.on{background:var(--acc);color:#fff;box-shadow:0 6px 16px -8px rgba(124,92,255,.9)}
+.tab.on{background:var(--acc);color:var(--onacc);box-shadow:0 6px 16px -8px rgba(124,92,255,.9)}
 @media (max-width:640px){
   /* На телефоне панель складывается в ДВЕ строки: сверху значок, звёзды и
      инструменты, снизу вкладки во всю ширину. Ради этого убираем то, без чего
@@ -136,12 +191,12 @@ button{font-family:inherit}
 .wrap{max-width:1080px;margin:0 auto;padding:26px 18px 90px}
 
 /* ---------- герой и секции ---------- */
-.hero{background:linear-gradient(150deg,#201c4d,#152a44);border:1px solid var(--line);border-radius:22px;padding:28px 30px;box-shadow:var(--sh)}
+.hero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;padding:28px 30px;box-shadow:var(--sh)}
 .hero h1{margin:0 0 8px;font-size:34px;line-height:1.12}
 .hero p{margin:0;color:var(--soft);max-width:60ch}
 .hero .row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .bigbtn{border:0;border-radius:13px;padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer;
-  background:linear-gradient(135deg,var(--acc),#9d7bff);color:#fff;box-shadow:0 8px 22px -8px rgba(124,92,255,.9);transition:.15s}
+  background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);box-shadow:0 8px 22px -8px rgba(124,92,255,.55);transition:.15s}
 .bigbtn:hover{transform:translateY(-2px)}
 .bigbtn.ghost{background:transparent;border:1px solid var(--line2);color:var(--soft);box-shadow:none}
 .bigbtn.ghost:hover{color:var(--ink);border-color:var(--acc)}
@@ -170,8 +225,8 @@ button{font-family:inherit}
 .wfoot{display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:12px;color:var(--faint);gap:8px}
 
 .tag{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);color:var(--faint);white-space:nowrap}
-.tag.draw{color:var(--acc2);border-color:#1d5e57}
-.tag.pro{color:var(--gold);border-color:#6b551f}
+.tag.draw{color:var(--acc2);border-color:var(--acc2line)}
+.tag.pro{color:var(--gold);border-color:var(--goldline)}
 
 /* ---------- список уроков ---------- */
 .lessons{display:flex;flex-direction:column;gap:7px;margin-top:6px}
@@ -185,16 +240,16 @@ button{font-family:inherit}
 .lesson.locked:hover,.lesson.soon:hover{transform:none;border-color:var(--line)}
 .lnum{flex:none;width:30px;height:30px;border-radius:9px;background:var(--sunken);border:1px solid var(--line);
   display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--faint)}
-.lesson:not(.locked):not(.soon) .lnum{color:var(--acc2);border-color:#1d5e57}
+.lesson:not(.locked):not(.soon) .lnum{color:var(--acc2);border-color:var(--acc2line)}
 .lbody{flex:1;min-width:0}
 .lbody b{display:block;font-size:15px;font-weight:600;line-height:1.3}
 .lbody span{font-size:12.5px;color:var(--faint)}
 .lright{flex:none}
-.stars{font-size:13px;letter-spacing:1.5px;color:#39406e}
+.stars{font-size:13px;letter-spacing:1.5px;color:var(--dot)}
 .stars b{color:var(--gold);font-weight:400}
 .soontag{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
 .bosstag{display:inline-block;font-size:10px;font-family:'Inter';letter-spacing:.08em;text-transform:uppercase;
-  color:var(--gold);border:1px solid #6b551f;border-radius:99px;padding:1px 7px;vertical-align:middle;margin-left:6px}
+  color:var(--gold);border:1px solid var(--goldline);border-radius:99px;padding:1px 7px;vertical-align:middle;margin-left:6px}
 
 /* ---------- достижения ---------- */
 .badges{display:flex;flex-wrap:wrap;gap:10px}
@@ -219,7 +274,7 @@ button{font-family:inherit}
 .card p{margin:0 0 10px;max-width:70ch}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
-.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:#b9c6ff}
+.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink)}
 .demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
 
 .note{border-left:3px solid var(--acc2);background:rgba(0,224,184,.07);padding:13px 16px;border-radius:0 12px 12px 0;margin:0 0 18px;font-size:14.5px;color:var(--soft)}
@@ -227,15 +282,15 @@ button{font-family:inherit}
 
 .demo{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0 4px;background:var(--code)}
 .demo pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:13.5px;line-height:1.6}
-.demo .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:#0f1428;flex-wrap:wrap}
+.demo .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:var(--bar);flex-wrap:wrap}
 .demo .bar .hintx{font-size:12px;color:var(--faint);margin-left:auto}
 .minibtn{border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .minibtn:hover{border-color:var(--acc2);color:var(--acc2)}
-.demo .res{border-top:1px solid var(--line);background:#0b1020;padding:10px 14px;font-size:13px;white-space:pre-wrap;color:var(--acc2);display:none}
+.demo .res{border-top:1px solid var(--line);background:var(--res);padding:10px 14px;font-size:13px;white-space:pre-wrap;color:var(--acc2);display:none}
 .demo .res.show{display:block}
 .t-k{color:var(--k)}.t-s{color:var(--s)}.t-n{color:var(--n)}.t-c{color:var(--c);font-style:italic}.t-f{color:var(--f)}.t-d{color:var(--d)}
 
-.goal{background:linear-gradient(150deg,#1b2450,#182a45);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:24px 0 14px}
+.goal{background:var(--goalbg);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:24px 0 14px}
 .goal h3{margin:0 0 8px;font-size:18px}
 .goal p{margin:0}
 .goal ul{margin:8px 0 0;padding-left:19px;color:var(--soft)}
@@ -247,11 +302,11 @@ button{font-family:inherit}
 @media (max-width:860px){.studio.split{grid-template-columns:1fr}}
 
 .editorbox{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--code);box-shadow:var(--sh)}
-.ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f1428;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint)}
-.ehead .dot{width:9px;height:9px;border-radius:50%;background:#39406e}
+.ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line);font-size:12px;color:var(--faint)}
+.ehead .dot{width:9px;height:9px;border-radius:50%;background:var(--dot)}
 .ehead .lbl{margin-left:6px}
 /* вкладки файлов: урок из нескольких файлов, как в настоящем проекте */
-.ftabs{display:flex;gap:2px;padding:0 8px;background:#0c1122;border-bottom:1px solid var(--line);overflow-x:auto}
+.ftabs{display:flex;gap:2px;padding:0 8px;background:var(--bar2);border-bottom:1px solid var(--line);overflow-x:auto}
 .ftab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--faint);
   font:600 12px/1 'JetBrains Mono',ui-monospace,monospace;padding:9px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
 .ftab:hover{color:var(--soft)}
@@ -280,12 +335,12 @@ button{font-family:inherit}
   border-radius:8px;background:var(--sunken);color:var(--soft);padding:8px 10px;
   font:14px/1.4 'JetBrains Mono',ui-monospace,monospace}
 .playbar .playin:focus{outline:none;border-color:var(--acc2)}
-.rbtn.play{background:var(--acc2);color:#04231e}
+.rbtn.play{background:var(--acc2);color:var(--onacc2)}
 
 /* карточки игр */
 .gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .gamecard{display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
-  border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px 16px 18px;
+  border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px 16px 18px;
   transition:.15s;color:inherit}
 .gamecard:hover{border-color:var(--acc2);transform:translateY(-2px)}
 .gamecard .gemoji{font-size:34px;line-height:1}
@@ -398,7 +453,7 @@ button{font-family:inherit}
 .reglbl input:focus,.reglbl textarea:focus{outline:none;border-color:var(--acc)}
 .codebox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sunken);
   border:1px solid var(--line);border-radius:11px;padding:10px 12px}
-.codebox code{background:none;border:0;padding:0;color:#b9c6ff;font-size:14px;word-break:break-all;flex:1;min-width:0}
+.codebox code{background:none;border:0;padding:0;color:var(--codeink);font-size:14px;word-break:break-all;flex:1;min-width:0}
 .mono{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--soft);word-break:break-all}
 
 /* раздел «Разминка»: угадай вывод (predict) */
@@ -436,11 +491,11 @@ button{font-family:inherit}
 .vizbox{display:flex;flex-direction:column;gap:12px}
 .vizplayer{display:flex;flex-direction:column;gap:12px}
 .vizctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);
-  border-radius:var(--r);background:#0f1428}
+  border-radius:var(--r);background:var(--bar)}
 .vizslider{flex:1 1 160px;min-width:120px;accent-color:var(--acc)}
 .vizpos{font-size:12.5px;color:var(--faint);font-family:'JetBrains Mono',monospace;white-space:nowrap}
 .viznote{font-size:12.5px;color:var(--faint);padding:0 2px}
-.vizerr{border-radius:12px;padding:12px 14px;font-size:14px;background:rgba(255,107,107,.1);border:1px solid #6b2a2a;color:#ffb3b3}
+.vizerr{border-radius:12px;padding:12px 14px;font-size:14px;background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
 .vizerr b{display:block;margin-bottom:3px}
 .vizstage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start}
 @media (max-width:820px){.vizstage{grid-template-columns:1fr}}
@@ -448,7 +503,7 @@ button{font-family:inherit}
   font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.6;padding:8px 0}
 .vcl{display:flex;gap:10px;padding:1px 12px;border-left:3px solid transparent}
 .vcl.on{background:rgba(124,92,255,.16);border-left-color:var(--acc)}
-.vcl .vcn{color:#3f4877;user-select:none;min-width:20px;text-align:right;flex:none}
+.vcl .vcn{color:var(--gutink);user-select:none;min-width:20px;text-align:right;flex:none}
 .vcl .vct{white-space:pre-wrap;overflow-wrap:anywhere}
 .vizmem{position:relative;display:flex;gap:22px;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r);
   background:var(--panel);padding:14px;min-height:120px}
@@ -470,7 +525,7 @@ button{font-family:inherit}
   font-family:'JetBrains Mono',monospace;font-size:13px;min-width:22px;text-align:center}
 .vodict{display:flex;flex-direction:column;gap:5px}
 .vopair{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:13px}
-.vopair .vokey{background:var(--code);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;color:#b9c6ff}
+.vopair .vokey{background:var(--code);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;color:var(--codeink)}
 .vopair .vosep{color:var(--faint)}
 .voempty{color:var(--faint);font-style:italic;font-size:12.5px}
 .vval{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink)}
@@ -482,11 +537,11 @@ button{font-family:inherit}
    Если положить его прямо в .vizwhat, каждый <b> станет flex-элементом и
    фраза расползётся по зазорам — «всего: 0 → 12» превратится в «всего : 0 → 12». */
 .vizwhat{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;font-size:13.5px;color:var(--ink);
-  background:rgba(0,224,184,.09);border:1px solid #1c5a52;border-radius:12px;padding:9px 13px}
+  background:rgba(0,224,184,.09);border:1px solid var(--acc2line);border-radius:12px;padding:9px 13px}
 .vizwhat .vwl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--acc2);flex:none;
   padding-top:2px}
 .vizwhat .vwt{flex:1 1 auto;min-width:0}
-.vizwhat b{font-family:'JetBrains Mono',monospace;font-weight:600;color:#8ff0bb}
+.vizwhat b{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--okink)}
 /* Две метки: «новое» тёплая, «изменилось» бирюзовая. Разные цвета, потому что
    это разные события: появилось имя или поменялось значение у прежнего. */
 .vzn{border-color:var(--gold) !important;box-shadow:0 0 0 2px rgba(255,197,61,.18)}
@@ -506,11 +561,11 @@ button{font-family:inherit}
 @keyframes vzpop{from{transform:scale(.9)}to{transform:scale(1)}}
 
 .edit-area{position:relative;display:flex;min-height:190px}
-.gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
-  user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
+.gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:var(--gutink);font-size:13.5px;line-height:1.62;
+  user-select:none;background:var(--gut);border-right:1px solid var(--line);min-width:42px}
 .gutter i{display:block;font-style:normal;transition:.2s;border-radius:3px}
-.gutter i.err{color:#fff;background:var(--bad);margin-right:-4px;padding-right:4px}
-.gutter i.cur{color:#04231e;background:var(--acc2);margin-right:-4px;padding-right:4px}
+.gutter i.err{color:var(--onacc);background:var(--bad);margin-right:-4px;padding-right:4px}
+.gutter i.cur{color:var(--onacc2);background:var(--acc2);margin-right:-4px;padding-right:4px}
 .edit-scroll{position:relative;flex:1;min-width:0}
 .edit-scroll pre.hl,.edit-scroll textarea{
   margin:0;padding:12px 14px;font-size:13.5px;line-height:1.62;
@@ -521,24 +576,24 @@ button{font-family:inherit}
   caret-color:var(--acc2);resize:none;outline:none;display:block;overflow:hidden}
 .edit-scroll textarea::selection{background:rgba(124,92,255,.45);color:transparent}
 
-.runbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:#0f1428;border-top:1px solid var(--line)}
+.runbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--bar);border-top:1px solid var(--line)}
 .runbar .sp{flex:1}
 .runbar .tip,.hintbox .tip{font-size:11.5px;color:var(--faint)}
 .rbtn{border:0;border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:.15s;
-  background:linear-gradient(135deg,#00c9a7,var(--acc2));color:#04231e}
+  background:linear-gradient(135deg,var(--acc2-lt),var(--acc2));color:var(--onacc2)}
 .rbtn:hover{transform:translateY(-1px)}
 .rbtn.sec{background:var(--panel2);color:var(--soft);border:1px solid var(--line2)}
 .rbtn.sec:hover{color:var(--ink);border-color:var(--acc)}
-.rbtn.check{background:linear-gradient(135deg,var(--acc),#9d7bff);color:#fff}
+.rbtn.check{background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc)}
 
 .side{display:flex;flex-direction:column;gap:12px}
 .pane{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden;box-shadow:var(--sh)}
-.pane .ph{padding:8px 13px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line);background:#141a33}
+.pane .ph{padding:8px 13px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line);background:var(--panehead)}
 .pane .pb{padding:12px 14px;font-size:13.5px}
 .console{background:var(--sunken);min-height:90px;max-height:280px;overflow:auto;white-space:pre-wrap;
-  color:#cfe3ff;font-size:13px;line-height:1.55;padding:12px 14px;font-family:'JetBrains Mono',monospace}
+  color:var(--outink);font-size:13px;line-height:1.55;padding:12px 14px;font-family:'JetBrains Mono',monospace}
 .console .empty,.varlist .empty{color:var(--faint);font-style:italic;font-family:'Inter'}
-canvas.stage{display:block;width:100%;height:auto;background:#070a16}
+canvas.stage{display:block;width:100%;height:auto;background:var(--stage)}
 .varlist{display:flex;flex-direction:column;gap:5px}
 .varrow{display:flex;gap:8px;align-items:baseline;font-size:13px}
 .varrow b{color:var(--acc2);font-weight:600;font-family:'JetBrains Mono'}
@@ -547,17 +602,17 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 
 .msg{border-radius:13px;padding:14px 16px;margin-top:12px;font-size:14.5px;display:none;animation:pop .28s cubic-bezier(.2,1.2,.4,1)}
 .msg.show{display:block}
-.msg.ok{background:rgba(61,220,132,.12);border:1px solid #1e5c3c;color:#8ff0bb}
-.msg.bad{background:rgba(255,107,107,.1);border:1px solid #6b2a2a;color:#ffb3b3}
-.msg.warn{background:rgba(255,171,61,.1);border:1px solid #6b4d1f;color:#ffd79a}
+.msg.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
+.msg.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
+.msg.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
 .msg b{display:block;margin-bottom:4px;font-size:15px}
 .msg .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-family:'JetBrains Mono';font-size:12.5px}
-.msg .cmp div{background:rgba(0,0,0,.3);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.msg .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .msg .cmp u{display:block;text-decoration:none;font-family:'Inter';font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
 @keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
 
 .hintbox{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.hintout{margin-top:10px;display:none;background:rgba(255,171,61,.09);border:1px solid #6b4d1f;border-radius:12px;padding:12px 15px;font-size:14px;color:#ffd79a}
+.hintout{margin-top:10px;display:none;background:var(--warnbg);border:1px solid var(--warnline);border-radius:12px;padding:12px 15px;font-size:14px;color:var(--warnink)}
 .hintout.show{display:block}
 .hintout .step{margin-bottom:7px}
 .hintout .step:last-child{margin-bottom:0}
@@ -566,19 +621,19 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 .pager .sp{flex:1}
 
 .ref{display:flex;flex-wrap:wrap;gap:6px}
-.ref span{font-family:'JetBrains Mono';font-size:11.5px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:#9fb4ff;cursor:pointer}
+.ref span{font-family:'JetBrains Mono';font-size:11.5px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--codeink);cursor:pointer}
 .ref span:hover{border-color:var(--acc2);color:var(--acc2)}
 
 /* ---------- победа ---------- */
-.win{position:fixed;inset:0;z-index:100;background:rgba(6,8,18,.82);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px}
+.win{position:fixed;inset:0;z-index:100;background:var(--scrim);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px}
 .win.show{display:grid}
-.wincard{background:linear-gradient(160deg,#1d2350,#16304a);border:1px solid var(--line2);border-radius:24px;
-  padding:32px 34px;max-width:440px;width:100%;text-align:center;box-shadow:0 30px 80px -20px #000;
+.wincard{background:var(--modal);border:1px solid var(--line2);border-radius:24px;
+  padding:32px 34px;max-width:440px;width:100%;text-align:center;box-shadow:var(--shbig);
   animation:pop .4s cubic-bezier(.2,1.3,.4,1)}
 .wincard .big{font-size:52px;line-height:1;margin-bottom:6px}
 .wincard h2{margin:0 0 6px;font-size:26px}
 .wincard p{margin:0 0 16px;color:var(--soft)}
-.winstars{font-size:38px;letter-spacing:6px;color:#39406e;margin-bottom:10px}
+.winstars{font-size:38px;letter-spacing:6px;color:var(--dot);margin-bottom:10px}
 .winstars b{color:var(--gold);font-weight:400;display:inline-block;animation:star .5s cubic-bezier(.2,1.4,.4,1) backwards}
 .winstars b:nth-child(1){animation-delay:.05s}.winstars b:nth-child(2){animation-delay:.2s}.winstars b:nth-child(3){animation-delay:.35s}
 @keyframes star{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
@@ -586,8 +641,8 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 .winrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99;display:none}
 
-.toast{position:fixed;right:16px;bottom:16px;z-index:120;background:linear-gradient(150deg,#1d2350,#16304a);
-  border:1px solid var(--gold);border-radius:14px;padding:12px 16px;box-shadow:0 16px 40px -12px #000;
+.toast{position:fixed;right:16px;bottom:16px;z-index:120;background:var(--modal);
+  border:1px solid var(--gold);border-radius:14px;padding:12px 16px;box-shadow:var(--shbig);
   display:flex;gap:10px;align-items:center;font-size:14px;animation:pop .35s cubic-bezier(.2,1.3,.4,1);transition:.4s}
 .toast.out{opacity:0;transform:translateY(10px)}
 .toast .em{font-size:24px}
@@ -623,17 +678,17 @@ body.focus .lede{display:none}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
 /* ---------- задание «найди и почини ошибку» ---------- */
-.bugcard{background:linear-gradient(150deg,#3a2030,#2b1c36);border:1px solid #6d2f42;border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
-.bugcard h3{margin:0 0 6px;font-size:17px;color:#ffb3c6}
-.bugcard p{margin:0 0 9px;color:#f0d8e0}
-.bugcard code{background:rgba(0,0,0,.32);border:1px solid #6d2f42;border-radius:5px;padding:1px 6px;font-size:.86em;color:#ffd0dc}
-.bugcard .bugtip{display:block;font-size:12.5px;color:#a98a9a}
+.bugcard{background:var(--bugbg);border:1px solid var(--bugline);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.bugcard h3{margin:0 0 6px;font-size:17px;color:var(--bugink)}
+.bugcard p{margin:0 0 9px;color:var(--ink)}
+.bugcard code{background:var(--sunk2);border:1px solid var(--bugline);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--bugink)}
+.bugcard .bugtip{display:block;font-size:12.5px;color:var(--soft)}
 .demo .bar .hintx.errx{color:var(--warn)}
 
 /* ---------- задание «вынеси вердикт» (тип review в «Ты и ИИ») ---------- */
-.claimcard{background:linear-gradient(150deg,#1d2b4a,#1a2340);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
-.claimcard h3{margin:0 0 6px;font-size:17px;color:#9fd0ff}
-.claimcard p{margin:0 0 9px;color:#e2e9ff;font-size:16.5px}
+.claimcard{background:var(--claimbg);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.claimcard h3{margin:0 0 6px;font-size:17px;color:var(--claimink)}
+.claimcard p{margin:0 0 9px;color:var(--ink);font-size:16.5px}
 .claimcard .claimtip{display:block;font-size:12.5px;color:var(--faint)}
 .verdict{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:16px 0 0}
 .verdict h3{margin:0 0 6px;font-size:18px}
@@ -658,7 +713,7 @@ body.focus .lede{display:none}
 .proof{margin:12px 0 4px;text-align:left;font-size:13.5px;color:var(--soft)}
 .proof u{display:block;text-decoration:none;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
 .proof .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;font-family:'JetBrains Mono';font-size:12.5px}
-.proof .cmp div{background:rgba(0,0,0,.32);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.proof .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .proof .cmp u{margin-bottom:5px}
 @media (max-width:620px){
   .proof .cmp{grid-template-columns:1fr}
@@ -698,7 +753,7 @@ body.focus .lede{display:none}
 .admjson{width:100%;height:150px;background:var(--sunken);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;color:var(--soft);font-size:12px;line-height:1.5;resize:vertical;margin:8px 0 4px}
 .admjson:focus{outline:none;border-color:var(--acc)}
 .admlist{display:flex;flex-direction:column;gap:6px;margin-top:9px}
-.admlrow{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.22);border-radius:9px;padding:7px 11px;flex-wrap:wrap}
+.admlrow{display:flex;align-items:center;gap:10px;background:var(--sunk2);border-radius:9px;padding:7px 11px;flex-wrap:wrap}
 .admlrow b{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink)}
 .admlrow span{font-size:12px;color:var(--soft);margin-right:auto}
 .admlbl input[type=text],.admlbl input[type=password]{width:190px;font-family:'JetBrains Mono',monospace;font-size:13px}
@@ -729,7 +784,7 @@ body.focus .lede{display:none}
 }
 
 /* ---------- шпаргалка: оверлей поверх любого экрана ---------- */
-.sheet{position:fixed;inset:0;z-index:60;background:rgba(6,8,20,.72);
+.sheet{position:fixed;inset:0;z-index:60;background:var(--scrim);
   display:flex;align-items:flex-start;justify-content:center;padding:40px 16px}
 .sheet[hidden]{display:none}
 .sheetbox{width:min(760px,100%);max-height:calc(100vh - 80px);display:flex;flex-direction:column;
@@ -840,7 +895,7 @@ body.focus .lede{display:none}
 .certcard .rbtn{flex:none}
 
 /* ---------- сертификат: лист бумаги поверх страницы ---------- */
-.cert{position:fixed;inset:0;z-index:70;background:rgba(6,8,20,.78);
+.cert{position:fixed;inset:0;z-index:70;background:var(--scrim);
   display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto}
 .cert[hidden]{display:none}
 .certwrap{width:min(760px,100%)}
@@ -903,7 +958,7 @@ body.focus .lede{display:none}
 .pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .pic{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
 .pic.broken{border-color:var(--bad)}
-.picart{display:block;width:100%;background:#070a16}
+.picart{display:block;width:100%;background:var(--stage)}
 .picbody{padding:10px 13px;display:flex;flex-direction:column;gap:3px}
 .picbody b{font-size:15px}
 .picsub{font-size:12px;color:var(--faint)}
@@ -934,12 +989,12 @@ body.focus .lede{display:none}
 .keybar{display:none}
 @media (max-width:640px){
   .keybar{display:flex;flex-wrap:wrap;gap:5px;padding:7px 8px;
-    background:#0b1020;border-top:1px solid var(--line)}
+    background:var(--res);border-top:1px solid var(--line)}
   .kbk{flex:none;min-width:34px;border:1px solid var(--line2);background:var(--panel2);
     color:var(--ink);border-radius:8px;padding:7px 0;font-family:'JetBrains Mono',monospace;
     font-size:14px;font-weight:700;cursor:pointer}
   .kbk.wide{min-width:96px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--soft)}
-  .kbk:active{background:var(--acc);color:#fff;border-color:transparent}
+  .kbk:active{background:var(--acc);color:var(--onacc);border-color:transparent}
 }
 
 /* ---------- разбор кода: что можно сделать чище ---------- */
@@ -990,7 +1045,152 @@ body.focus .lede{display:none}
 .tsteps{margin:8px 0 0;padding-left:20px;color:var(--soft)}
 .tsteps li{margin-bottom:4px}
 
+/* ============================================================
+   ПОМОЩЬ: кнопка «?» и всплывающее окно
+   Раньше объяснение «что это за экран и что тут делать» жило только на
+   Главном и только пока не пройден первый урок. Дальше ребёнок оставался
+   один на один с экраном, которого никогда не видел: «Визуализатор»,
+   «Повторить», «Своё задание» — по названию не догадаешься.
+   Теперь ответ всегда на одном месте — «?» в правом верхнем углу, — и текст
+   в нём МЕНЯЕТСЯ вместе с экраном. Окно всплывает поверх, а не уводит со
+   страницы: уход с урока стёр бы написанный код.
+   ============================================================ */
+.tbtn.help{font-weight:700}
+.tbtn.help.on{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* На большом экране обёртка НЕ ловит указатель: иначе прозрачное затемнение
+   съедало бы прокрутку колесом, и страница за окном «замирала» бы — это
+   читается как поломка. Закрытие по клику мимо держится на обработчике в
+   js/app.js. На телефоне наоборот: затемнение видно, оно ловит палец и
+   закрывает — кнопка «✕» слишком мелкая для пальца. */
+.helpwrap{position:fixed;inset:0;z-index:90;display:none;pointer-events:none}
+.helpwrap.show{display:block}
+.helpwrap .helpveil{position:absolute;inset:0;background:transparent}
+.helpwrap .helpbox{pointer-events:auto}
+@media (max-width:640px){
+  .helpwrap{pointer-events:auto}
+  .helpwrap .helpveil{background:var(--scrim)}
+}
+
+.helpbox{position:absolute;top:64px;right:16px;width:min(400px,calc(100vw - 32px));
+  max-height:min(78vh,720px);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line2);border-radius:18px;
+  box-shadow:var(--shbig);overflow:hidden;animation:pop .2s cubic-bezier(.2,1.2,.4,1)}
+@media (max-width:640px){
+  .helpbox{top:auto;bottom:0;right:0;left:0;width:100%;max-height:82vh;
+    border-radius:18px 18px 0 0}
+}
+.helphead{display:flex;align-items:center;gap:10px;padding:13px 15px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}
+.helphead b{font-family:'Fredoka','Inter',sans-serif;font-size:16px;flex:1;min-width:0}
+.helpbody{padding:15px 17px 18px;overflow:auto;font-size:14px;line-height:1.6}
+.helpbody h4{margin:16px 0 6px;font-size:13.5px;color:var(--acc2);
+  letter-spacing:.04em;text-transform:uppercase;font-family:'Inter',sans-serif}
+.helpbody h4:first-child{margin-top:0}
+.helpbody p{margin:0 0 8px;color:var(--soft)}
+.helpbody ul,.helpbody ol{margin:0 0 8px;padding-left:19px;color:var(--soft)}
+.helpbody li{margin-bottom:5px}
+.helpbody b{color:var(--ink)}
+.helpbody kbd{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--sunken);
+  border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--ink)}
+.helprow{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.helprow .rbtn{flex:1 1 auto}
+
+/* переключатель темы внутри помощи: три кнопки, светится текущая */
+.themepick{display:flex;gap:6px;margin:2px 0 4px}
+.themepick button{flex:1;border:1px solid var(--line2);background:var(--panel2);color:var(--soft);
+  border-radius:10px;padding:9px 6px;font:600 13px/1.2 'Inter',sans-serif;cursor:pointer;transition:.15s}
+.themepick button:hover{color:var(--ink);border-color:var(--acc)}
+.themepick button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* «?» рядом с заголовком раздела: тот же ответ, но не надо искать глазами
+   кнопку в шапке. Ставится в правый верхний угол блока. */
+.qm{flex:none;width:22px;height:22px;padding:0;border-radius:50%;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--soft);
+  font:700 12px/1 'Inter',sans-serif;cursor:pointer;transition:.15s}
+.qm:hover{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* ============================================================
+   ПОИСК УРОКА
+   Сто уроков лежат в пяти мирах по двадцать. Пока помнишь номер — всё
+   хорошо, а «где было про словари» ищется только глазами по пяти экранам.
+   Строка поиска стоит прямо в блоке «Уроки» и ищет по названию, подзаголовку
+   и номеру; закрытые уроки показываются тоже — но видно, что они закрыты.
+   ============================================================ */
+.lsearch{display:flex;align-items:center;gap:9px;margin:0 0 14px}
+.lsearch input{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--line2);
+  border-radius:11px;background:var(--panel);color:var(--ink);padding:10px 13px;font:14px/1.4 'Inter',sans-serif}
+.lsearch input:focus{outline:none;border-color:var(--acc)}
+.lsearch input::placeholder{color:var(--faint)}
+.lsfound{display:flex;flex-direction:column;gap:6px;margin:0 0 16px}
+.lsrow{display:flex;align-items:center;gap:11px;text-align:left;width:100%;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  color:inherit;font:inherit;padding:9px 13px;cursor:pointer;transition:.14s}
+.lsrow:hover{border-color:var(--acc);background:var(--panel2)}
+.lsrow .lsnum{flex:none;font:700 12px/1 'JetBrains Mono',monospace;color:var(--faint);min-width:30px}
+.lsrow .lstitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.lsrow .lssub{flex:none;font-size:12px;color:var(--faint)}
+.lsrow.lock{opacity:.55;cursor:default}
+.lsrow.lock:hover{border-color:var(--line);background:var(--panel)}
+.lsnone{margin:0 0 16px;color:var(--faint);font-size:13.5px}
+@media (max-width:620px){ .lsrow .lssub{display:none} }
+
+/* ============================================================
+   КНОПКА «НАВЕРХ»
+   Экран урока и портфолио бывают в несколько экранов длиной, а кнопки
+   «дальше» живут внизу — но «к списку уроков» и панель наверху. Кнопка
+   появляется только когда прокрутили больше экрана, иначе она мусор.
+   ============================================================ */
+.toTop{position:fixed;right:16px;bottom:16px;z-index:55;width:42px;height:42px;
+  border-radius:50%;border:1px solid var(--line2);background:var(--panel);color:var(--soft);
+  font-size:16px;cursor:pointer;box-shadow:var(--sh);display:none;transition:.15s}
+.toTop.show{display:block}
+.toTop:hover{color:var(--ink);border-color:var(--acc)}
+body.focus .toTop{display:none}
+@media print{ .toTop,.helpwrap{display:none !important} }
+
+/* ============================================================
+   ЭКРАН «КАК ПОЛЬЗОВАТЬСЯ»
+   Всплывающая помощь отвечает на «что тут прямо сейчас», а это — полная
+   инструкция: устройство сайта, из чего состоит урок, откуда берутся
+   звёзды, что делать, когда не получается, и отдельный кусок для родителя.
+   ============================================================ */
+.guide .card{margin-bottom:14px}
+.guidesteps{counter-reset:g;list-style:none;margin:0;padding:0}
+.guidesteps li{position:relative;padding:0 0 14px 42px;counter-increment:g}
+.guidesteps li:last-child{padding-bottom:0}
+.guidesteps li::before{content:counter(g);position:absolute;left:0;top:0;
+  width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  background:var(--acc);color:var(--onacc);font:700 14px/1 'Inter',sans-serif}
+.guidesteps b{display:block;margin-bottom:2px}
+.guidesteps span{color:var(--soft);font-size:14px}
+.keylist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin:0}
+.keyrow{display:flex;align-items:baseline;gap:10px;font-size:13.5px;color:var(--soft)}
+.keyrow kbd{flex:none;font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--sunken);
+  border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--ink)}
+.iconlist{display:flex;flex-direction:column;gap:9px;margin:0}
+.iconrow{display:flex;align-items:flex-start;gap:11px;font-size:14px}
+.iconrow .ic{flex:none;width:34px;text-align:center;font-size:18px}
+.iconrow span{color:var(--soft)}
+.iconrow b{color:var(--ink)}
+
 </style>
+<!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
+     это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
+     страница успеет нарисоваться в теме по умолчанию. Скрипт крошечный и
+     нарочно не зависит ни от чего: он обязан отработать даже если app.js
+     не загрузился. -->
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem("kodokvest_theme");
+    if (t !== "dark" && t !== "light") t = "light";
+    document.documentElement.setAttribute("data-theme", t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute("content", t === "dark" ? "#0d1020" : "#f1f4fc");
+  }catch(e){}
+})();
+</script>
 
 </head>
 
@@ -1019,6 +1219,12 @@ body.focus .lede{display:none}
     <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖</button>
     <button class="tbtn who" id="btn-who" title="Профиль">👤</button>
     <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">⛶</button>
+    <!-- Пятый инструмент, и он же единственный, которому разрешено быть
+         пятым: «?» отвечает на вопрос «что это за экран и что тут делать»
+         для ЛЮБОГО экрана. Раньше такой ответ был только на Главном и только
+         у новичка — дальше ребёнок оставался один на один с «Визуализатором»
+         и «Повторить», о которых по названию не догадаешься. -->
+    <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog">?</button>
   </div>
 </div>
 
@@ -1051,6 +1257,19 @@ body.focus .lede{display:none}
     </div>
   </div>
 </div>
+
+<!-- Помощь всплывает ПОВЕРХ страницы по той же причине, что и шпаргалка:
+     чаще всего она нужна посреди урока, а уход со страницы стёр бы код. -->
+<div class="helpwrap" id="helpwrap">
+  <div class="helpveil" id="helpveil"></div>
+  <div class="helpbox" role="dialog" aria-label="Подсказка">
+    <div class="helphead"><b id="helptitle">Подсказка</b>
+      <button class="rbtn sec" id="helpclose" title="Закрыть (Esc)">✕</button></div>
+    <div class="helpbody" id="helpbody"></div>
+  </div>
+</div>
+
+<button class="toTop" id="totop" title="Наверх" aria-label="Наверх">↑</button>
 
 <canvas id="confetti"></canvas>
 
@@ -14838,8 +15057,71 @@ function trainCards(){
   ];
 }
 
+/* ================= поиск по урокам =================
+   Сто уроков разложены по пяти мирам, и пока помнишь номер — всё хорошо.
+   А «где было про словари» раньше искалось только глазами по пяти экранам.
+   Ищем по названию, подзаголовку, теме мира и номеру.
+
+   Закрытые уроки из выдачи НЕ прячем, но и открыть их отсюда нельзя:
+   спрятать — значит соврать («такого урока нет»), а пустить — сломать
+   порядок, на котором держится весь курс. Поэтому строка видна и помечена
+   замком: «есть, но позже».
+   ============================================================ */
+function lessonSearch(q){
+  q = String(q || "").toLowerCase().trim();
+  if (q.length < 2) return [];
+  var out = [];
+  CURRICULUM.forEach(function(w){
+    w.lessons.forEach(function(l){
+      var hay = (l.title + " " + l.sub + " " + w.title + " " + l.num).toLowerCase();
+      if (hay.indexOf(q) >= 0) out.push(l);
+    });
+  });
+  return out.slice(0, 8);
+}
+function wireLessonSearch(){
+  var inp = document.getElementById("lq");
+  var box = document.getElementById("lsfound");
+  if (!inp || !box) return;
+  var draw = function(){
+    var q = String(inp.value || "").trim();
+    if (q.length < 2){ box.hidden = true; box.innerHTML = ""; return; }
+    var found = lessonSearch(q);
+    box.hidden = false;
+    if (!found.length){
+      box.innerHTML = '<p class="lsnone">Ничего не нашлось. Попробуй одно слово: ' +
+        '«список», «цикл», «функция», «черепашка» — или номер урока.</p>';
+      return;
+    }
+    box.innerHTML = found.map(function(l){
+      var open = lessonOpen(l);
+      var st = solved(l.id)
+        ? new Array(starsOf(l.id) + 1).join("★")
+        : (open ? "" : "🔒 позже");
+      return '<button class="lsrow' + (open ? "" : " lock") + '"' +
+        (open ? ' data-open="' + l.id + '"' : "") + '>' +
+        '<span class="lsnum">' + l.num + '</span>' +
+        '<span class="lstitle">' + esc(l.title) + '</span>' +
+        '<span class="lssub">' + esc(l.sub) + '</span>' +
+        '<span class="lsnum">' + st + '</span></button>';
+    }).join("");
+    box.querySelectorAll("[data-open]").forEach(function(b){
+      b.onclick = function(){ openLesson(b.getAttribute("data-open")); };
+    });
+  };
+  inp.oninput = draw;
+  inp.onkeydown = function(e){
+    if (e.key === "Escape"){ inp.value = ""; draw(); return; }
+    /* Enter открывает первый найденный урок: искал — значит уже решил, куда идти */
+    if (e.key === "Enter"){
+      var first = box.querySelector("[data-open]");
+      if (first) first.click();
+    }
+  };
+}
+
 function screenWorlds(){
-  enterScreen("home");
+  enterScreen("home", "home");
   session = { id:null, attempts:0, hints:0, shown:false };
   /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
      только на сайте с раздельными файлами), догружаем всё и перерисовываем —
@@ -14881,6 +15163,7 @@ function screenWorlds(){
       '<span>' + (dues ? "· " + dues + " " + plural(dues, "урок ждёт", "урока ждут", "уроков ждут") + " повтора"
                        : "· долгов по повторению нет") + '</span>' +
       '<span>· шпаргалка 📖 наверху открывается прямо посреди урока</span>' +
+      '<span>· не понял, что за экран, — жми <b>?</b> в правом верхнем углу</span>' +
     '</div></div>';
 
   /* ===== как это работает: только пока ни один урок не пройден ===== */
@@ -14893,15 +15176,24 @@ function screenWorlds(){
       'а рядом со строками — что каждая сделала.</li>' +
       '<li><b>Жмёшь «✓ Проверить».</b> Если что-то не так, тренажёр покажет, чем твой ответ отличается от нужного.</li>' +
       '</ol><p class="dim">Три звезды дают за урок, пройденный с первой попытки и без подсказок. ' +
-      'Подсказки есть всегда — они стоят одну звезду, и это не страшно.</p></div>';
+      'Подсказки есть всегда — они стоят одну звезду, и это не страшно.</p>' +
+      '<div class="helprow"><button class="rbtn sec" id="go-guide">📕 Полная инструкция</button>' +
+      '<button class="rbtn sec" data-help="tools">🧰 Что за кнопки наверху</button></div></div>';
   }
 
   /* ===== уроки ===== */
-  h += '<div class="sect"><h2>Уроки</h2><div class="line"></div><span class="cnt">' +
+  h += '<div class="sect"><h2>Уроки</h2>' + qm("worlds", "Как устроен курс") +
+    '<div class="line"></div><span class="cnt">' +
     doneTotal + ' из ' + CURRICULUM.total + '</span></div>' +
     '<p class="dim">Это главное в тренажёре: сто уроков по порядку, пять миров по двадцать. ' +
     'Уроки открываются один за другим — сдал, открылся следующий. В конце каждого мира ' +
-    'свой проект и сертификат.</p><div class="worlds">';
+    'свой проект и сертификат.</p>' +
+    /* Поиск по урокам. Сто уроков лежат в пяти мирах, и «где было про словари»
+       раньше искалось только глазами по пяти экранам подряд. */
+    '<div class="lsearch"><input type="search" id="lq" autocomplete="off" spellcheck="false" ' +
+    'placeholder="Найти урок: словари, черепашка, цикл, 42…"></div>' +
+    '<div class="lsfound" id="lsfound" hidden></div>' +
+    '<div class="worlds">';
   CURRICULUM.forEach(function(w){
     var ready = worldReadyLessons(w);
     var done = ready.filter(function(l){ return solved(l.id); }).length;
@@ -14924,7 +15216,8 @@ function screenWorlds(){
   h += '</div>';
 
   /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
-  h += '<div class="sect"><h2>Тренировки</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Тренировки</h2>' + qm("train", "Что такое тренировки") +
+    '<div class="line"></div>' +
     '<span class="cnt">вне сотни уроков</span></div>' +
     '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
     'Звёзд они не дают, но день занятий засчитывают.</p>' +
@@ -14947,7 +15240,8 @@ function screenWorlds(){
   var ctAll = certList(), ctDone = 0;
   ctAll.forEach(function(c){ if (c.ready) ctDone++; });
   var pics = galleryList().length, mine = myTasksList().length;
-  h += '<div class="sect"><h2>Моё</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Моё</h2>' + qm("folio", "Что лежит в «Моём»") +
+    '<div class="line"></div>' +
     '<span class="cnt">' + (pjDone + pics + mine) + ' ' +
     plural(pjDone + pics + mine, "работа", "работы", "работ") + '</span></div>' +
     '<div class="projcard' + (pjDone || pics ? " done" : "") + '">' +
@@ -14975,7 +15269,8 @@ function screenWorlds(){
     '</div>';
 
   /* ===== достижения ===== */
-  h += '<div class="sect"><h2>Достижения</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Достижения</h2>' + qm("stars", "Откуда берутся звёзды и опыт") +
+    '<div class="line"></div>' +
     '<span class="cnt">' + S.badges.length + ' из ' + BADGES.length + '</span></div><div class="badges">';
   BADGES.forEach(function(b){
     h += '<div class="badge' + (S.badges.indexOf(b.id) >= 0 ? " got" : "") + '">' +
@@ -14993,6 +15288,9 @@ function screenWorlds(){
   var ga = document.getElementById("go-again");
   if (ga) ga.onclick = screenReview;
   document.getElementById("go-train").onclick = screenTrain;
+  var gg = document.getElementById("go-guide");
+  if (gg) gg.onclick = screenGuide;
+  wireLessonSearch();
   document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
   var cards = trainCards();
@@ -15016,7 +15314,7 @@ function screenWorlds(){
    что из этого игра, а что учебный инструмент, было невозможно.
    ============================================================ */
 function screenTrain(){
-  enterScreen("train");
+  enterScreen("train", "train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
     '<h1>🎯 Тренировки</h1></div></div>' +
@@ -15032,6 +15330,8 @@ function screenTrain(){
       '<button class="bigbtn" data-train="' + c.id + '">Открыть</button></div>';
   });
   h += '</div>' +
+    '<div class="note"><b>Не знаешь, что выбрать</b>Жми «?» в правом верхнем углу — ' +
+    'там написано, что это за экран и что тут делать. Так на любом экране сайта.</div>' +
     '<div class="note"><b>Повторение живёт отдельно</b>Уроки, которые дались тяжело, ' +
     'возвращаются сами в разделе «Повторить» — он на Главном, потому что это про уроки, ' +
     'а не про отдых. Там же бестиарий ошибок: каждая ошибка, которую ты победил.</div>' +
@@ -15053,7 +15353,7 @@ function screenTrain(){
 
 /* ================= экран: мир ================= */
 function screenWorld(n){
-  var seq = enterScreen();
+  var seq = enterScreen(undefined, "world");
   var w = CURRICULUM.world(n);
   worldContent(n).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -15236,6 +15536,7 @@ function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
   curTab = "home";              /* урок — это «Главное», а не отдельный раздел */
+  curPlace = "lesson";          /* а помощь «?» — про урок */
   var seq = claimScreen();
   worldContent(l.world).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -15721,7 +16022,7 @@ function confetti(n){
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
-  enterScreen("train");
+  enterScreen("train", "sand");
   /* sandbox:true — метка для draftFlush: уход с этого экрана обязан сохранить код */
   session = { id:null, attempts:0, hints:0, shown:false, sandbox:true };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
@@ -15803,7 +16104,7 @@ function gamesList(){ return (window.GAMES || []); }
 function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
 
 function screenGames(){
-  enterScreen("train");
+  enterScreen("train", "games");
   session = { id:null, attempts:0, hints:0, shown:false };
   var gs = gamesList();
   var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
@@ -15829,7 +16130,7 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
-  enterScreen("train");
+  enterScreen("train", "game");
   session = { id:null, attempts:0, hints:0, shown:false };
   var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
@@ -16153,7 +16454,7 @@ function runBlocksCheck(w, ed, showMsg){
    Ребёнок вводит имя → создаётся код и аккаунт. Либо входит по готовому коду.
    ============================================================ */
 function screenRegister(){
-  enterScreen(null);
+  enterScreen(null, "register");
   session = { id:null, attempts:0, hints:0, shown:false };
   var h =
     '<div class="reghero"><span class="regmark">🐍</span>' +
@@ -16232,7 +16533,7 @@ function copyText(text, btn){
   oldWay();
 }
 function screenAccount(){
-  enterScreen(null);
+  enterScreen(null, "account");
   session = { id:null, attempts:0, hints:0, shown:false };
   var code = myCode(), name = myName();
   var link = "";
@@ -16259,6 +16560,20 @@ function screenAccount(){
     '<div class="card"><h3>Портфолио</h3>' +
     '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
+    /* Оформление стоит в профиле, а не только в помощи: настройку ищут там,
+       где настройки, а не там, где подсказки. Дублирование тут дешевле
+       ненайденной кнопки. */
+    '<div class="card"><h3>Оформление</h3>' +
+    '<p class="dim">Светлая тема стоит по умолчанию — тёмный фон тяжело читать днём. ' +
+    'Выбор запоминается на этом устройстве и на другие не переезжает.</p>' +
+    '<div class="themepick" id="acctheme">' +
+      '<button data-theme-set="light">☀️ Светлая</button>' +
+      '<button data-theme-set="dark">🌙 Тёмная</button>' +
+    '</div></div>' +
+    '<div class="card"><h3>Как пользоваться</h3>' +
+    '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
+    'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="goguide">❓ Открыть инструкцию</button></div></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
@@ -16267,6 +16582,16 @@ function screenAccount(){
   var cl = document.getElementById("copylink");
   if (cl) cl.onclick = function(){ copyText(link, cl); };
   document.getElementById("gofolio").onclick = screenFolio;
+  document.getElementById("goguide").onclick = screenGuide;
+  var paintTheme = function(){
+    app.querySelectorAll("#acctheme button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-theme-set") === themeGet());
+    });
+  };
+  app.querySelectorAll("#acctheme button").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paintTheme(); };
+  });
+  paintTheme();
   document.getElementById("logout").onclick = function(){
     var yes = true;
     try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
@@ -16318,7 +16643,7 @@ function shieldBoxHTML(){
 }
 
 function screenToday(){
-  enterScreen();
+  enterScreen(undefined, "today");
   session = { id:null, attempts:0, hints:0, shown:false };
   var streak = streakCurrent();
   var best = streakBest();
@@ -16414,7 +16739,7 @@ function screenToday(){
 }
 
 function screenWarmups(){
-  enterScreen("train");
+  enterScreen("train", "warm");
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
   var open = warmupsOpen();
@@ -16452,7 +16777,7 @@ function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
-  enterScreen("train");
+  enterScreen("train", "warmup");
   var isDaily = !!(opts && opts.daily);
   session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
   /* из задачи дня «назад» и списки ведут на экран «Сегодня», а не в разминку */
@@ -16821,7 +17146,7 @@ function reviewWhen(at){
   return "через " + d + " " + plural(d, "день", "дня", "дней");
 }
 function screenReview(){
-  enterScreen();
+  enterScreen(undefined, "review");
   session = { id:null, attempts:0, hints:0, shown:false };
   var all = reviewList(), now = Date.now();
   var due = all.filter(function(x){ return x.at <= now; });
@@ -16883,7 +17208,7 @@ function revCard(x){
 }
 
 function screenAILab(){
-  enterScreen("train");
+  enterScreen("train", "ai");
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = ailabList();
   var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
@@ -16944,7 +17269,7 @@ function openAILesson(id){
   var xs = ailabList();
   var x = xs.filter(function(e){ return e.id === id; })[0];
   if (!x) return screenAILab();
-  enterScreen("train");
+  enterScreen("train", "ailesson");
   session = { id:id, attempts:0, hints:0, shown:false };
   var pos = xs.indexOf(x);
   var next = pos < xs.length - 1 ? xs[pos+1] : null;
@@ -17387,7 +17712,7 @@ function openProject(id, forceStep){
     var i = (typeof forceStep === "number") ? forceStep : st.step;
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
-    enterScreen();
+    enterScreen(undefined, "project");
     session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
 
     var dots = p.steps.map(function(s, k){
@@ -17506,7 +17831,7 @@ function winProjectStep(p, i, code){
 function screenProjectDone(id){
   var p = projectById(id);
   if (!p) return screenWorlds();
-  enterScreen();
+  enterScreen(undefined, "projectdone");
   session = { id:null, attempts:0, hints:0, shown:false };
   var st = projectState(p.id);
   var code = st.code || p.steps[p.steps.length - 1].solution;
@@ -17859,7 +18184,7 @@ function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.
 function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
 
 function screenFolio(){
-  enterScreen("mine");
+  enterScreen("mine", "folio");
   session = { id:null, attempts:0, hints:0, shown:false };
 
   var projects = projectsList();
@@ -18208,7 +18533,7 @@ function taskBuild(title, goal, code){
 
 /* ===== экран: мои задания ===== */
 function screenMyTasks(edit){
-  enterScreen("mine");
+  enterScreen("mine", "mytasks");
   var list = myTasksList();
   var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
   var start = edit || draft || { title:"", goal:"", code:"" };
@@ -18354,7 +18679,7 @@ function screenMyTasks(edit){
    opts.own — это своё же задание, открытое «глазами друга»: проверка та же,
    но опыт за него не даётся (иначе задания составлялись бы ради XP). */
 function openFriendTask(t, opts){
-  enterScreen("mine");
+  enterScreen("mine", "friendtask");
   opts = opts || {};
   var key = taskKey(t);
   var already = !!(S.friendTasks && S.friendTasks[key]);
@@ -18446,7 +18771,7 @@ function winFriendTask(t, key, already, opts){
    на присланную ссылку и должен понять, что случилось, а не решить, что
    тренажёр сломался. */
 function screenTaskBroken(){
-  enterScreen("mine");
+  enterScreen("mine", "friendtask");
   session = { id:null, attempts:0, hints:0, shown:false };
   app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
     '<h1>✍️ Задание не прочиталось</h1></div></div>' +
@@ -18983,7 +19308,7 @@ function vizDrawArrows(mem){
    жил сам по себе. С черновиками (draftFlush в claimScreen) уход безопасен:
    код урока сохраняется на переходе и возвращается на место. */
 function screenViz(opts){
-  enterScreen("train");
+  enterScreen("train", "viz");
   session = { id:null, attempts:0, hints:0, shown:false };
   opts = opts || {};
   var mine = !!opts.code;
@@ -19156,8 +19481,11 @@ function vizPlayer(player, ed, rec){
 /* tab — какая вкладка наверху должна светиться: "home" (по умолчанию),
    "train", "mine" или null, если экран не принадлежит ни одному разделу
    (профиль, регистрация, панель наставника). */
-function enterScreen(tab){
+function enterScreen(tab, place){
   curTab = tab === undefined ? "home" : tab;
+  /* Второе имя — для помощи «?»: вкладок три, а экранов под ними два десятка,
+     и текст подсказки у них разный. Не сказали — считаем, что это «Главное». */
+  curPlace = place || "home";
   stopTimer();
   vizStopPlay();
   clearAdminHash();
@@ -19217,7 +19545,9 @@ var HASH_SCREENS = {
   "#again":   function(){ screenReview(); },
   "#folio":   function(){ screenFolio(); },
   "#mine":    function(){ screenMyTasks(); },
-  "#train":   function(){ screenTrain(); }
+  "#train":   function(){ screenTrain(); },
+  "#help":    function(){ screenGuide(); },
+  "#guide":   function(){ screenGuide(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
@@ -19568,6 +19898,7 @@ function serverCardHTML(){
 
 function screenAdmin(){
   /* без clearAdminHash: этот экран как раз открывается по #admin */
+  curPlace = "admin";
   stopTimer(); vizStopPlay();
   if (!adminUnlocked()) return adminGate();
 
@@ -19813,6 +20144,496 @@ function screenAdmin(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ============================================================
+   ОФОРМЛЕНИЕ: светлая тема и тёмная
+   Тема — настройка УСТРОЙСТВА, а не результат ученика, поэтому лежит в
+   localStorage отдельным ключом и намеренно НЕ синхронизируется с сервером
+   (ровно как снятые замки): на телефоне может быть светлая, на ноутбуке
+   тёмная. Ставится тема ещё в <head>, до первой отрисовки, — иначе у того,
+   кто выбрал тёмную, мелькал бы светлый фон.
+   ============================================================ */
+var THEME_KEY = "kodokvest_theme";
+function themeGet(){
+  try {
+    var t = localStorage.getItem(THEME_KEY);
+    return (t === "dark" || t === "light") ? t : "light";
+  } catch(e){ return document.documentElement.getAttribute("data-theme") || "light"; }
+}
+function themeSet(t){
+  if (t !== "dark") t = "light";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem(THEME_KEY, t); } catch(e){}
+  /* Цвет строки браузера на телефоне: без него шапка системы остаётся
+     тёмной над светлой страницей и выглядит как чужой кусок. */
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute("content", t === "dark" ? "#0d1020" : "#f1f4fc");
+  /* Черепашка и графики нарисованы на canvas по цветам темы — их надо
+     перерисовать руками, стилями холст не перекрасить. */
+  document.querySelectorAll("canvas.stage").forEach(function(c){
+    if (c._lastTurtle) drawTurtle(c, c._lastTurtle);
+  });
+  if (helpIsOpen()) helpRender();
+}
+
+/* ============================================================
+   ПОМОЩЬ «?»: что это за экран и что тут делать
+   Один ответ на один вопрос, который у ребёнка возникает чаще всего и
+   раньше не имел адреса вообще. Текст меняется вместе с экраном: на уроке
+   он про урок, в визуализаторе — про визуализатор.
+
+   Почему всплывающим окном, а не отдельной страницей: помощь чаще всего
+   нужна ПОСРЕДИ дела, а уход с урока стёр бы написанный код. По той же
+   причине поверх страницы живут шпаргалка и сертификат.
+   ============================================================ */
+/* Где мы сейчас — для помощи. Вкладка (curTab) для этого не годится: под
+   «Тренировками» лежат пять разных экранов, и помощь у них разная. */
+var curPlace = "home";
+
+var HELP = {
+  home: { t:"🏠 Главное — с чего начать", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Отсюда начинается всё. Сверху написано, <b>что делать прямо сейчас</b>, ' +
+    'ниже — сто уроков по порядку, ещё ниже — тренировки и твои работы.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ol><li>Жми большую кнопку <b>«Начать»</b> или <b>«Продолжить»</b> — она сама откроет ' +
+    'тот урок, до которого ты дошёл.</li>' +
+    '<li>Не помнишь, где было нужное слово, — впиши его в <b>поиск урока</b> в блоке «Уроки».</li>' +
+    '<li>Устал от уроков — загляни в <b>«Тренировки»</b>: там игры и короткие упражнения.</li></ol>' +
+    '<h4>Хитрость</h4>' +
+    '<p>Кнопка <b>🔥 Сегодня</b> наверху считает дни подряд. Один урок или одна разминка ' +
+    'в день — и серия не оборвётся.</p>' },
+
+  world: { t:"🗺 Мир — двадцать уроков подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Один мир — это двадцать уроков на одну большую тему. Они открываются ' +
+    '<b>по очереди</b>: сдал урок — открылся следующий. Замо́к значит «сюда ещё рано», ' +
+    'а не «сюда нельзя навсегда».</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Жми первый урок без замка.</li>' +
+    '<li>Пройденные уроки можно открывать сколько угодно раз — звёзды не отнимутся.</li>' +
+    '<li>Последний урок мира — <b>босс</b>, а за ним проект и сертификат.</li></ul>' },
+
+  lesson: { t:"📘 Урок — как он устроен", h:
+    '<h4>Урок читается сверху вниз</h4>' +
+    '<ol><li><b>Примеры.</b> У каждого есть «▶ Запустить пример» — код сработает прямо тут, ' +
+    'а «→ В редактор» перенесёт его вниз, чтобы поменять и попробовать своё.</li>' +
+    '<li><b>Задача</b> в рамке «🎯 Твоя задача» — списком требований.</li>' +
+    '<li><b>Редактор</b>: пишешь код и жмёшь «▶ Запустить». Видно, что программа напечатала, ' +
+    'а рядом со строками — что каждая сделала.</li>' +
+    '<li><b>«✓ Проверить»</b> засчитывает урок. Если что-то не так — покажет, чем твой ответ ' +
+    'отличается от нужного.</li></ol>' +
+    '<h4>Не получается</h4>' +
+    '<p><b>💡 Подсказка</b> под редактором — это не стыдно: она стоит одну звезду, и всё. ' +
+    '<b>⏭ Шаг</b> проходит программу по строчкам, чтобы увидеть, где она свернула не туда. ' +
+    '<b>🧹 Ревью кода</b> говорит, что можно сделать чище, и звёзд не отнимает.</p>' +
+    '<h4>Кнопки клавиатуры</h4>' +
+    '<div class="keylist">' +
+    '<div class="keyrow"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>запустить код</span></div>' +
+    '<div class="keyrow"><kbd>Tab</kbd><span>отступ в четыре пробела</span></div>' +
+    '<div class="keyrow"><kbd>Enter</kbd><span>отступ подставится сам после двоеточия</span></div>' +
+    '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div></div>' +
+    '<p>Написанное <b>не пропадает</b>: уйдёшь с урока и вернёшься — код будет на месте.</p>' },
+
+  train: { t:"🎯 Тренировки — зачем они", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Всё, что <b>вне сотни уроков</b>. Звёзд тут не дают и по порядку проходить не надо — ' +
+    'заходят по настроению. Но день занятий засчитывается и здесь, так что серия не оборвётся.</p>' +
+    '<h4>Что выбрать</h4>' +
+    '<ul><li><b>Разминка</b> — пять минут, когда нет сил на урок.</li>' +
+    '<li><b>Игры</b> — то же самое, но играя.</li>' +
+    '<li><b>Ты и ИИ</b> — как разговаривать с нейросетью и как ловить её враньё.</li>' +
+    '<li><b>Песочница</b> — чистый лист: пиши что хочешь, никто не проверяет.</li>' +
+    '<li><b>Визуализатор</b> — показывает, что происходит в памяти, когда программа работает.</li></ul>' },
+
+  sand: { t:"🧪 Песочница — чистый лист", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пустой редактор без задачи и без проверки. Тут ничего нельзя сломать и ничего ' +
+    'не засчитывается — можно пробовать что угодно.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Скопируй сюда код из урока и поменяй одну строчку — посмотри, что изменится.</li>' +
+    '<li><b>Ctrl+Enter</b> — запустить, не тянясь к мышке.</li>' +
+    '<li>Хочешь понять, почему получилось именно так, — открой <b>Визуализатор</b>.</li></ul>' },
+
+  games: { t:"🎮 Игры", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пять игр, в которые играют <b>кодом</b>: программа — это твой ход. Звёзд не дают, ' +
+    'день занятий засчитывают.</p>' +
+    '<p>Если игра непонятная — прочитай, что написано над полем: там всегда сказано, ' +
+    'что от программы требуется.</p>' },
+
+  game: { t:"🎮 Игра — что нажимать", h:
+    '<h4>Как играть</h4>' +
+    '<ul><li>Условие игры написано над редактором.</li>' +
+    '<li>Пиши код и жми <b>«▶ Запустить»</b> — ход засчитается.</li>' +
+    '<li>Проиграл — ничего не теряешь, начинай заново.</li></ul>' },
+
+  today: { t:"🔥 Сегодня — дни подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Считает, сколько дней подряд ты занимался. Любое дело засчитывает день: урок, ' +
+    'разминка, игра, проект.</p>' +
+    '<h4>Щиты</h4>' +
+    '<p>🛡️ — это «прогул прощён». Щит появляется сам за несколько дней занятий и ' +
+    '<b>автоматически</b> закрывает один пропущенный день, чтобы серия не оборвалась. ' +
+    'Тратить его руками не надо.</p>' +
+    '<h4>Задача дня</h4>' +
+    '<p>Одно короткое упражнение, одинаковое для всех и своё на каждый день.</p>' },
+
+  warm: { t:"🔥 Разминка", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Короткие упражнения на пять минут: <b>угадай, что напечатает код</b>, ' +
+    '<b>собери программу из блоков</b> и <b>предскажи, что лежит в памяти</b>. ' +
+    'Кода писать почти не надо — надо думать.</p>' +
+    '<p>Упражнения открываются по мере прохождения уроков: в них встречается только то, ' +
+    'что ты уже проходил.</p>' },
+
+  warmup: { t:"🔥 Разминка — как решать", h:
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>Угадай вывод:</b> прочитай код глазами и напиши, что он напечатает. ' +
+    'Запускать нельзя — в этом и смысл.</li>' +
+    '<li><b>Собери из блоков:</b> перетащи строки в правильном порядке. Отступ важен.</li>' +
+    '<li><b>Предскажи память:</b> скажи, что будет лежать в переменных в этот момент.</li></ul>' +
+    '<p>Ошибся — ничего не теряешь, показывается разбор.</p>' },
+
+  review: { t:"🔁 Повторить", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Уроки, которые дались тяжело, <b>возвращаются сами</b> — через день, потом через три, ' +
+    'потом через неделю. Так они и запоминаются: не зубрёжкой, а возвратами.</p>' +
+    '<p>Три чистых повтора — и урок больше не попросит повторения.</p>' +
+    '<h4>Бестиарий ошибок</h4>' +
+    '<p>Ниже на этом же экране — список ошибок, которые ты встречал. Побеждённая ошибка ' +
+    'подсвечивается зелёным: это не ошибки, это трофеи.</p>' },
+
+  ai: { t:"🤖 Ты и ИИ", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пятнадцать упражнений про то, как <b>командовать</b> нейросетью и как <b>проверять</b> ' +
+    'за ней. ИИ уверенно врёт — уметь его поймать важнее, чем уметь его попросить.</p>' +
+    '<h4>Что тут бывает</h4>' +
+    '<ul><li>предсказать, что ответит ИИ;</li>' +
+    '<li>починить код, который ИИ написал с ошибкой;</li>' +
+    '<li>вынести вердикт: прав он или нет, и доказать это кодом.</li></ul>' },
+
+  ailesson: { t:"🤖 Упражнение про ИИ", h:
+    '<h4>Что делать</h4>' +
+    '<p>Прочитай задание сверху, ответь или напиши код внизу и нажми <b>«✓ Проверить»</b>. ' +
+    'Если требуется доказать, что ИИ неправ, — доказательством считается <b>работающий код</b>, ' +
+    'а не слова.</p>' },
+
+  project: { t:"🏗 Проект — большая программа", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Проект собирается <b>по шагам</b>: каждый шаг добавляет к программе кусочек. ' +
+    'Готовый проект остаётся у тебя в «Моём» — его можно показать и скачать файлом <b>.py</b>.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Шаги идут по порядку, точки сверху показывают, где ты.</li>' +
+    '<li>Ушёл и вернулся — проект продолжится с того же шага.</li>' +
+    '<li>Застрял — подсказка на месте, как в уроке.</li></ul>' },
+
+  projectdone: { t:"🎉 Проект собран", h:
+    '<p>Программа целиком — вот она. Её можно <b>скачать файлом .py</b> и запустить на ' +
+    'настоящем компьютере, а можно просто показать. Она уже лежит в разделе ' +
+    '<b>🎒 Моё</b> и никуда оттуда не денется.</p>' },
+
+  folio: { t:"🎒 Моё — что тут лежит", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Всё, что сделано руками: <b>программы</b> из проектов, <b>рисунки</b> черепашки, ' +
+    '<b>свои задания</b> и <b>сертификаты</b> за миры.</p>' +
+    '<h4>Что с этим делать</h4>' +
+    '<ul><li>Программу — скачать файлом <b>.py</b>.</li>' +
+    '<li>Сертификат — <b>распечатать</b> или сохранить в PDF (кнопка внутри сертификата).</li>' +
+    '<li>Рисунок — сохранить картинкой.</li></ul>' },
+
+  mytasks: { t:"✍️ Своё задание", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Тут ты не решаешь, а <b>придумываешь</b> задачу — и отправляешь её ссылкой другу. ' +
+    'Правильный ответ тренажёр посчитает сам, запустив твоё решение.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ol><li>Опиши задачу словами — так, чтобы понял тот, кто её не видел.</li>' +
+    '<li>Напиши решение: из него берётся правильный ответ.</li>' +
+    '<li>Скопируй ссылку и отправь. Друг откроет её и будет решать.</li></ol>' +
+    '<p>Составить задание труднее, чем решить: придётся объяснить словами то, что понимаешь руками.</p>' },
+
+  friendtask: { t:"✉️ Задание от друга", h:
+    '<p>Это задача, которую придумал <b>другой человек</b>. Она не из курса, звёзд не даёт ' +
+    'и на прогресс не влияет.</p>' +
+    '<p>Напиши код и нажми «✓ Проверить» — ответ сверится с тем, что получилось у автора.</p>' },
+
+  viz: { t:"🔍 Визуализатор — что в памяти", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Показывает, что происходит <b>внутри</b> программы: какая строка выполняется сейчас ' +
+    'и что в этот момент лежит в каждой переменной.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>⏭</b> — шаг вперёд, <b>⏮</b> — шаг назад: перемотку можно крутить в обе стороны.</li>' +
+    '<li>Стрелки показывают, какая переменная на что ссылается — так видно, ' +
+    'почему два списка «менялись сами».</li>' +
+    '<li>Внизу — <b>пересказ словами</b>: что программа сделала, по-русски.</li></ul>' +
+    '<p>Сюда стоит идти, когда код работает, но <b>непонятно почему</b>.</p>' },
+
+  account: { t:"👤 Профиль", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Имя, код ученика и настройки. <b>Код ученика</b> нужен, чтобы открыть свой прогресс ' +
+    'на другом устройстве, — храни его как пароль.</p>' +
+    '<p>Прогресс хранится в самом браузере. Чистка истории браузера может его стереть — ' +
+    'поэтому код и ссылку лучше сохранить заранее.</p>' },
+
+  register: { t:"👋 Вход", h:
+    '<p>Впиши имя — и всё, это вся регистрация. Ни почты, ни пароля не нужно.</p>' +
+    '<p>Если ты уже занимался на другом устройстве, введи свой <b>код ученика</b> — ' +
+    'прогресс приедет вместе с ним.</p>' },
+
+  guide: { t:"❓ Как пользоваться", h:
+    '<p>Это полная инструкция. А «?» наверху отвечает <b>про тот экран, где ты сейчас</b>, — ' +
+    'загляни туда, когда что-то непонятно посреди дела.</p>' },
+
+  admin: { t:"🛠 Панель наставника", h:
+    '<p>Экран для взрослого: видно, сколько времени ушло на каждый урок, где было больше всего ' +
+    'попыток и какие ошибки повторяются. Отсюда же снимаются замки с уроков.</p>' },
+
+  /* --- не экраны, а темы: сюда ведут кружки «?» рядом с заголовками --- */
+  stars: { t:"★ Звёзды и опыт", h:
+    '<h4>Откуда берутся звёзды</h4>' +
+    '<ul><li><b>★★★</b> — урок сдан с первой попытки и без подсказок;</li>' +
+    '<li><b>★★</b> — со второй попытки или с одной подсказкой;</li>' +
+    '<li><b>★</b> — сдан. Это тоже победа.</li></ul>' +
+    '<p>Звёзды <b>не сгорают</b> и не отнимаются задним числом. Пройти урок заново можно ' +
+    'когда угодно — хуже уже не станет, а лучше станет.</p>' +
+    '<h4>Опыт и ранг</h4>' +
+    '<p>Полоска наверху — опыт. Он копится за уроки, проекты и дни подряд, и от него ' +
+    'зависит ранг: Новичок → … → Мастер.</p>' },
+
+  worlds: { t:"🗺 Пять миров, сто уроков", h:
+    '<p>Курс — это <b>сто уроков</b>, разложенных на пять миров по двадцать. Уроки идут ' +
+    'строго по порядку: каждый следующий опирается на предыдущий.</p>' +
+    '<p>В конце каждого мира — <b>проект</b> (большая программа, которую ты соберёшь по шагам) ' +
+    'и <b>сертификат</b>, который печатается на бумаге.</p>' +
+    '<p>Не помнишь, где было нужное, — есть <b>поиск по урокам</b> прямо над списком миров.</p>' },
+
+  tools: { t:"🧰 Кнопки наверху", h:
+    '<div class="iconlist">' +
+    '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
+    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — всё, что вне сотни уроков</span></div>' +
+    '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — сделанное своими руками</span></div>' +
+    '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — справочник по командам, открывается прямо посреди урока</span></div>' +
+    '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, настройки</span></div>' +
+    '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
+    '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — то, что ты сейчас читаешь</span></div>' +
+    '</div>' }
+};
+
+function helpIsOpen(){
+  var el = document.getElementById("helpwrap");
+  return !!el && el.classList.contains("show");
+}
+function helpFor(key){
+  return HELP[key] || HELP[curPlace] || HELP.home;
+}
+/* Ключ, который показывается сейчас. Отдельная переменная нужна, чтобы
+   кружок «?» у заголовка мог показать НЕ то, что показала бы кнопка в
+   шапке, — и чтобы смена темы перерисовала именно этот текст. */
+var helpKey = null;
+function helpRender(){
+  var body = document.getElementById("helpbody");
+  var head = document.getElementById("helptitle");
+  if (!body || !head) return;
+  var e = helpFor(helpKey);
+  head.textContent = e.t;
+  var th = themeGet();
+  body.innerHTML = e.h +
+    '<h4>Оформление</h4>' +
+    '<div class="themepick">' +
+      '<button data-theme-set="light"' + (th === "light" ? ' class="on"' : '') + '>☀️ Светлая</button>' +
+      '<button data-theme-set="dark"' + (th === "dark" ? ' class="on"' : '') + '>🌙 Тёмная</button>' +
+    '</div>' +
+    '<div class="helprow">' +
+      '<button class="rbtn sec" id="help-guide">📕 Полная инструкция</button>' +
+      '<button class="rbtn sec" id="help-sheet">📖 Шпаргалка</button>' +
+    '</div>';
+  body.querySelectorAll("[data-theme-set]").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); };
+  });
+  var g = document.getElementById("help-guide");
+  if (g) g.onclick = function(){ closeHelp(); screenGuide(); };
+  var s = document.getElementById("help-sheet");
+  if (s) s.onclick = function(){ closeHelp(); openSheet(); };
+  body.scrollTop = 0;
+}
+function openHelp(key){
+  var el = document.getElementById("helpwrap");
+  if (!el) return;
+  helpKey = key || null;
+  helpRender();
+  el.classList.add("show");
+  var b = document.getElementById("btn-help");
+  if (b) b.classList.add("on");
+}
+function closeHelp(){
+  var el = document.getElementById("helpwrap");
+  if (el) el.classList.remove("show");
+  var b = document.getElementById("btn-help");
+  if (b) b.classList.remove("on");
+}
+function toggleHelp(){ if (helpIsOpen()) closeHelp(); else openHelp(null); }
+/* Кружок «?» у заголовка. Разметку пишем одной функцией, чтобы кружки
+   везде выглядели одинаково и вели себя одинаково. */
+function qm(key, what){
+  return '<button class="qm" data-help="' + key + '" title="' +
+    esc(what || "Что это такое") + '" aria-label="' + esc(what || "Что это такое") + '">?</button>';
+}
+/* Один обработчик на всю страницу, и он делает две вещи сразу.
+   Первая: кружки «?» рисуются ВНУТРИ экранов, которые перерисовываются
+   целиком, — вешать им onclick пришлось бы в каждом экране.
+   Вторая: клик мимо окна закрывает помощь. Раньше это делало прозрачное
+   затемнение на весь экран, но оно же съедало прокрутку колесом — страница
+   за окном «замирала», и это читалось как поломка. Теперь на большом экране
+   затемнение не ловит указатель вовсе (см. .helpwrap в стилях), а закрытие
+   держится на этом обработчике. */
+document.addEventListener("click", function(e){
+  var t = e.target;
+  var b = t && t.closest ? t.closest("[data-help]") : null;
+  if (b){
+    e.preventDefault();
+    return openHelp(b.getAttribute("data-help"));
+  }
+  if (!helpIsOpen()) return;
+  /* клик по самой кнопке «?» обрабатывает она сама (там переключение) */
+  if (t.closest(".helpbox") || t.closest("#btn-help")) return;
+  closeHelp();
+});
+
+/* ================= экран: как пользоваться =================
+   Полная инструкция. Всплывающее «?» отвечает про текущий экран, а это —
+   один связный текст: устройство сайта, из чего состоит урок, откуда
+   берутся звёзды, что делать, когда не выходит, и кусок для родителя.
+   ============================================================ */
+function screenGuide(){
+  enterScreen(null, "guide");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var h = '<div class="lvlhead"><div><div class="idx">инструкция</div>' +
+    '<h1>❓ Как пользоваться</h1></div></div>' +
+    '<p class="lede">Здесь написано, как всё устроено. Если вопрос про конкретный экран — ' +
+    'жми <b>«?»</b> в правом верхнем углу: там ответ про то место, где ты сейчас.</p>' +
+    '<div class="guide">';
+
+  h += '<div class="card"><h3>Что это вообще такое</h3>' +
+    '<p>Кодоквест — тренажёр языка Python. Код пишется и выполняется прямо в браузере: ' +
+    'ничего не надо устанавливать, интернет нужен только чтобы открыть страницу.</p>' +
+    '<p class="dim">Курс — сто уроков в пяти мирах. Плюс тренировки, игры и проекты вокруг них.</p></div>';
+
+  h += '<div class="card"><h3>Первый час: что делать по шагам</h3>' +
+    '<ol class="guidesteps">' +
+    '<li><b>Нажми «Начать первый урок» на Главном</b>' +
+    '<span>Тренажёр сам откроет тот урок, до которого ты дошёл. Искать ничего не надо.</span></li>' +
+    '<li><b>Прочитай примеры и запусти их</b>' +
+    '<span>У каждого примера есть «▶ Запустить пример»: код сработает тут же. ' +
+    '«→ В редактор» перенесёт его вниз, чтобы поменять и попробовать своё.</span></li>' +
+    '<li><b>Реши задачу в редакторе</b>' +
+    '<span>Пиши код и жми «▶ Запустить» столько раз, сколько нужно. Это ничего не стоит.</span></li>' +
+    '<li><b>Нажми «✓ Проверить»</b>' +
+    '<span>Урок засчитается. Если не сошлось — тренажёр покажет, чем твой ответ отличается ' +
+    'от нужного, и можно пробовать дальше.</span></li>' +
+    '<li><b>Возвращайся каждый день</b>' +
+    '<span>Хоть на пять минут. Огонёк 🔥 наверху считает дни подряд, а щит 🛡️ прощает пропуск.</span></li>' +
+    '</ol></div>';
+
+  h += '<div class="card"><h3>Кнопки наверху</h3>' +
+    '<div class="iconlist">' +
+    '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
+    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — разминка, игры, «Ты и ИИ», песочница, визуализатор</span></div>' +
+    '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — программы, рисунки, свои задания, сертификаты</span></div>' +
+    '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 106 команд с примерами, открывается поверх урока</span></div>' +
+    '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, выход</span></div>' +
+    '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
+    '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — что это за экран и что тут делать</span></div>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Звёзды, опыт и ранги</h3>' +
+    '<p>За урок дают от одной до трёх звёзд: <b>★★★</b> — с первой попытки и без подсказок, ' +
+    '<b>★★</b> — со второй попытки или с одной подсказкой, <b>★</b> — сдан.</p>' +
+    '<p>Звёзды не сгорают и не отнимаются задним числом. Подсказка стоит одну звезду — ' +
+    'и это <b>не страшно</b>: пройти урок с подсказкой лучше, чем не пройти.</p>' +
+    '<p class="dim">Полоска наверху — опыт. От него зависит ранг, а ранг ни на что не влияет, ' +
+    'кроме удовольствия.</p></div>';
+
+  h += '<div class="card"><h3>Когда не получается</h3>' +
+    '<ul><li><b>💡 Подсказка</b> под редактором — по шагам, от намёка к ответу.</li>' +
+    '<li><b>⏭ Шаг</b> в панели запуска — программа пройдёт по строчкам, и будет видно, ' +
+    'где она свернула не туда.</li>' +
+    '<li><b>📖 Шпаргалка</b> наверху — забыл команду, посмотри пример.</li>' +
+    '<li><b>🔍 Визуализатор</b> — когда код работает, но непонятно почему.</li>' +
+    '<li><b>Красная рамка с ошибкой</b> — это не ругань, а объяснение. Там всегда написано, ' +
+    'в какой строке и что именно не сошлось.</li></ul></div>';
+
+  h += '<div class="card"><h3>Кнопки клавиатуры</h3><div class="keylist">' +
+    '<div class="keyrow"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>запустить код</span></div>' +
+    '<div class="keyrow"><kbd>⌘</kbd>+<kbd>Enter</kbd><span>то же самое на Маке</span></div>' +
+    '<div class="keyrow"><kbd>Tab</kbd><span>отступ в четыре пробела</span></div>' +
+    '<div class="keyrow"><kbd>Enter</kbd><span>после двоеточия отступ подставится сам</span></div>' +
+    '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Оформление</h3>' +
+    '<p>Светлая тема стоит по умолчанию: тёмный фон тяжело читать днём. Кому удобнее ' +
+    'тёмная — переключается тут же и запоминается на этом устройстве.</p>' +
+    '<div class="themepick" id="guidetheme">' +
+      '<button data-theme-set="light">☀️ Светлая</button>' +
+      '<button data-theme-set="dark">🌙 Тёмная</button>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Сохраняется ли прогресс</h3>' +
+    '<p>Да. Всё, что пройдено, хранится в самом браузере — закрыл вкладку, вернулся, ' +
+    'всё на месте. Написанный в уроке код тоже сохраняется.</p>' +
+    '<p>Чтобы заниматься с двух устройств, нужен <b>код ученика</b> из профиля 👤. ' +
+    'Чистка истории браузера может стереть прогресс — код лучше сохранить заранее.</p>' +
+    '<p class="dim">Сайт можно поставить на домашний экран телефона: он будет открываться ' +
+    'как приложение и работать без интернета.</p></div>';
+
+  h += '<div class="card"><h3>Для родителя</h3>' +
+    '<p>Правильный режим — <b>пятнадцать минут в день</b>, а не два часа в воскресенье. ' +
+    'Огонёк дня сделан ровно для этого.</p>' +
+    '<p>Подсказки — не читерство. Ребёнок, который взял подсказку и дошёл до конца, ' +
+    'выучил больше, чем тот, кто бросил урок на середине.</p>' +
+    '<p>В профиле есть панель наставника: сколько времени ушло на каждый урок, где было ' +
+    'больше всего попыток и какие ошибки повторяются.</p></div>';
+
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+    '<span class="sp"></span><button class="bigbtn" id="gostart">▶ К урокам</button></div>';
+
+  app.innerHTML = h;
+  var paint = function(){
+    app.querySelectorAll("#guidetheme button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-theme-set") === themeGet());
+    });
+  };
+  app.querySelectorAll("#guidetheme button").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paint(); };
+  });
+  paint();
+  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("gostart").onclick = function(){
+    var n = nextLesson();
+    if (n) openLesson(n.id); else screenWorlds();
+  };
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ============================================================
+   КНОПКА «НАВЕРХ»
+   Урок и портфолио бывают в несколько экранов длиной, а вкладки и «?»
+   живут в шапке. Кнопка появляется только после экрана прокрутки —
+   иначе она просто загораживала бы угол.
+   ============================================================ */
+(function(){
+  var b = document.getElementById("totop");
+  if (!b) return;
+  b.onclick = function(){ window.scrollTo({ top:0, behavior:"smooth" }); };
+  var check = function(){
+    b.classList.toggle("show", (window.pageYOffset || document.documentElement.scrollTop || 0) > 700);
+  };
+  window.addEventListener("scroll", check, { passive:true });
+  check();
+})();
+
 /* ================= старт ================= */
 /* Вкладки. Их всего три, и это весь верхний уровень: «Главное» (уроки и что
    делать сейчас), «Тренировки» (всё, что вне сотни), «Моё» (сделанное своими
@@ -19852,6 +20673,13 @@ document.getElementById("logo").onclick = screenWorlds;
   if (el) el.onclick = function(e){ if (e.target === el) closeCert(); };
 })();
 (function(){
+  var b = document.getElementById("btn-help"); if (b) b.onclick = toggleHelp;
+  var x = document.getElementById("helpclose"); if (x) x.onclick = closeHelp;
+  /* Клик мимо окна закрывает: на телефоне это единственный удобный способ,
+     кнопка «✕» слишком мелкая для пальца. */
+  var v = document.getElementById("helpveil"); if (v) v.onclick = closeHelp;
+})();
+(function(){
   var b = document.getElementById("btn-focus");
   if (b) b.onclick = function(){
     document.body.classList.toggle("focus");
@@ -19862,6 +20690,7 @@ document.getElementById("win").onclick = function(e){ if (e.target === this) clo
 window.addEventListener("keydown", function(e){
   if (e.key !== "Escape") return;
   if (certIsOpen()) closeCert();
+  else if (helpIsOpen()) closeHelp();
   else if (sheetIsOpen()) closeSheet();
   else closeWin();
 });
@@ -20047,6 +20876,10 @@ window.__game = {
   lintCode: lintCode, lintHTML: lintHTML, lintKnows: lintKnows, astWalk: astWalk,
   lintCount: lintCount, lintNote: lintNote,
   LINT_MAX: LINT_MAX, LINT_LONG_FUNC: LINT_LONG_FUNC,
+  HELP: HELP, openHelp: openHelp, closeHelp: closeHelp, helpIsOpen: helpIsOpen,
+  toggleHelp: toggleHelp, screenGuide: screenGuide,
+  themeGet: themeGet, themeSet: themeSet,
+  lessonSearch: lessonSearch, lessonOpen: lessonOpen,
   ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
   errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
   beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,

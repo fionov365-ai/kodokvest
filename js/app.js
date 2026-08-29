@@ -2589,8 +2589,71 @@ function trainCards(){
   ];
 }
 
+/* ================= поиск по урокам =================
+   Сто уроков разложены по пяти мирам, и пока помнишь номер — всё хорошо.
+   А «где было про словари» раньше искалось только глазами по пяти экранам.
+   Ищем по названию, подзаголовку, теме мира и номеру.
+
+   Закрытые уроки из выдачи НЕ прячем, но и открыть их отсюда нельзя:
+   спрятать — значит соврать («такого урока нет»), а пустить — сломать
+   порядок, на котором держится весь курс. Поэтому строка видна и помечена
+   замком: «есть, но позже».
+   ============================================================ */
+function lessonSearch(q){
+  q = String(q || "").toLowerCase().trim();
+  if (q.length < 2) return [];
+  var out = [];
+  CURRICULUM.forEach(function(w){
+    w.lessons.forEach(function(l){
+      var hay = (l.title + " " + l.sub + " " + w.title + " " + l.num).toLowerCase();
+      if (hay.indexOf(q) >= 0) out.push(l);
+    });
+  });
+  return out.slice(0, 8);
+}
+function wireLessonSearch(){
+  var inp = document.getElementById("lq");
+  var box = document.getElementById("lsfound");
+  if (!inp || !box) return;
+  var draw = function(){
+    var q = String(inp.value || "").trim();
+    if (q.length < 2){ box.hidden = true; box.innerHTML = ""; return; }
+    var found = lessonSearch(q);
+    box.hidden = false;
+    if (!found.length){
+      box.innerHTML = '<p class="lsnone">Ничего не нашлось. Попробуй одно слово: ' +
+        '«список», «цикл», «функция», «черепашка» — или номер урока.</p>';
+      return;
+    }
+    box.innerHTML = found.map(function(l){
+      var open = lessonOpen(l);
+      var st = solved(l.id)
+        ? new Array(starsOf(l.id) + 1).join("★")
+        : (open ? "" : "🔒 позже");
+      return '<button class="lsrow' + (open ? "" : " lock") + '"' +
+        (open ? ' data-open="' + l.id + '"' : "") + '>' +
+        '<span class="lsnum">' + l.num + '</span>' +
+        '<span class="lstitle">' + esc(l.title) + '</span>' +
+        '<span class="lssub">' + esc(l.sub) + '</span>' +
+        '<span class="lsnum">' + st + '</span></button>';
+    }).join("");
+    box.querySelectorAll("[data-open]").forEach(function(b){
+      b.onclick = function(){ openLesson(b.getAttribute("data-open")); };
+    });
+  };
+  inp.oninput = draw;
+  inp.onkeydown = function(e){
+    if (e.key === "Escape"){ inp.value = ""; draw(); return; }
+    /* Enter открывает первый найденный урок: искал — значит уже решил, куда идти */
+    if (e.key === "Enter"){
+      var first = box.querySelector("[data-open]");
+      if (first) first.click();
+    }
+  };
+}
+
 function screenWorlds(){
-  enterScreen("home");
+  enterScreen("home", "home");
   session = { id:null, attempts:0, hints:0, shown:false };
   /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
      только на сайте с раздельными файлами), догружаем всё и перерисовываем —
@@ -2632,6 +2695,7 @@ function screenWorlds(){
       '<span>' + (dues ? "· " + dues + " " + plural(dues, "урок ждёт", "урока ждут", "уроков ждут") + " повтора"
                        : "· долгов по повторению нет") + '</span>' +
       '<span>· шпаргалка 📖 наверху открывается прямо посреди урока</span>' +
+      '<span>· не понял, что за экран, — жми <b>?</b> в правом верхнем углу</span>' +
     '</div></div>';
 
   /* ===== как это работает: только пока ни один урок не пройден ===== */
@@ -2644,15 +2708,24 @@ function screenWorlds(){
       'а рядом со строками — что каждая сделала.</li>' +
       '<li><b>Жмёшь «✓ Проверить».</b> Если что-то не так, тренажёр покажет, чем твой ответ отличается от нужного.</li>' +
       '</ol><p class="dim">Три звезды дают за урок, пройденный с первой попытки и без подсказок. ' +
-      'Подсказки есть всегда — они стоят одну звезду, и это не страшно.</p></div>';
+      'Подсказки есть всегда — они стоят одну звезду, и это не страшно.</p>' +
+      '<div class="helprow"><button class="rbtn sec" id="go-guide">📕 Полная инструкция</button>' +
+      '<button class="rbtn sec" data-help="tools">🧰 Что за кнопки наверху</button></div></div>';
   }
 
   /* ===== уроки ===== */
-  h += '<div class="sect"><h2>Уроки</h2><div class="line"></div><span class="cnt">' +
+  h += '<div class="sect"><h2>Уроки</h2>' + qm("worlds", "Как устроен курс") +
+    '<div class="line"></div><span class="cnt">' +
     doneTotal + ' из ' + CURRICULUM.total + '</span></div>' +
     '<p class="dim">Это главное в тренажёре: сто уроков по порядку, пять миров по двадцать. ' +
     'Уроки открываются один за другим — сдал, открылся следующий. В конце каждого мира ' +
-    'свой проект и сертификат.</p><div class="worlds">';
+    'свой проект и сертификат.</p>' +
+    /* Поиск по урокам. Сто уроков лежат в пяти мирах, и «где было про словари»
+       раньше искалось только глазами по пяти экранам подряд. */
+    '<div class="lsearch"><input type="search" id="lq" autocomplete="off" spellcheck="false" ' +
+    'placeholder="Найти урок: словари, черепашка, цикл, 42…"></div>' +
+    '<div class="lsfound" id="lsfound" hidden></div>' +
+    '<div class="worlds">';
   CURRICULUM.forEach(function(w){
     var ready = worldReadyLessons(w);
     var done = ready.filter(function(l){ return solved(l.id); }).length;
@@ -2675,7 +2748,8 @@ function screenWorlds(){
   h += '</div>';
 
   /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
-  h += '<div class="sect"><h2>Тренировки</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Тренировки</h2>' + qm("train", "Что такое тренировки") +
+    '<div class="line"></div>' +
     '<span class="cnt">вне сотни уроков</span></div>' +
     '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
     'Звёзд они не дают, но день занятий засчитывают.</p>' +
@@ -2698,7 +2772,8 @@ function screenWorlds(){
   var ctAll = certList(), ctDone = 0;
   ctAll.forEach(function(c){ if (c.ready) ctDone++; });
   var pics = galleryList().length, mine = myTasksList().length;
-  h += '<div class="sect"><h2>Моё</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Моё</h2>' + qm("folio", "Что лежит в «Моём»") +
+    '<div class="line"></div>' +
     '<span class="cnt">' + (pjDone + pics + mine) + ' ' +
     plural(pjDone + pics + mine, "работа", "работы", "работ") + '</span></div>' +
     '<div class="projcard' + (pjDone || pics ? " done" : "") + '">' +
@@ -2726,7 +2801,8 @@ function screenWorlds(){
     '</div>';
 
   /* ===== достижения ===== */
-  h += '<div class="sect"><h2>Достижения</h2><div class="line"></div>' +
+  h += '<div class="sect"><h2>Достижения</h2>' + qm("stars", "Откуда берутся звёзды и опыт") +
+    '<div class="line"></div>' +
     '<span class="cnt">' + S.badges.length + ' из ' + BADGES.length + '</span></div><div class="badges">';
   BADGES.forEach(function(b){
     h += '<div class="badge' + (S.badges.indexOf(b.id) >= 0 ? " got" : "") + '">' +
@@ -2744,6 +2820,9 @@ function screenWorlds(){
   var ga = document.getElementById("go-again");
   if (ga) ga.onclick = screenReview;
   document.getElementById("go-train").onclick = screenTrain;
+  var gg = document.getElementById("go-guide");
+  if (gg) gg.onclick = screenGuide;
+  wireLessonSearch();
   document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
   var cards = trainCards();
@@ -2767,7 +2846,7 @@ function screenWorlds(){
    что из этого игра, а что учебный инструмент, было невозможно.
    ============================================================ */
 function screenTrain(){
-  enterScreen("train");
+  enterScreen("train", "train");
   session = { id:null, attempts:0, hints:0, shown:false };
   var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
     '<h1>🎯 Тренировки</h1></div></div>' +
@@ -2783,6 +2862,8 @@ function screenTrain(){
       '<button class="bigbtn" data-train="' + c.id + '">Открыть</button></div>';
   });
   h += '</div>' +
+    '<div class="note"><b>Не знаешь, что выбрать</b>Жми «?» в правом верхнем углу — ' +
+    'там написано, что это за экран и что тут делать. Так на любом экране сайта.</div>' +
     '<div class="note"><b>Повторение живёт отдельно</b>Уроки, которые дались тяжело, ' +
     'возвращаются сами в разделе «Повторить» — он на Главном, потому что это про уроки, ' +
     'а не про отдых. Там же бестиарий ошибок: каждая ошибка, которую ты победил.</div>' +
@@ -2804,7 +2885,7 @@ function screenTrain(){
 
 /* ================= экран: мир ================= */
 function screenWorld(n){
-  var seq = enterScreen();
+  var seq = enterScreen(undefined, "world");
   var w = CURRICULUM.world(n);
   worldContent(n).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -2987,6 +3068,7 @@ function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
   curTab = "home";              /* урок — это «Главное», а не отдельный раздел */
+  curPlace = "lesson";          /* а помощь «?» — про урок */
   var seq = claimScreen();
   worldContent(l.world).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -3472,7 +3554,7 @@ function confetti(n){
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
 function screenSandbox(){
-  enterScreen("train");
+  enterScreen("train", "sand");
   /* sandbox:true — метка для draftFlush: уход с этого экрана обязан сохранить код */
   session = { id:null, attempts:0, hints:0, shown:false, sandbox:true };
   var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
@@ -3554,7 +3636,7 @@ function gamesList(){ return (window.GAMES || []); }
 function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
 
 function screenGames(){
-  enterScreen("train");
+  enterScreen("train", "games");
   session = { id:null, attempts:0, hints:0, shown:false };
   var gs = gamesList();
   var h = '<div class="lvlhead"><div><div class="idx">поиграй и загляни внутрь</div><h1>🎮 Игры</h1></div></div>' +
@@ -3580,7 +3662,7 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
-  enterScreen("train");
+  enterScreen("train", "game");
   session = { id:null, attempts:0, hints:0, shown:false };
   var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">игра</div><h1>' + g.emoji + ' ' + esc(g.title) + '</h1></div></div>' +
@@ -3904,7 +3986,7 @@ function runBlocksCheck(w, ed, showMsg){
    Ребёнок вводит имя → создаётся код и аккаунт. Либо входит по готовому коду.
    ============================================================ */
 function screenRegister(){
-  enterScreen(null);
+  enterScreen(null, "register");
   session = { id:null, attempts:0, hints:0, shown:false };
   var h =
     '<div class="reghero"><span class="regmark">🐍</span>' +
@@ -3983,7 +4065,7 @@ function copyText(text, btn){
   oldWay();
 }
 function screenAccount(){
-  enterScreen(null);
+  enterScreen(null, "account");
   session = { id:null, attempts:0, hints:0, shown:false };
   var code = myCode(), name = myName();
   var link = "";
@@ -4010,6 +4092,20 @@ function screenAccount(){
     '<div class="card"><h3>Портфолио</h3>' +
     '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
+    /* Оформление стоит в профиле, а не только в помощи: настройку ищут там,
+       где настройки, а не там, где подсказки. Дублирование тут дешевле
+       ненайденной кнопки. */
+    '<div class="card"><h3>Оформление</h3>' +
+    '<p class="dim">Светлая тема стоит по умолчанию — тёмный фон тяжело читать днём. ' +
+    'Выбор запоминается на этом устройстве и на другие не переезжает.</p>' +
+    '<div class="themepick" id="acctheme">' +
+      '<button data-theme-set="light">☀️ Светлая</button>' +
+      '<button data-theme-set="dark">🌙 Тёмная</button>' +
+    '</div></div>' +
+    '<div class="card"><h3>Как пользоваться</h3>' +
+    '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
+    'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="goguide">❓ Открыть инструкцию</button></div></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
@@ -4018,6 +4114,16 @@ function screenAccount(){
   var cl = document.getElementById("copylink");
   if (cl) cl.onclick = function(){ copyText(link, cl); };
   document.getElementById("gofolio").onclick = screenFolio;
+  document.getElementById("goguide").onclick = screenGuide;
+  var paintTheme = function(){
+    app.querySelectorAll("#acctheme button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-theme-set") === themeGet());
+    });
+  };
+  app.querySelectorAll("#acctheme button").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paintTheme(); };
+  });
+  paintTheme();
   document.getElementById("logout").onclick = function(){
     var yes = true;
     try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
@@ -4069,7 +4175,7 @@ function shieldBoxHTML(){
 }
 
 function screenToday(){
-  enterScreen();
+  enterScreen(undefined, "today");
   session = { id:null, attempts:0, hints:0, shown:false };
   var streak = streakCurrent();
   var best = streakBest();
@@ -4165,7 +4271,7 @@ function screenToday(){
 }
 
 function screenWarmups(){
-  enterScreen("train");
+  enterScreen("train", "warm");
   session = { id:null, attempts:0, hints:0, shown:false };
   var ws = warmupsList();
   var open = warmupsOpen();
@@ -4203,7 +4309,7 @@ function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
-  enterScreen("train");
+  enterScreen("train", "warmup");
   var isDaily = !!(opts && opts.daily);
   session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
   /* из задачи дня «назад» и списки ведут на экран «Сегодня», а не в разминку */
@@ -4572,7 +4678,7 @@ function reviewWhen(at){
   return "через " + d + " " + plural(d, "день", "дня", "дней");
 }
 function screenReview(){
-  enterScreen();
+  enterScreen(undefined, "review");
   session = { id:null, attempts:0, hints:0, shown:false };
   var all = reviewList(), now = Date.now();
   var due = all.filter(function(x){ return x.at <= now; });
@@ -4634,7 +4740,7 @@ function revCard(x){
 }
 
 function screenAILab(){
-  enterScreen("train");
+  enterScreen("train", "ai");
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = ailabList();
   var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
@@ -4695,7 +4801,7 @@ function openAILesson(id){
   var xs = ailabList();
   var x = xs.filter(function(e){ return e.id === id; })[0];
   if (!x) return screenAILab();
-  enterScreen("train");
+  enterScreen("train", "ailesson");
   session = { id:id, attempts:0, hints:0, shown:false };
   var pos = xs.indexOf(x);
   var next = pos < xs.length - 1 ? xs[pos+1] : null;
@@ -5138,7 +5244,7 @@ function openProject(id, forceStep){
     var i = (typeof forceStep === "number") ? forceStep : st.step;
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
-    enterScreen();
+    enterScreen(undefined, "project");
     session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
 
     var dots = p.steps.map(function(s, k){
@@ -5257,7 +5363,7 @@ function winProjectStep(p, i, code){
 function screenProjectDone(id){
   var p = projectById(id);
   if (!p) return screenWorlds();
-  enterScreen();
+  enterScreen(undefined, "projectdone");
   session = { id:null, attempts:0, hints:0, shown:false };
   var st = projectState(p.id);
   var code = st.code || p.steps[p.steps.length - 1].solution;
@@ -5610,7 +5716,7 @@ function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.
 function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
 
 function screenFolio(){
-  enterScreen("mine");
+  enterScreen("mine", "folio");
   session = { id:null, attempts:0, hints:0, shown:false };
 
   var projects = projectsList();
@@ -5959,7 +6065,7 @@ function taskBuild(title, goal, code){
 
 /* ===== экран: мои задания ===== */
 function screenMyTasks(edit){
-  enterScreen("mine");
+  enterScreen("mine", "mytasks");
   var list = myTasksList();
   var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
   var start = edit || draft || { title:"", goal:"", code:"" };
@@ -6105,7 +6211,7 @@ function screenMyTasks(edit){
    opts.own — это своё же задание, открытое «глазами друга»: проверка та же,
    но опыт за него не даётся (иначе задания составлялись бы ради XP). */
 function openFriendTask(t, opts){
-  enterScreen("mine");
+  enterScreen("mine", "friendtask");
   opts = opts || {};
   var key = taskKey(t);
   var already = !!(S.friendTasks && S.friendTasks[key]);
@@ -6197,7 +6303,7 @@ function winFriendTask(t, key, already, opts){
    на присланную ссылку и должен понять, что случилось, а не решить, что
    тренажёр сломался. */
 function screenTaskBroken(){
-  enterScreen("mine");
+  enterScreen("mine", "friendtask");
   session = { id:null, attempts:0, hints:0, shown:false };
   app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
     '<h1>✍️ Задание не прочиталось</h1></div></div>' +
@@ -6734,7 +6840,7 @@ function vizDrawArrows(mem){
    жил сам по себе. С черновиками (draftFlush в claimScreen) уход безопасен:
    код урока сохраняется на переходе и возвращается на место. */
 function screenViz(opts){
-  enterScreen("train");
+  enterScreen("train", "viz");
   session = { id:null, attempts:0, hints:0, shown:false };
   opts = opts || {};
   var mine = !!opts.code;
@@ -6907,8 +7013,11 @@ function vizPlayer(player, ed, rec){
 /* tab — какая вкладка наверху должна светиться: "home" (по умолчанию),
    "train", "mine" или null, если экран не принадлежит ни одному разделу
    (профиль, регистрация, панель наставника). */
-function enterScreen(tab){
+function enterScreen(tab, place){
   curTab = tab === undefined ? "home" : tab;
+  /* Второе имя — для помощи «?»: вкладок три, а экранов под ними два десятка,
+     и текст подсказки у них разный. Не сказали — считаем, что это «Главное». */
+  curPlace = place || "home";
   stopTimer();
   vizStopPlay();
   clearAdminHash();
@@ -6968,7 +7077,9 @@ var HASH_SCREENS = {
   "#again":   function(){ screenReview(); },
   "#folio":   function(){ screenFolio(); },
   "#mine":    function(){ screenMyTasks(); },
-  "#train":   function(){ screenTrain(); }
+  "#train":   function(){ screenTrain(); },
+  "#help":    function(){ screenGuide(); },
+  "#guide":   function(){ screenGuide(); }
 };
 function routeHash(){
   if (wantsAdmin()){ screenAdmin(); return true; }
@@ -7319,6 +7430,7 @@ function serverCardHTML(){
 
 function screenAdmin(){
   /* без clearAdminHash: этот экран как раз открывается по #admin */
+  curPlace = "admin";
   stopTimer(); vizStopPlay();
   if (!adminUnlocked()) return adminGate();
 
@@ -7564,6 +7676,496 @@ function screenAdmin(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ============================================================
+   ОФОРМЛЕНИЕ: светлая тема и тёмная
+   Тема — настройка УСТРОЙСТВА, а не результат ученика, поэтому лежит в
+   localStorage отдельным ключом и намеренно НЕ синхронизируется с сервером
+   (ровно как снятые замки): на телефоне может быть светлая, на ноутбуке
+   тёмная. Ставится тема ещё в <head>, до первой отрисовки, — иначе у того,
+   кто выбрал тёмную, мелькал бы светлый фон.
+   ============================================================ */
+var THEME_KEY = "kodokvest_theme";
+function themeGet(){
+  try {
+    var t = localStorage.getItem(THEME_KEY);
+    return (t === "dark" || t === "light") ? t : "light";
+  } catch(e){ return document.documentElement.getAttribute("data-theme") || "light"; }
+}
+function themeSet(t){
+  if (t !== "dark") t = "light";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem(THEME_KEY, t); } catch(e){}
+  /* Цвет строки браузера на телефоне: без него шапка системы остаётся
+     тёмной над светлой страницей и выглядит как чужой кусок. */
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute("content", t === "dark" ? "#0d1020" : "#f1f4fc");
+  /* Черепашка и графики нарисованы на canvas по цветам темы — их надо
+     перерисовать руками, стилями холст не перекрасить. */
+  document.querySelectorAll("canvas.stage").forEach(function(c){
+    if (c._lastTurtle) drawTurtle(c, c._lastTurtle);
+  });
+  if (helpIsOpen()) helpRender();
+}
+
+/* ============================================================
+   ПОМОЩЬ «?»: что это за экран и что тут делать
+   Один ответ на один вопрос, который у ребёнка возникает чаще всего и
+   раньше не имел адреса вообще. Текст меняется вместе с экраном: на уроке
+   он про урок, в визуализаторе — про визуализатор.
+
+   Почему всплывающим окном, а не отдельной страницей: помощь чаще всего
+   нужна ПОСРЕДИ дела, а уход с урока стёр бы написанный код. По той же
+   причине поверх страницы живут шпаргалка и сертификат.
+   ============================================================ */
+/* Где мы сейчас — для помощи. Вкладка (curTab) для этого не годится: под
+   «Тренировками» лежат пять разных экранов, и помощь у них разная. */
+var curPlace = "home";
+
+var HELP = {
+  home: { t:"🏠 Главное — с чего начать", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Отсюда начинается всё. Сверху написано, <b>что делать прямо сейчас</b>, ' +
+    'ниже — сто уроков по порядку, ещё ниже — тренировки и твои работы.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ol><li>Жми большую кнопку <b>«Начать»</b> или <b>«Продолжить»</b> — она сама откроет ' +
+    'тот урок, до которого ты дошёл.</li>' +
+    '<li>Не помнишь, где было нужное слово, — впиши его в <b>поиск урока</b> в блоке «Уроки».</li>' +
+    '<li>Устал от уроков — загляни в <b>«Тренировки»</b>: там игры и короткие упражнения.</li></ol>' +
+    '<h4>Хитрость</h4>' +
+    '<p>Кнопка <b>🔥 Сегодня</b> наверху считает дни подряд. Один урок или одна разминка ' +
+    'в день — и серия не оборвётся.</p>' },
+
+  world: { t:"🗺 Мир — двадцать уроков подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Один мир — это двадцать уроков на одну большую тему. Они открываются ' +
+    '<b>по очереди</b>: сдал урок — открылся следующий. Замо́к значит «сюда ещё рано», ' +
+    'а не «сюда нельзя навсегда».</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Жми первый урок без замка.</li>' +
+    '<li>Пройденные уроки можно открывать сколько угодно раз — звёзды не отнимутся.</li>' +
+    '<li>Последний урок мира — <b>босс</b>, а за ним проект и сертификат.</li></ul>' },
+
+  lesson: { t:"📘 Урок — как он устроен", h:
+    '<h4>Урок читается сверху вниз</h4>' +
+    '<ol><li><b>Примеры.</b> У каждого есть «▶ Запустить пример» — код сработает прямо тут, ' +
+    'а «→ В редактор» перенесёт его вниз, чтобы поменять и попробовать своё.</li>' +
+    '<li><b>Задача</b> в рамке «🎯 Твоя задача» — списком требований.</li>' +
+    '<li><b>Редактор</b>: пишешь код и жмёшь «▶ Запустить». Видно, что программа напечатала, ' +
+    'а рядом со строками — что каждая сделала.</li>' +
+    '<li><b>«✓ Проверить»</b> засчитывает урок. Если что-то не так — покажет, чем твой ответ ' +
+    'отличается от нужного.</li></ol>' +
+    '<h4>Не получается</h4>' +
+    '<p><b>💡 Подсказка</b> под редактором — это не стыдно: она стоит одну звезду, и всё. ' +
+    '<b>⏭ Шаг</b> проходит программу по строчкам, чтобы увидеть, где она свернула не туда. ' +
+    '<b>🧹 Ревью кода</b> говорит, что можно сделать чище, и звёзд не отнимает.</p>' +
+    '<h4>Кнопки клавиатуры</h4>' +
+    '<div class="keylist">' +
+    '<div class="keyrow"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>запустить код</span></div>' +
+    '<div class="keyrow"><kbd>Tab</kbd><span>отступ в четыре пробела</span></div>' +
+    '<div class="keyrow"><kbd>Enter</kbd><span>отступ подставится сам после двоеточия</span></div>' +
+    '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div></div>' +
+    '<p>Написанное <b>не пропадает</b>: уйдёшь с урока и вернёшься — код будет на месте.</p>' },
+
+  train: { t:"🎯 Тренировки — зачем они", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Всё, что <b>вне сотни уроков</b>. Звёзд тут не дают и по порядку проходить не надо — ' +
+    'заходят по настроению. Но день занятий засчитывается и здесь, так что серия не оборвётся.</p>' +
+    '<h4>Что выбрать</h4>' +
+    '<ul><li><b>Разминка</b> — пять минут, когда нет сил на урок.</li>' +
+    '<li><b>Игры</b> — то же самое, но играя.</li>' +
+    '<li><b>Ты и ИИ</b> — как разговаривать с нейросетью и как ловить её враньё.</li>' +
+    '<li><b>Песочница</b> — чистый лист: пиши что хочешь, никто не проверяет.</li>' +
+    '<li><b>Визуализатор</b> — показывает, что происходит в памяти, когда программа работает.</li></ul>' },
+
+  sand: { t:"🧪 Песочница — чистый лист", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пустой редактор без задачи и без проверки. Тут ничего нельзя сломать и ничего ' +
+    'не засчитывается — можно пробовать что угодно.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Скопируй сюда код из урока и поменяй одну строчку — посмотри, что изменится.</li>' +
+    '<li><b>Ctrl+Enter</b> — запустить, не тянясь к мышке.</li>' +
+    '<li>Хочешь понять, почему получилось именно так, — открой <b>Визуализатор</b>.</li></ul>' },
+
+  games: { t:"🎮 Игры", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пять игр, в которые играют <b>кодом</b>: программа — это твой ход. Звёзд не дают, ' +
+    'день занятий засчитывают.</p>' +
+    '<p>Если игра непонятная — прочитай, что написано над полем: там всегда сказано, ' +
+    'что от программы требуется.</p>' },
+
+  game: { t:"🎮 Игра — что нажимать", h:
+    '<h4>Как играть</h4>' +
+    '<ul><li>Условие игры написано над редактором.</li>' +
+    '<li>Пиши код и жми <b>«▶ Запустить»</b> — ход засчитается.</li>' +
+    '<li>Проиграл — ничего не теряешь, начинай заново.</li></ul>' },
+
+  today: { t:"🔥 Сегодня — дни подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Считает, сколько дней подряд ты занимался. Любое дело засчитывает день: урок, ' +
+    'разминка, игра, проект.</p>' +
+    '<h4>Щиты</h4>' +
+    '<p>🛡️ — это «прогул прощён». Щит появляется сам за несколько дней занятий и ' +
+    '<b>автоматически</b> закрывает один пропущенный день, чтобы серия не оборвалась. ' +
+    'Тратить его руками не надо.</p>' +
+    '<h4>Задача дня</h4>' +
+    '<p>Одно короткое упражнение, одинаковое для всех и своё на каждый день.</p>' },
+
+  warm: { t:"🔥 Разминка", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Короткие упражнения на пять минут: <b>угадай, что напечатает код</b>, ' +
+    '<b>собери программу из блоков</b> и <b>предскажи, что лежит в памяти</b>. ' +
+    'Кода писать почти не надо — надо думать.</p>' +
+    '<p>Упражнения открываются по мере прохождения уроков: в них встречается только то, ' +
+    'что ты уже проходил.</p>' },
+
+  warmup: { t:"🔥 Разминка — как решать", h:
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>Угадай вывод:</b> прочитай код глазами и напиши, что он напечатает. ' +
+    'Запускать нельзя — в этом и смысл.</li>' +
+    '<li><b>Собери из блоков:</b> перетащи строки в правильном порядке. Отступ важен.</li>' +
+    '<li><b>Предскажи память:</b> скажи, что будет лежать в переменных в этот момент.</li></ul>' +
+    '<p>Ошибся — ничего не теряешь, показывается разбор.</p>' },
+
+  review: { t:"🔁 Повторить", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Уроки, которые дались тяжело, <b>возвращаются сами</b> — через день, потом через три, ' +
+    'потом через неделю. Так они и запоминаются: не зубрёжкой, а возвратами.</p>' +
+    '<p>Три чистых повтора — и урок больше не попросит повторения.</p>' +
+    '<h4>Бестиарий ошибок</h4>' +
+    '<p>Ниже на этом же экране — список ошибок, которые ты встречал. Побеждённая ошибка ' +
+    'подсвечивается зелёным: это не ошибки, это трофеи.</p>' },
+
+  ai: { t:"🤖 Ты и ИИ", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Пятнадцать упражнений про то, как <b>командовать</b> нейросетью и как <b>проверять</b> ' +
+    'за ней. ИИ уверенно врёт — уметь его поймать важнее, чем уметь его попросить.</p>' +
+    '<h4>Что тут бывает</h4>' +
+    '<ul><li>предсказать, что ответит ИИ;</li>' +
+    '<li>починить код, который ИИ написал с ошибкой;</li>' +
+    '<li>вынести вердикт: прав он или нет, и доказать это кодом.</li></ul>' },
+
+  ailesson: { t:"🤖 Упражнение про ИИ", h:
+    '<h4>Что делать</h4>' +
+    '<p>Прочитай задание сверху, ответь или напиши код внизу и нажми <b>«✓ Проверить»</b>. ' +
+    'Если требуется доказать, что ИИ неправ, — доказательством считается <b>работающий код</b>, ' +
+    'а не слова.</p>' },
+
+  project: { t:"🏗 Проект — большая программа", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Проект собирается <b>по шагам</b>: каждый шаг добавляет к программе кусочек. ' +
+    'Готовый проект остаётся у тебя в «Моём» — его можно показать и скачать файлом <b>.py</b>.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Шаги идут по порядку, точки сверху показывают, где ты.</li>' +
+    '<li>Ушёл и вернулся — проект продолжится с того же шага.</li>' +
+    '<li>Застрял — подсказка на месте, как в уроке.</li></ul>' },
+
+  projectdone: { t:"🎉 Проект собран", h:
+    '<p>Программа целиком — вот она. Её можно <b>скачать файлом .py</b> и запустить на ' +
+    'настоящем компьютере, а можно просто показать. Она уже лежит в разделе ' +
+    '<b>🎒 Моё</b> и никуда оттуда не денется.</p>' },
+
+  folio: { t:"🎒 Моё — что тут лежит", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Всё, что сделано руками: <b>программы</b> из проектов, <b>рисунки</b> черепашки, ' +
+    '<b>свои задания</b> и <b>сертификаты</b> за миры.</p>' +
+    '<h4>Что с этим делать</h4>' +
+    '<ul><li>Программу — скачать файлом <b>.py</b>.</li>' +
+    '<li>Сертификат — <b>распечатать</b> или сохранить в PDF (кнопка внутри сертификата).</li>' +
+    '<li>Рисунок — сохранить картинкой.</li></ul>' },
+
+  mytasks: { t:"✍️ Своё задание", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Тут ты не решаешь, а <b>придумываешь</b> задачу — и отправляешь её ссылкой другу. ' +
+    'Правильный ответ тренажёр посчитает сам, запустив твоё решение.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ol><li>Опиши задачу словами — так, чтобы понял тот, кто её не видел.</li>' +
+    '<li>Напиши решение: из него берётся правильный ответ.</li>' +
+    '<li>Скопируй ссылку и отправь. Друг откроет её и будет решать.</li></ol>' +
+    '<p>Составить задание труднее, чем решить: придётся объяснить словами то, что понимаешь руками.</p>' },
+
+  friendtask: { t:"✉️ Задание от друга", h:
+    '<p>Это задача, которую придумал <b>другой человек</b>. Она не из курса, звёзд не даёт ' +
+    'и на прогресс не влияет.</p>' +
+    '<p>Напиши код и нажми «✓ Проверить» — ответ сверится с тем, что получилось у автора.</p>' },
+
+  viz: { t:"🔍 Визуализатор — что в памяти", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Показывает, что происходит <b>внутри</b> программы: какая строка выполняется сейчас ' +
+    'и что в этот момент лежит в каждой переменной.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>⏭</b> — шаг вперёд, <b>⏮</b> — шаг назад: перемотку можно крутить в обе стороны.</li>' +
+    '<li>Стрелки показывают, какая переменная на что ссылается — так видно, ' +
+    'почему два списка «менялись сами».</li>' +
+    '<li>Внизу — <b>пересказ словами</b>: что программа сделала, по-русски.</li></ul>' +
+    '<p>Сюда стоит идти, когда код работает, но <b>непонятно почему</b>.</p>' },
+
+  account: { t:"👤 Профиль", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Имя, код ученика и настройки. <b>Код ученика</b> нужен, чтобы открыть свой прогресс ' +
+    'на другом устройстве, — храни его как пароль.</p>' +
+    '<p>Прогресс хранится в самом браузере. Чистка истории браузера может его стереть — ' +
+    'поэтому код и ссылку лучше сохранить заранее.</p>' },
+
+  register: { t:"👋 Вход", h:
+    '<p>Впиши имя — и всё, это вся регистрация. Ни почты, ни пароля не нужно.</p>' +
+    '<p>Если ты уже занимался на другом устройстве, введи свой <b>код ученика</b> — ' +
+    'прогресс приедет вместе с ним.</p>' },
+
+  guide: { t:"❓ Как пользоваться", h:
+    '<p>Это полная инструкция. А «?» наверху отвечает <b>про тот экран, где ты сейчас</b>, — ' +
+    'загляни туда, когда что-то непонятно посреди дела.</p>' },
+
+  admin: { t:"🛠 Панель наставника", h:
+    '<p>Экран для взрослого: видно, сколько времени ушло на каждый урок, где было больше всего ' +
+    'попыток и какие ошибки повторяются. Отсюда же снимаются замки с уроков.</p>' },
+
+  /* --- не экраны, а темы: сюда ведут кружки «?» рядом с заголовками --- */
+  stars: { t:"★ Звёзды и опыт", h:
+    '<h4>Откуда берутся звёзды</h4>' +
+    '<ul><li><b>★★★</b> — урок сдан с первой попытки и без подсказок;</li>' +
+    '<li><b>★★</b> — со второй попытки или с одной подсказкой;</li>' +
+    '<li><b>★</b> — сдан. Это тоже победа.</li></ul>' +
+    '<p>Звёзды <b>не сгорают</b> и не отнимаются задним числом. Пройти урок заново можно ' +
+    'когда угодно — хуже уже не станет, а лучше станет.</p>' +
+    '<h4>Опыт и ранг</h4>' +
+    '<p>Полоска наверху — опыт. Он копится за уроки, проекты и дни подряд, и от него ' +
+    'зависит ранг: Новичок → … → Мастер.</p>' },
+
+  worlds: { t:"🗺 Пять миров, сто уроков", h:
+    '<p>Курс — это <b>сто уроков</b>, разложенных на пять миров по двадцать. Уроки идут ' +
+    'строго по порядку: каждый следующий опирается на предыдущий.</p>' +
+    '<p>В конце каждого мира — <b>проект</b> (большая программа, которую ты соберёшь по шагам) ' +
+    'и <b>сертификат</b>, который печатается на бумаге.</p>' +
+    '<p>Не помнишь, где было нужное, — есть <b>поиск по урокам</b> прямо над списком миров.</p>' },
+
+  tools: { t:"🧰 Кнопки наверху", h:
+    '<div class="iconlist">' +
+    '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
+    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — всё, что вне сотни уроков</span></div>' +
+    '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — сделанное своими руками</span></div>' +
+    '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — справочник по командам, открывается прямо посреди урока</span></div>' +
+    '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, настройки</span></div>' +
+    '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
+    '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — то, что ты сейчас читаешь</span></div>' +
+    '</div>' }
+};
+
+function helpIsOpen(){
+  var el = document.getElementById("helpwrap");
+  return !!el && el.classList.contains("show");
+}
+function helpFor(key){
+  return HELP[key] || HELP[curPlace] || HELP.home;
+}
+/* Ключ, который показывается сейчас. Отдельная переменная нужна, чтобы
+   кружок «?» у заголовка мог показать НЕ то, что показала бы кнопка в
+   шапке, — и чтобы смена темы перерисовала именно этот текст. */
+var helpKey = null;
+function helpRender(){
+  var body = document.getElementById("helpbody");
+  var head = document.getElementById("helptitle");
+  if (!body || !head) return;
+  var e = helpFor(helpKey);
+  head.textContent = e.t;
+  var th = themeGet();
+  body.innerHTML = e.h +
+    '<h4>Оформление</h4>' +
+    '<div class="themepick">' +
+      '<button data-theme-set="light"' + (th === "light" ? ' class="on"' : '') + '>☀️ Светлая</button>' +
+      '<button data-theme-set="dark"' + (th === "dark" ? ' class="on"' : '') + '>🌙 Тёмная</button>' +
+    '</div>' +
+    '<div class="helprow">' +
+      '<button class="rbtn sec" id="help-guide">📕 Полная инструкция</button>' +
+      '<button class="rbtn sec" id="help-sheet">📖 Шпаргалка</button>' +
+    '</div>';
+  body.querySelectorAll("[data-theme-set]").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); };
+  });
+  var g = document.getElementById("help-guide");
+  if (g) g.onclick = function(){ closeHelp(); screenGuide(); };
+  var s = document.getElementById("help-sheet");
+  if (s) s.onclick = function(){ closeHelp(); openSheet(); };
+  body.scrollTop = 0;
+}
+function openHelp(key){
+  var el = document.getElementById("helpwrap");
+  if (!el) return;
+  helpKey = key || null;
+  helpRender();
+  el.classList.add("show");
+  var b = document.getElementById("btn-help");
+  if (b) b.classList.add("on");
+}
+function closeHelp(){
+  var el = document.getElementById("helpwrap");
+  if (el) el.classList.remove("show");
+  var b = document.getElementById("btn-help");
+  if (b) b.classList.remove("on");
+}
+function toggleHelp(){ if (helpIsOpen()) closeHelp(); else openHelp(null); }
+/* Кружок «?» у заголовка. Разметку пишем одной функцией, чтобы кружки
+   везде выглядели одинаково и вели себя одинаково. */
+function qm(key, what){
+  return '<button class="qm" data-help="' + key + '" title="' +
+    esc(what || "Что это такое") + '" aria-label="' + esc(what || "Что это такое") + '">?</button>';
+}
+/* Один обработчик на всю страницу, и он делает две вещи сразу.
+   Первая: кружки «?» рисуются ВНУТРИ экранов, которые перерисовываются
+   целиком, — вешать им onclick пришлось бы в каждом экране.
+   Вторая: клик мимо окна закрывает помощь. Раньше это делало прозрачное
+   затемнение на весь экран, но оно же съедало прокрутку колесом — страница
+   за окном «замирала», и это читалось как поломка. Теперь на большом экране
+   затемнение не ловит указатель вовсе (см. .helpwrap в стилях), а закрытие
+   держится на этом обработчике. */
+document.addEventListener("click", function(e){
+  var t = e.target;
+  var b = t && t.closest ? t.closest("[data-help]") : null;
+  if (b){
+    e.preventDefault();
+    return openHelp(b.getAttribute("data-help"));
+  }
+  if (!helpIsOpen()) return;
+  /* клик по самой кнопке «?» обрабатывает она сама (там переключение) */
+  if (t.closest(".helpbox") || t.closest("#btn-help")) return;
+  closeHelp();
+});
+
+/* ================= экран: как пользоваться =================
+   Полная инструкция. Всплывающее «?» отвечает про текущий экран, а это —
+   один связный текст: устройство сайта, из чего состоит урок, откуда
+   берутся звёзды, что делать, когда не выходит, и кусок для родителя.
+   ============================================================ */
+function screenGuide(){
+  enterScreen(null, "guide");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var h = '<div class="lvlhead"><div><div class="idx">инструкция</div>' +
+    '<h1>❓ Как пользоваться</h1></div></div>' +
+    '<p class="lede">Здесь написано, как всё устроено. Если вопрос про конкретный экран — ' +
+    'жми <b>«?»</b> в правом верхнем углу: там ответ про то место, где ты сейчас.</p>' +
+    '<div class="guide">';
+
+  h += '<div class="card"><h3>Что это вообще такое</h3>' +
+    '<p>Кодоквест — тренажёр языка Python. Код пишется и выполняется прямо в браузере: ' +
+    'ничего не надо устанавливать, интернет нужен только чтобы открыть страницу.</p>' +
+    '<p class="dim">Курс — сто уроков в пяти мирах. Плюс тренировки, игры и проекты вокруг них.</p></div>';
+
+  h += '<div class="card"><h3>Первый час: что делать по шагам</h3>' +
+    '<ol class="guidesteps">' +
+    '<li><b>Нажми «Начать первый урок» на Главном</b>' +
+    '<span>Тренажёр сам откроет тот урок, до которого ты дошёл. Искать ничего не надо.</span></li>' +
+    '<li><b>Прочитай примеры и запусти их</b>' +
+    '<span>У каждого примера есть «▶ Запустить пример»: код сработает тут же. ' +
+    '«→ В редактор» перенесёт его вниз, чтобы поменять и попробовать своё.</span></li>' +
+    '<li><b>Реши задачу в редакторе</b>' +
+    '<span>Пиши код и жми «▶ Запустить» столько раз, сколько нужно. Это ничего не стоит.</span></li>' +
+    '<li><b>Нажми «✓ Проверить»</b>' +
+    '<span>Урок засчитается. Если не сошлось — тренажёр покажет, чем твой ответ отличается ' +
+    'от нужного, и можно пробовать дальше.</span></li>' +
+    '<li><b>Возвращайся каждый день</b>' +
+    '<span>Хоть на пять минут. Огонёк 🔥 наверху считает дни подряд, а щит 🛡️ прощает пропуск.</span></li>' +
+    '</ol></div>';
+
+  h += '<div class="card"><h3>Кнопки наверху</h3>' +
+    '<div class="iconlist">' +
+    '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
+    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — разминка, игры, «Ты и ИИ», песочница, визуализатор</span></div>' +
+    '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — программы, рисунки, свои задания, сертификаты</span></div>' +
+    '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 106 команд с примерами, открывается поверх урока</span></div>' +
+    '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, выход</span></div>' +
+    '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
+    '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — что это за экран и что тут делать</span></div>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Звёзды, опыт и ранги</h3>' +
+    '<p>За урок дают от одной до трёх звёзд: <b>★★★</b> — с первой попытки и без подсказок, ' +
+    '<b>★★</b> — со второй попытки или с одной подсказкой, <b>★</b> — сдан.</p>' +
+    '<p>Звёзды не сгорают и не отнимаются задним числом. Подсказка стоит одну звезду — ' +
+    'и это <b>не страшно</b>: пройти урок с подсказкой лучше, чем не пройти.</p>' +
+    '<p class="dim">Полоска наверху — опыт. От него зависит ранг, а ранг ни на что не влияет, ' +
+    'кроме удовольствия.</p></div>';
+
+  h += '<div class="card"><h3>Когда не получается</h3>' +
+    '<ul><li><b>💡 Подсказка</b> под редактором — по шагам, от намёка к ответу.</li>' +
+    '<li><b>⏭ Шаг</b> в панели запуска — программа пройдёт по строчкам, и будет видно, ' +
+    'где она свернула не туда.</li>' +
+    '<li><b>📖 Шпаргалка</b> наверху — забыл команду, посмотри пример.</li>' +
+    '<li><b>🔍 Визуализатор</b> — когда код работает, но непонятно почему.</li>' +
+    '<li><b>Красная рамка с ошибкой</b> — это не ругань, а объяснение. Там всегда написано, ' +
+    'в какой строке и что именно не сошлось.</li></ul></div>';
+
+  h += '<div class="card"><h3>Кнопки клавиатуры</h3><div class="keylist">' +
+    '<div class="keyrow"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>запустить код</span></div>' +
+    '<div class="keyrow"><kbd>⌘</kbd>+<kbd>Enter</kbd><span>то же самое на Маке</span></div>' +
+    '<div class="keyrow"><kbd>Tab</kbd><span>отступ в четыре пробела</span></div>' +
+    '<div class="keyrow"><kbd>Enter</kbd><span>после двоеточия отступ подставится сам</span></div>' +
+    '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Оформление</h3>' +
+    '<p>Светлая тема стоит по умолчанию: тёмный фон тяжело читать днём. Кому удобнее ' +
+    'тёмная — переключается тут же и запоминается на этом устройстве.</p>' +
+    '<div class="themepick" id="guidetheme">' +
+      '<button data-theme-set="light">☀️ Светлая</button>' +
+      '<button data-theme-set="dark">🌙 Тёмная</button>' +
+    '</div></div>';
+
+  h += '<div class="card"><h3>Сохраняется ли прогресс</h3>' +
+    '<p>Да. Всё, что пройдено, хранится в самом браузере — закрыл вкладку, вернулся, ' +
+    'всё на месте. Написанный в уроке код тоже сохраняется.</p>' +
+    '<p>Чтобы заниматься с двух устройств, нужен <b>код ученика</b> из профиля 👤. ' +
+    'Чистка истории браузера может стереть прогресс — код лучше сохранить заранее.</p>' +
+    '<p class="dim">Сайт можно поставить на домашний экран телефона: он будет открываться ' +
+    'как приложение и работать без интернета.</p></div>';
+
+  h += '<div class="card"><h3>Для родителя</h3>' +
+    '<p>Правильный режим — <b>пятнадцать минут в день</b>, а не два часа в воскресенье. ' +
+    'Огонёк дня сделан ровно для этого.</p>' +
+    '<p>Подсказки — не читерство. Ребёнок, который взял подсказку и дошёл до конца, ' +
+    'выучил больше, чем тот, кто бросил урок на середине.</p>' +
+    '<p>В профиле есть панель наставника: сколько времени ушло на каждый урок, где было ' +
+    'больше всего попыток и какие ошибки повторяются.</p></div>';
+
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+    '<span class="sp"></span><button class="bigbtn" id="gostart">▶ К урокам</button></div>';
+
+  app.innerHTML = h;
+  var paint = function(){
+    app.querySelectorAll("#guidetheme button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-theme-set") === themeGet());
+    });
+  };
+  app.querySelectorAll("#guidetheme button").forEach(function(b){
+    b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paint(); };
+  });
+  paint();
+  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("gostart").onclick = function(){
+    var n = nextLesson();
+    if (n) openLesson(n.id); else screenWorlds();
+  };
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ============================================================
+   КНОПКА «НАВЕРХ»
+   Урок и портфолио бывают в несколько экранов длиной, а вкладки и «?»
+   живут в шапке. Кнопка появляется только после экрана прокрутки —
+   иначе она просто загораживала бы угол.
+   ============================================================ */
+(function(){
+  var b = document.getElementById("totop");
+  if (!b) return;
+  b.onclick = function(){ window.scrollTo({ top:0, behavior:"smooth" }); };
+  var check = function(){
+    b.classList.toggle("show", (window.pageYOffset || document.documentElement.scrollTop || 0) > 700);
+  };
+  window.addEventListener("scroll", check, { passive:true });
+  check();
+})();
+
 /* ================= старт ================= */
 /* Вкладки. Их всего три, и это весь верхний уровень: «Главное» (уроки и что
    делать сейчас), «Тренировки» (всё, что вне сотни), «Моё» (сделанное своими
@@ -7603,6 +8205,13 @@ document.getElementById("logo").onclick = screenWorlds;
   if (el) el.onclick = function(e){ if (e.target === el) closeCert(); };
 })();
 (function(){
+  var b = document.getElementById("btn-help"); if (b) b.onclick = toggleHelp;
+  var x = document.getElementById("helpclose"); if (x) x.onclick = closeHelp;
+  /* Клик мимо окна закрывает: на телефоне это единственный удобный способ,
+     кнопка «✕» слишком мелкая для пальца. */
+  var v = document.getElementById("helpveil"); if (v) v.onclick = closeHelp;
+})();
+(function(){
   var b = document.getElementById("btn-focus");
   if (b) b.onclick = function(){
     document.body.classList.toggle("focus");
@@ -7613,6 +8222,7 @@ document.getElementById("win").onclick = function(e){ if (e.target === this) clo
 window.addEventListener("keydown", function(e){
   if (e.key !== "Escape") return;
   if (certIsOpen()) closeCert();
+  else if (helpIsOpen()) closeHelp();
   else if (sheetIsOpen()) closeSheet();
   else closeWin();
 });
@@ -7798,6 +8408,10 @@ window.__game = {
   lintCode: lintCode, lintHTML: lintHTML, lintKnows: lintKnows, astWalk: astWalk,
   lintCount: lintCount, lintNote: lintNote,
   LINT_MAX: LINT_MAX, LINT_LONG_FUNC: LINT_LONG_FUNC,
+  HELP: HELP, openHelp: openHelp, closeHelp: closeHelp, helpIsOpen: helpIsOpen,
+  toggleHelp: toggleHelp, screenGuide: screenGuide,
+  themeGet: themeGet, themeSet: themeSet,
+  lessonSearch: lessonSearch, lessonOpen: lessonOpen,
   ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
   errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
   beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,

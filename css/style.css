@@ -1,19 +1,74 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
+/* ============================================================
+   ЦВЕТА: две темы, и обе описаны ОДНИМ набором переменных.
+   Раньше тема была одна — тёмная, — и половина цветов стояла прямо в
+   правилах («background:#0f1428»). Из-за этого светлой темы не могло
+   существовать в принципе: жёсткий цвет не переопределить.
+   Теперь любой цвет, который меняется между темами, живёт здесь.
+
+   По умолчанию тема СВЕТЛАЯ. Тёмный фон читается тяжело при дневном свете
+   и на плохих экранах, а тренажёр открывают чаще днём. Тому, кто любит
+   тёмную, она в один клик: «?» наверху → «Оформление».
+   Выбор темы НЕ синхронизируется с сервером: это настройка устройства,
+   как и снятые замки, — на телефоне может быть светлая, на ноутбуке тёмная.
+   ============================================================ */
 :root{
+  /* --- светлая (по умолчанию) --- */
+  --bg:#f1f4fc; --bg2:#ffffff; --panel:#ffffff; --panel2:#f5f7fe; --sunken:#eef1fa;
+  --line:#dde3f1; --line2:#c3cbe4; --ink:#1a1f3d; --soft:#4a5372; --faint:#79819d;
+  --acc:#5a41e0; --acc-lt:#7c5cff; --acc2:#00806c; --acc2-lt:#00a68c;
+  --gold:#b07d00; --ok:#16814a; --bad:#cf3838; --warn:#b5730a;
+  --code:#ffffff;
+  --k:#8a2ec0;--s:#227a2e;--n:#c04a12;--c:#8f96b0;--f:#1f56c8;--d:#9a6a00;
+  --glow1:#e7e9ff; --glow2:#ddf1ee;
+  --topbg:rgba(255,255,255,.9);
+  --herobg:linear-gradient(150deg,#e9e6ff,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#eef0ff,#e5f4f5);
+  --bar:#f5f7fd; --bar2:#eef1fa; --res:#f7f9ff; --gut:#f5f7fd; --gutink:#a9b1cb;
+  --outink:#24304f; --stage:#ffffff; --panehead:#f4f6fd;
+  --scrim:rgba(24,28,54,.42); --modal:linear-gradient(160deg,#ffffff,#f1f4ff);
+  --sunk2:rgba(26,31,61,.06); --onacc:#ffffff; --onacc2:#ffffff;
+  --codeink:#4b3ea8; --dot:#ccd3e7; --goldline:#e5d09a; --acc2line:#9ad9cd;
+  --okbg:rgba(22,129,74,.10); --okline:#a8dcbe; --okink:#0f5f36;
+  --badbg:rgba(207,56,56,.08); --badline:#f0b9b9; --badink:#a52626;
+  --warnbg:rgba(181,115,10,.10); --warnline:#e8cf9c; --warnink:#8a5806;
+  --bugbg:linear-gradient(150deg,#fdeef3,#f7eefb); --bugline:#eec2d1; --bugink:#9c2b4d;
+  --claimbg:linear-gradient(150deg,#eef2fd,#f2f0fe); --claimink:#2a4c8f;
+  --sh:0 1px 2px rgba(28,35,80,.06),0 14px 32px -22px rgba(28,35,80,.45);
+  --shbig:0 24px 60px -20px rgba(28,35,80,.4);
+  --r:16px;
+}
+:root[data-theme="dark"]{
   --bg:#0d1020; --bg2:#141a33; --panel:#181f3d; --panel2:#1f2749; --sunken:#0a0d1c;
   --line:#2a3360; --line2:#3b4680; --ink:#eef1ff; --soft:#a6b0dd; --faint:#6f7ab0;
-  --acc:#7c5cff; --acc2:#00e0b8; --gold:#ffc53d; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffab3d;
+  --acc:#7c5cff; --acc-lt:#9d7bff; --acc2:#00e0b8; --acc2-lt:#00c9a7;
+  --gold:#ffc53d; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffab3d;
   --code:#0a0d1c;
   --k:#c792ea;--s:#c3e88d;--n:#f78c6c;--c:#5f6a9e;--f:#82aaff;--d:#ffcb6b;
-  --r:16px; --sh:0 2px 6px rgba(0,0,0,.35),0 18px 40px -22px rgba(0,0,0,.9);
+  --glow1:#1d2350; --glow2:#17303f;
+  --topbg:rgba(13,16,32,.86);
+  --herobg:linear-gradient(150deg,#201c4d,#152a44);
+  --goalbg:linear-gradient(150deg,#1b2450,#182a45);
+  --bar:#0f1428; --bar2:#0c1122; --res:#0b1020; --gut:#080b18; --gutink:#3f4877;
+  --outink:#cfe3ff; --stage:#070a16; --panehead:#141a33;
+  --scrim:rgba(6,8,18,.82); --modal:linear-gradient(160deg,#1d2350,#16304a);
+  --sunk2:rgba(0,0,0,.3); --onacc:#ffffff; --onacc2:#04231e;
+  --codeink:#b9c6ff; --dot:#39406e; --goldline:#6b551f; --acc2line:#1c5a52;
+  --okbg:rgba(61,220,132,.12); --okline:#1e5c3c; --okink:#8ff0bb;
+  --badbg:rgba(255,107,107,.1); --badline:#6b2a2a; --badink:#ffb3b3;
+  --warnbg:rgba(255,171,61,.1); --warnline:#6b4d1f; --warnink:#ffd79a;
+  --bugbg:linear-gradient(150deg,#3a2030,#2b1c36); --bugline:#6d2f42; --bugink:#ffd0dc;
+  --claimbg:linear-gradient(150deg,#1d2b4a,#1a2340); --claimink:#9fd0ff;
+  --sh:0 2px 6px rgba(0,0,0,.35),0 18px 40px -22px rgba(0,0,0,.9);
+  --shbig:0 30px 80px -20px #000;
 }
 *{box-sizing:border-box}
 body{
   margin:0;
   background:
-    radial-gradient(1200px 600px at 15% -10%, #1d2350 0%, transparent 60%),
-    radial-gradient(900px 500px at 90% 0%, #17303f 0%, transparent 55%),
+    radial-gradient(1200px 600px at 15% -10%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, var(--glow2) 0%, transparent 55%),
     var(--bg);
   color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:16px;line-height:1.6;
   -webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh;
@@ -23,7 +78,7 @@ h1,h2,h3{font-family:'Fredoka','Inter',sans-serif;letter-spacing:.005em}
 button{font-family:inherit}
 
 /* ---------- шапка ---------- */
-.top{position:sticky;top:0;z-index:60;background:rgba(13,16,32,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top{position:sticky;top:0;z-index:60;background:var(--topbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .top-in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* Панель ограничена 1080px и на широком экране НЕ становится шире, поэтому
    влезать в одну строку она обязана всегда — иначе вторая строка съедает
@@ -36,13 +91,13 @@ button{font-family:inherit}
 .logo .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:16px;flex:none}
 .logo b{font-family:'Fredoka';font-size:19px;font-weight:600}
 .xpbox{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--soft)}
-.lvlchip{background:linear-gradient(135deg,var(--acc),#a97bff);color:#fff;font-weight:700;font-size:12px;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.lvlchip{background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);font-weight:700;font-size:12px;padding:3px 10px;border-radius:99px;white-space:nowrap}
 .xpbar{width:110px;height:8px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);overflow:hidden}
 .xpbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc2),var(--acc));transition:width .6s cubic-bezier(.2,.8,.3,1)}
 .starcount{color:var(--gold);font-weight:700;font-size:13.5px;white-space:nowrap}
 .tbtn{border:1px solid var(--line2);background:var(--panel);color:var(--soft);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
 .tbtn:hover{color:var(--ink);border-color:var(--acc);background:var(--panel2)}
-.tbtn.on{background:var(--acc);color:#fff;border-color:transparent}
+.tbtn.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 
 /* ---------- полоска «что дальше» на первом уроке ---------- */
 .howbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:0 0 -4px;
@@ -99,7 +154,7 @@ button{font-family:inherit}
 .tab{border:0;background:transparent;color:var(--soft);border-radius:9px;padding:7px 11px;
   font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
 .tab:hover{color:var(--ink)}
-.tab.on{background:var(--acc);color:#fff;box-shadow:0 6px 16px -8px rgba(124,92,255,.9)}
+.tab.on{background:var(--acc);color:var(--onacc);box-shadow:0 6px 16px -8px rgba(124,92,255,.9)}
 @media (max-width:640px){
   /* На телефоне панель складывается в ДВЕ строки: сверху значок, звёзды и
      инструменты, снизу вкладки во всю ширину. Ради этого убираем то, без чего
@@ -118,12 +173,12 @@ button{font-family:inherit}
 .wrap{max-width:1080px;margin:0 auto;padding:26px 18px 90px}
 
 /* ---------- герой и секции ---------- */
-.hero{background:linear-gradient(150deg,#201c4d,#152a44);border:1px solid var(--line);border-radius:22px;padding:28px 30px;box-shadow:var(--sh)}
+.hero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;padding:28px 30px;box-shadow:var(--sh)}
 .hero h1{margin:0 0 8px;font-size:34px;line-height:1.12}
 .hero p{margin:0;color:var(--soft);max-width:60ch}
 .hero .row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .bigbtn{border:0;border-radius:13px;padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer;
-  background:linear-gradient(135deg,var(--acc),#9d7bff);color:#fff;box-shadow:0 8px 22px -8px rgba(124,92,255,.9);transition:.15s}
+  background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);box-shadow:0 8px 22px -8px rgba(124,92,255,.55);transition:.15s}
 .bigbtn:hover{transform:translateY(-2px)}
 .bigbtn.ghost{background:transparent;border:1px solid var(--line2);color:var(--soft);box-shadow:none}
 .bigbtn.ghost:hover{color:var(--ink);border-color:var(--acc)}
@@ -152,8 +207,8 @@ button{font-family:inherit}
 .wfoot{display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:12px;color:var(--faint);gap:8px}
 
 .tag{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);color:var(--faint);white-space:nowrap}
-.tag.draw{color:var(--acc2);border-color:#1d5e57}
-.tag.pro{color:var(--gold);border-color:#6b551f}
+.tag.draw{color:var(--acc2);border-color:var(--acc2line)}
+.tag.pro{color:var(--gold);border-color:var(--goldline)}
 
 /* ---------- список уроков ---------- */
 .lessons{display:flex;flex-direction:column;gap:7px;margin-top:6px}
@@ -167,16 +222,16 @@ button{font-family:inherit}
 .lesson.locked:hover,.lesson.soon:hover{transform:none;border-color:var(--line)}
 .lnum{flex:none;width:30px;height:30px;border-radius:9px;background:var(--sunken);border:1px solid var(--line);
   display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--faint)}
-.lesson:not(.locked):not(.soon) .lnum{color:var(--acc2);border-color:#1d5e57}
+.lesson:not(.locked):not(.soon) .lnum{color:var(--acc2);border-color:var(--acc2line)}
 .lbody{flex:1;min-width:0}
 .lbody b{display:block;font-size:15px;font-weight:600;line-height:1.3}
 .lbody span{font-size:12.5px;color:var(--faint)}
 .lright{flex:none}
-.stars{font-size:13px;letter-spacing:1.5px;color:#39406e}
+.stars{font-size:13px;letter-spacing:1.5px;color:var(--dot)}
 .stars b{color:var(--gold);font-weight:400}
 .soontag{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
 .bosstag{display:inline-block;font-size:10px;font-family:'Inter';letter-spacing:.08em;text-transform:uppercase;
-  color:var(--gold);border:1px solid #6b551f;border-radius:99px;padding:1px 7px;vertical-align:middle;margin-left:6px}
+  color:var(--gold);border:1px solid var(--goldline);border-radius:99px;padding:1px 7px;vertical-align:middle;margin-left:6px}
 
 /* ---------- достижения ---------- */
 .badges{display:flex;flex-wrap:wrap;gap:10px}
@@ -201,7 +256,7 @@ button{font-family:inherit}
 .card p{margin:0 0 10px;max-width:70ch}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
-.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:#b9c6ff}
+.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink)}
 .demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
 
 .note{border-left:3px solid var(--acc2);background:rgba(0,224,184,.07);padding:13px 16px;border-radius:0 12px 12px 0;margin:0 0 18px;font-size:14.5px;color:var(--soft)}
@@ -209,15 +264,15 @@ button{font-family:inherit}
 
 .demo{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0 4px;background:var(--code)}
 .demo pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:13.5px;line-height:1.6}
-.demo .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:#0f1428;flex-wrap:wrap}
+.demo .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:var(--bar);flex-wrap:wrap}
 .demo .bar .hintx{font-size:12px;color:var(--faint);margin-left:auto}
 .minibtn{border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .minibtn:hover{border-color:var(--acc2);color:var(--acc2)}
-.demo .res{border-top:1px solid var(--line);background:#0b1020;padding:10px 14px;font-size:13px;white-space:pre-wrap;color:var(--acc2);display:none}
+.demo .res{border-top:1px solid var(--line);background:var(--res);padding:10px 14px;font-size:13px;white-space:pre-wrap;color:var(--acc2);display:none}
 .demo .res.show{display:block}
 .t-k{color:var(--k)}.t-s{color:var(--s)}.t-n{color:var(--n)}.t-c{color:var(--c);font-style:italic}.t-f{color:var(--f)}.t-d{color:var(--d)}
 
-.goal{background:linear-gradient(150deg,#1b2450,#182a45);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:24px 0 14px}
+.goal{background:var(--goalbg);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:24px 0 14px}
 .goal h3{margin:0 0 8px;font-size:18px}
 .goal p{margin:0}
 .goal ul{margin:8px 0 0;padding-left:19px;color:var(--soft)}
@@ -229,11 +284,11 @@ button{font-family:inherit}
 @media (max-width:860px){.studio.split{grid-template-columns:1fr}}
 
 .editorbox{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--code);box-shadow:var(--sh)}
-.ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f1428;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint)}
-.ehead .dot{width:9px;height:9px;border-radius:50%;background:#39406e}
+.ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line);font-size:12px;color:var(--faint)}
+.ehead .dot{width:9px;height:9px;border-radius:50%;background:var(--dot)}
 .ehead .lbl{margin-left:6px}
 /* вкладки файлов: урок из нескольких файлов, как в настоящем проекте */
-.ftabs{display:flex;gap:2px;padding:0 8px;background:#0c1122;border-bottom:1px solid var(--line);overflow-x:auto}
+.ftabs{display:flex;gap:2px;padding:0 8px;background:var(--bar2);border-bottom:1px solid var(--line);overflow-x:auto}
 .ftab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--faint);
   font:600 12px/1 'JetBrains Mono',ui-monospace,monospace;padding:9px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
 .ftab:hover{color:var(--soft)}
@@ -262,12 +317,12 @@ button{font-family:inherit}
   border-radius:8px;background:var(--sunken);color:var(--soft);padding:8px 10px;
   font:14px/1.4 'JetBrains Mono',ui-monospace,monospace}
 .playbar .playin:focus{outline:none;border-color:var(--acc2)}
-.rbtn.play{background:var(--acc2);color:#04231e}
+.rbtn.play{background:var(--acc2);color:var(--onacc2)}
 
 /* карточки игр */
 .gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .gamecard{display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
-  border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px 16px 18px;
+  border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px 16px 18px;
   transition:.15s;color:inherit}
 .gamecard:hover{border-color:var(--acc2);transform:translateY(-2px)}
 .gamecard .gemoji{font-size:34px;line-height:1}
@@ -380,7 +435,7 @@ button{font-family:inherit}
 .reglbl input:focus,.reglbl textarea:focus{outline:none;border-color:var(--acc)}
 .codebox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sunken);
   border:1px solid var(--line);border-radius:11px;padding:10px 12px}
-.codebox code{background:none;border:0;padding:0;color:#b9c6ff;font-size:14px;word-break:break-all;flex:1;min-width:0}
+.codebox code{background:none;border:0;padding:0;color:var(--codeink);font-size:14px;word-break:break-all;flex:1;min-width:0}
 .mono{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--soft);word-break:break-all}
 
 /* раздел «Разминка»: угадай вывод (predict) */
@@ -418,11 +473,11 @@ button{font-family:inherit}
 .vizbox{display:flex;flex-direction:column;gap:12px}
 .vizplayer{display:flex;flex-direction:column;gap:12px}
 .vizctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);
-  border-radius:var(--r);background:#0f1428}
+  border-radius:var(--r);background:var(--bar)}
 .vizslider{flex:1 1 160px;min-width:120px;accent-color:var(--acc)}
 .vizpos{font-size:12.5px;color:var(--faint);font-family:'JetBrains Mono',monospace;white-space:nowrap}
 .viznote{font-size:12.5px;color:var(--faint);padding:0 2px}
-.vizerr{border-radius:12px;padding:12px 14px;font-size:14px;background:rgba(255,107,107,.1);border:1px solid #6b2a2a;color:#ffb3b3}
+.vizerr{border-radius:12px;padding:12px 14px;font-size:14px;background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
 .vizerr b{display:block;margin-bottom:3px}
 .vizstage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start}
 @media (max-width:820px){.vizstage{grid-template-columns:1fr}}
@@ -430,7 +485,7 @@ button{font-family:inherit}
   font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.6;padding:8px 0}
 .vcl{display:flex;gap:10px;padding:1px 12px;border-left:3px solid transparent}
 .vcl.on{background:rgba(124,92,255,.16);border-left-color:var(--acc)}
-.vcl .vcn{color:#3f4877;user-select:none;min-width:20px;text-align:right;flex:none}
+.vcl .vcn{color:var(--gutink);user-select:none;min-width:20px;text-align:right;flex:none}
 .vcl .vct{white-space:pre-wrap;overflow-wrap:anywhere}
 .vizmem{position:relative;display:flex;gap:22px;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r);
   background:var(--panel);padding:14px;min-height:120px}
@@ -452,7 +507,7 @@ button{font-family:inherit}
   font-family:'JetBrains Mono',monospace;font-size:13px;min-width:22px;text-align:center}
 .vodict{display:flex;flex-direction:column;gap:5px}
 .vopair{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:13px}
-.vopair .vokey{background:var(--code);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;color:#b9c6ff}
+.vopair .vokey{background:var(--code);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;color:var(--codeink)}
 .vopair .vosep{color:var(--faint)}
 .voempty{color:var(--faint);font-style:italic;font-size:12.5px}
 .vval{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink)}
@@ -464,11 +519,11 @@ button{font-family:inherit}
    Если положить его прямо в .vizwhat, каждый <b> станет flex-элементом и
    фраза расползётся по зазорам — «всего: 0 → 12» превратится в «всего : 0 → 12». */
 .vizwhat{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;font-size:13.5px;color:var(--ink);
-  background:rgba(0,224,184,.09);border:1px solid #1c5a52;border-radius:12px;padding:9px 13px}
+  background:rgba(0,224,184,.09);border:1px solid var(--acc2line);border-radius:12px;padding:9px 13px}
 .vizwhat .vwl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--acc2);flex:none;
   padding-top:2px}
 .vizwhat .vwt{flex:1 1 auto;min-width:0}
-.vizwhat b{font-family:'JetBrains Mono',monospace;font-weight:600;color:#8ff0bb}
+.vizwhat b{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--okink)}
 /* Две метки: «новое» тёплая, «изменилось» бирюзовая. Разные цвета, потому что
    это разные события: появилось имя или поменялось значение у прежнего. */
 .vzn{border-color:var(--gold) !important;box-shadow:0 0 0 2px rgba(255,197,61,.18)}
@@ -488,11 +543,11 @@ button{font-family:inherit}
 @keyframes vzpop{from{transform:scale(.9)}to{transform:scale(1)}}
 
 .edit-area{position:relative;display:flex;min-height:190px}
-.gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:#3f4877;font-size:13.5px;line-height:1.62;
-  user-select:none;background:#080b18;border-right:1px solid var(--line);min-width:42px}
+.gutter{flex:none;padding:12px 8px 12px 12px;text-align:right;color:var(--gutink);font-size:13.5px;line-height:1.62;
+  user-select:none;background:var(--gut);border-right:1px solid var(--line);min-width:42px}
 .gutter i{display:block;font-style:normal;transition:.2s;border-radius:3px}
-.gutter i.err{color:#fff;background:var(--bad);margin-right:-4px;padding-right:4px}
-.gutter i.cur{color:#04231e;background:var(--acc2);margin-right:-4px;padding-right:4px}
+.gutter i.err{color:var(--onacc);background:var(--bad);margin-right:-4px;padding-right:4px}
+.gutter i.cur{color:var(--onacc2);background:var(--acc2);margin-right:-4px;padding-right:4px}
 .edit-scroll{position:relative;flex:1;min-width:0}
 .edit-scroll pre.hl,.edit-scroll textarea{
   margin:0;padding:12px 14px;font-size:13.5px;line-height:1.62;
@@ -503,24 +558,24 @@ button{font-family:inherit}
   caret-color:var(--acc2);resize:none;outline:none;display:block;overflow:hidden}
 .edit-scroll textarea::selection{background:rgba(124,92,255,.45);color:transparent}
 
-.runbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:#0f1428;border-top:1px solid var(--line)}
+.runbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--bar);border-top:1px solid var(--line)}
 .runbar .sp{flex:1}
 .runbar .tip,.hintbox .tip{font-size:11.5px;color:var(--faint)}
 .rbtn{border:0;border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:.15s;
-  background:linear-gradient(135deg,#00c9a7,var(--acc2));color:#04231e}
+  background:linear-gradient(135deg,var(--acc2-lt),var(--acc2));color:var(--onacc2)}
 .rbtn:hover{transform:translateY(-1px)}
 .rbtn.sec{background:var(--panel2);color:var(--soft);border:1px solid var(--line2)}
 .rbtn.sec:hover{color:var(--ink);border-color:var(--acc)}
-.rbtn.check{background:linear-gradient(135deg,var(--acc),#9d7bff);color:#fff}
+.rbtn.check{background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc)}
 
 .side{display:flex;flex-direction:column;gap:12px}
 .pane{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden;box-shadow:var(--sh)}
-.pane .ph{padding:8px 13px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line);background:#141a33}
+.pane .ph{padding:8px 13px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line);background:var(--panehead)}
 .pane .pb{padding:12px 14px;font-size:13.5px}
 .console{background:var(--sunken);min-height:90px;max-height:280px;overflow:auto;white-space:pre-wrap;
-  color:#cfe3ff;font-size:13px;line-height:1.55;padding:12px 14px;font-family:'JetBrains Mono',monospace}
+  color:var(--outink);font-size:13px;line-height:1.55;padding:12px 14px;font-family:'JetBrains Mono',monospace}
 .console .empty,.varlist .empty{color:var(--faint);font-style:italic;font-family:'Inter'}
-canvas.stage{display:block;width:100%;height:auto;background:#070a16}
+canvas.stage{display:block;width:100%;height:auto;background:var(--stage)}
 .varlist{display:flex;flex-direction:column;gap:5px}
 .varrow{display:flex;gap:8px;align-items:baseline;font-size:13px}
 .varrow b{color:var(--acc2);font-weight:600;font-family:'JetBrains Mono'}
@@ -529,17 +584,17 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 
 .msg{border-radius:13px;padding:14px 16px;margin-top:12px;font-size:14.5px;display:none;animation:pop .28s cubic-bezier(.2,1.2,.4,1)}
 .msg.show{display:block}
-.msg.ok{background:rgba(61,220,132,.12);border:1px solid #1e5c3c;color:#8ff0bb}
-.msg.bad{background:rgba(255,107,107,.1);border:1px solid #6b2a2a;color:#ffb3b3}
-.msg.warn{background:rgba(255,171,61,.1);border:1px solid #6b4d1f;color:#ffd79a}
+.msg.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
+.msg.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
+.msg.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
 .msg b{display:block;margin-bottom:4px;font-size:15px}
 .msg .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-family:'JetBrains Mono';font-size:12.5px}
-.msg .cmp div{background:rgba(0,0,0,.3);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.msg .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .msg .cmp u{display:block;text-decoration:none;font-family:'Inter';font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
 @keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
 
 .hintbox{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.hintout{margin-top:10px;display:none;background:rgba(255,171,61,.09);border:1px solid #6b4d1f;border-radius:12px;padding:12px 15px;font-size:14px;color:#ffd79a}
+.hintout{margin-top:10px;display:none;background:var(--warnbg);border:1px solid var(--warnline);border-radius:12px;padding:12px 15px;font-size:14px;color:var(--warnink)}
 .hintout.show{display:block}
 .hintout .step{margin-bottom:7px}
 .hintout .step:last-child{margin-bottom:0}
@@ -548,19 +603,19 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 .pager .sp{flex:1}
 
 .ref{display:flex;flex-wrap:wrap;gap:6px}
-.ref span{font-family:'JetBrains Mono';font-size:11.5px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:#9fb4ff;cursor:pointer}
+.ref span{font-family:'JetBrains Mono';font-size:11.5px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--codeink);cursor:pointer}
 .ref span:hover{border-color:var(--acc2);color:var(--acc2)}
 
 /* ---------- победа ---------- */
-.win{position:fixed;inset:0;z-index:100;background:rgba(6,8,18,.82);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px}
+.win{position:fixed;inset:0;z-index:100;background:var(--scrim);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px}
 .win.show{display:grid}
-.wincard{background:linear-gradient(160deg,#1d2350,#16304a);border:1px solid var(--line2);border-radius:24px;
-  padding:32px 34px;max-width:440px;width:100%;text-align:center;box-shadow:0 30px 80px -20px #000;
+.wincard{background:var(--modal);border:1px solid var(--line2);border-radius:24px;
+  padding:32px 34px;max-width:440px;width:100%;text-align:center;box-shadow:var(--shbig);
   animation:pop .4s cubic-bezier(.2,1.3,.4,1)}
 .wincard .big{font-size:52px;line-height:1;margin-bottom:6px}
 .wincard h2{margin:0 0 6px;font-size:26px}
 .wincard p{margin:0 0 16px;color:var(--soft)}
-.winstars{font-size:38px;letter-spacing:6px;color:#39406e;margin-bottom:10px}
+.winstars{font-size:38px;letter-spacing:6px;color:var(--dot);margin-bottom:10px}
 .winstars b{color:var(--gold);font-weight:400;display:inline-block;animation:star .5s cubic-bezier(.2,1.4,.4,1) backwards}
 .winstars b:nth-child(1){animation-delay:.05s}.winstars b:nth-child(2){animation-delay:.2s}.winstars b:nth-child(3){animation-delay:.35s}
 @keyframes star{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
@@ -568,8 +623,8 @@ canvas.stage{display:block;width:100%;height:auto;background:#070a16}
 .winrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99;display:none}
 
-.toast{position:fixed;right:16px;bottom:16px;z-index:120;background:linear-gradient(150deg,#1d2350,#16304a);
-  border:1px solid var(--gold);border-radius:14px;padding:12px 16px;box-shadow:0 16px 40px -12px #000;
+.toast{position:fixed;right:16px;bottom:16px;z-index:120;background:var(--modal);
+  border:1px solid var(--gold);border-radius:14px;padding:12px 16px;box-shadow:var(--shbig);
   display:flex;gap:10px;align-items:center;font-size:14px;animation:pop .35s cubic-bezier(.2,1.3,.4,1);transition:.4s}
 .toast.out{opacity:0;transform:translateY(10px)}
 .toast .em{font-size:24px}
@@ -605,17 +660,17 @@ body.focus .lede{display:none}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
 /* ---------- задание «найди и почини ошибку» ---------- */
-.bugcard{background:linear-gradient(150deg,#3a2030,#2b1c36);border:1px solid #6d2f42;border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
-.bugcard h3{margin:0 0 6px;font-size:17px;color:#ffb3c6}
-.bugcard p{margin:0 0 9px;color:#f0d8e0}
-.bugcard code{background:rgba(0,0,0,.32);border:1px solid #6d2f42;border-radius:5px;padding:1px 6px;font-size:.86em;color:#ffd0dc}
-.bugcard .bugtip{display:block;font-size:12.5px;color:#a98a9a}
+.bugcard{background:var(--bugbg);border:1px solid var(--bugline);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.bugcard h3{margin:0 0 6px;font-size:17px;color:var(--bugink)}
+.bugcard p{margin:0 0 9px;color:var(--ink)}
+.bugcard code{background:var(--sunk2);border:1px solid var(--bugline);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--bugink)}
+.bugcard .bugtip{display:block;font-size:12.5px;color:var(--soft)}
 .demo .bar .hintx.errx{color:var(--warn)}
 
 /* ---------- задание «вынеси вердикт» (тип review в «Ты и ИИ») ---------- */
-.claimcard{background:linear-gradient(150deg,#1d2b4a,#1a2340);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
-.claimcard h3{margin:0 0 6px;font-size:17px;color:#9fd0ff}
-.claimcard p{margin:0 0 9px;color:#e2e9ff;font-size:16.5px}
+.claimcard{background:var(--claimbg);border:1px solid var(--line2);border-radius:var(--r);padding:16px 20px;margin:0 0 14px}
+.claimcard h3{margin:0 0 6px;font-size:17px;color:var(--claimink)}
+.claimcard p{margin:0 0 9px;color:var(--ink);font-size:16.5px}
 .claimcard .claimtip{display:block;font-size:12.5px;color:var(--faint)}
 .verdict{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:18px 20px;margin:16px 0 0}
 .verdict h3{margin:0 0 6px;font-size:18px}
@@ -640,7 +695,7 @@ body.focus .lede{display:none}
 .proof{margin:12px 0 4px;text-align:left;font-size:13.5px;color:var(--soft)}
 .proof u{display:block;text-decoration:none;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
 .proof .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;font-family:'JetBrains Mono';font-size:12.5px}
-.proof .cmp div{background:rgba(0,0,0,.32);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.proof .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .proof .cmp u{margin-bottom:5px}
 @media (max-width:620px){
   .proof .cmp{grid-template-columns:1fr}
@@ -680,7 +735,7 @@ body.focus .lede{display:none}
 .admjson{width:100%;height:150px;background:var(--sunken);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;color:var(--soft);font-size:12px;line-height:1.5;resize:vertical;margin:8px 0 4px}
 .admjson:focus{outline:none;border-color:var(--acc)}
 .admlist{display:flex;flex-direction:column;gap:6px;margin-top:9px}
-.admlrow{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.22);border-radius:9px;padding:7px 11px;flex-wrap:wrap}
+.admlrow{display:flex;align-items:center;gap:10px;background:var(--sunk2);border-radius:9px;padding:7px 11px;flex-wrap:wrap}
 .admlrow b{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink)}
 .admlrow span{font-size:12px;color:var(--soft);margin-right:auto}
 .admlbl input[type=text],.admlbl input[type=password]{width:190px;font-family:'JetBrains Mono',monospace;font-size:13px}
@@ -711,7 +766,7 @@ body.focus .lede{display:none}
 }
 
 /* ---------- шпаргалка: оверлей поверх любого экрана ---------- */
-.sheet{position:fixed;inset:0;z-index:60;background:rgba(6,8,20,.72);
+.sheet{position:fixed;inset:0;z-index:60;background:var(--scrim);
   display:flex;align-items:flex-start;justify-content:center;padding:40px 16px}
 .sheet[hidden]{display:none}
 .sheetbox{width:min(760px,100%);max-height:calc(100vh - 80px);display:flex;flex-direction:column;
@@ -822,7 +877,7 @@ body.focus .lede{display:none}
 .certcard .rbtn{flex:none}
 
 /* ---------- сертификат: лист бумаги поверх страницы ---------- */
-.cert{position:fixed;inset:0;z-index:70;background:rgba(6,8,20,.78);
+.cert{position:fixed;inset:0;z-index:70;background:var(--scrim);
   display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto}
 .cert[hidden]{display:none}
 .certwrap{width:min(760px,100%)}
@@ -885,7 +940,7 @@ body.focus .lede{display:none}
 .pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .pic{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
 .pic.broken{border-color:var(--bad)}
-.picart{display:block;width:100%;background:#070a16}
+.picart{display:block;width:100%;background:var(--stage)}
 .picbody{padding:10px 13px;display:flex;flex-direction:column;gap:3px}
 .picbody b{font-size:15px}
 .picsub{font-size:12px;color:var(--faint)}
@@ -916,12 +971,12 @@ body.focus .lede{display:none}
 .keybar{display:none}
 @media (max-width:640px){
   .keybar{display:flex;flex-wrap:wrap;gap:5px;padding:7px 8px;
-    background:#0b1020;border-top:1px solid var(--line)}
+    background:var(--res);border-top:1px solid var(--line)}
   .kbk{flex:none;min-width:34px;border:1px solid var(--line2);background:var(--panel2);
     color:var(--ink);border-radius:8px;padding:7px 0;font-family:'JetBrains Mono',monospace;
     font-size:14px;font-weight:700;cursor:pointer}
   .kbk.wide{min-width:96px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--soft)}
-  .kbk:active{background:var(--acc);color:#fff;border-color:transparent}
+  .kbk:active{background:var(--acc);color:var(--onacc);border-color:transparent}
 }
 
 /* ---------- разбор кода: что можно сделать чище ---------- */
@@ -971,3 +1026,132 @@ body.focus .lede{display:none}
 /* ---------- свои задания: форма автора ---------- */
 .tsteps{margin:8px 0 0;padding-left:20px;color:var(--soft)}
 .tsteps li{margin-bottom:4px}
+
+/* ============================================================
+   ПОМОЩЬ: кнопка «?» и всплывающее окно
+   Раньше объяснение «что это за экран и что тут делать» жило только на
+   Главном и только пока не пройден первый урок. Дальше ребёнок оставался
+   один на один с экраном, которого никогда не видел: «Визуализатор»,
+   «Повторить», «Своё задание» — по названию не догадаешься.
+   Теперь ответ всегда на одном месте — «?» в правом верхнем углу, — и текст
+   в нём МЕНЯЕТСЯ вместе с экраном. Окно всплывает поверх, а не уводит со
+   страницы: уход с урока стёр бы написанный код.
+   ============================================================ */
+.tbtn.help{font-weight:700}
+.tbtn.help.on{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* На большом экране обёртка НЕ ловит указатель: иначе прозрачное затемнение
+   съедало бы прокрутку колесом, и страница за окном «замирала» бы — это
+   читается как поломка. Закрытие по клику мимо держится на обработчике в
+   js/app.js. На телефоне наоборот: затемнение видно, оно ловит палец и
+   закрывает — кнопка «✕» слишком мелкая для пальца. */
+.helpwrap{position:fixed;inset:0;z-index:90;display:none;pointer-events:none}
+.helpwrap.show{display:block}
+.helpwrap .helpveil{position:absolute;inset:0;background:transparent}
+.helpwrap .helpbox{pointer-events:auto}
+@media (max-width:640px){
+  .helpwrap{pointer-events:auto}
+  .helpwrap .helpveil{background:var(--scrim)}
+}
+
+.helpbox{position:absolute;top:64px;right:16px;width:min(400px,calc(100vw - 32px));
+  max-height:min(78vh,720px);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line2);border-radius:18px;
+  box-shadow:var(--shbig);overflow:hidden;animation:pop .2s cubic-bezier(.2,1.2,.4,1)}
+@media (max-width:640px){
+  .helpbox{top:auto;bottom:0;right:0;left:0;width:100%;max-height:82vh;
+    border-radius:18px 18px 0 0}
+}
+.helphead{display:flex;align-items:center;gap:10px;padding:13px 15px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}
+.helphead b{font-family:'Fredoka','Inter',sans-serif;font-size:16px;flex:1;min-width:0}
+.helpbody{padding:15px 17px 18px;overflow:auto;font-size:14px;line-height:1.6}
+.helpbody h4{margin:16px 0 6px;font-size:13.5px;color:var(--acc2);
+  letter-spacing:.04em;text-transform:uppercase;font-family:'Inter',sans-serif}
+.helpbody h4:first-child{margin-top:0}
+.helpbody p{margin:0 0 8px;color:var(--soft)}
+.helpbody ul,.helpbody ol{margin:0 0 8px;padding-left:19px;color:var(--soft)}
+.helpbody li{margin-bottom:5px}
+.helpbody b{color:var(--ink)}
+.helpbody kbd{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--sunken);
+  border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--ink)}
+.helprow{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.helprow .rbtn{flex:1 1 auto}
+
+/* переключатель темы внутри помощи: три кнопки, светится текущая */
+.themepick{display:flex;gap:6px;margin:2px 0 4px}
+.themepick button{flex:1;border:1px solid var(--line2);background:var(--panel2);color:var(--soft);
+  border-radius:10px;padding:9px 6px;font:600 13px/1.2 'Inter',sans-serif;cursor:pointer;transition:.15s}
+.themepick button:hover{color:var(--ink);border-color:var(--acc)}
+.themepick button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* «?» рядом с заголовком раздела: тот же ответ, но не надо искать глазами
+   кнопку в шапке. Ставится в правый верхний угол блока. */
+.qm{flex:none;width:22px;height:22px;padding:0;border-radius:50%;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--soft);
+  font:700 12px/1 'Inter',sans-serif;cursor:pointer;transition:.15s}
+.qm:hover{background:var(--acc);color:var(--onacc);border-color:transparent}
+
+/* ============================================================
+   ПОИСК УРОКА
+   Сто уроков лежат в пяти мирах по двадцать. Пока помнишь номер — всё
+   хорошо, а «где было про словари» ищется только глазами по пяти экранам.
+   Строка поиска стоит прямо в блоке «Уроки» и ищет по названию, подзаголовку
+   и номеру; закрытые уроки показываются тоже — но видно, что они закрыты.
+   ============================================================ */
+.lsearch{display:flex;align-items:center;gap:9px;margin:0 0 14px}
+.lsearch input{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--line2);
+  border-radius:11px;background:var(--panel);color:var(--ink);padding:10px 13px;font:14px/1.4 'Inter',sans-serif}
+.lsearch input:focus{outline:none;border-color:var(--acc)}
+.lsearch input::placeholder{color:var(--faint)}
+.lsfound{display:flex;flex-direction:column;gap:6px;margin:0 0 16px}
+.lsrow{display:flex;align-items:center;gap:11px;text-align:left;width:100%;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  color:inherit;font:inherit;padding:9px 13px;cursor:pointer;transition:.14s}
+.lsrow:hover{border-color:var(--acc);background:var(--panel2)}
+.lsrow .lsnum{flex:none;font:700 12px/1 'JetBrains Mono',monospace;color:var(--faint);min-width:30px}
+.lsrow .lstitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.lsrow .lssub{flex:none;font-size:12px;color:var(--faint)}
+.lsrow.lock{opacity:.55;cursor:default}
+.lsrow.lock:hover{border-color:var(--line);background:var(--panel)}
+.lsnone{margin:0 0 16px;color:var(--faint);font-size:13.5px}
+@media (max-width:620px){ .lsrow .lssub{display:none} }
+
+/* ============================================================
+   КНОПКА «НАВЕРХ»
+   Экран урока и портфолио бывают в несколько экранов длиной, а кнопки
+   «дальше» живут внизу — но «к списку уроков» и панель наверху. Кнопка
+   появляется только когда прокрутили больше экрана, иначе она мусор.
+   ============================================================ */
+.toTop{position:fixed;right:16px;bottom:16px;z-index:55;width:42px;height:42px;
+  border-radius:50%;border:1px solid var(--line2);background:var(--panel);color:var(--soft);
+  font-size:16px;cursor:pointer;box-shadow:var(--sh);display:none;transition:.15s}
+.toTop.show{display:block}
+.toTop:hover{color:var(--ink);border-color:var(--acc)}
+body.focus .toTop{display:none}
+@media print{ .toTop,.helpwrap{display:none !important} }
+
+/* ============================================================
+   ЭКРАН «КАК ПОЛЬЗОВАТЬСЯ»
+   Всплывающая помощь отвечает на «что тут прямо сейчас», а это — полная
+   инструкция: устройство сайта, из чего состоит урок, откуда берутся
+   звёзды, что делать, когда не получается, и отдельный кусок для родителя.
+   ============================================================ */
+.guide .card{margin-bottom:14px}
+.guidesteps{counter-reset:g;list-style:none;margin:0;padding:0}
+.guidesteps li{position:relative;padding:0 0 14px 42px;counter-increment:g}
+.guidesteps li:last-child{padding-bottom:0}
+.guidesteps li::before{content:counter(g);position:absolute;left:0;top:0;
+  width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  background:var(--acc);color:var(--onacc);font:700 14px/1 'Inter',sans-serif}
+.guidesteps b{display:block;margin-bottom:2px}
+.guidesteps span{color:var(--soft);font-size:14px}
+.keylist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin:0}
+.keyrow{display:flex;align-items:baseline;gap:10px;font-size:13.5px;color:var(--soft)}
+.keyrow kbd{flex:none;font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--sunken);
+  border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--ink)}
+.iconlist{display:flex;flex-direction:column;gap:9px;margin:0}
+.iconrow{display:flex;align-items:flex-start;gap:11px;font-size:14px}
+.iconrow .ic{flex:none;width:34px;text-align:center;font-size:18px}
+.iconrow span{color:var(--soft)}
+.iconrow b{color:var(--ink)}

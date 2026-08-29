@@ -11,10 +11,26 @@
      извне», а неразрешимая ссылка это обещание бы нарушила. -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
-<meta name="theme-color" content="#0d1020">
+<meta name="theme-color" content="#f1f4fc" id="themecolor">
 <meta name="apple-mobile-web-app-title" content="Кодоквест">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
+<!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
+     это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
+     страница успеет нарисоваться в теме по умолчанию. Скрипт крошечный и
+     нарочно не зависит ни от чего: он обязан отработать даже если app.js
+     не загрузился. -->
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem("kodokvest_theme");
+    if (t !== "dark" && t !== "light") t = "light";
+    document.documentElement.setAttribute("data-theme", t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute("content", t === "dark" ? "#0d1020" : "#f1f4fc");
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -41,6 +57,12 @@
     <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖</button>
     <button class="tbtn who" id="btn-who" title="Профиль">👤</button>
     <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">⛶</button>
+    <!-- Пятый инструмент, и он же единственный, которому разрешено быть
+         пятым: «?» отвечает на вопрос «что это за экран и что тут делать»
+         для ЛЮБОГО экрана. Раньше такой ответ был только на Главном и только
+         у новичка — дальше ребёнок оставался один на один с «Визуализатором»
+         и «Повторить», о которых по названию не догадаешься. -->
+    <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog">?</button>
   </div>
 </div>
 
@@ -73,6 +95,19 @@
     </div>
   </div>
 </div>
+
+<!-- Помощь всплывает ПОВЕРХ страницы по той же причине, что и шпаргалка:
+     чаще всего она нужна посреди урока, а уход со страницы стёр бы код. -->
+<div class="helpwrap" id="helpwrap">
+  <div class="helpveil" id="helpveil"></div>
+  <div class="helpbox" role="dialog" aria-label="Подсказка">
+    <div class="helphead"><b id="helptitle">Подсказка</b>
+      <button class="rbtn sec" id="helpclose" title="Закрыть (Esc)">✕</button></div>
+    <div class="helpbody" id="helpbody"></div>
+  </div>
+</div>
+
+<button class="toTop" id="totop" title="Наверх" aria-label="Наверх">↑</button>
 
 <canvas id="confetti"></canvas>
 
