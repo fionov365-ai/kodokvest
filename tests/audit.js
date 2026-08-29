@@ -19,6 +19,7 @@ eval(read("js/curriculum.js"));
 ["content/world1.js","content/world2.js","content/world3.js","content/world4.js","content/world5.js"]
   .forEach(f => eval(read(f)));
 eval(read("js/cheatsheet.js"));
+eval(read("js/projects.js"));   /* шаги проектов проверяются наравне с уроками */
 
 const MP = global.MiniPy || window.MiniPy;
 const noTags = x => String(x || "").replace(/<[^>]*>/g, " ");
@@ -212,6 +213,36 @@ section("5. Условие обещает не то, что печатает э�
       hit(`урок ${l.num} ${l.id}: условие обещает «${o}», а эталон печатает ` +
           свои.slice(0, 2).map(x => `«${x}»`).join(" и "));
     });
+  }));
+  /* Шаги проектов — те же задания с требованиями и эталоном, просто живут
+     не в CURRICULUM, а в PROJECTS. Первая версия проверки о них не знала. */
+  const ПРОЕКТЫ = global.PROJECTS || (global.window && global.window.PROJECTS) || [];
+  if (!ПРОЕКТЫ.length) hit("проекты не загрузились — проверка шагов проектов ничего не проверила");
+  ПРОЕКТЫ.forEach(p => (p.steps || []).forEach((st, i) => {
+    const код = String(st.solution || "");
+    if (!код.trim() || СЛУЧАЙ.test(код)) return;
+    let вывод = "";
+    try {
+      const r = MP.run(код, { turtle: new MP.Turtle(), sources: st.files || {},
+                              files: st.data ? JSON.parse(JSON.stringify(st.data)) : {},
+                              stdin: st.stdin || [] });
+      if (r.error) return;
+      вывод = r.output || "";
+    } catch(e){ return; }
+    const строки = вывод.split("\n").map(x => x.trim()).filter(Boolean);
+    const сырое = [st.goal].concat(st.list || []).join(" ⟂ ");
+    (сырое.match(/<code>([\s\S]*?)<\/code>/g) || [])
+      .map(x => x.replace(/<[^>]*>/g, "").replace(/^\n+|\n+$/g, "").trim())
+      .forEach(o => {
+        const m = /^(.{2,40}?):\s*(\S.*)$/.exec(o);
+        if (!m) return;
+        const ключ = m[1].trim(), обещано = m[2].trim();
+        const свои = строки.filter(x => x.indexOf(ключ + ":") === 0);
+        if (!свои.length) return;
+        if (свои.some(x => x.slice(ключ.length + 1).trim() === обещано)) return;
+        hit(`проект ${p.id} шаг ${i + 1}: условие обещает «${o}», а эталон печатает ` +
+            свои.slice(0, 2).map(x => `«${x}»`).join(" и "));
+      });
   }));
   if (total === before) clean("обещанные строки совпадают с выводом эталонов");
 }

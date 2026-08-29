@@ -605,6 +605,25 @@ const shownBefore = new Set();
    это литерал, и его надо писать через &lt; и &gt;. */
 const РАЗМЕТКА = new Set(["b", "/b", "i", "/i", "code", "/code", "br",
                           "u", "/u", "em", "/em", "strong", "/strong"]);
+/* Поля с КОДОМ пропускаем: там теги — это данные для python3, а не разметка
+   страницы (урок про Flask возвращает настоящий <h1>, и так и надо). */
+const ПОЛЯ_С_КОДОМ = ["code", "solution", "starter", "demo", "show",
+                      "files", "data", "truth", "probe"];
+function разметкаВнутри(объект, путь, сказать){
+  if (объект == null) return;
+  if (typeof объект === "string"){
+    (объект.match(/<\/?[a-zA-Z][^>]*>/g) || []).forEach(tag => {
+      const имя = tag.replace(/[<>]/g, "").split(/[\s/]/).filter(Boolean)[0];
+      if (!РАЗМЕТКА.has((tag[1] === "/" ? "/" : "") + имя)) сказать(путь, tag);
+    });
+    return;
+  }
+  if (typeof объект !== "object") return;
+  Object.keys(объект).forEach(k => {
+    if (ПОЛЯ_С_КОДОМ.indexOf(k) >= 0) return;
+    разметкаВнутри(объект[k], путь + "." + k, сказать);
+  });
+}
 CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
   const body = (CONTENT["world" + w.n] || {})[l.id];
   if (!body) return;
@@ -622,6 +641,19 @@ CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
     });
   });
 }));
+
+/* То же самое для всего, что ВНЕ ста уроков: разминки, «Ты и ИИ», проекты,
+   игры, шпаргалка. Проверка сначала смотрела только уроки — и пропустила
+   четыре требования в проекте пятого мира, где сырые <h1>, <li> и <html>
+   браузер исполнял вместо того, чтобы показать. */
+[["разминка", global.WARMUPS, "id"], ["«Ты и ИИ»", global.AILAB, "id"],
+ ["проект", global.PROJECTS, "id"], ["игра", global.GAMES, "id"]].forEach(([что, список, ключ]) => {
+  (список || []).forEach(x => разметкаВнутри(x, x[ключ] || "?", (путь, tag) =>
+    say(`[разметка] ${что} ${путь}: тег ${tag} браузер исполнит, а не покажет — пиши &lt; и &gt;`)));
+});
+(global.CHEATSHEET || []).forEach(g => (g.items || []).forEach(it =>
+  разметкаВнутри(it, it.id || "?", (путь, tag) =>
+    say(`[разметка] шпаргалка ${путь}: тег ${tag} браузер исполнит, а не покажет — пиши &lt; и &gt;`))));
 
 let auditLessons = 0;
 
