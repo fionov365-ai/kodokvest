@@ -594,6 +594,35 @@ const AUDIT_METHODS = ["append","pop","remove","insert","index","count","sort","
   "readlines","readline","strftime","copy","isdigit","isalpha","format","rstrip","lstrip","splitlines","zfill"];
 const noTags = x => String(x || "").replace(/<[^>]*>/g, " ");
 const shownBefore = new Set();
+/* ---------- разметка в тексте урока ----------
+   Текст урока попадает на страницу как HTML. Значит любой тег в нём браузер
+   исполнит, а не покажет. Для <b> и <code> это и нужно, а вот <p> в условии
+   урока про Flask — это КОД, который ребёнок обязан вернуть из функции:
+   «вернуть «<p>Ошибки: »». Браузер съедал тег, и ребёнок видел условие без
+   того самого, что от него требовалось. Так было в трёх уроках пятого мира.
+
+   Правило: в тексте урока разрешены только теги оформления. Всё остальное —
+   это литерал, и его надо писать через &lt; и &gt;. */
+const РАЗМЕТКА = new Set(["b", "/b", "i", "/i", "code", "/code", "br",
+                          "u", "/u", "em", "/em", "strong", "/strong"]);
+CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
+  const body = (CONTENT["world" + w.n] || {})[l.id];
+  if (!body) return;
+  const куски = [["лид", body.lede], ["цель", body.task && body.task.goal],
+                 ["симптом", body.task && body.task.symptom]]
+    .concat((body.theory || []).map((t, i) => ["теория " + (i + 1), t.h + " " + t.p + " " + (t.showNote || "")]))
+    .concat(((body.task && body.task.list) || []).map((x, i) => ["требование " + (i + 1), x]))
+    .concat(((body.task && body.task.hints) || []).map((x, i) => ["подсказка " + (i + 1), x]));
+  куски.forEach(([где, txt]) => {
+    if (!txt) return;
+    (String(txt).match(/<\/?[a-zA-Z][^>]*>/g) || []).forEach(tag => {
+      const имя = tag.replace(/[<>]/g, "").split(/[\s/]/).filter(Boolean)[0];
+      if (!РАЗМЕТКА.has((tag[1] === "/" ? "/" : "") + имя))
+        say(`[разметка] урок ${l.num} ${l.id}, ${где}: тег ${tag} браузер исполнит, а не покажет — пиши &lt; и &gt;`);
+    });
+  });
+}));
+
 let auditLessons = 0;
 
 CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {

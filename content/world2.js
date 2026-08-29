@@ -219,8 +219,11 @@ CONTENT.world2 = {
       "Внутри f-строки кавычки должны быть другими, чем снаружи: f\"Имя: {hero['имя']}\" — снаружи двойные, внутри одиночные."
     ],
     check:{ kind:"output",
-      needCode:["{"],
-      needMsg:"Словарь нужно построить и заполнить, а не напечатать готовые строки." }
+      /* Не "{" — эта скобка уже стоит в заготовке (hero = {}), и требование
+         ничем не подкреплено: можно было оставить пустой словарь и напечатать
+         три готовые строки. Просим то, чем словарь ДЕЙСТВИТЕЛЬНО наполняют. */
+      needCode:["hero[", ".get("],
+      needMsg:"Словарь нужно наполнить самому — через hero[\"ключ\"] = значение, — а ману взять через get с заменой на ноль. Напечатать три готовые строки не считается." }
   }
 },
 
@@ -415,7 +418,7 @@ CONTENT.world2 = {
       demo:'nums = [1, 2, 3, 4]\n\nsquares = []\nfor n in nums:\n    squares.append(n * n)\nprint(squares)\n\nprint([n * n for n in nums])' },
     { h:"Внутри можно что угодно",
       p:"Слева от <code>for</code> — что кладём в новый список. Там помещается любое выражение: вызов метода, длина, f-строка. В примере одним включением вычищают лишние пробелы, другим считают длину уже чистой строки.",
-      demo:'сырое = ["  кот  ", " пёс", "ёж "]\nprint([с.strip() for с in сырое])\nprint([len(с.strip()) for с in сырое])\nprint([f"«{с.strip()}»" for с in сырое])' },
+      demo:'raw = ["  кот  ", " пёс", "ёж "]\nprint([w.strip() for w in raw])\nprint([len(w.strip()) for w in raw])\nprint([f"«{w.strip()}»" for w in raw])' },
     { h:"Из range — самое частое",
       p:"Так делают готовый список чисел, когда он нужен целиком, а не по одному.",
       demo:'print([n for n in range(5)])\nprint([n * 10 for n in range(1, 6)])\nprint(sum([n * n for n in range(1, 5)]))' },
@@ -458,7 +461,7 @@ CONTENT.world2 = {
       demo:'nums = [1, 2, 3, 4]\nprint(["чёт" if n % 2 == 0 else "нечёт" for n in nums])\nprint([n for n in nums if n % 2 == 0])' },
     { h:"Когда нужен не список, а ответ да или нет",
       p:"Иногда вопрос другой: не «какие подходят», а «есть ли хоть один» или «все ли». Сделай включение из условий — получится список из <code>True</code> и <code>False</code>, — а потом спроси <code>any</code> (хотя бы один) или <code>all</code> (все). Это те же <code>or</code> и <code>and</code> из Мира 1, только сразу по всему списку.",
-      demo:'оценки = [5, 3, 4, 2]\nпроверки = [о >= 3 for о in оценки]\nprint(проверки)\nprint(any(проверки), all(проверки))\nprint(any([о == 2 for о in оценки]))' }
+      demo:'marks = [5, 3, 4, 2]\nchecks = [m >= 3 for m in marks]\nprint(checks)\nprint(any(checks), all(checks))\nprint(any([m == 2 for m in marks]))' }
   ],
   task: {
     type:"code",
@@ -540,13 +543,13 @@ CONTENT.world2 = {
           "Первая строка: список, отсортированный по очкам от большего к меньшему",
           "Вторая: имя победителя",
           "Третья: имена, отсортированные по длине имени",
-          "Все три — через <code>lambda</code>"],
-    starter:'players = [("Аня", 12), ("Боря", 30), ("Вика", 7), ("Гоша", 21)]\n\n# три строки, в каждой lambda\n',
-    solution:'players = [("Аня", 12), ("Боря", 30), ("Вика", 7), ("Гоша", 21)]\nprint(sorted(players, key=lambda p: p[1], reverse=True))\nprint(max(players, key=lambda p: p[1])[0])\nprint(sorted([p[0] for p in players], key=lambda name: len(name)))',
+          "Первые две — через <code>lambda</code>. А третьей <code>lambda</code> не нужна: длину умеет считать сама <code>len</code>, её и передай признаком — <code>key=len</code>"],
+    starter:'players = [("Аня", 12), ("Боря", 30), ("Вика", 7), ("Гоша", 21)]\n\n# три строки\n',
+    solution:'players = [("Аня", 12), ("Боря", 30), ("Вика", 7), ("Гоша", 21)]\nprint(sorted(players, key=lambda p: p[1], reverse=True))\nprint(max(players, key=lambda p: p[1])[0])\nprint(sorted([p[0] for p in players], key=len))',
     hints:[
       "Очки — второй элемент пары, то есть p[1]: sorted(players, key=lambda p: p[1], reverse=True)",
       "Победитель: max(players, key=lambda p: p[1]) даёт пару целиком, а имя из неё — [0].",
-      "Для третьей строки сначала достань имена включением [p[0] for p in players], а потом отсортируй их по длине."
+      "Для третьей строки сначала достань имена включением [p[0] for p in players], а потом отсортируй их по длине: key=len, без lambda."
     ],
     check:{ kind:"output", needCode:["lambda"], needMsg:"В этом задании нужна именно lambda." }
   }

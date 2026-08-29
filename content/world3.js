@@ -73,7 +73,7 @@ CONTENT.world3 = {
       "Вернуть ровно три значения одним return",
       "Разница — это максимум минус минимум",
       "В основной программе распакуй результат в три переменные low, high, spread",
-      "Печатать нужно так: «мин 1, макс 9, разброс 8»"
+      "Печатать нужно так: <code>мин 1, макс 9, разброс 8</code>"
     ],
     starter:'def bounds(nums):\n    return 0\n\n\nnums = [4, 9, 1, 7, 3]\nlow = 0\nhigh = 0\nspread = 0\nprint(f"мин {low}, макс {high}, разброс {spread}")\n',
     solution:'def bounds(nums):\n    return min(nums), max(nums), max(nums) - min(nums)\n\n\nnums = [4, 9, 1, 7, 3]\nlow, high, spread = bounds(nums)\nprint(f"мин {low}, макс {high}, разброс {spread}")\n',
@@ -291,12 +291,12 @@ CONTENT.world3 = {
   theory: [
     { h:"Два файла вместо одного",
       p:"Слева над редактором появились вкладки: <code>main.py</code> и <code>tools.py</code>. Программа запускается всегда из <code>main.py</code>. Второй файл сам по себе ничего не делает — он ждёт, когда его подключат.",
-      files:{ "tools.py": 'def clean(text):\n    return text.strip().lower()\n' },
-      demo:'import tools\n\nprint(tools.clean("  ПрИвЕт  "))' },
+      files:{ "tools.py": 'def greet(name):\n    return "привет, " + name\n' },
+      demo:'import tools\n\nprint(tools.greet("Аня"))' },
     { h:"import берёт модуль целиком",
-      p:"После <code>import tools</code> все функции из файла доступны через точку: <code>tools.clean(...)</code>. Имя модуля — это имя файла без <code>.py</code>.",
-      files:{ "tools.py": 'PREFIX = "→ "\n\n\ndef clean(text):\n    return text.strip().lower()\n\n\ndef shout(text):\n    return PREFIX + text.upper()\n' },
-      demo:'import tools\n\nprint(tools.clean("  ДА  "))\nprint(tools.shout("подъём"))\nprint(tools.PREFIX + "и переменные тоже")' },
+      p:"После <code>import tools</code> все функции из файла доступны через точку: <code>tools.greet(...)</code>. Имя модуля — это имя файла без <code>.py</code>.",
+      files:{ "tools.py": 'PREFIX = "→ "\n\n\ndef greet(name):\n    return "привет, " + name\n\n\ndef frame(text):\n    return PREFIX + text + " " + PREFIX\n' },
+      demo:'import tools\n\nprint(tools.greet("Аня"))\nprint(tools.frame("важное"))\nprint(tools.PREFIX + "и переменные тоже")' },
     { h:"from ... import берёт по имени",
       p:"Если нужна одна функция, её забирают отдельно — тогда точка не нужна. Так короче, но по коду труднее понять, откуда взялось имя.",
       files:{ "tools.py": 'def trim(text):\n    return text.strip()\n\n\ndef repeat(text, times):\n    return text * times\n' },

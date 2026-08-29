@@ -210,10 +210,7 @@ CONTENT.world1 = {
       demo:'age = 12\nname = "Кодер"\nprint(f"Меня зовут {name}, мне {age} лет")' },
     { h:"Внутри скобок можно считать",
       p:"Python сначала посчитает то, что в фигурных скобках, и только потом вставит результат в текст.",
-      demo:'age = 12\nprint(f"Через 3 года мне будет {age + 3}")\nprint(f"Длина слова: {len(\'черепаха\')}")' },
-    { h:"Что умеют строки",
-      p:"У текста есть свои команды. Они пишутся через точку после переменной.",
-      demo:'word = "питон"\nprint(word.upper())\nprint(len(word))\nprint(word[0])\nprint("а-б-в".split("-"))' }
+      demo:'age = 12\nprint(f"Через 3 года мне будет {age + 3}")\nprint(f"Длина слова: {len(\'черепаха\')}")' }
   ],
   task: {
     type:"code",
@@ -310,12 +307,12 @@ CONTENT.world1 = {
     { h:"Четыре главные команды",
       p:"<code>forward(n)</code> — проползти n шагов вперёд. <code>right(a)</code> и <code>left(a)</code> — повернуться на a градусов. <code>color(\"red\")</code> — сменить цвет следа.",
       demo:'forward(120)\nright(90)\nforward(80)' },
-    { h:"Цвет и толщина",
-      p:"Цвета: red, blue, green, yellow, orange, purple, pink, cyan, white, gray. Толщина — от 1 до 20.",
-      demo:'color("cyan")\nwidth(8)\nforward(100)\ncolor("orange")\nright(90)\nforward(100)' },
-    { h:"Поднять карандаш",
-      p:"<code>penup()</code> — идти, не рисуя. <code>pendown()</code> — снова рисовать. Так делают пунктир и переносят черепашку в другое место.",
-      demo:'forward(40)\npenup()\nforward(30)\npendown()\nforward(40)' }
+    { h:"Куда смотрит черепашка",
+      p:"В начале она стоит в центре холста и смотрит <b>вправо</b>. <code>right(a)</code> поворачивает её на месте по часовой стрелке, <code>left(a)</code> — против. Два поворота по 90° — и она едет назад, откуда пришла.",
+      demo:'forward(80)\nright(90)\nforward(80)\nright(90)\nforward(80)' },
+    { h:"Цвет и толщина ставятся сверху",
+      p:"<code>color(\"yellow\")</code> и <code>width(5)</code> настраивают перо для всего, что нарисуется <b>дальше</b>. Поэтому их пишут в начале программы. Какие бывают цвета, насколько толстым бывает перо и как поднять карандаш над бумагой — весь следующий урок.",
+      demo:'color("cyan")\nwidth(8)\nforward(100)\nright(120)\nforward(100)' }
   ],
   task: {
     type:"code",
@@ -386,7 +383,7 @@ CONTENT.world1 = {
   task: {
     type:"code",
     goal:"Выведи таблицу умножения на 7.",
-    list:["Десять строк: от <code>7 x 1 = 7</code> до <code>7 x 10 = 70</code>","Обязательно циклом, а не десятью print","Формат строго: <code>7 x 1 = 7</code> (пробелы вокруг x и =)"],
+    list:["Десять строк: от <code>7 x 1 = 7</code> до <code>7 x 10 = 70</code>","Обязательно циклом, а не десятью print","Формат строго: <code>7 x 1 = 7</code> — пробелы вокруг знаков, и <b>x здесь латинская</b>: русская «х» выглядит так же, но Python и проверка их различают"],
     starter:'for i in range(1, 11):\n    # замени это на строку таблицы\n    print(i)\n',
     solution:'for i in range(1, 11):\n    print(f"7 x {i} = {7 * i}")',
     hints:[
