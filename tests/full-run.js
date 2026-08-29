@@ -3253,6 +3253,68 @@ function checkEncoding(){
       if (!/Звёзды/i.test(htitle.textContent))
         bad("[помощь] кружок у «Достижений» открыл не про звёзды: " + htitle.textContent);
     }
+    /* --- подсказка не должна называть кнопок, которых нет ---
+       Проверка написана после того, как в текстах нашлись выдуманные кнопки:
+       визуализатор объяснялся через «⏭» и «⏮», которых там нет (там «Вперёд ▶»
+       и «◀ Назад»), а игра — через «▶ Запустить» вместо «▶ Новая игра».
+       Такую ошибку не поймает ни один тест на работу кода: код исправен,
+       врёт текст. Поэтому берём из подсказки всё, что она берёт в кавычки
+       и что похоже на кнопку, и требуем, чтобы такая кнопка на экране была. */
+    const ЗНАКИ = /[▶⏭⏮✓↩⬇💡🧹🔍↺🖼]/;
+    const ЭКРАНЫ = {
+      home:    function(){ g.screenWorlds(); },
+      world:   function(){ g.screenWorld(1); },
+      lesson:  function(){ g.openLesson("print-first"); },
+      train:   function(){ g.screenTrain(); },
+      sand:    function(){ g.screenSandbox(); },
+      game:    function(){ g.openGame(GAMES[0].id); },
+      today:   function(){ g.screenToday(); },
+      warm:    function(){ g.screenWarmups(); },
+      warmup:  function(){ g.openWarmup(WARMUPS[0].id); },
+      review:  function(){ g.screenReview(); },
+      ai:      function(){ g.screenAILab(); },
+      folio:   function(){ g.screenFolio(); },
+      mytasks: function(){ g.screenMyTasks(); },
+      /* У визуализатора кнопки перемотки появляются только ПОСЛЕ запуска —
+         это и заставило дописать в подсказку первый шаг «Показать по шагам». */
+      viz:     function(){ g.screenViz(); const b = doc.querySelector('[data-role="viz"]'); if (b) b.click(); },
+      guide:   function(){ g.screenGuide(); }
+    };
+    /* «games» — список игр, а его подсказка рассказывает, что будет ВНУТРИ
+       игры. Это не ошибка, а единственное такое место; кнопки самой игры
+       проверяются на ключе «game». */
+    for (const key of Object.keys(ЭКРАНЫ)){
+      ЭКРАНЫ[key](); await tick();
+      const кнопки = [...doc.querySelectorAll("button")]
+        .map(b => b.textContent.replace(/\s+/g, " ").trim()).join(" ┆ ");
+      const цитаты = (g.HELP[key].h.match(/«[^»]{2,44}»/g) || [])
+        .map(x => x.slice(1, -1).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim())
+        .filter(x => ЗНАКИ.test(x));
+      цитаты.forEach(q => {
+        if (кнопки.indexOf(q) < 0)
+          bad("[помощь] на экране «" + key + "» нет кнопки «" + q + "», а подсказка её называет");
+      });
+    }
+
+    /* --- числа в подсказках должны совпадать с кодом --- */
+    /* Сроки повтора и запас щитов написаны словами в двух местах: в коде
+       константой и в подсказке текстом. Разъехались — ребёнку соврали. */
+    const срокиТекст = g.HELP.review.h;
+    if (g.REVIEW_STEPS.join(",") !== "2,7,21")
+      bad("[помощь] сроки повтора поменялись (" + g.REVIEW_STEPS.join(",") +
+          ") — перепиши текст в HELP.review и в инструкции");
+    if (!/через два дня/.test(срокиТекст) || !/через неделю/.test(срокиТекст))
+      bad("[помощь] в подсказке «Повторить» названы не те сроки");
+    if (g.SHIELD_EVERY !== 5 || g.SHIELD_MAX !== 2)
+      bad("[помощь] правила щита поменялись — перепиши текст в HELP.today");
+    if (!/каждые пять дней/.test(g.HELP.today.h))
+      bad("[помощь] в подсказке «Сегодня» назван не тот срок появления щита");
+    /* Последний ранг: раньше в тексте стояло «Новичок → … → Мастер»,
+       а Мастер шестой из восьми. */
+    const последнийРанг = g.RANKS[g.RANKS.length - 1][1];
+    if (g.HELP.stars.h.indexOf(последнийРанг) < 0)
+      bad("[помощь] в подсказке про звёзды нет последнего ранга «" + последнийРанг + "»");
+
     /* Esc закрывает помощь, а не роняет её поверх шпаргалки */
     const esc = new w.KeyboardEvent("keydown", { key:"Escape", bubbles:true });
     w.dispatchEvent(esc);
