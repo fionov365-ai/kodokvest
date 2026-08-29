@@ -288,7 +288,12 @@ button{font-family:inherit}
 .card p{margin:0 0 10px;max-width:70ch}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
-.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink)}
+/* pre-wrap, а не обычный перенос: внутри <code> в условиях иногда стоят
+   ПРОБЕЛЫ, которые и есть смысл примера — выравнивание таблицы по ширине
+   (урок 40) или «лишние пробелы снаружи и внутри» (урок 7). HTML схлопывает
+   их в один, и урок показывал ребёнку не то, что печатает программа.
+   Переносить строки при этом всё равно можно — за это отвечает «-wrap». */
+.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink);white-space:pre-wrap}
 .demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
 
 .note{border-left:3px solid var(--acc2);background:rgba(0,224,184,.07);padding:13px 16px;border-radius:0 12px 12px 0;margin:0 0 18px;font-size:14.5px;color:var(--soft)}
@@ -9681,8 +9686,8 @@ CONTENT.world2 = {
     type:"code",
     goal:"Сделай десять бросков кубика и посчитай сумму.",
     list:["Десять строк вида <code>Бросок 1: 4</code> — нумерация с единицы, значение от 1 до 6",
-          "Последняя, одиннадцатая строка: <code>Всего: 37</code> — сумма всех бросков",
-          "Числа будут свои — проверка смотрит на форму и на то, что сумма сходится"],
+          "Последняя, одиннадцатая строка: <code>Всего:</code> и сумма всех бросков",
+          "Конкретные числа не важны: проверка смотрит на форму строк и на то, что сумма сходится с бросками"],
     starter:'total = 0\n\nfor i in range(1, 11):\n    # брось кубик, добавь в total, напечатай строку\n    pass\n\nprint(f"Всего: {total}")',
     solution:'total = 0\n\nfor i in range(1, 11):\n    value = randint(1, 6)\n    total += value\n    print(f"Бросок {i}: {value}")\n\nprint(f"Всего: {total}")',
     hints:[
@@ -9790,7 +9795,7 @@ CONTENT.world2 = {
     type:"code",
     goal:"Босс-уровень: отчёт по базе героев.",
     list:["База уже в переменной <code>db</code> — четыре героя с полями имя, сила, жив",
-          "Сначала таблица <b>живых</b> героев по убыванию силы: <code>Вика    9</code> (имя выровнено по ширине 8)",
+          "Сначала таблица <b>живых</b> героев по убыванию силы: <code>Вика     9</code> (имя дополнено пробелами до ширины 8)",
           "Потом <code>Живых: 3 из 4</code>",
           "Потом <code>Средняя сила живых: 7.0</code> — округли до одного знака",
           "Потом <code>Сильнейший: Вика</code>"],
