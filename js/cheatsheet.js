@@ -74,11 +74,11 @@ window.CHEATSHEET = [
       what:"проверяет, есть ли кусок внутри строки",
       code:'print("код" in "кодоквест", "ёж" in "кодоквест")' },
     { id:"str-slice", sig:"строка[2:5]", lesson:"text-work",
-      what:"кусок строки: с 2-го знака по 5-й, не включая 5-й",
-      code:'с = "кодоквест"\nprint(с[0], с[:3], с[-4:])' },
+      what:"кусок строки: от номера 2 до номера 5, причём 5 не включается. Номера с нуля",
+      code:'с = "кодоквест"\nprint(с[2:5])\nprint(с[0], с[:3], с[-4:])' },
     { id:"startswith", sig:".startswith() и .endswith()", lesson:"str-methods",
       what:"проверяет начало и конец строки",
-      code:'print("отчёт.txt".endswith(".txt"))' }
+      code:'print("отчёт.txt".startswith("отчёт"))\nprint("отчёт.txt".endswith(".txt"))' }
   ]
 },
 {
@@ -95,7 +95,7 @@ window.CHEATSHEET = [
       code:'print(2 ** 10)' },
     { id:"int-str", sig:"int(), str(), float()", lesson:"text-vs-num",
       what:"превращает одно в другое. «2» и 2 — разные вещи",
-      code:'print(int("7") + 1)\nprint(str(7) + "1")' },
+      code:'print(int("7") + 1)\nprint(str(7) + "1")\nprint(float("2.5") + 0.5)' },
     { id:"round", sig:"round(число, знаков)", lesson:"math",
       what:"округляет. Без второго числа — до целого",
       code:'print(round(3.14159, 2), round(2.5), round(3.5))' },
@@ -336,7 +336,7 @@ window.CHEATSHEET = [
       what:"берёт из модуля одну вещь, чтобы писать её без точки",
       code:'from math import sqrt\nprint(sqrt(81))' },
     { id:"random", sig:"random.randint(a, b)", lesson:"random",
-      what:"случайное целое от a до b включительно. Каждый запуск разное",
+      what:"случайное целое от a до b включительно. На настоящем компьютере каждый запуск разный, а в тренажёре числа нарочно повторяются — иначе задания было бы не проверить",
       code:'import random\nprint(random.randint(1, 6) in range(1, 7))' },
     { id:"choice", sig:"random.choice(список)", lesson:"random",
       what:"случайный элемент списка",
