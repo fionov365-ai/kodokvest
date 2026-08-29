@@ -991,6 +991,16 @@ function hlWatched(code, watch, cols){
 }
 
 /* ================= холст ================= */
+/* Цвет доски берём из стилей, а не пишем числом второй раз: раньше в CSS
+   стоял один цвет, а холст заливался другим — до первого рисунка доска была
+   одного цвета, после запуска становилась другого. Один источник правды. */
+function boardColor(){
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue("--board");
+    if (v && v.trim()) return v.trim();
+  } catch(e){}
+  return "#070a16";
+}
 function drawTurtle(canvas, turtle, progress){
   if (!canvas || !turtle) return;
   canvas._lastTurtle = turtle;
@@ -1005,7 +1015,7 @@ function drawTurtle(canvas, turtle, progress){
   }
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = "#070a16"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = boardColor(); ctx.fillRect(0,0,W,H);
   ctx.strokeStyle = "rgba(60,72,130,.28)"; ctx.lineWidth = 1;
   for (var gx = 0; gx <= W; gx += 40){ ctx.beginPath(); ctx.moveTo(gx+.5,0); ctx.lineTo(gx+.5,H); ctx.stroke(); }
   for (var gy = 0; gy <= H; gy += 40){ ctx.beginPath(); ctx.moveTo(0,gy+.5); ctx.lineTo(W,gy+.5); ctx.stroke(); }
