@@ -8012,21 +8012,59 @@ function helpRender(){
   if (s) s.onclick = function(){ closeHelp(); openSheet(); };
   body.scrollTop = 0;
 }
+/* Кто открыл помощь — чтобы вернуть фокус туда же при закрытии. Без этого
+   тот, кто ходит с клавиатуры, после Esc оказывается в начале страницы и
+   заново пробегает всю панель, чтобы вернуться туда, где читал. */
+var helpOpener = null;
+/* Что внутри окна можно поймать табом. Порядок — документный, его даёт сам
+   querySelectorAll. Проверки на видимость тут нарочно нет: в окне помощи
+   ничего не прячется, а `offsetParent` не работает в проверках (там нет
+   раскладки) — фильтр по нему молча выключил бы всю ловушку фокуса. */
+function helpFocusable(){
+  var box = document.querySelector(".helpbox");
+  if (!box) return [];
+  return [].filter.call(box.querySelectorAll("button, a[href], input, [tabindex]:not([tabindex='-1'])"),
+    function(el){ return !el.disabled; });
+}
 function openHelp(key){
   var el = document.getElementById("helpwrap");
   if (!el) return;
   helpKey = key || null;
   helpRender();
+  helpOpener = document.activeElement;
   el.classList.add("show");
   var b = document.getElementById("btn-help");
-  if (b) b.classList.add("on");
+  if (b){ b.classList.add("on"); b.setAttribute("aria-expanded", "true"); }
+  /* Фокус уводим на само окно, а не на первую кнопку: диктор прочитает
+     заголовок окна и текст, а не «Закрыть». */
+  var box = el.querySelector(".helpbox");
+  if (box && box.focus) try { box.focus(); } catch(e){}
 }
 function closeHelp(){
   var el = document.getElementById("helpwrap");
+  var was = !!el && el.classList.contains("show");
   if (el) el.classList.remove("show");
   var b = document.getElementById("btn-help");
-  if (b) b.classList.remove("on");
+  if (b){ b.classList.remove("on"); b.setAttribute("aria-expanded", "false"); }
+  /* Возвращаем фокус тому, кто открывал, — но только если он ещё на странице:
+     кружок «?» живёт внутри экрана и мог исчезнуть при перерисовке. */
+  if (was && helpOpener && document.contains(helpOpener) && helpOpener.focus){
+    try { helpOpener.focus(); } catch(e){}
+  }
+  helpOpener = null;
 }
+/* Пока помощь открыта, Tab ходит ВНУТРИ окна и не убегает на страницу за ним.
+   Выход один и он написан прямо в окне: Esc (и он же возвращает фокус назад). */
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Tab" || !helpIsOpen()) return;
+  var list = helpFocusable();
+  if (!list.length) return;
+  var first = list[0], last = list[list.length - 1];
+  var box = document.querySelector(".helpbox");
+  if (!box.contains(document.activeElement)){ e.preventDefault(); return first.focus(); }
+  if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+});
 function toggleHelp(){ if (helpIsOpen()) closeHelp(); else openHelp(null); }
 /* Кружок «?» у заголовка. Разметку пишем одной функцией, чтобы кружки
    везде выглядели одинаково и вели себя одинаково. */

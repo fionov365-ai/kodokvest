@@ -62,7 +62,7 @@
          для ЛЮБОГО экрана. Раньше такой ответ был только на Главном и только
          у новичка — дальше ребёнок оставался один на один с «Визуализатором»
          и «Повторить», о которых по названию не догадаешься. -->
-    <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog">?</button>
+    <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog" aria-expanded="false" aria-label="Подсказка про этот экран">?</button>
   </div>
 </div>
 
@@ -100,7 +100,10 @@
      чаще всего она нужна посреди урока, а уход со страницы стёр бы код. -->
 <div class="helpwrap" id="helpwrap">
   <div class="helpveil" id="helpveil"></div>
-  <div class="helpbox" role="dialog" aria-label="Подсказка">
+  <!-- tabindex="-1" на самом окне: при открытии фокус уводится СЮДА, а не на
+       «✕», иначе экранный диктор первым делом читает «Закрыть» вместо того,
+       что это вообще за окно. -->
+  <div class="helpbox" role="dialog" aria-modal="true" aria-labelledby="helptitle" tabindex="-1">
     <div class="helphead"><b id="helptitle">Подсказка</b>
       <button class="rbtn sec" id="helpclose" title="Закрыть (Esc)">✕</button></div>
     <div class="helpbody" id="helpbody"></div>

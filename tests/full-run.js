@@ -3296,6 +3296,40 @@ function checkEncoding(){
       });
     }
 
+    /* --- помощь с клавиатуры ---
+       Тот, кто ходит табом, должен попасть в окно, обойти его по кругу и
+       выйти по Esc ровно туда, откуда пришёл. Без возврата фокуса Esc
+       выбрасывает в начало страницы, и всю панель приходится пробегать
+       заново. Проверка держит и это, и aria-expanded на кнопке. */
+    g.screenWorlds(); await tick();
+    const hb = doc.getElementById("btn-help");
+    hb.focus();
+    hb.click(); await tick();
+    const box = doc.querySelector(".helpbox");
+    if (doc.activeElement !== box)
+      bad("[помощь] при открытии фокус не встал на окно: " + (doc.activeElement || {}).className);
+    if (hb.getAttribute("aria-expanded") !== "true")
+      bad("[помощь] кнопка не сказала диктору, что окно открыто");
+    const focusables = g.HELP && doc.querySelectorAll(".helpbox button");
+    if (!focusables.length) bad("[помощь] в окне нечего поймать табом");
+    else {
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      const tab = (shift) => box.dispatchEvent(
+        new w.KeyboardEvent("keydown", { key:"Tab", shiftKey:!!shift, bubbles:true }));
+      last.focus(); tab();
+      if (doc.activeElement !== first)
+        bad("[помощь] таб с последней кнопки убежал из окна");
+      first.focus(); tab(true);
+      if (doc.activeElement !== last)
+        bad("[помощь] Shift+Tab с первой кнопки убежал из окна");
+    }
+    w.dispatchEvent(new w.KeyboardEvent("keydown", { key:"Escape", bubbles:true }));
+    if (g.helpIsOpen()) bad("[помощь] Esc не закрыл окно");
+    if (doc.activeElement !== hb)
+      bad("[помощь] после Esc фокус не вернулся на кнопку «?»: " + (doc.activeElement || {}).id);
+    if (hb.getAttribute("aria-expanded") !== "false")
+      bad("[помощь] кнопка не сказала диктору, что окно закрылось");
+
     /* --- числа в подсказках должны совпадать с кодом --- */
     /* Сроки повтора и запас щитов написаны словами в двух местах: в коде
        константой и в подсказке текстом. Разъехались — ребёнку соврали. */
@@ -3350,6 +3384,29 @@ function checkEncoding(){
     g.themeSet("light");
     if (doc.documentElement.getAttribute("data-theme") !== "light")
       bad("[оформление] светлая тема не вернулась");
+
+    /* --- печать: на бумагу уходит только сертификат ---
+       Держится это на ОДНОМ правиле `body>*{display:none}`, а не на списке
+       того, что надо спрятать. Разница принципиальная: со списком каждый
+       новый оверлей (окно помощи, кнопка «наверх») пришлось бы в него
+       дописывать, а забытый вылез бы на распечатку у ребёнка. */
+    const печать = (cssText.match(/@media\s+print\s*\{([\s\S]*?)\n\}/) || [])[1] || "";
+    if (!печать) bad("[печать] в стилях нет блока @media print");
+    if (!/body\s*>\s*\*\s*\{[^}]*display\s*:\s*none/.test(печать))
+      bad("[печать] печать больше не прячет всё разом — новый оверлей вылезет на бумагу");
+    if (!/body\s*>\s*\.cert:not\(\[hidden\]\)/.test(печать))
+      bad("[печать] сертификат не возвращается на печать");
+    if (!/\.certbar\s*\{[^}]*display\s*:\s*none/.test(печать))
+      bad("[печать] кнопки «Распечатать» и «Закрыть» уедут на бумагу");
+    /* Кроме сертификата на печати не должно всплывать ничего: любое другое
+       `display:block` внутри блока — это ещё один элемент на листе. */
+    const возвраты = (печать.match(/^\s*([^{}\n]+)\{[^}]*display\s*:\s*(block|flex|grid)/gm) || [])
+      .map(x => x.split("{")[0].trim());
+    возвраты.forEach(sel => {
+      if (!/\.cert/.test(sel))
+        bad("[печать] на бумагу возвращается не сертификат: " + sel);
+    });
+
     if (problems.length === p0) themeChecked++;
   }
 

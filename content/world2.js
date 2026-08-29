@@ -684,10 +684,11 @@ CONTENT.world2 = {
     goal:"Сделай отчёт по песне.",
     list:["Текст песни уже в переменной <code>song</code>",
           "<code>Строк: 4</code>",
-          "<code>Слов: 12</code> — всего слов во всех строках",
-          "<code>Разных: 10</code>",
+          "<code>Слов: 11</code> — всего слов во всех строках",
+          "<code>Разных: 9</code>",
           "<code>Самое частое: едем</code> — слово, встречающееся чаще всех",
-          "<code>Самая длинная строка: счастливые друзья</code> — строка с наибольшим числом букв"],
+          "<code>Самая длинная строка: мы едем едем едем</code> — строка с наибольшим числом букв. " +
+          "Самых длинных тут <b>две</b>, по 17 букв: <code>max</code> берёт ту, что выше"],
     starter:'song = """мы едем едем едем\nв далёкие края\nхорошие соседи\nсчастливые друзья"""\n\nlines = song.split("\\n")\n\n# пять строк отчёта\n',
     solution:'song = """мы едем едем едем\nв далёкие края\nхорошие соседи\nсчастливые друзья"""\n\nlines = song.split("\\n")\nall_words = []\nfor line in lines:\n    all_words.extend(line.split())\n\ncounts = {}\nfor w in all_words:\n    counts[w] = counts.get(w, 0) + 1\n\nprint(f"Строк: {len(lines)}")\nprint(f"Слов: {len(all_words)}")\nprint(f"Разных: {len(set(all_words))}")\nprint(f"Самое частое: {max(counts, key=counts.get)}")\nprint(f"Самая длинная строка: {max(lines, key=len)}")',
     hints:[

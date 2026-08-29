@@ -1143,7 +1143,10 @@ body.focus .lede{display:none}
 .toTop.show{display:block}
 .toTop:hover{color:var(--ink);border-color:var(--acc)}
 body.focus .toTop{display:none}
-@media print{ .toTop,.helpwrap{display:none !important} }
+/* Прятать кнопку при печати отдельным правилом не надо: в @media print уже
+   стоит `body>*{display:none}`, и оно закрывает всё, что лежит прямо в body,
+   — включая эту кнопку и окно помощи. Дубль только сбивал бы с толку:
+   казалось бы, что список надо пополнять при каждом новом элементе. */
 
 /* ============================================================
    ЭКРАН «КАК ПОЛЬЗОВАТЬСЯ»
