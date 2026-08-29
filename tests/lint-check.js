@@ -120,6 +120,45 @@ setTimeout(function(){
   })();
   console.log(`подключаемых файлов пропущено: ${skippedModules} — их имена читает другой файл`);
 
+  /* ---------- что из этого ребёнок ВООБЩЕ увидит ----------
+     Список выше прогоняется без гейтов (`all: true`) — там все находки,
+     включая те, что закрыты по прогрессу. Ребёнку же совет показывается,
+     только если урок из его гейта уже пройден. Разница большая: сырых
+     находок два десятка, а видимых — единицы.
+
+     Смотреть надо на строку «решение»: это код, который ребёнок пишет САМ,
+     и совет на нём означает, что курс ругает свой же правильный ответ.
+     Находка на «примере» слабее: пример попадает в редактор, только если
+     ребёнок нажал «→ В редактор», и советуют ему тогда про чужой код. */
+  const numOf = {};
+  CUR.forEach(wr => wr.lessons.forEach(l => { numOf[l.id] = l.num; }));
+  const видимые = [];
+  CUR.forEach(wr => wr.lessons.forEach(l => {
+    const b = (CONTENT["world" + wr.n] || {})[l.id];
+    if (!b || !b.task) return;
+    const need = ((b.task.check || {}).needCode || []).join(" ").toLowerCase();
+    const коды = [["решение", b.task.solution]]
+      .concat((b.task.files || []).map(f => ["файл " + f.name, f.solution]))
+      .concat((b.theory || []).map((t, i) => ["пример " + (i + 1), t.demo]));
+    коды.forEach(([где, code]) => {
+      if (!code || !String(code).trim()) return;
+      let found = null;
+      try { found = g.lintCode(code, { all: true }); } catch(e){ return; }
+      (found || []).forEach(f => {
+        if (f.after && (numOf[f.after] || 999) > l.num) return;   /* совет ещё закрыт */
+        if (f.conflict && need.indexOf(f.conflict) >= 0) return;
+        видимые.push({ num:l.num, id:l.id, где, title:f.title });
+      });
+    });
+  }));
+  const наРешениях = видимые.filter(x => x.где === "решение" || x.где.indexOf("файл") === 0);
+  console.log("\nЧто ребёнок увидит на эталоне урока (гейты учтены):");
+  видимые.sort((a, b) => a.num - b.num).forEach(x =>
+    console.log(`  урок ${String(x.num).padStart(3)} ${x.id.padEnd(14)} [${x.где}] ${x.title}`));
+  console.log(`\nвидимых советов: ${видимые.length}, из них на СВОЁМ коде ребёнка: ${наРешениях.length}`);
+  if (наРешениях.length)
+    console.log("  ↑ вот это и смотреть глазами: курс советует поправить свой же правильный ответ");
+
   /* обратная проверка: на грязной программе правило ОБЯЗАНО сработать */
   console.log("\nПроверка наоборот — нарочно грязные программы:");
   let silent = 0;
