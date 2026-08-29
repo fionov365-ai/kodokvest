@@ -436,8 +436,8 @@ CONTENT.world3 = {
       "Список ответов и печать не трогай, count() и готовое число не годятся",
       "Помогает приём из урока: напечатать внутри цикла то, что сравнивается"
     ],
-    starter:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if a == 5:\n        right = right + 1\n\nprint("Верных:", right)\n',
-    solution:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if int(a) == 5:\n        right = right + 1\n\nprint("Верных:", right)\n',
+    starter:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if a == 5:\n        right += 1\n\nprint("Верных:", right)\n',
+    solution:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if int(a) == 5:\n        right += 1\n\nprint("Верных:", right)\n',
     hints:[
       "Вставь в цикл строку print(repr(a), a == 5) и посмотри, что сравнивается с чем",
       "В списке лежат строки — «5» в кавычках. Строка никогда не равна числу, об этом было в теории",

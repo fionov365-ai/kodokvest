@@ -48,5 +48,20 @@ for (const c of cases) {
   }
 }
 console.log('\npass ' + pass + ' / fail ' + fail);
+/* Число программ корпуса написано словами в README. Расходится — значит
+   документация врёт о самой себе, а заметить это иначе нельзя: тест зелёный,
+   текст устарел. Сверяем прямо здесь, где число и считается. */
+const readmeBad = (function(){
+  const fs2 = require('fs'), path2 = require('path');
+  const readme = fs2.readFileSync(path2.join(__dirname, '..', 'README.md'), 'utf8');
+  const m = /сейчас в нём (\d+) программ/.exec(readme);
+  if (!m) { console.log('README: не найдена строка про размер корпуса'); return true; }
+  const total = pass + fail;
+  if (+m[1] !== total){
+    console.log('README говорит «' + m[1] + ' программ», а в корпусе ' + total + ' — поправь README.md');
+    return true;
+  }
+  return false;
+})();
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
-process.exit(fail ? 1 : 0);
+process.exit(fail || readmeBad ? 1 : 0);

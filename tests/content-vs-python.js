@@ -245,4 +245,18 @@ console.log("\nсверено с python3: " + checked + " (из них разм�
             ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ", шпаргалка: " + sheetChecked +
             "), пропущено как черепашка и случайность: " + skipped);
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
-process.exit(bad ? 1 : 0);
+/* Число сверок названо в README словами. Расходится — значит документация
+   врёт о самой себе, а заметить это иначе нельзя: тест зелёный, текст устарел.
+   Сверяем здесь, где число и считается. */
+const readmeBad = (function(){
+  const fs2 = require("fs"), path2 = require("path");
+  const readme = fs2.readFileSync(path2.join(__dirname, "..", "README.md"), "utf8");
+  const m = /сейчас (\d+) сверк/.exec(readme);
+  if (!m){ console.log("README: не найдена строка про число сверок"); return true; }
+  if (+m[1] !== checked){
+    console.log("README говорит «" + m[1] + " сверок», а их " + checked + " — поправь README.md");
+    return true;
+  }
+  return false;
+})();
+process.exit(bad || readmeBad ? 1 : 0);

@@ -10253,8 +10253,8 @@ CONTENT.world3 = {
       "Список ответов и печать не трогай, count() и готовое число не годятся",
       "Помогает приём из урока: напечатать внутри цикла то, что сравнивается"
     ],
-    starter:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if a == 5:\n        right = right + 1\n\nprint("Верных:", right)\n',
-    solution:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if int(a) == 5:\n        right = right + 1\n\nprint("Верных:", right)\n',
+    starter:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if a == 5:\n        right += 1\n\nprint("Верных:", right)\n',
+    solution:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if int(a) == 5:\n        right += 1\n\nprint("Верных:", right)\n',
     hints:[
       "Вставь в цикл строку print(repr(a), a == 5) и посмотри, что сравнивается с чем",
       "В списке лежат строки — «5» в кавычках. Строка никогда не равна числу, об этом было в теории",
@@ -14315,24 +14315,46 @@ function lintLongFunc(ast, out){
   });
 }
 
-/* ===== правило: три одинаковые строки =====
+/* ===== правило: повторяющийся кусок =====
    Это единственное правило по тексту, а не по дереву, и так и надо: речь
-   именно про повторение записи. Комментарии и пустые строки не считаем. */
+   именно про повторение записи. Комментарии и пустые строки не считаем.
+
+   Считаем ПОДРЯД ИДУЩИЕ повторы КУСКА, а не сколько раз строка встретилась
+   вообще. Разница не теоретическая: раньше правило ругалось на решения самого
+   курса, где повторение свернуть нельзя. В уроке 21 три `print(queue)` стоят
+   между тремя РАЗНЫМИ действиями со списком, в уроке 55 три `return
+   self.coins` лежат в разных методах — цикл там не при чём, и совет был
+   неправдой. А настоящий случай — «forward(120) / right(120)» три раза
+   подряд — кусок из двух строк, и он ловится.
+
+   У совета ребёнку нет права быть неправдой: правило, которое ошибается
+   на эталоне автора, ошибётся и на ребёнке. */
 function lintRepeat(code, out){
-  var lines = String(code).split("\n"), seen = {};
-  lines.forEach(function(ln, i){
+  var items = [];
+  String(code).split("\n").forEach(function(ln, i){
     var t = ln.trim();
-    if (t.length < 12 || t.charAt(0) === "#") return;
-    if (!seen[t]) seen[t] = { n:0, line:i + 1 };
-    seen[t].n++;
+    if (!t || t.charAt(0) === "#") return;
+    items.push({ t:t, line:i + 1 });
   });
-  Object.keys(seen).forEach(function(t){
-    if (seen[t].n < LINT_REPEAT_LINE) return;
-    out.push({ line:seen[t].line, after:"for-range", rank:5,
-      title:"Одна и та же строка " + seen[t].n + " раза",
-      why:"Повторение — работа для цикла: то, что меняется, положи в список и пройди по нему циклом. " +
-           "Тогда правка нужна в одном месте." });
-  });
+  var кусок = function(от, длина){
+    return items.slice(от, от + длина).map(function(x){ return x.t; }).join("\n");
+  };
+  for (var k = 1; k <= 4; k++){
+    for (var i = 0; i + k * LINT_REPEAT_LINE <= items.length; i++){
+      var block = кусок(i, k);
+      if (block.replace(/\n/g, "").length < 12) continue;
+      var n = 1;
+      while (кусок(i + n * k, k) === block) n++;
+      if (n < LINT_REPEAT_LINE) continue;
+      out.push({ line:items[i].line, after:"for-range", rank:5,
+        title: k === 1
+          ? "Одна и та же строка " + n + " раза"
+          : "Одни и те же " + k + " строки повторяются " + n + " раза",
+        why:"Повторение подряд — работа для цикла: то, что меняется, положи в список и пройди " +
+             "по нему циклом. Тогда правка нужна в одном месте." });
+      return;   /* одного такого совета достаточно */
+    }
+  }
 }
 
 /* Полный разбор. Возвращает список находок, уже отсортированный и урезанный;

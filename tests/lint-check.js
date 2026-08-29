@@ -111,6 +111,13 @@ setTimeout(function(){
     if (list.length > 4) console.log(`        …и ещё ${list.length - 4}`);
   });
   console.log(`\nпрограмм с находками: ${withFindings} из ${programs}`);
+  (function(){
+    /* Размер корпуса назван в README словами — сверяем, чтобы не разошлось. */
+    const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+    const m = /по всем (\d+) эталонн/.exec(readme);
+    if (m && +m[1] !== programs)
+      console.log(`README говорит «${m[1]} эталонных программ», а их ${programs} — поправь README.md`);
+  })();
   console.log(`подключаемых файлов пропущено: ${skippedModules} — их имена читает другой файл`);
 
   /* обратная проверка: на грязной программе правило ОБЯЗАНО сработать */
