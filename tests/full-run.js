@@ -1437,13 +1437,71 @@ function checkEncoding(){
         bad("[раскладка] объяснение не попало в свою колонку");
       if (!grid.querySelector(".lcol-work #studio"))
         bad("[раскладка] редактор не попал в рабочую колонку");
-      if (!grid.querySelector(".lcol-work .goal"))
-        bad("[раскладка] задание оторвано от редактора — ради этого всё и делалось");
+      /* задание стоит в конце ЧТЕНИЯ, а не в верстаке: решение фаундера */
+      if (!grid.querySelector(".lcol-read .goal"))
+        bad("[раскладка] задание уехало из колонки объяснения");
+      if (grid.querySelector(".lcol-work .goal"))
+        bad("[раскладка] задание попало в колонку редактора — его место в конце объяснения");
+      if (!grid.querySelector(".lcol-work .hintbox"))
+        bad("[раскладка] подсказки оторваны от редактора");
       if (grid.querySelector(".lcol-read #studio"))
         bad("[раскладка] редактор оказался в колонке объяснения");
       if (grid.classList.contains("one"))
         bad("[раскладка] обычный урок помечен как одноколоночный");
     }
+    /* Верстак обязан говорить, ЧТО делать: задание стоит в конце объяснения,
+       а редактор наверху справа, и без этой шапки правая колонка — код и
+       кнопки без единого слова о задаче. */
+    g.openLesson("vars"); await tick();
+    const wt = doc.getElementById("worktask");
+    const vbody = CONTENT.world1["vars"];
+    if (!wt) bad("[верстак] над редактором нет шапки с задачей");
+    else {
+      if (!doc.querySelector(".lcol-work #worktask"))
+        bad("[верстак] шапка задачи не в колонке редактора");
+      const head = (doc.querySelector(".wthead") || {}).textContent || "";
+      if (!/реша|чини/i.test(head))
+        bad("[верстак] заголовок не говорит ребёнку, что тут делать: " + JSON.stringify(head));
+      const line = (doc.querySelector(".wttxt") || {}).textContent || "";
+      if (!line.trim()) bad("[верстак] в шапке нет текста задачи");
+      if (/[<>]/.test(line)) bad("[верстак] в строку задачи попала разметка: " + line.slice(0, 60));
+      if (!doc.getElementById("wt-full").hidden)
+        bad("[верстак] полный текст задачи развёрнут сразу");
+      doc.getElementById("wt-open").click();
+      if (doc.getElementById("wt-full").hidden)
+        bad("[верстак] задача не разворачивается целиком");
+      if (doc.getElementById("wt-full").querySelectorAll("li").length !== vbody.task.list.length)
+        bad("[верстак] в развёрнутой задаче не все пункты");
+    }
+
+    /* «→ В редактор» затирал код задания молча. Теперь он обязан сказать об
+       этом и дать дорогу назад — иначе ребёнок остаётся с чужим кодом. */
+    {
+      const st0 = studioOf();
+      const wasStarter = st0.editor.getCode();
+      if (wasStarter !== vbody.task.starter)
+        bad("[пример] урок открылся не с заготовки задания");
+      const copy = doc.querySelector("[data-copy]");
+      if (!copy) bad("[пример] в объяснении нет кнопки «В редактор»");
+      else {
+        copy.click(); await tick();
+        const now = studioOf().editor.getCode();
+        if (now === wasStarter) bad("[пример] кнопка «В редактор» ничего не подставила");
+        const dn = doc.getElementById("draftnote");
+        if (!dn || dn.hidden)
+          bad("[пример] код задания подменён примером, а ребёнку об этом не сказали");
+        const back = doc.getElementById("backtask");
+        if (!back) bad("[пример] нет кнопки возврата к своей задаче");
+        else {
+          back.click(); await tick();
+          if (studioOf().editor.getCode() !== vbody.task.starter)
+            bad("[пример] возврат не вернул код задания");
+          if (!doc.getElementById("draftnote").hidden)
+            bad("[пример] подпись про пример осталась после возврата");
+        }
+      }
+    }
+
     /* уроки с рисованием идут одной колонкой: рядом с редактором холст */
     g.openLesson("turtle-first"); await tick();
     const drawGrid = doc.querySelector(".lessongrid");

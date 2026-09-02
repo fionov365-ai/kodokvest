@@ -969,6 +969,11 @@ var HLRE = new RegExp(
   "|\\b(" + KW + ")\\b" +
   "|\\b(" + BI + ")\\b", "g");
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+/* Текст задания без разметки — для строки в одну линию над редактором.
+   Теги вырезаем, а не экранируем: показать ребёнку «<code>» нельзя. */
+function stripTags(s){
+  return esc(String(s || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+}
 function hl(code){
   return esc(code).replace(HLRE, function(m, c, s, n, k, b){
     if (c) return '<span class="t-c">' + c + '</span>';
@@ -3266,17 +3271,36 @@ function openLesson(id){
        некуда. После правки редактор начинается на 606-м, задание стоит прямо
        над ним и держится липким, пока ребёнок пишет код.
 
+       Задание стоит В КОНЦЕ левой колонки, как и раньше, — решение фаундера
+       02.09.2026. Справа только верстак: редактор с подсказками. Он липкий и
+       потому стоит НАПРОТИВ ЛЮБОЙ карточки, какую ребёнок сейчас читает:
+       увидел пример — сразу пробуешь, не листая. Заодно щелчок в редактор
+       больше не прокручивает страницу: редактор и так в поле зрения.
+
        Правая колонка обязана влезать в экран целиком — иначе липкость не
-       спасает. Поэтому полоска «Что дальше» вынесена НАД сеткой: с ней
-       колонка 884px при экране 800, без неё 788. Показывается она всё равно
-       один раз в жизни, на первом уроке.
+       спасает. Без задания она стала ещё ниже: редактор 457px плюс подсказки
+       64 против экрана 800. Полоска «Что дальше» всё равно вынесена НАД
+       сеткой — она про кнопки редактора, а не про объяснение.
 
        На узком экране колонка одна и порядок прежний: объяснение, задание,
-       редактор. Там же работает липкая полоска задания, см. lessonPin(). */
+       редактор. Там же работает липкая полоска задания, см. taskPinShow(). */
     app.innerHTML = head + howbar +
       '<div class="lessongrid' + (body.draw ? ' one' : '') + '">' +
-        '<div class="lcol-read">' + theory + '</div>' +
-        '<div class="lcol-work">' + goal + bug +
+        '<div class="lcol-read">' + theory + goal + bug + '</div>' +
+        '<div class="lcol-work">' +
+          /* Задание живёт в конце объяснения, а верстак стоит наверху — значит
+             у верстака нет контекста: «непонятно, как решить задачу справа».
+             Поэтому над редактором висит строка с задачей: одной строкой,
+             тап разворачивает целиком. На узком экране её нет — там задание
+             и так стоит прямо над редактором. */
+          '<div class="worktask" id="worktask">' +
+            '<div class="wthead">' + (isFix ? "🔧 Здесь чинишь код" : "🎯 Здесь решаешь задачу") + '</div>' +
+            '<button class="wtmain" id="wt-open" aria-expanded="false" aria-controls="wt-full">' +
+              '<span class="wttxt">' + stripTags(body.task.goal) + '</span>' +
+              '<span class="wtchev">показать целиком ▾</span></button>' +
+            '<div class="wtfull" id="wt-full" hidden><p>' + body.task.goal + '</p><ul>' +
+              body.task.list.map(function(x){ return "<li>" + x + "</li>"; }).join("") + '</ul></div>' +
+          '</div>' +
           '<div class="draftnote" id="draftnote" hidden></div>' +
           '<div id="studio"></div>' + hints +
         '</div>' +
@@ -3321,6 +3345,28 @@ function openLesson(id){
       ? taskFiles.map(function(f){ return { name:f.name, code:f.code }; })
       : [{ name:"main.py", code: body.task.starter }];
 
+    /* Вернуть в редактор то, с чего задание начинается. Нужно в двух местах:
+       кнопка «Вернуть заготовку» у черновика и возврат после «→ В редактор».
+       Второго раньше не было вовсе: кнопка примера молча затирала код задания,
+       и ребёнок оставался с чужим кодом, не понимая, куда делось его. */
+    function backToTask(){
+      if (taskFiles && studio.editor.setFiles) studio.editor.setFiles(taskFiles);
+      else studio.editor.setCode(body.task.starter);
+      var dn0 = document.getElementById("draftnote");
+      if (dn0) dn0.hidden = true;
+      studio.editor.focusEditor();
+    }
+    /* Полоска над редактором: что там сейчас лежит и как вернуть своё. */
+    function noteDemo(){
+      var dn0 = document.getElementById("draftnote");
+      if (!dn0) return;
+      dn0.hidden = false;
+      dn0.innerHTML = '<span>📋 Сейчас в редакторе пример из объяснения, а не твоя задача.</span>' +
+        '<button class="rbtn sec" id="backtask">↩ Вернуть мою задачу</button>';
+      var bt = document.getElementById("backtask");
+      if (bt) bt.onclick = backToTask;
+    }
+
     var draft = draftGet(id);
     if (draft){
       draftApply(studio.editor, draft.files);
@@ -3332,10 +3378,7 @@ function openLesson(id){
         '<button class="rbtn sec" id="draftfresh">Вернуть заготовку</button>';
       document.getElementById("draftfresh").onclick = function(){
         draftDrop(id);
-        if (taskFiles && studio.editor.setFiles) studio.editor.setFiles(taskFiles);
-        else studio.editor.setCode(body.task.starter);
-        dnote.hidden = true;
-        studio.editor.focusEditor();
+        backToTask();
       };
     }
     /* набор текста откладывает сохранение: уход с экрана поймает claimScreen,
@@ -3358,7 +3401,10 @@ function openLesson(id){
       d.querySelector("[data-copy]").onclick = function(){
         studio.editor.setCode(body.theory[i].demo);
         studio.editor.focusEditor();
-        studio.scrollIntoView({ behavior:"smooth", block:"center" });
+        noteDemo();
+        /* проверка на метод — не суеверие: в jsdom его нет, и без неё падал бы
+           обработчик, а не прокрутка */
+        if (studio.scrollIntoView) studio.scrollIntoView({ behavior:"smooth", block:"center" });
       };
     });
 
@@ -3386,6 +3432,15 @@ function openLesson(id){
     app.querySelectorAll("[data-open]").forEach(function(b){
       b.onclick = function(){ openLesson(b.getAttribute("data-open")); };
     });
+
+    var wtOpen = document.getElementById("wt-open");
+    if (wtOpen) wtOpen.onclick = function(){
+      var wt = document.getElementById("worktask"), full = document.getElementById("wt-full");
+      var open = !wt.classList.contains("open");
+      wt.classList.toggle("open", open);
+      full.hidden = !open;
+      wtOpen.setAttribute("aria-expanded", open ? "true" : "false");
+    };
 
     refreshTop();
     /* полоска задания заводится ПОСЛЕ отрисовки: ей нужна живая карточка */

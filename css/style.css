@@ -1217,11 +1217,34 @@ body.focus .toTop{display:none}
   .lessongrid:not(.one){display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);
     gap:0 22px;align-items:start}
   .lessongrid:not(.one) .lcol-work{position:sticky;top:72px}
-  /* задание стоит первым в колонке — верхний отступ ему тут не нужен */
-  .lessongrid:not(.one) .lcol-work>.goal{margin-top:0}
+  /* колонки должны начинаться на одной высоте: слева первая карточка со
+     своим margin-bottom, справа редактор без верхнего отступа */
+  .lessongrid:not(.one) .lcol-work>#studio:first-child{margin-top:0}
   /* холста в этой колонке нет, а 540px на редактор и вывод рядом не хватит */
   .lessongrid:not(.one) .studio.split{grid-template-columns:1fr}
 }
+
+/* ---------- шапка верстака: «здесь решаешь задачу» ----------
+   Задание стоит в конце объяснения, а редактор — наверху справа. Без этой
+   шапки правая колонка это код и кнопки без единого слова о том, что вообще
+   надо сделать: фаундер так и сказал — «непонятно, как решить задачу справа».
+   Читает ребёнок, поэтому заголовок написан действием, а не термином. */
+.worktask{border:1px solid var(--line2);border-radius:var(--r);background:var(--goalbg);
+  padding:12px 15px;margin-bottom:12px}
+.wthead{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:5px}
+.wtmain{display:flex;align-items:baseline;gap:10px;width:100%;border:0;background:transparent;
+  color:var(--soft);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;padding:0}
+.wttxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.worktask.open .wttxt{white-space:normal;overflow:visible}
+.wtchev{flex:none;font-size:12px;color:var(--acc2);font-weight:600;white-space:nowrap}
+.worktask.open .wtchev{visibility:hidden}
+.wtfull{margin-top:8px;font-size:13.5px;color:var(--soft)}
+.wtfull[hidden]{display:none}
+.wtfull p{margin:0}
+.wtfull ul{margin:8px 0 0;padding-left:19px}
+/* На узком экране колонка одна, и задание стоит прямо над редактором —
+   вторая копия того же текста там только мешала бы. */
+@media (max-width:1039px){ .worktask{display:none} }
 
 /* ---------- липкая полоска задания (узкий экран) ---------- */
 /* Отступ сверху НЕ константа: на телефоне шапка складывается в две строки, и
