@@ -750,6 +750,23 @@ const seenCS = {};
     });
   }));
   notesChecked = checked;
+
+  /* Полнота. Разборы пишутся мирами, и без этой проверки новая карточка в уже
+     разобранном мире тихо осталась бы без разбора — а заметил бы это ребёнок,
+     а не мы. Мир попадает в список, когда разобран целиком. */
+  const NOTES_REQUIRED = [1];
+  NOTES_REQUIRED.forEach(n => {
+    const w = CURRICULUM.world(n);
+    if (!w) return say(`[разбор] мира ${n} нет, а разборы для него требуются`);
+    (w.lessons || []).forEach(l => {
+      const body = (CONTENT["world" + n] || {})[l.id];
+      if (!body) return;
+      (body.theory || []).forEach((t, i) => {
+        if (t.demo && !String(t.note || "").trim())
+          say(`[разбор] урок ${l.num} ${l.id}, карточка ${i + 1}: в Мире ${n} у примера нет разбора`);
+      });
+    });
+  });
 })();
 
 /* ===== числа в текстах не должны расходиться с содержанием =====
