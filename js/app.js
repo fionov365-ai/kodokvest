@@ -3215,8 +3215,15 @@ function openLesson(id){
         ? '<div class="showcode"><pre><code>' + hl(t.show) + '</code></pre>' +
           '<span class="shownote">' + (t.showNote || "этот код работает на настоящем компьютере, а не в тренажёре") + '</span></div>'
         : "";
+      /* Разбор примера. Отдельным блоком под кодом, а не в объяснении сверху:
+         сверху сказано, ЗАЧЕМ это нужно, а тут — что делает вот эта конкретная
+         программа, строка за строкой. Замер, с которого началось: в Мире 1
+         половина карточек была короче 150 знаков, то есть две фразы на всё. */
+      var note = t.note
+        ? '<div class="demonote"><b>Что тут происходит.</b> ' + t.note + '</div>'
+        : "";
       var demo = t.demo
-        ? '<div class="demo" data-demo="' + i + '"><pre><code>' + hl(t.demo) + '</code></pre>' +
+        ? '<div class="demo" data-demo="' + i + '"><pre><code>' + hl(t.demo) + '</code></pre>' + note +
           '<div class="bar"><button class="minibtn" data-run="' + i + '">▶ Запустить пример</button>' +
           '<button class="minibtn" data-copy="' + i + '">→ В редактор</button>' +
           '<span class="hintx' + (t.err ? " errx" : "") + '">' +

@@ -629,7 +629,8 @@ CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
   if (!body) return;
   const куски = [["лид", body.lede], ["цель", body.task && body.task.goal],
                  ["симптом", body.task && body.task.symptom]]
-    .concat((body.theory || []).map((t, i) => ["теория " + (i + 1), t.h + " " + t.p + " " + (t.showNote || "")]))
+    .concat((body.theory || []).map((t, i) => ["теория " + (i + 1),
+                   t.h + " " + t.p + " " + (t.showNote || "") + " " + (t.note || "")]))
     .concat(((body.task && body.task.list) || []).map((x, i) => ["требование " + (i + 1), x]))
     .concat(((body.task && body.task.hints) || []).map((x, i) => ["подсказка " + (i + 1), x]));
   куски.forEach(([где, txt]) => {
@@ -656,6 +657,7 @@ CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
     say(`[разметка] шпаргалка ${путь}: тег ${tag} браузер исполнит, а не покажет — пиши &lt; и &gt;`))));
 
 let auditLessons = 0;
+let notesChecked = 0;
 
 CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
   const body = (CONTENT["world" + w.n] || {})[l.id];
@@ -714,6 +716,42 @@ const seenCS = {};
   });
 });
 
+/* ===== разбор примера не должен врать про вывод =====
+   В разборе под кодом мы называем ребёнку конкретные числа: «печатается 4»,
+   «даёт -4». Проверить это глазами на полутора сотнях карточек нельзя, а
+   ошибка тут дороже обычной: ребёнок поверит написанному, а не экрану.
+   Поэтому каждый кусок в <code>…</code> внутри note обязан встречаться либо
+   в самом коде примера, либо в том, что этот код печатает, либо в виде
+   ошибки, если пример падает нарочно. Совпадение по подстроке — грубо, но
+   ловит именно то, ради чего заведено: выдуманное число. */
+(function checkNotes(){
+  let checked = 0;
+  CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
+    const body = (CONTENT["world" + w.n] || {})[l.id];
+    if (!body) return;
+    (body.theory || []).forEach((t, i) => {
+      if (!t.note) return;
+      checked++;
+      if (!t.demo)
+        return say(`[разбор] урок ${l.num} ${l.id}, карточка ${i + 1}: разбор есть, а примера нет`);
+      const r = MP.run(t.demo, { stdin: [], files: t.data ? JSON.parse(JSON.stringify(t.data)) : {},
+                                 sources: t.files || {} });
+      const haystack = (t.demo + "\n" + (r.output || "") + "\n" +
+                        (r.error ? r.error.kind + " " + r.error.msg : "")).replace(/\s+/g, " ");
+      (String(t.note).match(/<code>([\s\S]*?)<\/code>/g) || []).forEach(frag => {
+        const inner = frag.replace(/<\/?code>/g, "")
+          .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+          .replace(/\s+/g, " ").trim();
+        if (!inner) return;
+        if (haystack.indexOf(inner) < 0)
+          say(`[разбор] урок ${l.num} ${l.id}, карточка ${i + 1}: в разборе названо «${inner}», ` +
+              `а пример такого не печатает и в коде этого нет`);
+      });
+    });
+  }));
+  notesChecked = checked;
+})();
+
 /* ===== числа в текстах не должны расходиться с содержанием =====
    «106 команд» и «15 упражнений» разъехались с фактом молча — в том числе в
    подсказке, которую читает РЕБЁНОК. Числа берём из самих файлов содержания и
@@ -746,5 +784,6 @@ const seenCS = {};
 
 console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps}), шпаргалка: ${sheetItems}`);
 console.log(`порядок объяснений проверен на ${auditLessons} уроках`);
+console.log(`разборов примеров сверено с выводом: ${notesChecked}`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");
 process.exit(problems ? 1 : 0);

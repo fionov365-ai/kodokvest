@@ -1224,6 +1224,13 @@ body.focus .toTop{display:none}
   .lessongrid:not(.one) .studio.split{grid-template-columns:1fr}
 }
 
+/* ---------- разбор примера под кодом ----------
+   Замер: в Мире 1 у 55 карточек из 72 объяснение короче 150 знаков, в Мире 2 —
+   у 69 из 81. То есть чем МЛАДШЕ ребёнок в курсе, тем меньше ему объясняли. */
+.demonote{margin:0;padding:11px 14px;border-top:1px dashed var(--line2);
+  font-size:13.5px;line-height:1.55;color:var(--soft);background:var(--sunken)}
+.demonote b{color:var(--ink)}
+
 /* ---------- шапка верстака: «здесь решаешь задачу» ----------
    Задание стоит в конце объяснения, а редактор — наверху справа. Без этой
    шапки правая колонка это код и кнопки без единого слова о том, что вообще
