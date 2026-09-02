@@ -714,6 +714,36 @@ const seenCS = {};
   });
 });
 
+/* ===== числа в текстах не должны расходиться с содержанием =====
+   «106 команд» и «15 упражнений» разъехались с фактом молча — в том числе в
+   подсказке, которую читает РЕБЁНОК. Числа берём из самих файлов содержания и
+   сверяем везде, где они написаны словами. Файл, где числа нет вовсе, — не
+   ошибка: ошибка это число, которое врёт. */
+(function checkCounts(){
+  const fs2 = require("fs"), path2 = require("path");
+  const root2 = path2.join(__dirname, "..");
+  const facts = [
+    { what:"команд в шпаргалке", n: sheetItems,
+      where:[["README.md", /(\d+) команд/g], ["js/app.js", /(\d+) команд с примерами/g]] },
+    { what:"упражнений в «Ты и ИИ»", n: (global.AILAB || []).length,
+      where:[["README.md", /(\d+) упражнений раздела «Ты и ИИ»/g]] }
+  ];
+  facts.forEach(f => {
+    f.where.forEach(([file, rx]) => {
+      let text;
+      try { text = fs2.readFileSync(path2.join(root2, file), "utf8"); }
+      catch(e){ return say(`[числа] не читается ${file}`); }
+      let m, seen = 0;
+      while ((m = rx.exec(text)) !== null){
+        seen++;
+        if (+m[1] !== f.n)
+          say(`[числа] ${file}: написано «${m[0]}», а ${f.what} — ${f.n}`);
+      }
+      if (!seen) say(`[числа] ${file}: не нашлось места, где названо, сколько ${f.what}`);
+    });
+  });
+})();
+
 console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps}), шпаргалка: ${sheetItems}`);
 console.log(`порядок объяснений проверен на ${auditLessons} уроках`);
 console.log(problems ? `ПРОБЛЕМ: ${problems}` : "все уроки в порядке");

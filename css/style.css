@@ -100,7 +100,26 @@ button{font-family:inherit}
    полоска говорят то же самое, а точная цифра висит подсказкой на ранге,
    лежит в профиле и в панели наставника. Полоска уходит на телефоне. */
 #xptext{display:none}
-@media (max-width:900px){ .xpbar{display:none} }
+
+/* Панель обязана влезать в ОДНУ строку при ЛЮБОМ прогрессе, и раньше она
+   влезала только пока цифры маленькие. Замер: с рангом «Гуру» и счётчиком
+   «★ 300 · 100/100» ей нужно 1061px из 1080 доступных — то есть у пройденного
+   курса «?» уезжал на вторую строку, а вторая строка съедает у урока
+   сантиметр экрана. Причём заметно это становилось ровно у того ребёнка,
+   который дошёл до конца.
+
+   Чиним двумя вещами: переносить запрещаем совсем, а лишнее убираем
+   ступенями. Ступени посчитаны замером ширины каждого куска, а не подобраны
+   на глаз, и проверены на 1280 / 1100 / 1000 / 900 / 800 / 700 — везде одна
+   строка в 60px и ничего не вылезает. Ниже 640 работает своя мобильная
+   раскладка в две строки, она сделана нарочно и её не трогаем. */
+@media (min-width:641px){ .top-in{flex-wrap:nowrap} }
+@media (max-width:1120px){ .xpbar{display:none} }
+@media (max-width:1030px){ .lvlchip{display:none} }
+@media (max-width:960px){ .logo b{display:none} }
+@media (max-width:870px){ #btn-today .lbl{display:none} }
+@media (max-width:780px){ .starcount{font-size:12.5px} .tab{padding:7px 8px} }
+@media (max-width:720px){ #btn-focus{display:none} }
 .logo{display:flex;align-items:center;gap:9px;cursor:pointer}
 .logo .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:16px;flex:none}
 .logo b{font-family:'Fredoka';font-size:19px;font-weight:600}
@@ -1177,3 +1196,53 @@ body.focus .toTop{display:none}
 .iconrow .ic{flex:none;width:34px;text-align:center;font-size:18px}
 .iconrow span{color:var(--soft)}
 .iconrow b{color:var(--ink)}
+
+
+/* ---------- урок: объяснение слева, работа справа ----------
+   Замер до правки (урок «Текст и числа», экран 1280×720): страница 2341px,
+   редактор начинался на 1698-м — на 2,4 экрана ниже начала. Щёлкнув в
+   редактор, ребёнок оказывался там, где не видно ни объяснения, ни текста
+   задания, а под редактором только подсказки. После правки редактор
+   начинается на 606-м и виден сразу, а задание стоит над ним и держится.
+
+   Порог 1040px, а не 900: при 1040 правая колонка выходит примерно 540px, и
+   редактор в ней ещё читается. Уже — колонка одна, и работает липкая
+   полоска задания (.taskpin).
+
+   Уроки с рисованием (их четыре) идут одной колонкой: у них рядом с
+   редактором стоит холст, и на 540px эта пара не помещается. */
+.lessongrid{display:block}
+.lcol-read,.lcol-work{min-width:0}
+@media (min-width:1040px){
+  .lessongrid:not(.one){display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);
+    gap:0 22px;align-items:start}
+  .lessongrid:not(.one) .lcol-work{position:sticky;top:72px}
+  /* задание стоит первым в колонке — верхний отступ ему тут не нужен */
+  .lessongrid:not(.one) .lcol-work>.goal{margin-top:0}
+  /* холста в этой колонке нет, а 540px на редактор и вывод рядом не хватит */
+  .lessongrid:not(.one) .studio.split{grid-template-columns:1fr}
+}
+
+/* ---------- липкая полоска задания (узкий экран) ---------- */
+/* Отступ сверху НЕ константа: на телефоне шапка складывается в две строки, и
+   полоска с зашитыми 59px уехала бы под неё — ровно на том устройстве, ради
+   которого она и делалась. Высоту шапки в --toph пишет syncTopHeight(). */
+.taskpin{position:sticky;top:var(--toph,60px);z-index:55;background:var(--topbg);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line2)}
+.taskpin[hidden]{display:none}
+.tprow{max-width:1080px;margin:0 auto;padding:7px 18px;display:flex;align-items:center;gap:10px}
+.tpmain{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:0;background:transparent;
+  color:var(--ink);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;padding:0}
+.tpem{flex:none}
+.tptxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--soft)}
+.tpchev{flex:none;color:var(--faint);transition:transform .15s}
+.taskpin.open .tpchev{transform:rotate(180deg)}
+.taskpin.open .tptxt{white-space:normal;overflow:visible}
+.tpup{flex:none;border:1px solid var(--line2);background:var(--panel);color:var(--soft);
+  border-radius:9px;padding:5px 10px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.tpup:hover{color:var(--ink);border-color:var(--acc)}
+.tpfull{max-width:1080px;margin:0 auto;padding:0 18px 10px;font-size:13.5px;color:var(--soft)}
+.tpfull[hidden]{display:none}
+.tpfull ul{margin:6px 0 0;padding-left:19px}
+@media (min-width:1040px){ .taskpin{display:none} }
+@media print{ .taskpin{display:none} }

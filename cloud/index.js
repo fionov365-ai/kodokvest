@@ -70,7 +70,10 @@ function summarize(rec){
     attempts += g.attempts || 0;
     if ((g.last || 0) > last) last = g.last;
   });
-  return { xp: data.xp || 0, solved: n, stars: sum, badges: (data.badges || []).length,
+  /* Имя ребёнок вводит сам при входе и оно едет вместе с прогрессом. В списке
+     наставника без него видны только коды, а две Ани по кодам не различаются. */
+  return { name: String(data.name || "").slice(0, 40),
+           xp: data.xp || 0, solved: n, stars: sum, badges: (data.badges || []).length,
            timeMs: timeMs, attempts: attempts, lastLesson: last,
            savedAt: rec ? rec.savedAt : 0, serverAt: rec ? rec.serverAt : 0 };
 }

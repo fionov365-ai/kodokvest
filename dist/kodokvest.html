@@ -118,7 +118,26 @@ button{font-family:inherit}
    полоска говорят то же самое, а точная цифра висит подсказкой на ранге,
    лежит в профиле и в панели наставника. Полоска уходит на телефоне. */
 #xptext{display:none}
-@media (max-width:900px){ .xpbar{display:none} }
+
+/* Панель обязана влезать в ОДНУ строку при ЛЮБОМ прогрессе, и раньше она
+   влезала только пока цифры маленькие. Замер: с рангом «Гуру» и счётчиком
+   «★ 300 · 100/100» ей нужно 1061px из 1080 доступных — то есть у пройденного
+   курса «?» уезжал на вторую строку, а вторая строка съедает у урока
+   сантиметр экрана. Причём заметно это становилось ровно у того ребёнка,
+   который дошёл до конца.
+
+   Чиним двумя вещами: переносить запрещаем совсем, а лишнее убираем
+   ступенями. Ступени посчитаны замером ширины каждого куска, а не подобраны
+   на глаз, и проверены на 1280 / 1100 / 1000 / 900 / 800 / 700 — везде одна
+   строка в 60px и ничего не вылезает. Ниже 640 работает своя мобильная
+   раскладка в две строки, она сделана нарочно и её не трогаем. */
+@media (min-width:641px){ .top-in{flex-wrap:nowrap} }
+@media (max-width:1120px){ .xpbar{display:none} }
+@media (max-width:1030px){ .lvlchip{display:none} }
+@media (max-width:960px){ .logo b{display:none} }
+@media (max-width:870px){ #btn-today .lbl{display:none} }
+@media (max-width:780px){ .starcount{font-size:12.5px} .tab{padding:7px 8px} }
+@media (max-width:720px){ #btn-focus{display:none} }
 .logo{display:flex;align-items:center;gap:9px;cursor:pointer}
 .logo .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:16px;flex:none}
 .logo b{font-family:'Fredoka';font-size:19px;font-weight:600}
@@ -1196,6 +1215,56 @@ body.focus .toTop{display:none}
 .iconrow span{color:var(--soft)}
 .iconrow b{color:var(--ink)}
 
+
+/* ---------- урок: объяснение слева, работа справа ----------
+   Замер до правки (урок «Текст и числа», экран 1280×720): страница 2341px,
+   редактор начинался на 1698-м — на 2,4 экрана ниже начала. Щёлкнув в
+   редактор, ребёнок оказывался там, где не видно ни объяснения, ни текста
+   задания, а под редактором только подсказки. После правки редактор
+   начинается на 606-м и виден сразу, а задание стоит над ним и держится.
+
+   Порог 1040px, а не 900: при 1040 правая колонка выходит примерно 540px, и
+   редактор в ней ещё читается. Уже — колонка одна, и работает липкая
+   полоска задания (.taskpin).
+
+   Уроки с рисованием (их четыре) идут одной колонкой: у них рядом с
+   редактором стоит холст, и на 540px эта пара не помещается. */
+.lessongrid{display:block}
+.lcol-read,.lcol-work{min-width:0}
+@media (min-width:1040px){
+  .lessongrid:not(.one){display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);
+    gap:0 22px;align-items:start}
+  .lessongrid:not(.one) .lcol-work{position:sticky;top:72px}
+  /* задание стоит первым в колонке — верхний отступ ему тут не нужен */
+  .lessongrid:not(.one) .lcol-work>.goal{margin-top:0}
+  /* холста в этой колонке нет, а 540px на редактор и вывод рядом не хватит */
+  .lessongrid:not(.one) .studio.split{grid-template-columns:1fr}
+}
+
+/* ---------- липкая полоска задания (узкий экран) ---------- */
+/* Отступ сверху НЕ константа: на телефоне шапка складывается в две строки, и
+   полоска с зашитыми 59px уехала бы под неё — ровно на том устройстве, ради
+   которого она и делалась. Высоту шапки в --toph пишет syncTopHeight(). */
+.taskpin{position:sticky;top:var(--toph,60px);z-index:55;background:var(--topbg);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line2)}
+.taskpin[hidden]{display:none}
+.tprow{max-width:1080px;margin:0 auto;padding:7px 18px;display:flex;align-items:center;gap:10px}
+.tpmain{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:0;background:transparent;
+  color:var(--ink);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;padding:0}
+.tpem{flex:none}
+.tptxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--soft)}
+.tpchev{flex:none;color:var(--faint);transition:transform .15s}
+.taskpin.open .tpchev{transform:rotate(180deg)}
+.taskpin.open .tptxt{white-space:normal;overflow:visible}
+.tpup{flex:none;border:1px solid var(--line2);background:var(--panel);color:var(--soft);
+  border-radius:9px;padding:5px 10px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.tpup:hover{color:var(--ink);border-color:var(--acc)}
+.tpfull{max-width:1080px;margin:0 auto;padding:0 18px 10px;font-size:13.5px;color:var(--soft)}
+.tpfull[hidden]{display:none}
+.tpfull ul{margin:6px 0 0;padding-left:19px}
+@media (min-width:1040px){ .taskpin{display:none} }
+@media print{ .taskpin{display:none} }
+
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
      это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
@@ -1237,7 +1306,7 @@ body.focus .toTop{display:none}
       <span id="xptext">0 XP</span>
     </div>
     <span class="starcount" id="stars">★ 0</span>
-    <button class="tbtn streak" id="btn-today" title="Задача дня и дни подряд">🔥 Сегодня</button>
+    <button class="tbtn streak" id="btn-today" title="Задача дня и дни подряд">🔥 <span class="lbl">Сегодня</span></button>
     <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖</button>
     <button class="tbtn who" id="btn-who" title="Профиль">👤</button>
     <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">⛶</button>
@@ -1248,6 +1317,19 @@ body.focus .toTop{display:none}
          и «Повторить», о которых по названию не догадаешься. -->
     <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog" aria-expanded="false" aria-label="Подсказка про этот экран">?</button>
   </div>
+</div>
+
+<!-- Липкая полоска задания. Нужна на узком экране, где колонка одна: уйдя
+     в редактор, ребёнок терял из виду и текст задания, и дорогу назад. На
+     широком экране её нет — там задание и так стоит рядом с редактором. -->
+<div class="taskpin" id="taskpin" hidden>
+  <div class="tprow">
+    <button class="tpmain" id="tp-open" aria-expanded="false" aria-controls="tp-full">
+      <span class="tpem">🎯</span><span class="tptxt" id="tp-txt"></span><span class="tpchev">▾</span>
+    </button>
+    <button class="tpup" id="tp-up" title="Вернуться к объяснению урока">↑ Объяснение</button>
+  </div>
+  <div class="tpfull" id="tp-full" hidden></div>
 </div>
 
 <div class="wrap" id="app"></div>
@@ -6972,7 +7054,53 @@ print(самое_длинное(["я", "мы", "они"]))
   note: "Код честный. Первое слово взято за лучшее не случайно: так функция всегда вернёт слово ИЗ списка, а не пустую строку, которой в нём нет, и на списке из одного слова тоже сработает. Знак > строгий, поэтому при равной длине остаётся то слово, что встретилось раньше. Проверяющий, который правит и правильный код, мешает работе не меньше того, кто не проверяет вовсе."
 },
 
-/* 7. ИИ ошибся в логике — почини · проверка + починка · fix */
+/* 7. Ошибка на единицу · вердикт · review */
+{
+  id: "ai-verdict-edge",
+  type: "review",
+  title: "Не ниже четырёх",
+  emoji: "📏",
+  tag: "выносим вердикт",
+  intro: "«Не ниже четырёх» и «больше четырёх» в разговоре звучат почти одинаково. В коде это две разные программы, и разница ровно в одном знаке.",
+  brief: "Прочитай обещание и код. Посчитай сам, запусти, подставь свои оценки. Потом вынеси вердикт — и, если код врёт, ткни в строку.",
+  claim: "Функция считает, сколько учеников сдали зачёт. Зачёт сдан, если оценка не ниже четырёх.",
+  code:
+`def сдали(оценки):
+    сколько = 0
+    for о in оценки:
+        if о > 4:
+            сколько = сколько + 1
+    return сколько
+
+
+print(сдали([5, 4, 3, 4]))
+`,
+  truth:
+`def сдали(оценки):
+    сколько = 0
+    for о in оценки:
+        if о >= 4:
+            сколько = сколько + 1
+    return сколько
+
+
+print(сдали([5, 4, 3, 4]))
+`,
+  probe:
+`print(сдали([4, 4]))
+print(сдали([3, 3]))
+`,
+  verdict: "wrong",
+  badLine: 4,
+  hints: [
+    "Посчитай сам по списку [5, 4, 3, 4]: у кого оценка не ниже четырёх? Сколько таких учеников?",
+    "Теперь запусти программу. Число совпало с твоим?",
+    "«Не ниже четырёх» значит, что четвёрка тоже сдана. А знак > четвёрку не пускает."
+  ],
+  note: "Знак > означает «строго больше», и четвёрка под него не подходит — хотя по условию она сдана. Такую ошибку зовут ошибкой на единицу, и она самая незаметная из всех: программа не падает, ничего не подсвечивается красным, она просто тихо считает не тех. Отсюда правило: увидел в условии «не ниже», «не больше», «хотя бы» — проверь ровно ту границу, о которой эти слова говорят."
+},
+
+/* 8. ИИ ошибся в логике — почини · проверка + починка · fix */
 {
   id: "ai-logic",
   type: "fix",
@@ -7044,6 +7172,52 @@ print(sum(оценки) / len(оценки))
     "Среднее — это сумма, делённая на количество: раздели одно на другое."
   ],
   note: "ИИ уверенно вызвал .average() — а такого метода у списков нет, он его придумал. Движок Кодоквеста тут работает как детектор вранья: «уверенно» не значит «правильно». Настоящий способ короткий: sum / len."
+},
+
+/* ИИ починил одно и переписал другое · проверка чужой правки · fix */
+{
+  id: "ai-collateral",
+  type: "fix",
+  title: "Починил одно — переписал другое",
+  emoji: "🩹",
+  tag: "проверяем и чиним",
+  intro: "Ты просишь поправить одну строку. ИИ правит её — и заодно переделывает то, о чём его никто не просил. У него нет понятия «остальное не трогай».",
+  brief: "Верни то, что ИИ выкинул. Программа снова должна печатать две строки: список оценок с подписью «Оценки:» и средний балл с подписью «Средний балл:». Сам подсчёт не трогай — он верный.",
+  list: [
+    "Первая строка вывода: Оценки: и сам список.",
+    "Вторая строка: Средний балл: и число.",
+    "Функцию среднего не переписывай: 4.25 — правильный ответ."
+  ],
+  symptom: "До правки программа печатала две строки с подписями. Просили починить только подсчёт среднего — его ИИ и правда починил. Но заодно выбросил обе подписи и первую строку целиком: теперь печатается одно голое число 4.25, и по нему не понять даже, чего это среднее.",
+  starter:
+`# Версия от ИИ: просили починить только подсчёт среднего
+оценки = [5, 4, 3, 5]
+
+
+def средний(список):
+    return sum(список) / len(список)
+
+
+print(средний(оценки))
+`,
+  solution:
+`# Версия от ИИ: просили починить только подсчёт среднего
+оценки = [5, 4, 3, 5]
+
+
+def средний(список):
+    return sum(список) / len(список)
+
+
+print("Оценки:", оценки)
+print("Средний балл:", средний(оценки))
+`,
+  hints: [
+    "Подсчёт трогать не надо: sum и len на месте, 4.25 — верный ответ. Не хватает не расчёта, а вывода.",
+    "Строк печати должно стать две, а не одна.",
+    "Первая: print(\"Оценки:\", оценки). Вторая — та, что уже есть, но с подписью \"Средний балл:\" перед числом."
+  ],
+  note: "Ты просил починить одно, а получил ещё и переписанный вывод. Так бывает постоянно: ИИ не различает «поправь вот эту строку» и «сделай, как считаешь нужным». Поэтому чужую правку читают не только там, где искали баг, а целиком — и сравнивают с тем, что было до неё. Пропавший print — мелочь и видна сразу; в настоящей программе так же тихо уезжает проверка входных данных или запись в файл, и замечают это через неделю."
 },
 
 /* 9. ИИ уверен, но неправ · проверка вывода · predict */
@@ -7257,6 +7431,84 @@ print(есть_слово("мама мыла раму", "мыла"))
     "Напечатай есть_слово(\"мама мыла раму\", \"ма\"). Слова «ма» в тексте нет, а функция скажет True."
   ],
   note: "Оператор in у строки ищет подстроку, а у списка — целый элемент. Разница в одном вызове split(), но именно она отделяет «есть такой кусок букв» от «есть такое слово». Такой поиск в настоящих программах ловит «Питер» внутри «Питербург» и «кот» внутри «который». Проверять надо не тем примером, который придумал автор, а тем, на котором разница видна."
+},
+
+/* Пустой список · край данных · catch */
+{
+  id: "ai-catch-empty",
+  type: "catch",
+  title: "Докажи, что пустой список всё ломает",
+  emoji: "🕳",
+  tag: "ловим ИИ",
+  intro: "ИИ пишет код под тот пример, который у него перед глазами. Список из трёх оценок ему показали. Список, в котором оценок ноль, — нет, и он о нём не подумал.",
+  brief: "Код ИИ трогать нельзя. Допиши снизу свою проверку: вызови функцию своими данными и напечатай результат. Проверка засчитана, если на твоих данных код ИИ и правильная версия ведут себя по-разному.",
+  claim: "Функция считает средний балл по списку оценок.",
+  code:
+`def средний_балл(оценки):
+    сумма = 0
+    for о in оценки:
+        сумма = сумма + о
+    return сумма / len(оценки)
+
+
+print(средний_балл([5, 4, 3]))
+`,
+  truth:
+`def средний_балл(оценки):
+    if len(оценки) == 0:
+        return 0
+    сумма = 0
+    for о in оценки:
+        сумма = сумма + о
+    return сумма / len(оценки)
+
+
+print(средний_балл([5, 4, 3]))
+`,
+  probe:
+`print(средний_балл([]))
+`,
+  hints: [
+    "На списке из трёх оценок функция считает верно. Значит ищи не другую арифметику, а другие данные.",
+    "Последняя строка функции делит на количество оценок. Какой список ты можешь передать, чтобы делить оказалось не на что?",
+    "Напечатай средний_балл([]) — список без единой оценки. Программа даже не ответит неверно: она упадёт."
+  ],
+  note: "Пустой список — это не ошибка ИИ в арифметике, это то, о чём он не подумал: ему показали три оценки, и он написал код под три оценки. А пустой список в жизни встречается постоянно: ученик, которому ещё ничего не поставили; корзина, из которой всё убрали; поиск, ничего не нашедший. Правильная версия сначала спрашивает, есть ли вообще что делить. Проверяя чужой код, всегда пробуй край: ноль элементов, один, отрицательное число."
+},
+
+/* Округление, которого нет · подмена смысла · catch */
+{
+  id: "ai-catch-round",
+  type: "catch",
+  title: "Докажи, что округления не происходит",
+  emoji: "🔢",
+  tag: "ловим ИИ",
+  intro: "Иногда код ИИ делает почти то, что обещал. «Почти» здесь означает: на половине чисел верно, на другой половине — нет, и граница проходит там, где её никто не искал.",
+  brief: "Код ИИ трогать нельзя. Допиши снизу свою проверку и найди число, на котором обещание перестаёт сбываться.",
+  claim: "Функция округляет средний балл до целого.",
+  code:
+`def округли(балл):
+    return int(балл)
+
+
+print(округли(4.25))
+`,
+  truth:
+`def округли(балл):
+    return round(балл)
+
+
+print(округли(4.25))
+`,
+  probe:
+`print(округли(4.75))
+`,
+  hints: [
+    "Средний балл 4,25 округляется до 4 — и функция отвечает 4. Верно. Значит примером автора ничего не докажешь.",
+    "Подумай, когда «округлить» и «отбросить всё после запятой» дают РАЗНЫЕ ответы. При 4,25 — одинаковые. А при 4,9?",
+    "Напечатай округли(4.75). По правилам округления это 5, а функция ответит 4."
+  ],
+  note: "int() не округляет, а отрезает дробную часть — всегда вниз. С округлением это совпадает только на числах, у которых после запятой меньше половины: 4,25 → 4 верно и там, и там. Расходятся они ровно на тех числах, ради которых округление и нужно. Цена подмены в жизни — средний балл 4,75, превратившийся в журнале в четвёрку. Проверять надо не «работает ли вообще», а «работает ли на той половине данных, которую автор не показал»."
 },
 
 /* 11. Ты — тимлид, ИИ — джун · финальный проект · fix + code · boss */
@@ -7936,6 +8188,12 @@ window.CHEATSHEET = [
     { id:"upper", sig:".upper() и .lower()", lesson:"str-methods",
       what:"строка большими или маленькими буквами. Саму переменную не меняет",
       code:'имя = "Аня"\nprint(имя.upper(), имя.lower(), имя)' },
+    { id:"title", sig:".title() и .capitalize()", lesson:"str-methods",
+      what:"каждое слово с большой буквы, либо только первое слово строки",
+      code:'имя = "аня петрова"\nprint(имя.title())\nprint(имя.capitalize())' },
+    { id:"find", sig:".find(кусок)", lesson:"str-methods",
+      what:"с какого места начинается кусок. Нет такого куска — вернёт −1, а не ошибку",
+      code:'текст = "мама мыла раму"\nprint(текст.find("мыла"))\nprint(текст.find("папа"))' },
     { id:"strip", sig:".strip()", lesson:"str-methods",
       what:"убирает пробелы по краям — первое лекарство от «почему не совпало»",
       code:'print("[" + "  привет  ".strip() + "]")' },
@@ -7997,6 +8255,9 @@ window.CHEATSHEET = [
     { id:"append", sig:".append(что-то)", lesson:"list-ops",
       what:"добавляет в конец списка",
       code:'с = [1, 2]\nс.append(3)\nprint(с)' },
+    { id:"insert", sig:".insert(куда, что)", lesson:"list-ops",
+      what:"вставляет НЕ в конец, а на нужное место. Остальные сдвигаются вправо",
+      code:'очередь = ["Аня", "Боря"]\nочередь.insert(0, "Вика")\nprint(очередь)' },
     { id:"pop-remove", sig:".pop() и .remove(значение)", lesson:"list-ops",
       what:"pop убирает по номеру и отдаёт значение, remove — по значению",
       code:'с = ["кот", "ёж", "сова"]\nprint(с.pop(0))\nс.remove("сова")\nprint(с)' },
@@ -8009,6 +8270,9 @@ window.CHEATSHEET = [
     { id:"sort-key", sig:"sorted(список, key=...)", lesson:"sorting",
       what:"сортировка по чему-то своему: по длине, по второму значению пары",
       code:'слова = ["ёж", "бегемот", "кот"]\nprint(sorted(слова, key=len))' },
+    { id:"max-key", sig:"max(список, key=...)", lesson:"lambda",
+      what:"самый большой не по значению, а по своему признаку — например по длине",
+      code:'слова = ["кот", "бегемот", "ёж"]\nprint(max(слова, key=len))\nprint(min(слова, key=len))' },
     { id:"sort-inplace", sig:".sort() против sorted()", lesson:"sorting",
       what:".sort() меняет сам список и возвращает None, sorted() отдаёт новый",
       code:'очки = [3, 1, 2]\nновый = sorted(очки)\nprint(очки, новый)\nprint(очки.sort(), очки)' },
@@ -8050,6 +8314,12 @@ window.CHEATSHEET = [
     { id:"dict-items", sig:".items(), .keys(), .values()", lesson:"dict-loop",
       what:"перебор словаря: пары, только ключи, только значения",
       code:'г = {"сила": 7, "ум": 9}\nfor к, з in г.items():\n    print(к, з)\nprint(list(г.keys()), list(г.values()))' },
+    { id:"dict-update", sig:".update(другой словарь)", lesson:"collections",
+      what:"досыпает пары из другого словаря. Одинаковые ключи перезаписываются",
+      code:'н = {"звук": 1, "цвет": "синий"}\nн.update({"цвет": "красный", "язык": "ру"})\nprint(н)' },
+    { id:"dict-sort-val", sig:"sorted(словарь.items(), key=...)", lesson:"dict-counter",
+      what:"словарь по порядку значений — так делают таблицу лидеров",
+      code:'очки = {"Аня": 7, "Боря": 12, "Вика": 3}\nfor имя, о in sorted(очки.items(), key=lambda п: -п[1]):\n    print(имя, о)' },
     { id:"dict-count", sig:"счётчик[ключ] = счётчик.get(ключ, 0) + 1", lesson:"dict-counter",
       what:"словарь-счётчик: считает повторы",
       code:'с = {}\nfor б in "мама":\n    с[б] = с.get(б, 0) + 1\nprint(с)' },
@@ -8103,12 +8373,18 @@ window.CHEATSHEET = [
     { id:"zip", sig:"zip(a, b)", lesson:"tuples",
       what:"идёт по двум спискам сразу, парами",
       code:'for имя, очки in zip(["Аня", "Боря"], [7, 5]):\n    print(имя, очки)' },
+    { id:"zip-list", sig:"list(zip(a, b))", lesson:"tuples",
+      what:"те же пары, но не для цикла, а списком — их видно целиком",
+      code:'имена = ["Аня", "Боря"]\nочки = [7, 12]\nprint(list(zip(имена, очки)))' },
     { id:"while", sig:"while условие", lesson:"while-loop",
       what:"повторяет, пока условие верно. Что-то внутри обязано его менять",
       code:'n = 3\nwhile n > 0:\n    print(n)\n    n -= 1' },
     { id:"break", sig:"break и continue", lesson:"break-cont",
       what:"break выходит из цикла совсем, continue пропускает один заход",
       code:'for x in range(6):\n    if x == 4:\n        break\n    if x % 2:\n        continue\n    print(x)' },
+    { id:"while-true", sig:"while True: … break", lesson:"break-cont",
+      what:"цикл без условия наверху: он крутится, пока внутри не сработает break",
+      code:'n = 1\nwhile True:\n    if n * n > 50:\n        break\n    n = n + 1\nprint(n)' },
     { id:"nested", sig:"цикл внутри цикла", lesson:"for-nested",
       what:"строки и столбцы: внешний цикл — строка, внутренний — знаки в ней",
       code:'for с in range(3):\n    print("*" * (с + 1))' }
@@ -8141,6 +8417,9 @@ window.CHEATSHEET = [
     { id:"scope", sig:"переменная внутри функции", lesson:"scope",
       what:"живёт только внутри и наружу не выходит. Одинаковые имена не мешают",
       code:'ш = "снаружи"\n\n\ndef проба():\n    ш = "внутри"\n    print(ш)\n\n\nпроба()\nprint(ш)' },
+    { id:"global", sig:"global имя", lesson:"scope",
+      what:"разрешает функции менять внешнюю переменную. Без него она заведёт свою",
+      code:'счёт = 0\n\n\ndef плюс():\n    global счёт\n    счёт = счёт + 1\n\n\nплюс()\nплюс()\nprint(счёт)' },
     { id:"fn-dict", sig:"словарь функций", lesson:"fn-as-value",
       what:"действие выбирается по названию — короче длинной цепочки if. На этом стоит проект Мира 5",
       code:'действия = {\n    "плюс": lambda a, b: a + b,\n    "раз": lambda a, b: a * b,\n}\nвыбор = "плюс"\nprint(действия[выбор](2, 3), действия["раз"](2, 3))' },
@@ -12560,7 +12839,7 @@ var ADMIN_CODE = "kodokvest-2026";
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
-                     "mytasks","friendTasks","errs","gallery"];
+                     "mytasks","friendTasks","errs","gallery","certAt"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -13099,7 +13378,9 @@ function refreshTop(){
   if (bt){
     var s = streakCurrent();
     var due = studyDue();
-    bt.textContent = (due ? "🔔 " : "🔥 ") + (s > 0 ? s : "Сегодня");
+    /* Слово «Сегодня» лежит в отдельном span: на узком экране его прячет CSS,
+       а значок остаётся. Через textContent так нельзя — он стёр бы span. */
+    bt.innerHTML = (due ? "🔔 " : "🔥 ") + (s > 0 ? s : '<span class="lbl">Сегодня</span>');
     /* «горит», если сегодня уже занимались; «due» — учебный день, ещё не занимались */
     bt.classList.toggle("lit", activeOn(dayKey()));
     bt.classList.toggle("due", due);
@@ -13198,6 +13479,17 @@ function mergeProgress(a, b){
 
   /* какие игры вообще открывали: объединяем, как разминки */
   out.gamesPlayed = mergeSet(a.gamesPlayed, b.gamesPlayed);
+
+  /* даты выдачи сертификатов за разделы вне сотни. Здесь mergeSet не годится:
+     он схлопывает значение в единицу, а единица как метка времени — это
+     1 января 1970 года на распечатанном листе. Берём САМУЮ РАННЮЮ: раздел
+     закончен тогда, когда закончен, а не когда об этом узнало второе
+     устройство. */
+  out.certAt = {};
+  Object.keys(mergeSet(a.certAt, b.certAt)).forEach(function(k){
+    var t = minPos((a.certAt || {})[k], (b.certAt || {})[k]);
+    if (t) out.certAt[k] = t;
+  });
 
   /* дни занятий и выполненные «задачи дня»: объединяем множества дат.
      День, засчитанный на любом устройстве, остаётся засчитанным — так стрик
@@ -15588,6 +15880,75 @@ function draftSchedule(){
   draftTimer = setTimeout(function(){ draftTimer = null; draftFlush(); }, DRAFT_WAIT);
 }
 
+/* ===== липкая полоска задания =====
+   Нужна там, где колонка одна (узкий экран): уехав в редактор, ребёнок терял
+   из виду и текст задания, и дорогу назад. Полоска всегда говорит, что надо
+   сделать, разворачивается тапом в полный текст и даёт кнопку к объяснению.
+   Появляется она не «на уроке», а РОВНО когда карточка задания ушла выше
+   верхнего края: пока задание видно, вторая копия того же текста только
+   мешала бы. */
+var taskPinObs = null;
+/* Высота шапки уезжает в CSS-переменную: полоска задания прилипает ПОД шапкой,
+   а шапка на телефоне двухстрочная. Зашитое число пряталось бы под ней. */
+function syncTopHeight(){
+  var t = document.querySelector(".top");
+  if (!t || !t.getBoundingClientRect) return;
+  var h = Math.round(t.getBoundingClientRect().height);
+  if (h > 0) document.documentElement.style.setProperty("--toph", h + "px");
+}
+window.addEventListener("resize", syncTopHeight);
+function taskPinHide(){
+  if (taskPinObs){ taskPinObs.disconnect(); taskPinObs = null; }
+  var el = document.getElementById("taskpin");
+  if (!el) return;
+  el.hidden = true;
+  el.classList.remove("open");
+  var full = document.getElementById("tp-full");
+  if (full) full.hidden = true;
+  var op = document.getElementById("tp-open");
+  if (op) op.setAttribute("aria-expanded", "false");
+}
+function taskPinShow(goalEl){
+  taskPinHide();
+  var pin = document.getElementById("taskpin");
+  if (!pin || !goalEl || !window.IntersectionObserver) return;
+  var p = goalEl.querySelector("p");
+  document.getElementById("tp-txt").textContent = p ? p.textContent.trim() : "Задание";
+  /* в развёрнутом виде — тот же текст задания целиком, включая список пунктов */
+  var full = document.getElementById("tp-full");
+  full.innerHTML = (p ? "<p>" + p.innerHTML + "</p>" : "") +
+    (goalEl.querySelector("ul") ? goalEl.querySelector("ul").outerHTML : "");
+  taskPinObs = new IntersectionObserver(function(es){
+    var e = es[0];
+    var gone = !e.isIntersecting && e.boundingClientRect.top < 0;
+    if (!gone && !pin.hidden){
+      pin.classList.remove("open");
+      full.hidden = true;
+      document.getElementById("tp-open").setAttribute("aria-expanded", "false");
+    }
+    pin.hidden = !gone;
+  }, { threshold: 0 });
+  taskPinObs.observe(goalEl);
+}
+(function(){
+  var op = document.getElementById("tp-open");
+  if (op) op.onclick = function(){
+    var pin = document.getElementById("taskpin"), full = document.getElementById("tp-full");
+    var open = !pin.classList.contains("open");
+    pin.classList.toggle("open", open);
+    full.hidden = !open;
+    op.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  var up = document.getElementById("tp-up");
+  if (up) up.onclick = function(){
+    /* «к объяснению» — это первая карточка теории, а не начало страницы:
+       заголовок урока ребёнок и так помнит, а нужен ему разбор. */
+    var first = document.querySelector(".lcol-read .card.theory") || document.querySelector(".card.theory");
+    if (first && first.scrollIntoView) first.scrollIntoView({ behavior:"smooth", block:"start" });
+    else window.scrollTo({ top:0, behavior:"smooth" });
+  };
+})();
+
 
 function openLesson(id){
   var l = CURRICULUM.byId(id);
@@ -15669,9 +16030,29 @@ function openLesson(id){
         '<span>не получается — «<b>💡 Подсказка</b>» ниже</span></div>'
       : "";
 
-    app.innerHTML = head + theory + goal + bug +
-      '<div class="draftnote" id="draftnote" hidden></div>' +
-      howbar + '<div id="studio"></div>' + hints + pager;
+    /* Раскладка урока в ДВЕ колонки: слева объяснение, справа задание и
+       редактор. Замер до правки: страница 2341px при экране 720px, а редактор
+       начинался на 1698-м — на 2,4 экрана ниже. То есть в момент, когда
+       ребёнок щёлкал в редактор, за верхний край уезжали и объяснение, и сам
+       текст задания, а под редактором были только подсказки: вернуться
+       некуда. После правки редактор начинается на 606-м, задание стоит прямо
+       над ним и держится липким, пока ребёнок пишет код.
+
+       Правая колонка обязана влезать в экран целиком — иначе липкость не
+       спасает. Поэтому полоска «Что дальше» вынесена НАД сеткой: с ней
+       колонка 884px при экране 800, без неё 788. Показывается она всё равно
+       один раз в жизни, на первом уроке.
+
+       На узком экране колонка одна и порядок прежний: объяснение, задание,
+       редактор. Там же работает липкая полоска задания, см. lessonPin(). */
+    app.innerHTML = head + howbar +
+      '<div class="lessongrid' + (body.draw ? ' one' : '') + '">' +
+        '<div class="lcol-read">' + theory + '</div>' +
+        '<div class="lcol-work">' + goal + bug +
+          '<div class="draftnote" id="draftnote" hidden></div>' +
+          '<div id="studio"></div>' + hints +
+        '</div>' +
+      '</div>' + pager;
 
     /* Задание может состоять из нескольких файлов: главный плюс модули. */
     var taskFiles = body.task.files
@@ -15779,6 +16160,9 @@ function openLesson(id){
     });
 
     refreshTop();
+    /* полоска задания заводится ПОСЛЕ отрисовки: ей нужна живая карточка */
+    syncTopHeight();
+    taskPinShow(app.querySelector(".goal"));
     window.scrollTo({ top:0, behavior:"smooth" });
   });
 }
@@ -17725,6 +18109,9 @@ function projectState(id){
   return st;
 }
 function projectDone(id){ return !!projectState(id).done; }
+/* ключ черновика шага: у каждого шага свой, чтобы возврат на шаг возвращал
+   именно то, что на нём писали */
+function projectDraftId(pid, i){ return "proj-" + pid + "-" + i; }
 /* Проект открывается, когда все готовые уроки его мира пройдены.
    world: 0 — это проект вне миров («Напарник» в разделе «Ты и ИИ»): у него
    нет карты мира, поэтому и открывается он по своему разделу. */
@@ -17770,7 +18157,13 @@ function openProject(id, forceStep){
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
     enterScreen(undefined, "project");
-    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
+    /* Черновик шага проекта — тем же механизмом, что у уроков: ключ шага
+       вместо id урока. До этого код шага сохранялся ТОЛЬКО на победе, и уход
+       за подсказкой в шпаргалку стирал написанное. */
+    var draftId = projectDraftId(p.id, i);
+    var startCode = projectStartCode(p, i);
+    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i,
+                lesson:draftId, starter:[{ name:"main.py", code:startCode }] };
 
     var dots = p.steps.map(function(s, k){
       var cls = k < st.step ? "done" : (k === i ? "now" : "");
@@ -17805,16 +18198,34 @@ function openProject(id, forceStep){
     var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← ' +
       (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
 
-    app.innerHTML = head + goal + '<div id="studio"></div>' + hints + pager;
+    app.innerHTML = head + goal +
+      '<div class="draftnote" id="draftnote" hidden></div>' +
+      '<div id="studio"></div>' + hints + pager;
 
     var studio = makeStudio({
       engine: "mini",
-      code: projectStartCode(p, i),
+      code: startCode,
       label: "твоя программа",
       check: function(ed, showMsg){ runProjectCheck(p, i, ed, showMsg); }
     });
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
+
+    var pdraft = draftGet(draftId);
+    if (pdraft){
+      draftApply(studio.editor, pdraft.files);
+      var pnote = document.getElementById("draftnote");
+      pnote.hidden = false;
+      pnote.innerHTML = '<span>\u{1F4DD} В редакторе код с прошлого раза, а не то, с чего шаг начинался.</span>' +
+        '<button class="rbtn sec" id="draftfresh">Начать шаг заново</button>';
+      document.getElementById("draftfresh").onclick = function(){
+        draftDrop(draftId);
+        studio.editor.setCode(startCode);
+        pnote.hidden = true;
+        studio.editor.focusEditor();
+      };
+    }
+    studio.editor.onEdit = draftSchedule;
 
     wireHint(step.hints);
     document.getElementById("solbtn").onclick = function(){
@@ -17856,6 +18267,13 @@ function runProjectCheck(p, i, ed, showMsg){
 function winProjectStep(p, i, code){
   var st = projectState(p.id);
   st.code = code;
+  /* Шаг сдан — код уехал в st.code, черновик шага больше не нужен. Заготовку
+     сессии подменяем на сданный код: иначе draftFlush при уходе на следующий
+     шаг заведёт черновик заново, и он останется висеть навсегда. */
+  draftDrop(projectDraftId(p.id, i));
+  if (session && session.project === p.id && session.pstep === i){
+    session.starter = [{ name:"main.py", code: code }];
+  }
   if (i + 1 > st.step) st.step = i + 1;
   var last = st.step >= p.steps.length;
   /* doneAt ставится ОДИН раз: это дата на сертификате, и она не должна
@@ -18149,6 +18567,89 @@ function certCourseNeed(){
   return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
 }
 
+/* ---- сертификаты за разделы вне сотни ----
+   Устроены как у миров: задания раздела ПЛЮС его проект, если он есть.
+   Отличие одно, и оно в дате. У урока есть solvedAt в журнале, а разминка и
+   задание «Ты и ИИ» отмечались единицей, без времени, — восстановить задним
+   числом нечего. Поэтому дату выдачи ЗАПОМИНАЕМ в S.certAt в тот момент,
+   когда раздел закрылся, и больше не трогаем: сертификат, распечатанный
+   сегодня и через месяц, обязан быть одним и тем же листом. */
+var WARM_KIND = { predict:"угадай вывод", blocks:"собери из блоков", memory:"предскажи память" };
+var SECTION_CERTS = [
+  { id:"warmups", icon:"🧩", title:"Разминка пройдена целиком",
+    what:"Разминка",
+    all: function(){ return warmupsList().length; },
+    done: function(){
+      return warmupsList().filter(function(x){ return warmupDone(x.id); }).length;
+    },
+    unit: ["разминка", "разминки", "разминок"],
+    line: function(d, t){
+      /* Перечень механик считаем по самим разминкам, а не пишем строкой:
+         добавится шестой тип — лист соврёт, и заметить это будет некому. */
+      var seen = [], ok = 1;
+      warmupsList().forEach(function(x){
+        var nm = WARM_KIND[x.type];
+        if (!nm){ ok = 0; return; }
+        if (seen.indexOf(nm) < 0) seen.push(nm);
+      });
+      var tail = (ok && seen.length)
+        ? ' — ' + seen.map(function(n){ return '«' + n + '»'; }).join(", ") + '.'
+        : '.';
+      return 'Раздел «Разминка» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "упражнения", "упражнений", "упражнений") + tail;
+    } },
+  { id:"ailab", icon:"🤖", title:"Раздел «Ты и ИИ» пройден",
+    what:"Ты и ИИ",
+    all: function(){ return ailabList().length; },
+    done: function(){
+      return ailabList().filter(function(x){ return ailabDone(x.id); }).length;
+    },
+    unit: ["задание", "задания", "заданий"],
+    project: 0,
+    line: function(d, t){
+      var p = projectOfWorld(0);
+      return 'Раздел «Ты и ИИ» пройден полностью: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "задание", "задания", "заданий") +
+        (p ? ', проект «' + esc(p.title) + '» собран' : '') +
+        '. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
+    } }
+];
+function sectionCert(id){
+  for (var i = 0; i < SECTION_CERTS.length; i++)
+    if (SECTION_CERTS[i].id === id) return SECTION_CERTS[i];
+  return null;
+}
+function certSectionReady(id){
+  var c = sectionCert(id);
+  if (!c || !c.all()) return false;
+  if (c.done() !== c.all()) return false;
+  if (c.project !== undefined){
+    var p = projectOfWorld(c.project);
+    if (!p || !projectDone(p.id)) return false;
+  }
+  return true;
+}
+/* Дата выдачи. Ставится один раз — в момент, когда раздел закрылся. Если
+   раздел закрыли ДО того, как сертификаты появились, ставим сейчас: это
+   честно, лист и правда выдан сегодня, а выдумывать прошлую дату нельзя. */
+function certSectionAt(id){
+  if (!certSectionReady(id)) return 0;
+  S.certAt = S.certAt || {};
+  if (!S.certAt[id]){ S.certAt[id] = Date.now(); save(); }
+  return S.certAt[id];
+}
+function certSectionNeed(id){
+  var c = sectionCert(id);
+  if (!c) return "";
+  var bits = [], left = c.all() - c.done();
+  if (left > 0) bits.push(left + " " + plural(left, c.unit[0], c.unit[1], c.unit[2]));
+  if (c.project !== undefined){
+    var p = projectOfWorld(c.project);
+    if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
+  }
+  return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
+}
+
 function certList(){
   var out = [];
   CURRICULUM.forEach(function(w){
@@ -18158,6 +18659,14 @@ function certList(){
       ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
     });
   });
+  SECTION_CERTS.forEach(function(c){
+    out.push({
+      id: c.id, kind: c.id, icon: c.icon, title: c.title, section: 1,
+      ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.id)
+    });
+  });
+  /* «Курс целиком» стоит последним намеренно: это главный лист, и он не должен
+     теряться между сертификатами за разделы. */
   out.push({
     id: "course", kind: "course", icon: "🏆", title: "Курс пройден целиком",
     ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
@@ -18174,13 +18683,16 @@ function fmtDay(ts){
 /* Текст сертификата написан безлично («пройден», а не «прошёл»): курс учат
    и мальчики, и девочки, а угадывать род по имени — плохая идея. */
 function certBodyHTML(kind){
+  var sect = sectionCert(kind);
   var course = kind === "course";
-  var w = course ? null : CURRICULUM.world(kind);
-  var p = course ? null : projectOfWorld(kind);
-  var at = course ? certCourseAt() : certWorldAt(kind);
+  var w = (course || sect) ? null : CURRICULUM.world(kind);
+  var p = (course || sect) ? null : projectOfWorld(kind);
+  var at = sect ? certSectionAt(kind) : (course ? certCourseAt() : certWorldAt(kind));
   var stars = 0, top = 0, what = "";
 
-  if (course){
+  if (sect){
+    what = sect.line(sect.done(), sect.all());
+  } else if (course){
     CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
     top = CURRICULUM.total * 3;
     var names = [];
@@ -18202,13 +18714,18 @@ function certBodyHTML(kind){
   }
 
   var name = myName();
+  /* Звёзд в разделах вне сотни нет — и рисовать «★ 0 из 0» на листе нельзя.
+     Вместо счёта звёзд у раздела стоит счёт сделанного. */
+  var tally = sect
+    ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
+    : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
   return '<div class="certsheet">' +
     '<div class="certmark">🐍 Кодоквест</div>' +
     '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
     '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
-    '<div class="certstars">★ ' + stars + ' из ' + top + '</div>' +
+    tally +
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
   '</div>';
@@ -18357,7 +18874,8 @@ function screenFolio(){
   h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
     '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
     '<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
-    'проект мира. Его можно распечатать или сохранить в PDF.</p><div class="certs">';
+    'проект мира. Отдельно — за разделы вне сотни: всю «Разминку» и весь «Ты и ИИ». ' +
+    'Любой можно распечатать или сохранить в PDF.</p><div class="certs">';
   certs.forEach(function(c){
     h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
       '<span class="cticon">' + c.icon + '</span>' +
@@ -19558,7 +20076,7 @@ var screenSeq = 0;
 /* Через claimScreen проходит ЛЮБАЯ смена экрана: и enterScreen, и урок, и
    проект. Поэтому черновик уходящего урока сохраняется именно здесь — одним
    местом на все переходы, включая переход с урока сразу на другой урок. */
-function claimScreen(){ draftFlush(); return ++screenSeq; }
+function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
 function screenStale(n){ return n !== screenSeq; }
 function clearAdminHash(){
   try {
@@ -20131,8 +20649,12 @@ function screenAdmin(){
           '<div class="admlist">' + st.map(function(s){
             return s.broken
               ? '<div class="admlrow"><b>' + esc(s.code) + '</b><span>файл испорчен</span></div>'
-              : '<div class="admlrow"><b>' + esc(s.code) + '</b>' +
-                '<span>' + s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
+              /* Имя пришло с сервера — но только у тех, кто сохранялся уже после
+                 того, как оно там появилось. У остальных показываем код: это
+                 честнее, чем «без имени». */
+              : '<div class="admlrow"><b>' + esc(s.name || s.code) + '</b>' +
+                '<span>' + (s.name ? esc(s.code) + ' · ' : '') +
+                s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
                 fmtMins(s.timeMs) + ' · ' + fmtWhen(s.serverAt) + '</span>' +
                 '<button class="minibtn" data-act="viewcode" data-id="' + esc(s.code) + '">открыть</button></div>';
           }).join("") + '</div>');
@@ -20649,7 +21171,7 @@ function screenGuide(){
     '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — разминка, игры, «Ты и ИИ», песочница, визуализатор</span></div>' +
     '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — программы, рисунки, свои задания, сертификаты</span></div>' +
     '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
-    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 106 команд с примерами, открывается поверх урока</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 115 команд с примерами, открывается поверх урока</span></div>' +
     '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, выход</span></div>' +
     '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
     '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — что это за экран и что тут делать</span></div>' +
@@ -20948,6 +21470,7 @@ window.__game = {
   openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
+  projectDraftId: projectDraftId,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
   reviewTruth: reviewTruth, catchProbe: catchProbe, catchRun: catchRun, catchStart: catchStart,
   memAnswers: memAnswers, memFrame: memFrame, memNorm: memNorm,
@@ -21003,6 +21526,8 @@ window.__game = {
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
   certWorldAt: certWorldAt, certCourseAt: certCourseAt,
   certWorldNeed: certWorldNeed, certCourseNeed: certCourseNeed,
+  certSectionReady: certSectionReady, certSectionAt: certSectionAt,
+  certSectionNeed: certSectionNeed, SECTION_CERTS: SECTION_CERTS,
   worldWhole: worldWhole, worldStars: worldStars, worldSolvedCount: worldSolvedCount,
   fmtDay: fmtDay
 };

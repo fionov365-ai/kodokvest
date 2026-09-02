@@ -53,7 +53,7 @@
       <span id="xptext">0 XP</span>
     </div>
     <span class="starcount" id="stars">★ 0</span>
-    <button class="tbtn streak" id="btn-today" title="Задача дня и дни подряд">🔥 Сегодня</button>
+    <button class="tbtn streak" id="btn-today" title="Задача дня и дни подряд">🔥 <span class="lbl">Сегодня</span></button>
     <button class="tbtn" id="btn-sheet" title="Справочник по командам (открывается поверх урока)">📖</button>
     <button class="tbtn who" id="btn-who" title="Профиль">👤</button>
     <button class="tbtn" id="btn-focus" title="Спрятать всё лишнее">⛶</button>
@@ -64,6 +64,19 @@
          и «Повторить», о которых по названию не догадаешься. -->
     <button class="tbtn help" id="btn-help" title="Подсказка: что это за экран и что тут делать" aria-haspopup="dialog" aria-expanded="false" aria-label="Подсказка про этот экран">?</button>
   </div>
+</div>
+
+<!-- Липкая полоска задания. Нужна на узком экране, где колонка одна: уйдя
+     в редактор, ребёнок терял из виду и текст задания, и дорогу назад. На
+     широком экране её нет — там задание и так стоит рядом с редактором. -->
+<div class="taskpin" id="taskpin" hidden>
+  <div class="tprow">
+    <button class="tpmain" id="tp-open" aria-expanded="false" aria-controls="tp-full">
+      <span class="tpem">🎯</span><span class="tptxt" id="tp-txt"></span><span class="tpchev">▾</span>
+    </button>
+    <button class="tpup" id="tp-up" title="Вернуться к объяснению урока">↑ Объяснение</button>
+  </div>
+  <div class="tpfull" id="tp-full" hidden></div>
 </div>
 
 <div class="wrap" id="app"></div>

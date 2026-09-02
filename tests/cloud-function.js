@@ -23,7 +23,7 @@ const json = (r) => JSON.parse(r.body);
 const get = (q) => ({ httpMethod:"GET", queryStringParameters:q });
 const post = (q, body) => ({ httpMethod:"POST", queryStringParameters:q, body:body });
 
-const progress = { v:2, xp:160, stars:{ "print-first":3, "vars":2 }, badges:["first"],
+const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars":2 }, badges:["first"],
                    log:{ "print-first":{ attempts:2, hints:0, timeMs:180000, last:1000 } },
                    savedAt: 1234567890 };
 
@@ -110,11 +110,17 @@ const progress = { v:2, xp:160, stars:{ "print-first":3, "vars":2 }, badges:["fi
   check("в списке верный код", st && st[0].code === "misha-7f3a");
   check("в списке верный опыт", st && st[0].xp === 160);
   check("в списке посчитано время", st && st[0].timeMs === 180000);
+  /* без имени наставник видит только коды, а две Ани по кодам не различаются */
+  check("в списке есть имя ученика", st && st[0].name === "Миша", JSON.stringify(st && st[0]));
 
   /* ---------- второй ученик и порядок в списке ---------- */
   await call(post({ op:"save", code:"anya_2" }, JSON.stringify({ xp:25, stars:{ "print-first":1 } })));
   r = await call(get({ op:"list", key:"kluch-nastavnika" }));
   check("в списке стало два ученика", json(r).students.length === 2);
+  /* старые записи имени не знают — там должна быть пустая строка, а не «undefined» */
+  const anya = json(r).students.filter(s => s.code === "anya_2")[0];
+  check("у записи без имени имя пустое, а не мусор", anya && anya.name === "",
+        JSON.stringify(anya));
 
   /* ---------- испорченный файл не валит список ---------- */
   fs.writeFileSync(path.join(DIR, "slomannyi.json"), "{ это не json");

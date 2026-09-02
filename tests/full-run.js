@@ -473,6 +473,7 @@ function checkEncoding(){
 
   g.setStars("print-first", 3);
   g.setStars("vars", 2);
+  g.state.name = "Миша";
   await g.cloudPush().catch(e => bad("[сервер] отправка не удалась: " + e.message));
   const saved = fs.readdirSync(cloudDir);
   if (!saved.includes("test-kid.json")) bad(`[сервер] файл не появился: ${saved.join(", ")}`);
@@ -500,9 +501,40 @@ function checkEncoding(){
   if (!lst || (lst.students || []).length !== 2) bad(`[сервер] в списке ${lst && (lst.students||[]).length} учеников, ожидалось 2`);
   const badKey = await w.Cloud.list("не тот ключ").then(() => "пустили", () => "отказ");
   if (badKey !== "отказ") bad("[сервер] список открылся с неверным ключом наставника");
+  /* Имя в списке. Без него наставник видит одни коды, а две Ани по кодам не
+     различаются. У записи, сохранённой без имени, оно должно быть пустым —
+     и тогда в панели показывается код, а не слово «undefined». */
+  const meRow = (lst && lst.students || []).filter(x => x.code === "test-kid")[0];
+  if (!meRow || meRow.name !== "Миша")
+    bad("[сервер] имя ученика не доехало до списка наставника: " + JSON.stringify(meRow));
+  const oldRow = (lst && lst.students || []).filter(x => x.code === "anya-2b")[0];
+  if (!oldRow || oldRow.name !== "")
+    bad("[сервер] у записи без имени имя не пустое: " + JSON.stringify(oldRow));
 
   /* --- панель показывает чужой прогресс, не трогая свой --- */
   const myXpBefore = g.state.xp;
+  g.screenAdmin();
+  await tick();
+
+  /* список учеников в самой панели: строка должна называть ребёнка по имени */
+  const keyField = doc.getElementById("adminkey");
+  if (!keyField) bad("[панель] нет поля для ключа наставника");
+  else {
+    keyField.value = "kluch-testa";
+    doc.querySelector('[data-act="listall"]').click();
+    await tick(40);
+    const rows = doc.querySelectorAll(".admlrow");
+    if (!rows.length) bad("[панель] список учеников не отрисовался");
+    else {
+      const txt = Array.prototype.map.call(rows, r => r.textContent).join(" | ");
+      if (txt.indexOf("Миша") < 0)
+        bad("[панель] в списке учеников не видно имени: " + txt.slice(0, 160));
+      if (txt.indexOf("undefined") >= 0)
+        bad("[панель] в списке учеников напечатано «undefined»: " + txt.slice(0, 160));
+      if (txt.indexOf("anya-2b") < 0)
+        bad("[панель] ученик без имени пропал из списка вместо показа по коду");
+    }
+  }
   g.screenAdmin();
   await tick();
   const codeField = doc.getElementById("othercode");
@@ -1390,6 +1422,86 @@ function checkEncoding(){
     g.state.admin.unlockAll = savedUnlock2;
   }
 
+  /* --- раскладка урока: объяснение и работа рядом ---
+     Замер до правки: страница урока 2341px при экране 720px, а редактор
+     начинался на 1698-м. Ребёнок щёлкал в редактор, страница уезжала, и за
+     верхним краем оставались и объяснение, и текст задания. Проверяем не
+     «класс появился», а то, ЧТО ИМЕННО должно быть рядом с редактором. */
+  {
+    const p0 = problems.length;
+    g.openLesson("vars"); await tick();
+    const grid = doc.querySelector(".lessongrid");
+    if (!grid) bad("[раскладка] на уроке нет сетки объяснение/работа");
+    else {
+      if (!grid.querySelector(".lcol-read .card.theory"))
+        bad("[раскладка] объяснение не попало в свою колонку");
+      if (!grid.querySelector(".lcol-work #studio"))
+        bad("[раскладка] редактор не попал в рабочую колонку");
+      if (!grid.querySelector(".lcol-work .goal"))
+        bad("[раскладка] задание оторвано от редактора — ради этого всё и делалось");
+      if (grid.querySelector(".lcol-read #studio"))
+        bad("[раскладка] редактор оказался в колонке объяснения");
+      if (grid.classList.contains("one"))
+        bad("[раскладка] обычный урок помечен как одноколоночный");
+    }
+    /* уроки с рисованием идут одной колонкой: рядом с редактором холст */
+    g.openLesson("turtle-first"); await tick();
+    const drawGrid = doc.querySelector(".lessongrid");
+    if (!drawGrid || !drawGrid.classList.contains("one"))
+      bad("[раскладка] урок с рисованием втиснут в узкую колонку — холсту там не хватит места");
+    viewReset(g); await tick();
+  }
+
+  /* --- липкая полоска задания (узкий экран) ---
+     В jsdom нет IntersectionObserver, поэтому подставляем свой и дёргаем его
+     руками: важно не «наблюдатель создан», а что полоска показывает текст
+     задания, разворачивается и уходит вместе с экраном. */
+  {
+    const p0 = problems.length;
+    let io = null;
+    w.IntersectionObserver = function(cb){
+      this.cb = cb; io = this;
+      this.observe = function(){}; this.disconnect = function(){ io = null; };
+    };
+    g.openLesson("vars"); await tick();
+    const pin = doc.getElementById("taskpin");
+    if (!pin) bad("[полоска] в разметке нет липкой полоски задания");
+    else if (!io) bad("[полоска] наблюдатель за карточкой задания не заведён");
+    else {
+      if (!pin.hidden) bad("[полоска] полоска висит, хотя задание ещё видно");
+      const goalP = doc.querySelector(".goal p");
+      const txt = doc.getElementById("tp-txt").textContent.trim();
+      if (!txt || txt !== goalP.textContent.trim())
+        bad("[полоска] в полоске не текст задания: " + JSON.stringify(txt.slice(0, 60)));
+
+      /* задание уехало выше верхнего края — полоска обязана появиться */
+      io.cb([{ isIntersecting:false, boundingClientRect:{ top:-40 } }]);
+      if (pin.hidden) bad("[полоска] задание уехало вверх, а полоска не появилась");
+
+      const open = doc.getElementById("tp-open");
+      open.click();
+      if (doc.getElementById("tp-full").hidden)
+        bad("[полоска] полный текст задания не разворачивается");
+      if (doc.getElementById("tp-full").textContent.trim().length < 10)
+        bad("[полоска] в развёрнутой полоске пусто");
+      if (!doc.getElementById("tp-up")) bad("[полоска] нет кнопки возврата к объяснению");
+
+      /* задание снова видно — полоска и её раскрытие уходят */
+      io.cb([{ isIntersecting:true, boundingClientRect:{ top:120 } }]);
+      if (!pin.hidden) bad("[полоска] задание снова видно, а полоска осталась");
+      if (!doc.getElementById("tp-full").hidden)
+        bad("[полоска] полоска спряталась, а её раскрытый текст остался");
+
+      /* уход с урока обязан её убрать: на карте миров задания нет */
+      io.cb([{ isIntersecting:false, boundingClientRect:{ top:-40 } }]);
+      viewReset(g); await tick();
+      if (!doc.getElementById("taskpin").hidden)
+        bad("[полоска] осталась висеть после ухода с урока");
+    }
+    delete w.IntersectionObserver;
+    viewReset(g); await tick();
+  }
+
   /* --- черновики кода на экране урока ---
      Раньше уход с урока стирал написанное. Проверяем не «поле появилось»,
      а поведение: код переживает уход и возвращение, нетронутый урок ничего
@@ -1479,6 +1591,70 @@ function checkEncoding(){
         bad("[черновик] код песочницы потерялся при уходе через верхнюю панель");
     }
 
+    /* шаги проекта теряли код точно так же: он сохранялся ТОЛЬКО на победе,
+       и уход за подсказкой в шпаргалку стирал написанное на шаге. */
+    if (typeof g.openProject === "function" && typeof g.projectDraftId === "function" && PROJECTS.length){
+      const pr = PROJECTS[0], pkey = g.projectDraftId(pr.id, 0);
+      const savedUnlock3 = g.state.admin.unlockAll;
+      /* прогресс проектов трогать нельзя: дальше портфолио проверяет дату
+         сборки, записанную настоящим проходом выше. Убираем только свой */
+      const savedProj3 = JSON.parse(JSON.stringify(g.state.projects || {}));
+      g.state.admin.unlockAll = true;
+      delete g.state.projects[pr.id];
+      g.state.drafts = {};
+
+      g.openProject(pr.id); await tick();
+      let ps = studioOf();
+      if (!ps) bad("[черновик] шаг проекта не открылся");
+      else {
+        /* нетронутый шаг черновика не заводит */
+        viewReset(g); await tick();
+        if (g.draftGet(pkey)) bad("[черновик] нетронутый шаг проекта оставил черновик");
+
+        g.openProject(pr.id); await tick();
+        ps = studioOf();
+        ps.editor.setCode("# мои каракули на шаге\nprint(1)");
+        viewReset(g); await tick();
+        const pd = g.draftGet(pkey);
+        if (!pd) bad("[черновик] код шага проекта пропал при уходе с экрана");
+        else if (String(pd.files[0].code).indexOf("каракули на шаге") < 0)
+          bad("[черновик] на шаге проекта сохранён не тот код");
+
+        g.openProject(pr.id); await tick();
+        ps = studioOf();
+        if (!ps || ps.editor.getCode().indexOf("каракули на шаге") < 0)
+          bad("[черновик] код не вернулся в редактор шага проекта");
+        const pnote = doc.getElementById("draftnote");
+        if (!pnote || pnote.hidden)
+          bad("[черновик] на шаге проекта нет подписи, что в редакторе код с прошлого раза");
+        const pfresh = doc.getElementById("draftfresh");
+        if (!pfresh) bad("[черновик] на шаге проекта нет кнопки «Начать шаг заново»");
+        else {
+          pfresh.click(); await tick();
+          if (studioOf().editor.getCode() !== pr.steps[0].starter)
+            bad("[черновик] «Начать шаг заново» не вернуло заготовку шага");
+          if (g.draftGet(pkey)) bad("[черновик] «Начать шаг заново» не стёрло черновик шага");
+        }
+
+        /* сданный шаг черновика за собой не оставляет: код уехал в проект,
+           и вторая копия только занимала бы место в прогрессе */
+        ps = studioOf();
+        ps.editor.setCode(pr.steps[0].solution);
+        ps.querySelector('[data-role="check"]').click(); await tick();
+        if (!won()) bad("[черновик] шаг проекта не засчитан эталоном — " + msgText());
+        else {
+          const nx = doc.getElementById("pnext");
+          if (nx){ nx.click(); await tick(); } else closeWin();
+          if (g.draftGet(pkey))
+            bad("[черновик] сданный шаг проекта оставил за собой черновик");
+        }
+      }
+      g.state.admin.unlockAll = savedUnlock3;
+      g.state.projects = savedProj3;
+      g.state.drafts = {};
+      viewReset(g); await tick();
+    } else bad("[черновик] шаги проекта черновиков не знают — projectDraftId не выведен наружу");
+
     /* слияние: код сложить нельзя, поэтому свежая копия побеждает,
        но черновик, который был только на одном устройстве, не теряется */
     const dm = g.mergeProgress(
@@ -1529,8 +1705,14 @@ function checkEncoding(){
     if (!proj1) bad("[портфолио] у первого мира нет проекта — проверять сертификат нечем");
     g.state.name = "Аня";
 
-    /* пусто: ни программ, ни сертификатов */
+    /* пусто: ни программ, ни сертификатов. Разминки и «Ты и ИИ» тоже чистим:
+       выше по тесту они пройдены целиком, а за них теперь есть свои
+       сертификаты — без этой чистки «пустой прогресс» пустым не был бы. */
+    const savedWarm = JSON.parse(JSON.stringify(g.state.warmups));
+    const savedAilab = JSON.parse(JSON.stringify(g.state.ailab));
+    const savedCertAt = JSON.parse(JSON.stringify(g.state.certAt || {}));
     g.state.stars = {}; g.state.projects = {}; g.state.log = {};
+    g.state.warmups = {}; g.state.ailab = {}; g.state.certAt = {};
     g.screenFolio();
     await tick();
     if (!doc.querySelector(".fstats")) bad("[портфолио] сводка не отрисовалась");
@@ -1606,6 +1788,64 @@ function checkEncoding(){
     if (mp.projects.x.doneAt !== 500)
       bad("[сертификат] слияние взяло не раннюю дату сборки: " + mp.projects.x.doneAt);
 
+    /* --- сертификаты за разделы вне сотни ---
+       Обещание то же, что у миров: не «сколько прочитал», а всё сделано.
+       У «Ты и ИИ» к заданиям добавлен проект «Напарник» — иначе сертификат
+       был бы бумажкой без сделанной вещи. */
+    if (typeof g.certSectionReady === "function"){
+      const WARM = w.WARMUPS || [], AIL = w.AILAB || [], aiProj0 = g.projectOfWorld(0);
+      g.state.warmups = {}; g.state.ailab = {}; g.state.certAt = {};
+      Object.keys(g.state.projects).forEach(k => { if (aiProj0 && k === aiProj0.id) delete g.state.projects[k]; });
+
+      if (g.certSectionReady("warmups")) bad("[сертификат] «Разминка» выдана на нуле разминок");
+      if (!g.certSectionNeed("warmups")) bad("[сертификат] не сказано, сколько разминок осталось");
+      if (g.certSectionAt("warmups")) bad("[сертификат] у невыданной «Разминки» есть дата");
+
+      WARM.forEach(x => { g.state.warmups[x.id] = 1; });
+      if (!g.certSectionReady("warmups")) bad("[сертификат] «Разминка» не выдана, хотя разгаданы все");
+      if (g.certSectionNeed("warmups")) bad("[сертификат] выданная «Разминка» всё ещё чего-то требует");
+      const wAt = g.certSectionAt("warmups");
+      if (!wAt) bad("[сертификат] у выданной «Разминки» нет даты");
+      /* дата обязана стоять на месте: лист, распечатанный дважды, — один лист */
+      if (g.certSectionAt("warmups") !== wAt)
+        bad("[сертификат] дата «Разминки» переписывается при каждом открытии");
+
+      /* «Ты и ИИ»: заданий мало — нужен ещё проект раздела */
+      AIL.forEach(x => { g.state.ailab[x.id] = 1; });
+      if (aiProj0){
+        if (g.certSectionReady("ailab"))
+          bad("[сертификат] «Ты и ИИ» выдан без собранного проекта «" + aiProj0.title + "»");
+        if (g.certSectionNeed("ailab").indexOf(aiProj0.title) < 0)
+          bad("[сертификат] не сказано, что до «Ты и ИИ» не хватает проекта");
+        g.state.projects[aiProj0.id] =
+          { step: aiProj0.steps.length, done:1, aiAt:-1, doneAt:4000, code:"print(1)" };
+      }
+      if (!g.certSectionReady("ailab"))
+        bad("[сертификат] «Ты и ИИ» не выдан, хотя сделаны все задания и проект");
+
+      /* на самом листе: звёзд у раздела нет, и «★ 0 из 0» на бумаге быть не должно */
+      const sheet = g.certBodyHTML("warmups");
+      if (sheet.indexOf("★") >= 0)
+        bad("[сертификат] на листе раздела нарисованы звёзды, которых у раздела нет");
+      if (sheet.indexOf(String(WARM.length)) < 0)
+        bad("[сертификат] на листе «Разминки» не названо число упражнений");
+
+      g.screenFolio(); await tick();
+      if (!doc.querySelector('.certcard.got [data-cert="warmups"], [data-cert="warmups"]'))
+        bad("[портфолио] сертификата за «Разминку» нет среди карточек");
+      if (!doc.querySelector('[data-cert="ailab"]'))
+        bad("[портфолио] сертификата за «Ты и ИИ» нет среди карточек");
+
+      /* слияние: дата выдачи — ранняя, и она не должна схлопываться в единицу */
+      const cm = g.mergeProgress(
+        { certAt:{ warmups: 500 }, savedAt:1 },
+        { certAt:{ warmups: 900, ailab: 700 }, savedAt:2 });
+      if (!cm.certAt || cm.certAt.warmups !== 500)
+        bad("[сертификат] слияние взяло не раннюю дату выдачи: " + JSON.stringify(cm.certAt));
+      if (cm.certAt.ailab !== 700)
+        bad("[сертификат] слияние потеряло дату, которая была только на одном устройстве");
+    } else bad("[сертификат] сертификатов за разделы вне сотни нет");
+
     /* печать: на бумагу должен уходить только лист. Правило одно, и если его
        убрать, распечатается вся тёмная страница целиком */
     if (html.indexOf("body>.cert:not([hidden])") < 0)
@@ -1613,6 +1853,7 @@ function checkEncoding(){
 
     g.state.stars = savedStars; g.state.projects = savedProjects;
     g.state.log = savedLog; g.state.name = savedName;
+    g.state.warmups = savedWarm; g.state.ailab = savedAilab; g.state.certAt = savedCertAt;
     viewReset(g);
     await tick();
     if (!doc.getElementById("gofolio")) bad("[портфолио] на карте миров нет входа в портфолио");

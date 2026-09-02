@@ -32,6 +32,30 @@ fs.readdirSync(path.join(root, "content"))
 
 const TURTLE = /\b(forward|back|right|left|penup|pendown|color|width|goto|home|dot|circle|speed)\s*\(/;
 const RANDOM = /\b(randint|choice|shuffle|sample|random)\s*\(/;
+/* Программа упала — и это бывает НАРОЧНО: «ИИ выдумал функцию», проверка
+   на пустом списке. Раньше такое содержание сверить было нельзя вообще:
+   текст ошибки у python3 английский и подробный, у движка свой, и любое
+   падение читалось как расхождение. Сравнивать построчный текст и правда
+   бессмысленно, но три вещи сравнимы, и все три существенные:
+     что напечаталось ДО падения,
+     КАКОЕ это исключение (имена классов у нас совпадают с питоновскими),
+     на КАКОЙ строке оно случилось.
+   Ослаблением это не является: падение у одного и не-падение у другого
+   по-прежнему расхождение, и разные исключения — тоже. */
+function crashSummary(stdout, stderr){
+  const lines = String(stderr).trim().split("\n");
+  const last = lines[lines.length - 1] || "";
+  const kind = (last.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?::|$)/) || [])[1];
+  let line = 0;
+  lines.forEach(t => {
+    const m = t.match(/^\s*File "[^"]*", line (\d+)/);
+    if (m) line = +m[1];
+  });
+  return kind
+    ? stdout + "<<УПАЛО " + kind + " строка " + line + ">>"
+    : stdout + "<<УПАЛО, но разобрать не удалось: " + last + ">>";
+}
+
 function skipReason(code){
   if (TURTLE.test(code)) return "черепашка";
   if (RANDOM.test(code)) return "случайность";
@@ -61,11 +85,17 @@ function compare(what, code, files, data, stdin){
   /* файлы с данными кладём как есть: программа их читает и переписывает */
   for (const name in dataFiles) fs.writeFileSync(path.join(TMP, name), dataFiles[name]);
   let expected;
+  /* stdio задаём явно: у execFileSync stderr по умолчанию уходит в наш
+     собственный stderr, и падение НАРОЧНО печатало бы питоновский traceback
+     в вывод проверки, пугая читателя посреди зелёного прогона. */
   try { expected = execFileSync("python3", [f], { encoding: "utf8", cwd: TMP,
+    stdio: ["pipe", "pipe", "pipe"],
     input: answers.length ? answers.join("\n") + "\n" : "" }); }
-  catch (e){ expected = "<<PYTHON ОШИБКА>> " + String(e.stderr || "").trim().split("\n").pop(); }
+  catch (e){ expected = crashSummary(String(e.stdout || ""), String(e.stderr || "")); }
   const r = MP.run(code, { turtle: new MP.Turtle(), sources: srcs, files: dataFiles, stdin: answers });
-  const got = r.error ? "<<ОШИБКА " + r.error.kind + " строка " + r.error.line + ">>" : r.output;
+  const got = r.error
+    ? (r.output || "") + "<<УПАЛО " + r.error.kind + " строка " + r.error.line + ">>"
+    : r.output;
   if (got !== expected){
     bad++;
     console.log("--- РАСХОЖДЕНИЕ: " + what);
@@ -251,7 +281,11 @@ console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание ур�
 const readmeBad = (function(){
   const fs2 = require("fs"), path2 = require("path");
   const readme = fs2.readFileSync(path2.join(__dirname, "..", "README.md"), "utf8");
-  const m = /сейчас (\d+) сверк/.exec(readme);
+  /* «сверки», «сверок», «сверка» — число в README склоняется по правилам
+     русского, и регулярка обязана это пережить. Первая редакция знала только
+     «сверк…», и на 765 сверках проверка молча перестала находить строку —
+     то есть перестала работать ровно тогда, когда число изменилось. */
+  const m = /сейчас (\d+) сверо?к/.exec(readme);
   if (!m){ console.log("README: не найдена строка про число сверок"); return true; }
   if (+m[1] !== checked){
     console.log("README говорит «" + m[1] + " сверок», а их " + checked + " — поправь README.md");

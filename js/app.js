@@ -67,7 +67,7 @@ var ADMIN_CODE = "kodokvest-2026";
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
-                     "mytasks","friendTasks","errs","gallery"];
+                     "mytasks","friendTasks","errs","gallery","certAt"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -606,7 +606,9 @@ function refreshTop(){
   if (bt){
     var s = streakCurrent();
     var due = studyDue();
-    bt.textContent = (due ? "🔔 " : "🔥 ") + (s > 0 ? s : "Сегодня");
+    /* Слово «Сегодня» лежит в отдельном span: на узком экране его прячет CSS,
+       а значок остаётся. Через textContent так нельзя — он стёр бы span. */
+    bt.innerHTML = (due ? "🔔 " : "🔥 ") + (s > 0 ? s : '<span class="lbl">Сегодня</span>');
     /* «горит», если сегодня уже занимались; «due» — учебный день, ещё не занимались */
     bt.classList.toggle("lit", activeOn(dayKey()));
     bt.classList.toggle("due", due);
@@ -705,6 +707,17 @@ function mergeProgress(a, b){
 
   /* какие игры вообще открывали: объединяем, как разминки */
   out.gamesPlayed = mergeSet(a.gamesPlayed, b.gamesPlayed);
+
+  /* даты выдачи сертификатов за разделы вне сотни. Здесь mergeSet не годится:
+     он схлопывает значение в единицу, а единица как метка времени — это
+     1 января 1970 года на распечатанном листе. Берём САМУЮ РАННЮЮ: раздел
+     закончен тогда, когда закончен, а не когда об этом узнало второе
+     устройство. */
+  out.certAt = {};
+  Object.keys(mergeSet(a.certAt, b.certAt)).forEach(function(k){
+    var t = minPos((a.certAt || {})[k], (b.certAt || {})[k]);
+    if (t) out.certAt[k] = t;
+  });
 
   /* дни занятий и выполненные «задачи дня»: объединяем множества дат.
      День, засчитанный на любом устройстве, остаётся засчитанным — так стрик
@@ -3095,6 +3108,75 @@ function draftSchedule(){
   draftTimer = setTimeout(function(){ draftTimer = null; draftFlush(); }, DRAFT_WAIT);
 }
 
+/* ===== липкая полоска задания =====
+   Нужна там, где колонка одна (узкий экран): уехав в редактор, ребёнок терял
+   из виду и текст задания, и дорогу назад. Полоска всегда говорит, что надо
+   сделать, разворачивается тапом в полный текст и даёт кнопку к объяснению.
+   Появляется она не «на уроке», а РОВНО когда карточка задания ушла выше
+   верхнего края: пока задание видно, вторая копия того же текста только
+   мешала бы. */
+var taskPinObs = null;
+/* Высота шапки уезжает в CSS-переменную: полоска задания прилипает ПОД шапкой,
+   а шапка на телефоне двухстрочная. Зашитое число пряталось бы под ней. */
+function syncTopHeight(){
+  var t = document.querySelector(".top");
+  if (!t || !t.getBoundingClientRect) return;
+  var h = Math.round(t.getBoundingClientRect().height);
+  if (h > 0) document.documentElement.style.setProperty("--toph", h + "px");
+}
+window.addEventListener("resize", syncTopHeight);
+function taskPinHide(){
+  if (taskPinObs){ taskPinObs.disconnect(); taskPinObs = null; }
+  var el = document.getElementById("taskpin");
+  if (!el) return;
+  el.hidden = true;
+  el.classList.remove("open");
+  var full = document.getElementById("tp-full");
+  if (full) full.hidden = true;
+  var op = document.getElementById("tp-open");
+  if (op) op.setAttribute("aria-expanded", "false");
+}
+function taskPinShow(goalEl){
+  taskPinHide();
+  var pin = document.getElementById("taskpin");
+  if (!pin || !goalEl || !window.IntersectionObserver) return;
+  var p = goalEl.querySelector("p");
+  document.getElementById("tp-txt").textContent = p ? p.textContent.trim() : "Задание";
+  /* в развёрнутом виде — тот же текст задания целиком, включая список пунктов */
+  var full = document.getElementById("tp-full");
+  full.innerHTML = (p ? "<p>" + p.innerHTML + "</p>" : "") +
+    (goalEl.querySelector("ul") ? goalEl.querySelector("ul").outerHTML : "");
+  taskPinObs = new IntersectionObserver(function(es){
+    var e = es[0];
+    var gone = !e.isIntersecting && e.boundingClientRect.top < 0;
+    if (!gone && !pin.hidden){
+      pin.classList.remove("open");
+      full.hidden = true;
+      document.getElementById("tp-open").setAttribute("aria-expanded", "false");
+    }
+    pin.hidden = !gone;
+  }, { threshold: 0 });
+  taskPinObs.observe(goalEl);
+}
+(function(){
+  var op = document.getElementById("tp-open");
+  if (op) op.onclick = function(){
+    var pin = document.getElementById("taskpin"), full = document.getElementById("tp-full");
+    var open = !pin.classList.contains("open");
+    pin.classList.toggle("open", open);
+    full.hidden = !open;
+    op.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  var up = document.getElementById("tp-up");
+  if (up) up.onclick = function(){
+    /* «к объяснению» — это первая карточка теории, а не начало страницы:
+       заголовок урока ребёнок и так помнит, а нужен ему разбор. */
+    var first = document.querySelector(".lcol-read .card.theory") || document.querySelector(".card.theory");
+    if (first && first.scrollIntoView) first.scrollIntoView({ behavior:"smooth", block:"start" });
+    else window.scrollTo({ top:0, behavior:"smooth" });
+  };
+})();
+
 
 function openLesson(id){
   var l = CURRICULUM.byId(id);
@@ -3176,9 +3258,29 @@ function openLesson(id){
         '<span>не получается — «<b>💡 Подсказка</b>» ниже</span></div>'
       : "";
 
-    app.innerHTML = head + theory + goal + bug +
-      '<div class="draftnote" id="draftnote" hidden></div>' +
-      howbar + '<div id="studio"></div>' + hints + pager;
+    /* Раскладка урока в ДВЕ колонки: слева объяснение, справа задание и
+       редактор. Замер до правки: страница 2341px при экране 720px, а редактор
+       начинался на 1698-м — на 2,4 экрана ниже. То есть в момент, когда
+       ребёнок щёлкал в редактор, за верхний край уезжали и объяснение, и сам
+       текст задания, а под редактором были только подсказки: вернуться
+       некуда. После правки редактор начинается на 606-м, задание стоит прямо
+       над ним и держится липким, пока ребёнок пишет код.
+
+       Правая колонка обязана влезать в экран целиком — иначе липкость не
+       спасает. Поэтому полоска «Что дальше» вынесена НАД сеткой: с ней
+       колонка 884px при экране 800, без неё 788. Показывается она всё равно
+       один раз в жизни, на первом уроке.
+
+       На узком экране колонка одна и порядок прежний: объяснение, задание,
+       редактор. Там же работает липкая полоска задания, см. lessonPin(). */
+    app.innerHTML = head + howbar +
+      '<div class="lessongrid' + (body.draw ? ' one' : '') + '">' +
+        '<div class="lcol-read">' + theory + '</div>' +
+        '<div class="lcol-work">' + goal + bug +
+          '<div class="draftnote" id="draftnote" hidden></div>' +
+          '<div id="studio"></div>' + hints +
+        '</div>' +
+      '</div>' + pager;
 
     /* Задание может состоять из нескольких файлов: главный плюс модули. */
     var taskFiles = body.task.files
@@ -3286,6 +3388,9 @@ function openLesson(id){
     });
 
     refreshTop();
+    /* полоска задания заводится ПОСЛЕ отрисовки: ей нужна живая карточка */
+    syncTopHeight();
+    taskPinShow(app.querySelector(".goal"));
     window.scrollTo({ top:0, behavior:"smooth" });
   });
 }
@@ -5232,6 +5337,9 @@ function projectState(id){
   return st;
 }
 function projectDone(id){ return !!projectState(id).done; }
+/* ключ черновика шага: у каждого шага свой, чтобы возврат на шаг возвращал
+   именно то, что на нём писали */
+function projectDraftId(pid, i){ return "proj-" + pid + "-" + i; }
 /* Проект открывается, когда все готовые уроки его мира пройдены.
    world: 0 — это проект вне миров («Напарник» в разделе «Ты и ИИ»): у него
    нет карты мира, поэтому и открывается он по своему разделу. */
@@ -5277,7 +5385,13 @@ function openProject(id, forceStep){
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
     enterScreen(undefined, "project");
-    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i };
+    /* Черновик шага проекта — тем же механизмом, что у уроков: ключ шага
+       вместо id урока. До этого код шага сохранялся ТОЛЬКО на победе, и уход
+       за подсказкой в шпаргалку стирал написанное. */
+    var draftId = projectDraftId(p.id, i);
+    var startCode = projectStartCode(p, i);
+    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i,
+                lesson:draftId, starter:[{ name:"main.py", code:startCode }] };
 
     var dots = p.steps.map(function(s, k){
       var cls = k < st.step ? "done" : (k === i ? "now" : "");
@@ -5312,16 +5426,34 @@ function openProject(id, forceStep){
     var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← ' +
       (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
 
-    app.innerHTML = head + goal + '<div id="studio"></div>' + hints + pager;
+    app.innerHTML = head + goal +
+      '<div class="draftnote" id="draftnote" hidden></div>' +
+      '<div id="studio"></div>' + hints + pager;
 
     var studio = makeStudio({
       engine: "mini",
-      code: projectStartCode(p, i),
+      code: startCode,
       label: "твоя программа",
       check: function(ed, showMsg){ runProjectCheck(p, i, ed, showMsg); }
     });
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
+
+    var pdraft = draftGet(draftId);
+    if (pdraft){
+      draftApply(studio.editor, pdraft.files);
+      var pnote = document.getElementById("draftnote");
+      pnote.hidden = false;
+      pnote.innerHTML = '<span>\u{1F4DD} В редакторе код с прошлого раза, а не то, с чего шаг начинался.</span>' +
+        '<button class="rbtn sec" id="draftfresh">Начать шаг заново</button>';
+      document.getElementById("draftfresh").onclick = function(){
+        draftDrop(draftId);
+        studio.editor.setCode(startCode);
+        pnote.hidden = true;
+        studio.editor.focusEditor();
+      };
+    }
+    studio.editor.onEdit = draftSchedule;
 
     wireHint(step.hints);
     document.getElementById("solbtn").onclick = function(){
@@ -5363,6 +5495,13 @@ function runProjectCheck(p, i, ed, showMsg){
 function winProjectStep(p, i, code){
   var st = projectState(p.id);
   st.code = code;
+  /* Шаг сдан — код уехал в st.code, черновик шага больше не нужен. Заготовку
+     сессии подменяем на сданный код: иначе draftFlush при уходе на следующий
+     шаг заведёт черновик заново, и он останется висеть навсегда. */
+  draftDrop(projectDraftId(p.id, i));
+  if (session && session.project === p.id && session.pstep === i){
+    session.starter = [{ name:"main.py", code: code }];
+  }
   if (i + 1 > st.step) st.step = i + 1;
   var last = st.step >= p.steps.length;
   /* doneAt ставится ОДИН раз: это дата на сертификате, и она не должна
@@ -5656,6 +5795,89 @@ function certCourseNeed(){
   return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
 }
 
+/* ---- сертификаты за разделы вне сотни ----
+   Устроены как у миров: задания раздела ПЛЮС его проект, если он есть.
+   Отличие одно, и оно в дате. У урока есть solvedAt в журнале, а разминка и
+   задание «Ты и ИИ» отмечались единицей, без времени, — восстановить задним
+   числом нечего. Поэтому дату выдачи ЗАПОМИНАЕМ в S.certAt в тот момент,
+   когда раздел закрылся, и больше не трогаем: сертификат, распечатанный
+   сегодня и через месяц, обязан быть одним и тем же листом. */
+var WARM_KIND = { predict:"угадай вывод", blocks:"собери из блоков", memory:"предскажи память" };
+var SECTION_CERTS = [
+  { id:"warmups", icon:"🧩", title:"Разминка пройдена целиком",
+    what:"Разминка",
+    all: function(){ return warmupsList().length; },
+    done: function(){
+      return warmupsList().filter(function(x){ return warmupDone(x.id); }).length;
+    },
+    unit: ["разминка", "разминки", "разминок"],
+    line: function(d, t){
+      /* Перечень механик считаем по самим разминкам, а не пишем строкой:
+         добавится шестой тип — лист соврёт, и заметить это будет некому. */
+      var seen = [], ok = 1;
+      warmupsList().forEach(function(x){
+        var nm = WARM_KIND[x.type];
+        if (!nm){ ok = 0; return; }
+        if (seen.indexOf(nm) < 0) seen.push(nm);
+      });
+      var tail = (ok && seen.length)
+        ? ' — ' + seen.map(function(n){ return '«' + n + '»'; }).join(", ") + '.'
+        : '.';
+      return 'Раздел «Разминка» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "упражнения", "упражнений", "упражнений") + tail;
+    } },
+  { id:"ailab", icon:"🤖", title:"Раздел «Ты и ИИ» пройден",
+    what:"Ты и ИИ",
+    all: function(){ return ailabList().length; },
+    done: function(){
+      return ailabList().filter(function(x){ return ailabDone(x.id); }).length;
+    },
+    unit: ["задание", "задания", "заданий"],
+    project: 0,
+    line: function(d, t){
+      var p = projectOfWorld(0);
+      return 'Раздел «Ты и ИИ» пройден полностью: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "задание", "задания", "заданий") +
+        (p ? ', проект «' + esc(p.title) + '» собран' : '') +
+        '. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
+    } }
+];
+function sectionCert(id){
+  for (var i = 0; i < SECTION_CERTS.length; i++)
+    if (SECTION_CERTS[i].id === id) return SECTION_CERTS[i];
+  return null;
+}
+function certSectionReady(id){
+  var c = sectionCert(id);
+  if (!c || !c.all()) return false;
+  if (c.done() !== c.all()) return false;
+  if (c.project !== undefined){
+    var p = projectOfWorld(c.project);
+    if (!p || !projectDone(p.id)) return false;
+  }
+  return true;
+}
+/* Дата выдачи. Ставится один раз — в момент, когда раздел закрылся. Если
+   раздел закрыли ДО того, как сертификаты появились, ставим сейчас: это
+   честно, лист и правда выдан сегодня, а выдумывать прошлую дату нельзя. */
+function certSectionAt(id){
+  if (!certSectionReady(id)) return 0;
+  S.certAt = S.certAt || {};
+  if (!S.certAt[id]){ S.certAt[id] = Date.now(); save(); }
+  return S.certAt[id];
+}
+function certSectionNeed(id){
+  var c = sectionCert(id);
+  if (!c) return "";
+  var bits = [], left = c.all() - c.done();
+  if (left > 0) bits.push(left + " " + plural(left, c.unit[0], c.unit[1], c.unit[2]));
+  if (c.project !== undefined){
+    var p = projectOfWorld(c.project);
+    if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
+  }
+  return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
+}
+
 function certList(){
   var out = [];
   CURRICULUM.forEach(function(w){
@@ -5665,6 +5887,14 @@ function certList(){
       ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
     });
   });
+  SECTION_CERTS.forEach(function(c){
+    out.push({
+      id: c.id, kind: c.id, icon: c.icon, title: c.title, section: 1,
+      ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.id)
+    });
+  });
+  /* «Курс целиком» стоит последним намеренно: это главный лист, и он не должен
+     теряться между сертификатами за разделы. */
   out.push({
     id: "course", kind: "course", icon: "🏆", title: "Курс пройден целиком",
     ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
@@ -5681,13 +5911,16 @@ function fmtDay(ts){
 /* Текст сертификата написан безлично («пройден», а не «прошёл»): курс учат
    и мальчики, и девочки, а угадывать род по имени — плохая идея. */
 function certBodyHTML(kind){
+  var sect = sectionCert(kind);
   var course = kind === "course";
-  var w = course ? null : CURRICULUM.world(kind);
-  var p = course ? null : projectOfWorld(kind);
-  var at = course ? certCourseAt() : certWorldAt(kind);
+  var w = (course || sect) ? null : CURRICULUM.world(kind);
+  var p = (course || sect) ? null : projectOfWorld(kind);
+  var at = sect ? certSectionAt(kind) : (course ? certCourseAt() : certWorldAt(kind));
   var stars = 0, top = 0, what = "";
 
-  if (course){
+  if (sect){
+    what = sect.line(sect.done(), sect.all());
+  } else if (course){
     CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
     top = CURRICULUM.total * 3;
     var names = [];
@@ -5709,13 +5942,18 @@ function certBodyHTML(kind){
   }
 
   var name = myName();
+  /* Звёзд в разделах вне сотни нет — и рисовать «★ 0 из 0» на листе нельзя.
+     Вместо счёта звёзд у раздела стоит счёт сделанного. */
+  var tally = sect
+    ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
+    : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
   return '<div class="certsheet">' +
     '<div class="certmark">🐍 Кодоквест</div>' +
     '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
     '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
-    '<div class="certstars">★ ' + stars + ' из ' + top + '</div>' +
+    tally +
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
   '</div>';
@@ -5864,7 +6102,8 @@ function screenFolio(){
   h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
     '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
     '<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
-    'проект мира. Его можно распечатать или сохранить в PDF.</p><div class="certs">';
+    'проект мира. Отдельно — за разделы вне сотни: всю «Разминку» и весь «Ты и ИИ». ' +
+    'Любой можно распечатать или сохранить в PDF.</p><div class="certs">';
   certs.forEach(function(c){
     h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
       '<span class="cticon">' + c.icon + '</span>' +
@@ -7065,7 +7304,7 @@ var screenSeq = 0;
 /* Через claimScreen проходит ЛЮБАЯ смена экрана: и enterScreen, и урок, и
    проект. Поэтому черновик уходящего урока сохраняется именно здесь — одним
    местом на все переходы, включая переход с урока сразу на другой урок. */
-function claimScreen(){ draftFlush(); return ++screenSeq; }
+function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
 function screenStale(n){ return n !== screenSeq; }
 function clearAdminHash(){
   try {
@@ -7638,8 +7877,12 @@ function screenAdmin(){
           '<div class="admlist">' + st.map(function(s){
             return s.broken
               ? '<div class="admlrow"><b>' + esc(s.code) + '</b><span>файл испорчен</span></div>'
-              : '<div class="admlrow"><b>' + esc(s.code) + '</b>' +
-                '<span>' + s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
+              /* Имя пришло с сервера — но только у тех, кто сохранялся уже после
+                 того, как оно там появилось. У остальных показываем код: это
+                 честнее, чем «без имени». */
+              : '<div class="admlrow"><b>' + esc(s.name || s.code) + '</b>' +
+                '<span>' + (s.name ? esc(s.code) + ' · ' : '') +
+                s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
                 fmtMins(s.timeMs) + ' · ' + fmtWhen(s.serverAt) + '</span>' +
                 '<button class="minibtn" data-act="viewcode" data-id="' + esc(s.code) + '">открыть</button></div>';
           }).join("") + '</div>');
@@ -8156,7 +8399,7 @@ function screenGuide(){
     '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — разминка, игры, «Ты и ИИ», песочница, визуализатор</span></div>' +
     '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — программы, рисунки, свои задания, сертификаты</span></div>' +
     '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
-    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 106 команд с примерами, открывается поверх урока</span></div>' +
+    '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — 115 команд с примерами, открывается поверх урока</span></div>' +
     '<div class="iconrow"><span class="ic">👤</span><span><b>Профиль</b> — имя, код ученика, выход</span></div>' +
     '<div class="iconrow"><span class="ic">⛶</span><span><b>Фокус</b> — прячет всё лишнее, остаётся только урок</span></div>' +
     '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — что это за экран и что тут делать</span></div>' +
@@ -8455,6 +8698,7 @@ window.__game = {
   openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
   projectOfWorld: projectOfWorld, projectState: projectState, projectDone: projectDone,
   projectOpen: projectOpen, projectStartCode: projectStartCode,
+  projectDraftId: projectDraftId,
   screenAILab: screenAILab, openAILesson: openAILesson, ailabDone: ailabDone,
   reviewTruth: reviewTruth, catchProbe: catchProbe, catchRun: catchRun, catchStart: catchStart,
   memAnswers: memAnswers, memFrame: memFrame, memNorm: memNorm,
@@ -8510,6 +8754,8 @@ window.__game = {
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
   certWorldAt: certWorldAt, certCourseAt: certCourseAt,
   certWorldNeed: certWorldNeed, certCourseNeed: certCourseNeed,
+  certSectionReady: certSectionReady, certSectionAt: certSectionAt,
+  certSectionNeed: certSectionNeed, SECTION_CERTS: SECTION_CERTS,
   worldWhole: worldWhole, worldStars: worldStars, worldSolvedCount: worldSolvedCount,
   fmtDay: fmtDay
 };
