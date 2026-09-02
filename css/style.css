@@ -1276,3 +1276,10 @@ body.focus .toTop{display:none}
 .tpfull ul{margin:6px 0 0;padding-left:19px}
 @media (min-width:1040px){ .taskpin{display:none} }
 @media print{ .taskpin{display:none} }
+
+/* Кнопка «прочитать вслух» на карточке урока. float, а не абсолют: карточки
+   разной высоты, и позиционирование поверх заголовка ломало бы длинные. */
+.saybtn{float:right;margin:0 0 8px 12px;border:1px solid var(--line);background:var(--panel);
+  color:var(--soft);border-radius:999px;padding:5px 11px;font-size:14px;line-height:1.2;cursor:pointer}
+.saybtn:hover{color:var(--ink);border-color:var(--acc2)}
+.saybtn:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}

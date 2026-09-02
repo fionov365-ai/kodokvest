@@ -578,6 +578,7 @@ function toast(id){
   el.className = "toast";
   el.innerHTML = '<span class="em">' + b.em + '</span><span><b>Новый бейдж</b><span>' + b.name + '</span></span>';
   document.body.appendChild(el);
+  sfx("badge");
   setTimeout(function(){ el.classList.add("out"); }, 3000);
   setTimeout(function(){ el.remove(); }, 3600);
 }
@@ -2046,6 +2047,13 @@ function makeStudio(cfg){
     if (res.error){
       ed.setError(res.error.line);
       showMsg("bad", errHTML(res.error));
+      sfx("bad");
+      /* Объяснение ошибки — ровно тот текст, ради которого включают голос:
+         кому тяжело читать с экрана, тот застревает именно здесь.
+         Собираем фразу заново, а не читаем errHTML: там заголовок и текст
+         стоят встык (<b>…</b>текст), и вслух выходило «строка 1Имя». */
+      speakAuto((KIND_RU[res.error.kind] || res.error.kind) +
+                (res.error.line ? ", строка " + res.error.line : "") + ". " + res.error.msg);
       wrap._hadError = true;
       /* бестиарий: зверь встретился. Помним ЕГО тип — победа достанется
          именно ему, а не тому, что упало три запуска назад. */
@@ -3207,7 +3215,9 @@ function openLesson(id){
       '<span class="tag">' + l.sub + '</span>' + (body.draw ? '<span class="tag draw">рисование</span>' : '') + '</div></div>' +
       '<p class="lede">' + body.lede + '</p>';
 
+    var sayTexts = {};
     var theory = body.theory.map(function(t, i){
+      sayTexts["t" + i] = plainText(t.h + ". " + t.p);
       /* t.show — код, который в тренажёре не запускается: настоящий Flask,
          команды терминала, чужие библиотеки. Показываем как есть и честно
          пишем, где он работает. t.demo при этом может и быть, и не быть. */
@@ -3230,11 +3240,12 @@ function openLesson(id){
           (t.err ? "этот пример падает с ошибкой — так и задумано" : "можно менять и запускать снова") +
           '</span></div><div class="res"></div></div>'
         : "";
-      return '<div class="card theory"><h3>' + t.h + '</h3><p>' + t.p + '</p>' + shown + demo + '</div>';
+      return '<div class="card theory">' + sayBtnHTML("t" + i) + '<h3>' + t.h + '</h3><p>' + t.p + '</p>' + shown + demo + '</div>';
     }).join("");
 
     var isFix = body.task.type === "fix";
-    var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: починить" : "🎯 Твоя задача") + '</h3><p>' +
+    sayTexts.goal = plainText(body.task.goal + " " + body.task.list.join(". "));
+    var goal = '<div class="goal">' + sayBtnHTML("goal") + '<h3>' + (isFix ? "🔧 Задача: починить" : "🎯 Твоя задача") + '</h3><p>' +
       body.task.goal + '</p><ul>' +
       body.task.list.map(function(x){ return "<li>" + x + "</li>"; }).join("") + '</ul></div>';
     var bug = isFix
@@ -3391,6 +3402,8 @@ function openLesson(id){
     /* набор текста откладывает сохранение: уход с экрана поймает claimScreen,
        а вот просто закрытую вкладку — только это */
     studio.editor.onEdit = draftSchedule;
+
+    wireSay(app, sayTexts);
 
     app.querySelectorAll(".demo[data-demo]").forEach(function(d){
       var i = +d.getAttribute("data-demo"), res = d.querySelector(".res");
@@ -3716,6 +3729,7 @@ function winLesson(l, body){
       '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
   document.getElementById("win").classList.add("show");
   confetti(stars);
+  sfx(stars === 3 ? "win3" : "win");
   var wn = document.getElementById("wnext");
   if (wn) wn.onclick = function(){ closeWin(); openLesson(next.id); };
   var wl = document.getElementById("wlist");
@@ -4301,6 +4315,27 @@ function screenAccount(){
       '<button data-theme-set="light">☀️ Светлая</button>' +
       '<button data-theme-set="dark">🌙 Тёмная</button>' +
     '</div></div>' +
+    /* Звук стоит рядом с оформлением по той же причине: настройку ищут там,
+       где настройки. Про «этом устройстве» сказано прямо — иначе родитель
+       выключит дома и удивится, что в кружке снова звенит. */
+    '<div class="card"><h3>Звук</h3>' +
+    '<p class="dim">Короткие сигналы на победу, новый бейдж и ошибку. Выбор запоминается ' +
+    'на этом устройстве и на другие не переезжает: дома можно со звуком, за общим столом — без.</p>' +
+    '<div class="themepick" id="accsfx">' +
+      '<button data-sfx-set="on">🔔 Со звуком</button>' +
+      '<button data-sfx-set="off">🔕 Тихо</button>' +
+    '</div>' +
+    (voiceSupported()
+      ? '<p class="dim" style="margin-top:14px">Кнопка 🔊 на карточках урока читает текст вслух ' +
+        'по нажатию — она работает всегда. Здесь включается только автоматическое чтение: ' +
+        'объяснение ошибки проговаривается само. Полезно младшим и тем, кому тяжело читать с экрана.</p>' +
+        '<div class="themepick" id="accvoice">' +
+          '<button data-voice-set="on">🗣 Читать ошибки</button>' +
+          '<button data-voice-set="off">Не читать</button>' +
+        '</div>'
+      : '<p class="dim" style="margin-top:14px">Чтение вслух этот браузер не умеет — кнопок ' +
+        '🔊 не будет. Сигналы событий при этом работают.</p>') +
+    '</div>' +
     '<div class="card"><h3>Как пользоваться</h3>' +
     '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
     'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
@@ -4323,6 +4358,31 @@ function screenAccount(){
     b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paintTheme(); };
   });
   paintTheme();
+  var paintSound = function(){
+    app.querySelectorAll("#accsfx button").forEach(function(b){
+      b.classList.toggle("on", (b.getAttribute("data-sfx-set") === "on") === sfxOn());
+    });
+    app.querySelectorAll("#accvoice button").forEach(function(b){
+      b.classList.toggle("on", (b.getAttribute("data-voice-set") === "on") === voiceAuto());
+    });
+  };
+  app.querySelectorAll("#accsfx button").forEach(function(b){
+    b.onclick = function(){
+      var on = b.getAttribute("data-sfx-set") === "on";
+      sfxSet(on); paintSound();
+      /* Дать услышать сразу: иначе выбор проверяется только следующей
+         победой, то есть через целый урок. */
+      if (on) sfx("badge");
+    };
+  });
+  app.querySelectorAll("#accvoice button").forEach(function(b){
+    b.onclick = function(){
+      var on = b.getAttribute("data-voice-set") === "on";
+      voiceAutoSet(on); paintSound();
+      if (on) speak("Чтение вслух включено.");
+    };
+  });
+  paintSound();
   document.getElementById("logout").onclick = function(){
     var yes = true;
     try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
@@ -7353,6 +7413,9 @@ function enterScreen(tab, place){
   curPlace = place || "home";
   stopTimer();
   vizStopPlay();
+  /* Уходя с экрана — замолчать: иначе синтезатор дочитывает урок поверх
+     следующего экрана, и остановить его нечем. */
+  voiceStop();
   clearAdminHash();
   return claimScreen();
 }
@@ -8011,6 +8074,133 @@ function screenAdmin(){
 
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ============================================================
+   ЗВУК: короткие сигналы событий и чтение вслух
+   Обе настройки — про УСТРОЙСТВО, а не про ученика, поэтому лежат в
+   localStorage отдельными ключами и намеренно НЕ синхронизируются с сервером
+   (ровно как тема и снятые замки): дома можно со звуком, в кружке за общим
+   столом — без, и переезжать этот выбор между устройствами не должен.
+
+   Сигналы синтезируются на лету через Web Audio, файлов нет вовсе: сто
+   уроков весят 1,7 МБ вместе со всем содержанием, и класть рядом мегабайты
+   mp3 ради четырёх «дзыньков» было бы дороже самой затеи. Заодно это
+   переживает офлайн — синтез не ходит в сеть.
+
+   Звук ошибки нарочно НЕ резкий и не «проигрышный»: движок объясняет
+   падение словами, ошибка тут добыча, а не наказание. Наказывать звуком
+   ребёнка, который только что честно запустил код, — прямой вред.
+
+   Про чтение вслух две разные вещи, их легко перепутать:
+     - кнопка 🔊 на карточке читает по нажатию ВСЕГДА (пока браузер умеет);
+     - переключатель в профиле включает только АВТОМАТИЧЕСКОЕ чтение
+       (объяснение ошибки читается само).
+   Сделано так ради находимости: кнопка, которая молчит, пока не найдёшь
+   настройку, хуже лишней кнопки.
+   ============================================================ */
+var SFX_KEY = "kodokvest_sfx", VOICE_KEY = "kodokvest_voice";
+
+function sfxOn(){ try { return localStorage.getItem(SFX_KEY) !== "off"; } catch(e){ return true; } }
+function sfxSet(on){ try { localStorage.setItem(SFX_KEY, on ? "on" : "off"); } catch(e){} }
+
+/* Голос есть не везде: в jsdom его нет вовсе, в части браузеров тоже.
+   Поэтому проверяем, а не надеемся, — иначе падал бы рендер урока. */
+function voiceSupported(){
+  try { return ("speechSynthesis" in window) && typeof window.SpeechSynthesisUtterance === "function"; }
+  catch(e){ return false; }
+}
+function voiceAuto(){ try { return localStorage.getItem(VOICE_KEY) === "on"; } catch(e){ return false; } }
+function voiceAutoSet(on){
+  try { localStorage.setItem(VOICE_KEY, on ? "on" : "off"); } catch(e){}
+  if (!on) voiceStop();
+}
+
+/* Контекст заводится один на страницу и только по первому событию: браузеры
+   запрещают звук до того, как человек что-нибудь нажал, и созданный раньше
+   времени контекст остался бы навсегда «suspended». false — «не умеем». */
+var _actx = null;
+function audioCtx(){
+  if (_actx !== null) return _actx;
+  var C = window.AudioContext || window.webkitAudioContext;
+  if (!C){ _actx = false; return false; }
+  try { _actx = new C(); } catch(e){ _actx = false; }
+  return _actx;
+}
+
+/* [частота, задержка от начала, длительность] — в секундах */
+var SFX = {
+  win:   [[523,0,.12],[659,.10,.12],[784,.20,.24]],
+  win3:  [[523,0,.10],[659,.09,.10],[784,.18,.10],[1047,.27,.32]],
+  badge: [[880,0,.09],[1175,.08,.09],[1568,.16,.26]],
+  bad:   [[300,0,.13],[233,.12,.20]]
+};
+function sfx(name){
+  if (!sfxOn()) return;
+  var notes = SFX[name];
+  if (!notes) return;
+  var ctx = audioCtx();
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended" && ctx.resume) ctx.resume().catch(function(){});
+    var t0 = ctx.currentTime;
+    notes.forEach(function(n){
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = n[0];
+      var s = t0 + n[1], e = s + n[2];
+      /* Резкий старт и обрыв дают щелчок громче самой ноты — отсюда
+         огибающая. exponentialRamp не умеет в ноль, потому 0.0001. */
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.09, s + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, e);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(s); o.stop(e + 0.02);
+    });
+  } catch(e){}
+}
+
+/* Текст карточек — с разметкой (<code>, <b>), а вслух её читать нельзя.
+   Через textContent, а не регуляркой: сущности вроде &lt; тоже разворачиваются. */
+function plainText(html){
+  try {
+    var d = document.createElement("div");
+    d.innerHTML = String(html == null ? "" : html);
+    return (d.textContent || d.innerText || "").replace(/\s+/g, " ").trim();
+  } catch(e){ return ""; }
+}
+
+function speak(text){
+  if (!voiceSupported()) return;
+  text = plainText(text);
+  if (!text) return;
+  try {
+    /* Прошлую фразу обрываем: две реплики разом — каша, а очередь
+       синтезатора живёт дольше экрана, с которого её попросили. */
+    speechSynthesis.cancel();
+    var u = new window.SpeechSynthesisUtterance(text.slice(0, 600));
+    u.lang = "ru-RU"; u.rate = 0.95;
+    speechSynthesis.speak(u);
+  } catch(e){}
+}
+function voiceStop(){
+  if (!voiceSupported()) return;
+  try { speechSynthesis.cancel(); } catch(e){}
+}
+/* Читает само — только если включено в профиле (ошибки на уроке). */
+function speakAuto(text){ if (voiceAuto()) speak(text); }
+
+/* Пусто там, где браузер не умеет говорить: мёртвая кнопка хуже её отсутствия. */
+function sayBtnHTML(key){
+  if (!voiceSupported()) return "";
+  return '<button class="saybtn" type="button" data-say="' + key +
+         '" title="Прочитать вслух" aria-label="Прочитать вслух">🔊</button>';
+}
+/* Общая проводка кнопок 🔊: тексты собраны при отрисовке экрана. */
+function wireSay(root, texts){
+  if (!root || !texts) return;
+  root.querySelectorAll("[data-say]").forEach(function(b){
+    b.onclick = function(){ speak(texts[b.getAttribute("data-say")]); };
+  });
 }
 
 /* ============================================================
@@ -8755,6 +8945,9 @@ window.__game = {
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
+  sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx, voiceAuto: voiceAuto, voiceAutoSet: voiceAutoSet,
+  voiceSupported: voiceSupported, speak: speak, voiceStop: voiceStop, plainText: plainText,
+  sayBtnHTML: sayBtnHTML,
   screenViz: screenViz, vizRecord: vizRecord, vizPlaying: vizPlaying, state: S, save: save,
   vizDiff: vizDiff, vizMemoryHTML: vizMemoryHTML, VIZ_EXAMPLES: VIZ_EXAMPLES,
   openProject: openProject, screenProjectDone: screenProjectDone, projectById: projectById,
