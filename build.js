@@ -13,6 +13,16 @@ const read = p => fs.readFileSync(path.join(root, p), "utf8");
 
 const css = read("css/style.css");
 
+/* Шрифты в однофайловую сборку вшиваются как data:, а не ссылкой: рядом с
+   dist/kodokvest.html нет папки fonts, и относительный путь оттуда никуда не
+   ведёт. Плюс это делает правдой обещание из шапки — «ничего не грузится
+   извне». Файла нет — readFileSync упадёт, и это правильно: молча собранный
+   файл без шрифтов хуже несобранного. */
+const cssInlined = css.replace(/url\('\.\.\/fonts\/([^']+)'\)/g, (m, file) => {
+  const b64 = fs.readFileSync(path.join(root, "fonts", file)).toString("base64");
+  return "url('data:font/woff2;base64," + b64 + "')";
+});
+
 /* и размётка, и «голова» страницы берутся из index.html — один источник правды.
    Голова обязательна: без <meta charset="utf-8"> браузер, открывающий файл
    с диска (file://), читает его в однобайтовой кодировке и весь русский текст
@@ -34,7 +44,7 @@ head = head.replace(/^[ \t]*<link rel="manifest"[^>]*>\n?/m, "")
 
 const cssLink = '<link rel="stylesheet" href="css/style.css">';
 if (head.indexOf(cssLink) < 0) throw new Error("в <head> не найдена ссылка на css/style.css");
-head = head.replace(cssLink, "<style>\n" + css + "\n</style>");
+head = head.replace(cssLink, "<style>\n" + cssInlined + "\n</style>");
 if (head.indexOf('<meta charset="utf-8">') < 0) throw new Error("в <head> нет <meta charset=\"utf-8\">");
 
 const bodyStart = index.indexOf("<body>") + "<body>".length;

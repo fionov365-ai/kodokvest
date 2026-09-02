@@ -2778,6 +2778,15 @@ function screenWorlds(){
     '<p class="dim">Это главное в тренажёре: сто уроков по порядку, пять миров по двадцать. ' +
     'Уроки открываются один за другим — сдал, открылся следующий. В конце каждого мира ' +
     'свой проект и сертификат.</p>' +
+    /* Куда это ведёт. Раньше на главной было видно, ЧТО внутри (пять миров с
+       описаниями), но не было сказано, ЧЕМ дело кончится. Родителю нужно
+       именно это: он платит и решает не за «списки и словари», а за результат.
+       Все три обещания опираются на то, что в тренажёре уже есть, — шесть
+       собранных проектов, сертификаты и раздел «Ты и ИИ» с разбором чужих
+       ответов. Обещать больше нельзя: проверяется первым же прохождением. */
+    '<p class="path">🏁 <b>К концу пути</b> ребёнок пишет свои программы на Python, ' +
+    'разбирает чужой код и умеет находить ошибку в ответе нейросети. ' +
+    'На руках остаются шесть собранных проектов и сертификаты — то, что можно показать.</p>' +
     /* Поиск по урокам. Сто уроков лежат в пяти мирах, и «где было про словари»
        раньше искалось только глазами по пяти экранам подряд. */
     '<div class="lsearch"><input type="search" id="lq" autocomplete="off" spellcheck="false" ' +
@@ -2868,7 +2877,8 @@ function screenWorlds(){
   });
   h += '</div>';
 
-  app.innerHTML = h;
+  app.innerHTML = installTipHTML() + h;
+  wireInstallTip(app);
 
   var goNext = document.getElementById("go-next");
   if (goNext) goNext.onclick = function(){
@@ -2973,7 +2983,8 @@ function screenWorld(n){
           /* перышко — цель по шагам взята: видно, где программа уже не дороже
              решения автора, и где ещё есть куда переписывать */
           ((S.log[l.id] && S.log[l.id].lean) ? '<span class="leanmark" title="программа уложилась в цену решения автора">🪶</span>' : '') +
-          (has ? '<span class="stars">' + stars + '</span>' : '<span class="soontag">скоро</span>') + '</span>' +
+          (has ? minutesTag(lessonBody(l)) + '<span class="stars">' + stars + '</span>'
+               : '<span class="soontag">скоро</span>') + '</span>' +
         '</button>';
     });
     h += '</div>';
@@ -3212,7 +3223,8 @@ function openLesson(id){
     var head = '<div class="crumbs"><span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
       '<div class="lvlhead"><div><div class="idx">' + (l.boss ? "Босс мира " + w.n : "Урок " + l.num + " из 100") + '</div>' +
       '<h1>' + l.title + '</h1></div><div class="right">' +
-      '<span class="tag">' + l.sub + '</span>' + (body.draw ? '<span class="tag draw">рисование</span>' : '') + '</div></div>' +
+      '<span class="tag">' + l.sub + '</span>' + (body.draw ? '<span class="tag draw">рисование</span>' : '') +
+      '<span class="tag time">' + minutesTag(body) + '</span></div></div>' +
       '<p class="lede">' + body.lede + '</p>';
 
     var sayTexts = {};
@@ -3245,6 +3257,37 @@ function openLesson(id){
 
     var isFix = body.task.type === "fix";
     sayTexts.goal = plainText(body.task.goal + " " + body.task.list.join(". "));
+
+    /* ===== «Спроси»: разговор без микрофона и без нейросети =====
+       Ребёнок хочет спросить голосом, но распознавание речи в браузере
+       отправляет звук на чужие серверы, не работает без сети и есть не везде,
+       а живая модель решала бы задачу за него. Поэтому «разговор» устроен
+       наоборот: спрашивает ребёнок нажатием, отвечает тренажёр — вслух.
+
+       Отвечать есть чем, и ничего нового писать не пришлось: все четыре
+       ответа уже лежат в уроке (вступление, условие задачи, разбор примера)
+       и в движке (объяснение ошибки). Ответ про ошибку берётся из живого
+       сообщения на экране, а не запоминается при отрисовке: к моменту
+       вопроса ошибка уже другая. */
+    var demoNote = (body.theory || []).filter(function(t){ return t.note; })[0];
+    var ASKS = [
+      { q: "Что тут нового?",  a: function(){ return plainText(body.lede); } },
+      { q: "Что надо сделать?", a: function(){ return sayTexts.goal; } },
+      { q: "Почему ошибка?",   a: function(){
+          var m = document.querySelector(".msg.show.bad");
+          return m ? plainText(m.innerHTML.replace("</b>", "</b>. "))
+                   : "Сейчас ошибки нет. Нажми «Запустить» — если что-то сломается, я объясню, что именно.";
+        } },
+      { q: "Покажи пример",    a: function(){
+          return demoNote ? plainText(demoNote.note)
+                          : "В этом уроке разбора примера нет — зато есть карточки с объяснением выше.";
+        } }
+    ];
+    var askCard = '<div class="card ask"><h3>💬 Спроси</h3>' +
+      '<p class="dim">Нажми вопрос — отвечу текстом и прочитаю вслух.</p>' +
+      '<div class="askrow">' +
+      ASKS.map(function(x, i){ return '<button class="minibtn" data-ask="' + i + '">' + x.q + '</button>'; }).join("") +
+      '</div><div class="askans" id="askans" hidden></div></div>';
     var goal = '<div class="goal">' + sayBtnHTML("goal") + '<h3>' + (isFix ? "🔧 Задача: починить" : "🎯 Твоя задача") + '</h3><p>' +
       body.task.goal + '</p><ul>' +
       body.task.list.map(function(x){ return "<li>" + x + "</li>"; }).join("") + '</ul></div>';
@@ -3304,7 +3347,7 @@ function openLesson(id){
        редактор. Там же работает липкая полоска задания, см. taskPinShow(). */
     app.innerHTML = head + howbar +
       '<div class="lessongrid' + (body.draw ? ' one' : '') + '">' +
-        '<div class="lcol-read">' + theory + goal + bug + '</div>' +
+        '<div class="lcol-read">' + theory + goal + bug + askCard + '</div>' +
         '<div class="lcol-work">' +
           /* Задание живёт в конце объяснения, а верстак стоит наверху — значит
              у верстака нет контекста: «непонятно, как решить задачу справа».
@@ -3404,6 +3447,21 @@ function openLesson(id){
     studio.editor.onEdit = draftSchedule;
 
     wireSay(app, sayTexts);
+
+    app.querySelectorAll("[data-ask]").forEach(function(b){
+      b.onclick = function(){
+        var x = ASKS[+b.getAttribute("data-ask")];
+        var txt = x.a();
+        var box = document.getElementById("askans");
+        if (box){
+          box.innerHTML = '<b>' + esc(x.q) + '</b>' + esc(txt);
+          box.hidden = false;
+        }
+        /* Читаем всегда, а не только при включённом авточтении: вопрос нажали
+           руками — значит ответ хотят услышать. Ровно как кнопка 🔊. */
+        speak(txt);
+      };
+    });
 
     app.querySelectorAll(".demo[data-demo]").forEach(function(d){
       var i = +d.getAttribute("data-demo"), res = d.querySelector(".res");
@@ -3726,10 +3784,15 @@ function winLesson(l, body){
     '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
       (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
             : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
-      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>' +
+      workShareHTML(session && session.code) + '</div>';
   document.getElementById("win").classList.add("show");
   confetti(stars);
   sfx(stars === 3 ? "win3" : "win");
+  var wsh = document.getElementById("wshare");
+  if (wsh) wsh.onclick = function(){
+    copyText(workLink({ title: l.title, code: session.code, author: myName() }), wsh);
+  };
   var wn = document.getElementById("wnext");
   if (wn) wn.onclick = function(){ closeWin(); openLesson(next.id); };
   var wl = document.getElementById("wlist");
@@ -4336,6 +4399,12 @@ function screenAccount(){
       : '<p class="dim" style="margin-top:14px">Чтение вслух этот браузер не умеет — кнопок ' +
         '🔊 не будет. Сигналы событий при этом работают.</p>') +
     '</div>' +
+    (installPossible()
+      ? '<div class="card"><h3>Приложение на домашнем экране</h3>' +
+        '<p class="dim">Иконка вместо вкладки: открывается сразу на уроке, без адресной строки, ' +
+        'и работает без интернета. На iPhone напоминания о занятии возможны только так.</p>' +
+        installTipHTML(true) + '</div>'
+      : '') +
     '<div class="card"><h3>Как пользоваться</h3>' +
     '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
     'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
@@ -4347,6 +4416,7 @@ function screenAccount(){
   if (cc) cc.onclick = function(){ copyText(code, cc); };
   var cl = document.getElementById("copylink");
   if (cl) cl.onclick = function(){ copyText(link, cl); };
+  wireInstallTip(app);
   document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("goguide").onclick = screenGuide;
   var paintTheme = function(){
@@ -4514,9 +4584,10 @@ function screenToday(){
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    saved + banner + hero + taskCard + schedBox +
+    installTipHTML() + saved + banner + hero + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
+  wireInstallTip(app);
   var dopen = document.getElementById("dopen");
   if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
   var dwarm = document.getElementById("dwarm");
@@ -7488,6 +7559,14 @@ function routeHash(){
     if (got) openFriendTask(got, {}); else screenTaskBroken();
     return true;
   }
+  /* Работа по ссылке — тоже до приведения к нижнему регистру: base64
+     различает «A» и «a». */
+  var wpk = /^#work=(.+)$/.exec(location.hash || "");
+  if (wpk){
+    var gotw = workUnpack(wpk[1]);
+    if (gotw) screenWork(gotw); else screenWorkBroken();
+    return true;
+  }
   var h = (location.hash || "").toLowerCase();
   if (HASH_SCREENS[h]){ HASH_SCREENS[h](); return true; }
   var ph = h.replace(/^#/, "");
@@ -8075,6 +8154,227 @@ function screenAdmin(){
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
+
+/* ============================================================
+   ПОДЕЛИТЬСЯ РАБОТОЙ
+   У SoloLearn главный двигатель — сообщество: обсуждения, соревнования, обмен
+   кодом. Нам чат заводить нельзя: дети, модерация, персональные данные,
+   возрастная маркировка. Но сам двигатель — «смотри, что я сделал» — работает
+   и без чата, если показывать не в ленте, а по ссылке.
+
+   Механика взята готовой у «своего задания» (b64urlEnc и роут по хэшу): ничего
+   не хранится на сервере, вся работа лежит В САМОЙ ССЫЛКЕ. Отсюда и свойства:
+   ссылка живёт вечно, открывается у кого угодно, и при этом мы не собираем о
+   ребёнке ничего нового — хранить попросту нечего.
+
+   Имя автора кладём в ссылку по тому же правилу, что и в «своём задании»:
+   без него «смотри, что я сделал» теряет смысл. Отправляет ссылку ребёнок
+   сам и сам решает кому — как открытку, а не как публикацию.
+   ============================================================ */
+var WORK_CODE_MAX = 2000;   /* та же граница, что у задания: длиннее — не открытка */
+
+function workPack(w){
+  return b64urlEnc(JSON.stringify({ v:1, t:w.title, c:w.code, a:w.author || "" }));
+}
+/* Всё пришедшее снаружи считаем испорченным, пока не доказано обратное:
+   ссылку могли обрезать в мессенджере или собрать руками. */
+function workUnpack(s){
+  var o = null;
+  try { o = JSON.parse(b64urlDec(s)); } catch(e){ return null; }
+  if (!o || o.v !== 1) return null;
+  if (typeof o.t !== "string" || typeof o.c !== "string") return null;
+  if (!o.c.trim() || o.c.length > WORK_CODE_MAX) return null;
+  return { title: o.t.slice(0, 80), code: o.c,
+           author: typeof o.a === "string" ? o.a.slice(0, 24) : "" };
+}
+function workLink(w){
+  var base = "";
+  try { base = location.origin + location.pathname; } catch(e){}
+  return base + "#work=" + workPack(w);
+}
+/* Пусто, если делиться нечем: кнопки, которая выдаёт битую ссылку, быть не должно. */
+function workShareHTML(code){
+  if (!code || !code.trim() || code.length > WORK_CODE_MAX) return "";
+  return '<button class="bigbtn ghost" id="wshare">🔗 Поделиться работой</button>';
+}
+
+/* Чужая работа: только смотреть и забрать себе в песочницу. Запускать прямо
+   отсюда не даём намеренно — иначе это ещё один экран урока без урока. */
+function screenWork(w){
+  enterScreen("home", "work");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">работа по ссылке</div>' +
+    '<h1>' + esc(w.title) + '</h1></div></div>' +
+    (w.author ? '<p class="lede">Прислал(а) <b>' + esc(w.author) + '</b>. Вот программа целиком.</p>'
+              : '<p class="lede">Вот программа целиком.</p>') +
+    '<div class="card"><div class="showcode"><pre><code>' + hl(w.code) + '</code></pre></div></div>' +
+    '<div class="card"><h3>Хочешь так же?</h3>' +
+    '<p class="dim">Можно забрать эту программу в песочницу, поменять и запустить — ' +
+    'у автора она от этого не изменится.</p>' +
+    '<div class="winrow"><button class="bigbtn" id="wtake">Забрать в песочницу</button>' +
+    '<button class="bigbtn ghost" id="whome">Что это за тренажёр</button></div></div>';
+  document.getElementById("wtake").onclick = function(){
+    S.sandbox = w.code; save();
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenSandbox();
+  };
+  document.getElementById("whome").onclick = function(){
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenWorlds();
+  };
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function screenWorkBroken(){
+  enterScreen("home", "work");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">работа по ссылке</div><h1>Ссылка не прочиталась</h1></div></div>' +
+    '<p class="lede">Скорее всего, её обрезал мессенджер: длинные ссылки часто ломаются ' +
+    'на переносе строки. Попроси прислать ещё раз — целиком, одним куском.</p>' +
+    '<div class="winrow"><button class="bigbtn" id="whome">На главную</button></div>';
+  document.getElementById("whome").onclick = screenWorlds;
+}
+
+/* ============================================================
+   СКОЛЬКО ЗАЙМЁТ УРОК
+   Приём, общий у Mimo, SoloLearn и Codédex: время урока названо ДО того, как
+   его открыли. Работает он не на удобство, а на страх начинать — «пять минут»
+   не страшно, а неизвестность страшна.
+
+   Число не проставлено руками у ста уроков, а считается из самого урока: иначе
+   оно разошлось бы с содержанием на первой же правке. Замер 03.09.2026 по всем
+   ста урокам: слов в уроке от 173 до 454, медиана 272; карточек теории 3–7,
+   медиана 4.
+
+   120 слов в минуту — темп чтения подростка про себя, не взрослого. Плюс
+   четыре минуты на запуск примеров и решение задачи. По курсу выходит 5–8
+   минут, и это честнее, чем обещать всем «пять»: у нас уроки крупнее, чем
+   у Mimo, и врать про это нельзя — первый же урок опровергнет.
+
+   Число приблизительное намеренно, потому и «≈»: точного времени урока не
+   бывает, оно зависит от ребёнка.
+   ============================================================ */
+function lessonWords(body){
+  if (!body) return 0;
+  var t = (body.lede || "") + " " +
+    (body.theory || []).map(function(x){ return (x.h || "") + " " + (x.p || "") + " " + (x.note || ""); }).join(" ") +
+    " " + ((body.task && body.task.goal) || "") + " " +
+    (((body.task && body.task.list) || []).join(" "));
+  return plainText(t).split(/\s+/).filter(Boolean).length;
+}
+function lessonMinutes(body){
+  var w = lessonWords(body);
+  if (!w) return 0;
+  return Math.max(3, Math.round(w / 120 + 4));
+}
+function minutesTag(body){
+  var m = lessonMinutes(body);
+  return m ? '<span class="lmin" title="примерное время урока">\u2248' + m + '\u00a0мин</span>' : "";
+}
+
+/* ============================================================
+   ПОДСКАЗКА «ПОСТАВЬ НА ДОМАШНИЙ ЭКРАН»
+   Манифест и service worker были с 1.33.0, но сказать об этом ребёнку было
+   некому: человек по ссылке-приглашению видел обычную вкладку браузера и
+   никогда бы не догадался, что сайт ставится иконкой. Вкладку закрывают и
+   забывают — это и есть самое хрупкое место привычки.
+
+   Три случая, и ведут себя они по-разному:
+     - Chrome (Android и десктоп) заранее присылает beforeinstallprompt.
+       Его придерживаем и показываем НАСТОЯЩУЮ кнопку «Установить»;
+     - Safari на iPhone такого события не имеет вовсе — остаётся объяснить
+       словами, где «Поделиться» и «На экран Домой»;
+     - уже установленное приложение не должно звать устанавливать себя ещё
+       раз, поэтому display-mode проверяется до всего остального.
+
+   Отдельно про iPhone: пуш-напоминания там работают с iOS 16.4, но ТОЛЬКО
+   у приложения, поставленного на домашний экран. То есть эта подсказка — не
+   украшение, а обязательный первый шаг к напоминаниям.
+
+   «Не сейчас» помнится в localStorage, а НЕ в прогрессе ученика: установка —
+   свойство устройства, а не человека. Уехав на сервер, отказ с телефона
+   спрятал бы подсказку и на ноутбуке, где приложение не поставлено.
+   ============================================================ */
+var INSTALL_KEY = "kodokvest_installtip";
+var deferredInstall = null;
+
+function installHidden(){ try { return localStorage.getItem(INSTALL_KEY) === "off"; } catch(e){ return false; } }
+function installHide(){ try { localStorage.setItem(INSTALL_KEY, "off"); } catch(e){} }
+
+/* Уже стоит иконкой? Тогда подсказки быть не должно нигде. */
+function installDone(){
+  try {
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (navigator.standalone) return true;   /* Safari на iPhone */
+  } catch(e){}
+  return false;
+}
+/* iPad с iPadOS 13+ представляется «MacIntel», отличается только тачем. */
+function installIsIOS(){
+  try {
+    var ua = navigator.userAgent || "";
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
+  } catch(e){ return false; }
+}
+/* В одном файле и с диска ставить нечего: там нет ни манифеста, ни sw.js. */
+function installPossible(){
+  if (window.__SINGLE_FILE__) return false;
+  try { if (location.protocol === "file:") return false; } catch(e){ return false; }
+  return !installDone();
+}
+
+/* force — для карточки в профиле: там подсказка нужна и после «не сейчас». */
+function installTipHTML(force){
+  if (!installPossible()) return "";
+  if (!force && installHidden()) return "";
+  var how = deferredInstall
+    ? '<button class="bigbtn" id="instalgo">Установить</button>'
+    : (installIsIOS()
+        ? '<span class="instalhow">Нажми «Поделиться» внизу экрана, потом «На экран „Домой“».</span>'
+        : '<span class="instalhow">В меню браузера выбери «Установить приложение» или «Добавить на главный экран».</span>');
+  return '<div class="daybanner install" id="instaltip">' +
+    '<b>📲 Поставь Кодоквест на домашний экран</b> ' +
+    'Откроется как приложение, без адресной строки, и будет работать без интернета.' +
+    '<div class="instalrow">' + how +
+      (force ? '' : '<button class="bigbtn ghost" id="instalno">Не сейчас</button>') +
+    '</div></div>';
+}
+
+function wireInstallTip(root){
+  if (!root) return;
+  var go = root.querySelector("#instalgo");
+  if (go) go.onclick = function(){
+    if (!deferredInstall) return;
+    var e = deferredInstall;
+    deferredInstall = null;      /* показать приглашение можно один раз */
+    try { e.prompt(); } catch(err){}
+  };
+  var no = root.querySelector("#instalno");
+  if (no) no.onclick = function(){
+    installHide();
+    var b = root.querySelector("#instaltip");
+    if (b) b.remove();
+  };
+}
+
+(function(){
+  window.addEventListener("beforeinstallprompt", function(e){
+    /* Своё приглашение вместо браузерного: браузерное появляется когда
+       захочет и говорит не теми словами. */
+    try { e.preventDefault(); } catch(err){}
+    deferredInstall = e;
+    /* Событие обычно приходит уже после отрисовки главной, поэтому баннер
+       на экране надо обновить руками — иначе кнопка «Установить» появилась
+       бы только на следующем заходе. */
+    var b = document.getElementById("instaltip");
+    if (b && b.parentNode){
+      var box = document.createElement("div");
+      box.innerHTML = installTipHTML(false);
+      if (box.firstChild){ b.parentNode.replaceChild(box.firstChild, b); wireInstallTip(document); }
+    }
+  });
+  window.addEventListener("appinstalled", function(){ deferredInstall = null; });
+})();
 
 /* ============================================================
    ЗВУК: короткие сигналы событий и чтение вслух
@@ -8945,6 +9245,8 @@ window.__game = {
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
+  installTipHTML: installTipHTML, installPossible: installPossible, installDone: installDone,
+  installHidden: installHidden, installHide: installHide, installIsIOS: installIsIOS,
   sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx, voiceAuto: voiceAuto, voiceAutoSet: voiceAutoSet,
   voiceSupported: voiceSupported, speak: speak, voiceStop: voiceStop, plainText: plainText,
   sayBtnHTML: sayBtnHTML,
@@ -8988,6 +9290,8 @@ window.__game = {
   screenTaskBroken: screenTaskBroken, taskBuild: taskBuild, taskProblem: taskProblem,
   taskPack: taskPack, taskUnpack: taskUnpack, taskLink: taskLink, taskKey: taskKey,
   myTasksList: myTasksList, myTaskSave: myTaskSave, myTaskDrop: myTaskDrop,
+  workPack: workPack, workUnpack: workUnpack, workLink: workLink, screenWork: screenWork,
+  lessonMinutes: lessonMinutes, lessonWords: lessonWords,
   b64urlEnc: b64urlEnc, b64urlDec: b64urlDec, routeHash: routeHash,
   leanAward: leanAward, leanCount: leanCount, leanNote: leanNote, STAR_XP: STAR_XP,
   watchCompute: watchCompute, watchNote: watchNote, watchCut: watchCut,
