@@ -312,15 +312,21 @@ button{font-family:inherit}
 .crumbs{font-size:12.5px;color:var(--faint);margin-bottom:10px}
 .crumbs span{cursor:pointer}
 .crumbs span:hover{color:var(--acc2)}
-/* Дорога назад наверху страницы. Крошки рядом остаются — они говорят, ГДЕ
-   ты, а кнопка говорит, КУДА нажать: подпись кнопкой не выглядит, и на неё
-   не нажимают. Внизу страницы такая кнопка тоже есть, но там она за экраном
-   ровно в тот момент, когда ребёнок сидит в редакторе. */
-.backbtn{display:inline-block;vertical-align:middle;margin-right:10px;
-  border:1px solid var(--line2);background:var(--panel);color:var(--ink);
-  font:inherit;font-size:12.5px;font-weight:600;border-radius:999px;
-  padding:5px 13px;cursor:pointer;white-space:nowrap}
-.backbtn:hover{border-color:var(--acc2);color:var(--acc2)}
+/* Дорога назад живёт в ВЕРХНЕЙ ПАНЕЛИ, одна на все экраны (см. backTarget в
+   js/app.js). Внизу страницы такая кнопка тоже есть, но там она за экраном
+   ровно в тот момент, когда человек сидит в редакторе или дочитал длинный
+   экран до конца. */
+/* ⚠️ Класс свой, не .tbtn: в правило «три вкладки и пять инструментов» эта
+   кнопка не входит. Инструменты — это «что ещё можно сделать», а это дорога
+   назад, и стоит она слева от всего остального. */
+.navback{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+  border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:700;
+  cursor:pointer;transition:.15s;white-space:nowrap}
+.navback:hover{border-color:var(--acc);background:var(--panel2)}
+.navback[hidden]{display:none}
+/* На узком экране от кнопки остаётся стрелка: панель обязана уложиться в две
+   строки, а стрелка «назад» понятна и без подписи. */
+@media (max-width:720px){ .navback .lbl{display:none} }
 .lvlhead{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
 .lvlhead .idx{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--acc2);font-weight:700}
 .lvlhead h1{margin:3px 0 0;font-size:29px;line-height:1.15}

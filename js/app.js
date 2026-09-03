@@ -1296,7 +1296,72 @@ function toast(id){
 /* Какая вкладка наверху светится. Пишется в enterScreen (и вручную там, где
    экран заходит через claimScreen — на уроке и в проекте), читается здесь. */
 var curTab = "home";
+/* ================= дорога назад, одна на все экраны =================
+   Кнопка «Назад» в верхней панели. Заводится не ради красоты: раньше уйти с
+   экрана можно было только кнопкой в самом низу страницы — то есть за
+   экраном ровно тогда, когда человек сидит в редакторе или дочитал длинный
+   экран до конца (грабля 63). Хлебные крошки её не заменяют: они выглядят
+   подписью, а не кнопкой, и на них не нажимают.
+
+   Куда ведёт — решает КАРТА МЕСТ, а не история браузера. История в
+   одностраничном приложении врёт (мы не пишем в неё каждый экран), а «на
+   уровень вверх» предсказуемо: то же самое, куда ведёт кнопка внизу страницы.
+
+   ⚠️ Два места ведут не «вверх», а по смыслу: урок и разминка во время
+   занятия возвращают В ЗАНЯТИЕ. Иначе кнопка уносит мимо плана — ровно то,
+   от чего в 1.41.0 отказалось «Дальше →» в окне победы. */
+function backTarget(){
+  var open = (typeof zanOpen === "function") ? zanOpen() : null;
+  switch (curPlace){
+    case "home": case "register": return null;
+
+    case "lesson": {
+      if (open) return { label:"К занятию", go: screenZan };
+      var l = curLessonId ? CURRICULUM.byId(curLessonId) : null;
+      return l ? { label:"К урокам", go: function(){ screenWorld(l.world); } }
+               : { label:"На главную", go: screenWorlds };
+    }
+    case "warmup":
+      return open ? { label:"К занятию", go: screenZan }
+                  : { label:"К разминкам", go: screenWarmups };
+    case "world": case "review": case "today": case "folio": case "mytasks":
+    case "works": case "work": case "solved": case "assign": case "train":
+    case "guide": case "account": case "admin": case "adult":
+      return { label:"На главную", go: screenWorlds };
+
+    case "warm": case "games": case "sand": case "viz": case "ai":
+      return { label:"К тренировкам", go: screenTrain };
+    case "game":     return { label:"К играм", go: screenGames };
+    case "ailesson": return { label:"К заданиям", go: screenAILab };
+
+    case "project": case "projectdone": {
+      var p = (typeof session === "object" && session && session.project)
+        ? projectById(session.project) : null;
+      if (p && p.world) return { label:"К миру", go: function(){ screenWorld(p.world); } };
+      return { label:"На главную", go: screenWorlds };
+    }
+    case "zan":       return { label:"На «Сегодня»", go: screenToday };
+    case "shop":      return { label:"В портфолио", go: screenFolio };
+    case "friendtask":return { label:"К заданиям", go: function(){ screenMyTasks(); } };
+    case "trace":     return { label:"В кабинет", go: screenAdult };
+    default:          return { label:"На главную", go: screenWorlds };
+  }
+}
+/* Кнопка перерисовывается на каждой смене экрана — вместе со всей панелью. */
+function syncBack(){
+  var b = document.getElementById("btn-back");
+  if (!b) return;
+  var t = backTarget();
+  b.hidden = !t;
+  if (!t) return;
+  var lbl = b.querySelector(".lbl");
+  if (lbl) lbl.textContent = t.label;
+  b.title = "Назад: " + t.label;
+  b.onclick = function(){ t.go(); };
+}
+
 function refreshTop(){
+  syncBack();
   document.querySelectorAll(".tabs .tab").forEach(function(b){
     b.classList.toggle("on", b.getAttribute("data-tab") === curTab);
   });
@@ -4127,10 +4192,7 @@ function openLesson(id){
        ⚠️ Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в список уроков. Иначе
        кнопка уносит мимо плана ровно так же, как это делало «Дальше →» в
        победной карточке до правки 1.41.0. */
-    var backToZan = !!zanOpen();
-    var head = '<div class="crumbs"><button class="backbtn" data-go="' +
-        (backToZan ? 'zan' : 'world') + '">← ' +
-        (backToZan ? 'К занятию' : 'К списку уроков') + '</button>' +
+    var head = '<div class="crumbs">' +
       '<span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
       '<div class="lvlhead"><div><div class="idx">' + (l.boss ? "Босс мира " + w.n : "Урок " + l.num + " из 100") + '</div>' +
       '<h1>' + l.title + '</h1></div><div class="right">' +
@@ -12307,6 +12369,7 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  backTarget: backTarget, syncBack: syncBack,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
   showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,

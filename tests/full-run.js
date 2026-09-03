@@ -1477,10 +1477,10 @@ function checkEncoding(){
        сидит в редакторе. Хлебные крошки её не заменяют: они выглядят
        подписью, а не кнопкой. */
     {
-      const back = doc.querySelector(".crumbs .backbtn");
+      const back = doc.getElementById("btn-back");
       if (!back) bad("[назад] наверху урока нет кнопки «Назад»");
       else {
-        if (!/назад|к списку|к занятию/i.test(back.textContent))
+        if (!/назад|к урокам|к списку|к занятию/i.test(back.textContent))
           bad("[назад] кнопка наверху не говорит, куда ведёт: " + JSON.stringify(back.textContent));
         back.click();
         await tick();
@@ -3457,6 +3457,46 @@ function checkEncoding(){
     });
     if (doc.querySelectorAll(".top-in .tbtn").length > 5)
       bad("[устройство] в панели снова больше пяти кнопок — она опять станет свалкой");
+    /* Кнопка «Назад» шестым инструментом НЕ считается и считаться не должна:
+       инструменты отвечают «что ещё можно сделать», а это дорога назад. */
+    if (!doc.getElementById("btn-back")) bad("[устройство] в панели нет кнопки «Назад»");
+    if (doc.querySelector(".top-in .tbtn#btn-back"))
+      bad("[устройство] «Назад» записана в инструменты — она навигация, а не инструмент");
+
+    /* Дорога назад обязана быть на КАЖДОМ экране, кроме Главного: раньше уйти
+       можно было только кнопкой в самом низу страницы, то есть за экраном. */
+    {
+      const back = doc.getElementById("btn-back");
+      g.screenWorlds(); await tick();
+      if (!back.hidden) bad("[назад] на Главном кнопка «Назад» показана — возвращаться некуда");
+      const screens = [
+        ["Тренировки", () => g.screenTrain()],
+        ["витрина", () => g.screenShowcase()],
+        ["портфолио", () => g.screenFolio()],
+        ["мастерская", () => g.screenShop()],
+        ["свои задания", () => g.screenMyTasks()],
+        ["разминки", () => g.screenWarmups()],
+        ["игры", () => g.screenGames()],
+        ["песочница", () => g.screenSandbox()],
+        ["визуализатор", () => g.screenViz()],
+        ["«Ты и ИИ»", () => g.screenAILab()],
+        ["повторить", () => g.screenReview()],
+        ["сегодня", () => g.screenToday()],
+        ["инструкция", () => g.screenGuide()],
+        ["профиль", () => g.screenAccount()]
+      ];
+      for (const [name, go] of screens){
+        go(); await tick();
+        if (back.hidden) bad("[назад] на экране «" + name + "» нет кнопки «Назад»");
+        else if (!back.textContent.trim()) bad("[назад] на экране «" + name + "» кнопка без подписи");
+      }
+      /* и она правда уводит: с витрины — на Главное */
+      g.screenShowcase(); await tick(60);
+      back.click(); await tick();
+      if (!doc.querySelector(".worlds, .world"))
+        bad("[назад] кнопка с витрины не увела на Главное");
+      viewReset(g);
+    }
 
     /* Вкладка светится по тому, где мы находимся, а не по последнему клику */
     const active = () => [...doc.querySelectorAll(".tab.on")].map(b => b.getAttribute("data-tab")).join(",");
@@ -3945,7 +3985,7 @@ function checkEncoding(){
     {
       g.openLesson("vars");
       await tick();
-      const back = doc.querySelector(".crumbs .backbtn");
+      const back = doc.getElementById("btn-back");
       if (!back) bad("[назад] во время занятия на уроке нет кнопки «Назад»");
       else if (!/занятию/i.test(back.textContent))
         bad("[назад] во время занятия кнопка ведёт мимо плана: " + JSON.stringify(back.textContent));
