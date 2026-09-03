@@ -1329,8 +1329,11 @@ function backTarget(){
     case "guide": case "account": case "admin": case "adult":
       return { label:"На главную", go: screenWorlds };
 
-    case "warm": case "games": case "sand": case "viz": case "ai": case "specs":
+    case "warm": case "games": case "sand": case "viz": case "ai":
       return { label:"К тренировкам", go: screenTrain };
+    /* Приёмка — ступень раздела «Ты и ИИ», а не сосед по тренировкам:
+       и дорога назад обязана это подтверждать. */
+    case "specs":    return { label:"В «Ты и ИИ»", go: screenAILab };
     case "spec":     return { label:"Ко всем работам", go: screenSpecs };
     case "game":     return { label:"К играм", go: screenGames };
     case "ailesson": return { label:"К заданиям", go: screenAILab };
@@ -3565,21 +3568,21 @@ function trainCards(){
       when: "Когда хочется поиграть, а не учиться.",
       stat: gAll + " " + plural(gAll, "игра", "игры", "игр") },
     { id:"ai", em:"🤖", title:"Ты и ИИ", go: screenAILab,
-      why: "Упражнения про то, как командовать ИИ и проверять его: он ошибается, и это надо уметь замечать.",
-      when: "Когда хочется понять, кто тут главный — ты или ИИ.",
-      stat: aiAll ? aiDone + " из " + aiAll + " пройдено" : "" },
+      /* ⚠️ Здесь стоит ОБЕЩАНИЕ раздела, а не шутка. Курсы про нейросети учат
+         «как попросить»; этот раздел — единственный, который учит принимать
+         работу, и если не сказать этого словами, отличия не увидит никто. */
+      why: "Не «как попросить нейросеть», а как принять её работу: прочитать ответ, найти, где машина уверенно врёт, и доказать это проверкой.",
+      when: "Когда за тебя пишет машина, а отвечать всё равно тебе.",
+      stat: (function(){
+        var sAll = specsList().length;
+        var sOk = sAll ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
+        return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
+               (sAll ? " · приёмка " + sOk + " из " + sAll : "");
+      })() },
     { id:"sand", em:"🎨", title:"Песочница", go: screenSandbox,
       why: "Пустой лист без заданий и проверок: пиши что угодно, рисуй черепашкой, ломай и чини.",
       when: "Когда есть своя идея.",
       stat: "рисунок можно сохранить в галерею" },
-    { id:"spec", em:"📋", title:"Приёмка", go: screenSpecs,
-      why: "Программу написал напарник, а ты принимаешь работу: записываешь, что должно быть верно, и движок судит по твоим правилам.",
-      when: "Когда хочется не писать код, а проверять чужой.",
-      stat: (function(){
-        var all = specsList().length;
-        var d = all ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
-        return all ? d + " из " + all + " принято" : "";
-      })() },
     { id:"viz", em:"🔍", title:"Визуализатор", go: screenViz,
       why: "Программа по шагам: видно память, ссылки и что изменилось. И пересказ словами, что она сделала.",
       when: "Когда код работает не так, как ты думал.",
@@ -6245,27 +6248,118 @@ function revCard(x){
     '<span class="rdots">' + dots + '</span></span></button>';
 }
 
+/* ===== ступени раздела «Ты и ИИ» =====
+   Ставка Б из docs/foresight-2027.md § 3, названная там «самой быстрой к
+   продаже»: продукт есть, спрос назван рынком. Не хватало упаковки — раздел
+   лежал плоским списком из девятнадцати заданий, и по нему нельзя было
+   понять, чему он учит и в каком порядке.
+
+   ⚠️ Отличие, ради которого всё и делается, обязано стоять на экране прямым
+   текстом: рынок платит за ИИ-курсы 8–71 тыс. ₽, и все они про «как
+   попросить». Наше — **как принять работу**. Это разные умения, и второму
+   не учит никто.
+
+   Ступени строятся из поля tag самих заданий, а не пишутся списком: появится
+   задание с новой меткой — оно встанет в «Остальное» и будет мозолить глаза,
+   а не потеряется молча. Проверка на это есть в tests/full-run.js. */
+var AI_STAGES = [
+  { id:"ask",  em:"🎯", title:"Поставить задачу",
+    why:"Машина понимает буквально. Размытая просьба даёт мусор — и виноват в этом не ИИ.",
+    tags:["ставим задачу"] },
+  { id:"read", em:"📖", title:"Прочитать ответ",
+    why:"Прежде чем судить, надо понять, что прислали, и предсказать, что оно напечатает.",
+    tags:["читаем код", "проверяем вывод"] },
+  { id:"judge",em:"⚖️", title:"Вынести вердикт",
+    why:"Работает или нет — решаешь ты, а не уверенный тон ответа. И чинишь то, что сломано.",
+    tags:["выносим вердикт", "проверяем и чиним"] },
+  { id:"catch",em:"🔍", title:"Доказать, что ошибся",
+    why:"Мнения мало: пишешь проверку, которая ловит ошибку, и запускает её движок.",
+    tags:["ловим ИИ"] },
+  { id:"boss", em:"🤝", title:"Ответить за результат",
+    why:"Ты тимлид, ИИ — джун. Он пишет быстро и уверенно, а отвечаешь за работу ты.",
+    tags:["финальный проект"] }
+];
+function aiStageOf(x){
+  for (var i = 0; i < AI_STAGES.length; i++)
+    if (AI_STAGES[i].tags.indexOf(x.tag) >= 0) return AI_STAGES[i].id;
+  return "";
+}
+
 function screenAILab(){
   enterScreen("train", "ai");
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = ailabList();
   var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
+  var specs = specsList(), specsOk = specs.filter(function(x){ return specDone(x.id); }).length;
+
   var h = '<div class="lvlhead"><div><div class="idx">командуй, не подчиняйся</div><h1>🤖 Ты и ИИ</h1></div>' +
     '<div class="right"><span class="tag">пройдено ' + done + ' из ' + xs.length + '</span></div></div>' +
-    '<p class="lede">Код всё чаще пишет ИИ — и тем дороже три вещи, которые он не забирает: ' +
-    'точно поставить задачу, прочитать чужой код и проверить результат. Здесь ты тренируешь именно их. ' +
-    '«Ответ ИИ» — это заранее написанный код, а судья правды — движок: он запускает его и показывает, где тот врёт. ' +
-    'Раздел вне сотни уроков, звёзды тут не начисляются.</p>' +
-    '<div class="gamegrid">';
-  xs.forEach(function(x){
-    h += '<button class="gamecard" data-id="' + x.id + '">' +
-      '<span class="gemoji">' + x.emoji + '</span>' +
-      '<b>' + esc(x.title) + (x.boss ? ' <span class="wtag">финал</span>' : '') +
-      (ailabDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
-      '<span>' + esc(x.intro) + '</span>' +
-      '<span class="wtag">' + esc(x.tag) + '</span></button>';
+    '<p class="lede">Код всё чаще пишет машина — и тем дороже то, чего она не забирает: ' +
+    'точно поставить задачу, прочитать чужой код и <b>принять работу</b>. ' +
+    'Здесь этому учат по шагам, а судья правды — движок: он запускает ответ ИИ и показывает, где тот врёт. ' +
+    'Звёзд тут не дают.</p>';
+
+  /* ⚠️ Обещание раздела написано отдельным блоком и первым. Без него это
+     просто ещё одна пачка заданий, а с ним — единственный курс, который учит
+     не просить, а принимать. */
+  h += '<div class="card"><h3>Чему тут учат — и чем это отличается</h3>' +
+    '<div class="aidiff">' +
+    '<div><b>Курсы про нейросети</b><span>как попросить: формулы промптов, списки заклинаний, ' +
+    '«скажи модели, что она эксперт».</span></div>' +
+    '<div><b>Здесь</b><span>как <b>принять работу</b>: прочитать ответ, найти, где машина ' +
+    'уверенно врёт, написать проверку и вернуть на доработку.</span></div>' +
+    '</div>' +
+    '<p class="dim">⚠️ Живого ИИ здесь нет намеренно. «Ответ ИИ» — заранее написанный код, ' +
+    'и это не экономия: модель, которая пишет за ребёнка, несовместима с разделом, ' +
+    'который учит её проверять. Судит движок, а не мнение, — поэтому себя не обманешь.</p></div>';
+
+  /* ---------- путь по ступеням ---------- */
+  var used = {};
+  AI_STAGES.forEach(function(st){
+    var items = xs.filter(function(x){ return aiStageOf(x) === st.id; });
+    items.forEach(function(x){ used[x.id] = 1; });
+    if (!items.length) return;
+    var d = items.filter(function(x){ return ailabDone(x.id); }).length;
+    h += '<div class="sect"><h2>' + st.em + ' ' + esc(st.title) + '</h2><div class="line"></div>' +
+      '<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
+      '<p class="dim">' + esc(st.why) + '</p>' +
+      '<div class="gamegrid">';
+    items.forEach(function(x){
+      h += '<button class="gamecard" data-id="' + x.id + '">' +
+        '<span class="gemoji">' + x.emoji + '</span>' +
+        '<b>' + esc(x.title) + (x.boss ? ' <span class="wtag">финал</span>' : '') +
+        (ailabDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+        '<span>' + esc(x.intro) + '</span>' +
+        '<span class="wtag">' + esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
   });
-  h += '</div>';
+  /* Задание с незнакомой меткой не должно исчезнуть с экрана: пусть лучше
+     стоит в «Остальном» и мозолит глаза, чем пропадёт молча. */
+  var rest = xs.filter(function(x){ return !used[x.id]; });
+  if (rest.length){
+    h += '<div class="sect"><h2>Остальное</h2><div class="line"></div>' +
+      '<span class="cnt">' + rest.length + '</span></div><div class="gamegrid">';
+    rest.forEach(function(x){
+      h += '<button class="gamecard" data-id="' + x.id + '">' +
+        '<span class="gemoji">' + x.emoji + '</span><b>' + esc(x.title) + '</b>' +
+        '<span>' + esc(x.intro) + '</span>' +
+        '<span class="wtag">' + esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
+  }
+
+  /* ---------- приёмка: та же дисциплина, вынесенная в свой жанр ---------- */
+  h += '<div class="projcard' + (specsOk ? " done" : "") + '"><span class="pjemoji">📋</span>' +
+    '<span class="pjbody"><span class="pjkicker">Ступень 6 · приёмка работы</span>' +
+    '<b>Пиши правила, а не код</b>' +
+    '<span>напарник присылает программу, а ты записываешь, что должно быть верно, — ' +
+    'и движок судит его код по твоим правилам</span>' +
+    '<span class="pjnote">' + (specs.length
+      ? "Работ принято: " + specsOk + " из " + specs.length + ". Каждая твоя строка — настоящий Python."
+      : "Работы появятся вместе с разделом.") + '</span></span>' +
+    '<button class="bigbtn' + (specsOk ? "" : " ghost") + '" id="toaispecs">Открыть приёмку</button>' +
+    '</div>';
 
   /* Проект раздела: тот же вид карточки, что у проектов миров, — только
      открывается он не по уроками мира, а по заданиям этого раздела. */
@@ -6291,6 +6385,8 @@ function screenAILab(){
 
   h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
+  var tas = document.getElementById("toaispecs");
+  if (tas) tas.onclick = screenSpecs;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
   });
@@ -8170,13 +8266,13 @@ function screenSpecs(){
       '<span>' + esc(x.brief) + '</span></span>' +
       '<span class="wtag">' + (specDone(x.id) ? "принято" : "работа ждёт") + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← В «Ты и ИИ»</button></div>';
 
   app.innerHTML = h;
   app.querySelectorAll("[data-spec]").forEach(function(b){
     b.onclick = function(){ openSpec(b.getAttribute("data-spec")); };
   });
-  document.getElementById("tomap").onclick = screenTrain;
+  document.getElementById("tomap").onclick = screenAILab;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -9408,6 +9504,24 @@ function screenAdult(){
     'и не следим за ребёнком.</p>' +
     '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div></div>';
 
+  /* ---------- чему он учится про ИИ ----------
+     Взрослый платит за ИИ-курсы 8–71 тыс. ₽, и все они про «как попросить».
+     Если не сказать про отличие прямо здесь, он и не узнает, что купил
+     другое. */
+  var aiAllN = ailabList().length;
+  var aiDoneN = ailabList().filter(function(x){ return ailabDone(x.id); }).length;
+  var spAllN = specsList().length;
+  var spDoneN = specsList().filter(function(x){ return specDone(x.id); }).length;
+  h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
+    '<p>Курсы про нейросети учат <b>просить</b>. Здесь учат <b>принимать работу</b>: ' +
+    'прочитать ответ машины, найти, где она уверенно врёт, написать проверку и вернуть на доработку. ' +
+    'Судит движок, а не мнение, — поэтому себя тут не обманешь.</p>' +
+    '<p class="dim">Пройдено заданий: <b>' + aiDoneN + '</b> из ' + aiAllN +
+    (spAllN ? ' · работ принято: <b>' + spDoneN + '</b> из ' + spAllN : '') + '.</p>' +
+    '<p class="dim">⚠️ Живого ИИ рядом с ребёнком нет и не будет: модель, которая пишет за него, ' +
+    'несовместима с разделом, который учит её проверять.</p>' +
+    '<div class="admrow"><button class="rbtn check" data-act="toai">Посмотреть раздел →</button></div></div>';
+
   /* ---------- витрина ----------
      Кабинет — единственное место продукта, куда взрослый заходит сам.
      Значит и страница «что тут вообще собирают» должна быть под рукой
@@ -9611,6 +9725,7 @@ function wireAdult(){
       if (act === "toadmin"){ location.hash = "#admin"; return screenAdmin(); }
       if (act === "totrace") return screenTrace();
       if (act === "toworks") return screenShowcase();
+      if (act === "toai") return screenAILab();
       if (act === "freport"){ frameSet({ report: !frame().report }); return screenAdult(); }
       if (act === "peron"){
         var st = zanStats();
@@ -13002,6 +13117,7 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
+  AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,

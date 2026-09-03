@@ -1370,6 +1370,15 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- «Ты и ИИ»: отличие от курсов про нейросети ---------- */
+.aidiff{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
+.aidiff div{border:1px solid var(--line);border-radius:var(--r);padding:10px 13px;background:var(--panel)}
+.aidiff div:last-child{border-color:var(--okline);background:var(--okbg)}
+/* Только ЗАГОЛОВОК колонки, а не любой <b> внутри: без «>» правило ловило
+   выделение «принять работу» в тексте и выбрасывало его на отдельную строку. */
+.aidiff > div > b{display:block;margin-bottom:4px;font-size:14px}
+.aidiff span{font-size:13.5px;line-height:1.5;color:var(--soft)}
+
 /* ---------- приёмка: нотация ---------- */
 .specref{display:grid;gap:8px;margin-top:8px}
 .specref div{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;font-size:13.5px}

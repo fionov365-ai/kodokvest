@@ -3942,7 +3942,7 @@ function checkEncoding(){
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
-  let groupChecked = 0, specChecked = 0;
+  let groupChecked = 0, specChecked = 0, aiPackChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5400,6 +5400,86 @@ function checkEncoding(){
     if (problems.length === p0) specChecked++;
   }
 
+  /* --- 12. упаковка раздела «Ты и ИИ» --- */
+  if (Array.isArray(g.AI_STAGES)){
+    const p0 = problems.length;
+
+    /* 12.1. ⚠️ Ни одно задание не должно потеряться между ступенями. Ступени
+       строятся по метке задания, и задание с новой меткой обязано попасть в
+       «Остальное», а не исчезнуть с экрана. */
+    {
+      const xs = w.AILAB || [];
+      const noStage = xs.filter(x => !g.aiStageOf(x));
+      if (noStage.length)
+        bad("[ты и ии] задания без ступени: " + noStage.map(x => x.id + " (" + x.tag + ")").join(", "));
+      g.screenAILab(); await tick();
+      if (doc.querySelectorAll(".gamecard").length !== xs.length)
+        bad("[ты и ии] на экране показаны не все задания: " +
+            doc.querySelectorAll(".gamecard").length + " из " + xs.length);
+      const heads = [...doc.querySelectorAll(".sect h2")].map(x => x.textContent);
+      g.AI_STAGES.forEach(st => {
+        if (!(w.AILAB || []).some(x => g.aiStageOf(x) === st.id)) return;
+        if (!heads.some(hh => hh.indexOf(st.title) >= 0))
+          bad("[ты и ии] ступень «" + st.title + "» пропала с экрана");
+      });
+    }
+
+    /* 12.2. Обещание раздела — это его упаковка, и оно обязано быть на экране
+       словами. Ставка Б продаётся именно отличием: все курсы учат просить,
+       этот — принимать. */
+    {
+      const t = doc.getElementById("app").textContent;
+      if (!/принять работу/i.test(t))
+        bad("[ты и ии] на экране не сказано, что тут учат принимать работу");
+      if (!/как попросить/i.test(t))
+        bad("[ты и ии] не названо, чем это отличается от курсов про нейросети");
+      if (!/живого ИИ/i.test(t))
+        bad("[ты и ии] не сказано, что живой модели тут нет");
+      /* приёмка — ступень этого раздела, а не сосед по тренировкам */
+      if (!doc.getElementById("toaispecs"))
+        bad("[ты и ии] приёмка не связана с разделом");
+      if (g.trainCards().some(c => c.id === "spec"))
+        bad("[ты и ии] приёмка осталась отдельной карточкой тренировок — упаковки не вышло");
+      const ai = g.trainCards().filter(c => c.id === "ai")[0];
+      if (!ai || !/принять/i.test(ai.why))
+        bad("[ты и ии] карточка тренировок не говорит обещания: " + (ai && ai.why));
+    }
+
+    /* 12.3. Дорога назад с приёмки ведёт в раздел, а не в тренировки. */
+    {
+      g.screenSpecs(); await tick();
+      const back = doc.getElementById("btn-back");
+      if (!back || back.hidden) bad("[ты и ии] на приёмке нет кнопки «Назад»");
+      else if (!/Ты и ИИ/.test(back.textContent))
+        bad("[ты и ии] с приёмки уводит не в раздел: " + back.textContent);
+      back.click(); await tick();
+      if (!/Ты и ИИ/.test(doc.getElementById("app").textContent))
+        bad("[ты и ии] кнопка «Назад» с приёмки привела не в раздел");
+    }
+
+    /* 12.4. Взрослому в кабинете сказано то же отличие — иначе он не узнает,
+       что купил не очередной курс «как просить нейросеть». */
+    {
+      g.adminUnlock();
+      g.screenAdult(); await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/Чему он учится про ИИ/.test(t))
+        bad("[ты и ии] в кабинете взрослого нет карточки про ИИ");
+      if (!/принимать работу/i.test(t))
+        bad("[ты и ии] взрослому не сказано отличие от курсов «как просить»");
+      const b = doc.querySelector('[data-act="toai"]');
+      if (!b) bad("[ты и ии] из кабинета нельзя открыть раздел");
+      else {
+        b.click(); await tick();
+        if (!/Ты и ИИ/.test(doc.getElementById("app").textContent))
+          bad("[ты и ии] кнопка кабинета открыла не раздел");
+      }
+      viewReset(g);
+    }
+
+    if (problems.length === p0) aiPackChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -5453,6 +5533,7 @@ function checkEncoding(){
   console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
   console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
+  console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
