@@ -1407,6 +1407,8 @@ body.focus .toTop{display:none}
 .lblin{background:var(--sunken);border:1px solid var(--line2);border-radius:8px;padding:5px 8px;
   color:var(--ink);font-size:13px;min-width:150px}
 .lblin:focus{outline:none;border-color:var(--acc)}
+.zanplan li.cut{border-style:dashed;opacity:.75}
+.zanask{border-color:var(--acc)}
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -13775,7 +13777,7 @@ function zanStart(){
   if (open) return open;
   var key = dayKey(), n = zanOfDay(key).length + 1;
   var rec = { start: Date.now(), end: 0, len: frame().len, plan: zanPlanFor(key),
-              done: [], sec: 0, pause: 0, predOk: 0, predAll: 0 };
+              done: [], cut: [], ask: 0, sec: 0, pause: 0, predOk: 0, predAll: 0 };
   zanAll()[zanKeyOf(key, n)] = rec;
   save();
   return Object.assign({ key: zanKeyOf(key, n) }, rec);
@@ -13814,8 +13816,8 @@ function zanNote(kind, id, extra){
     if (extra && extra.ok) rec.predOk++;
   }
   save();
-  /* всё по плану сделано — занятие закрывается само */
-  if (rec.done.length >= rec.plan.length) zanFinish("plan");
+  /* всё по плану закрыто (сделано или перенесено) — занятие закрывается само */
+  if (!zanRemaining(rec).length) zanFinish("plan");
 }
 function zanFinish(reason){
   var open = zanOpen();
@@ -13826,6 +13828,79 @@ function zanFinish(reason){
   rec.why = reason || "hand";
   save();
   return Object.assign({ key: open.key }, rec);
+}
+/* Что в плане ещё не закрыто. Шаг закрыт двумя способами: сделан или перенесён.
+   Перенесённый не исчезает — он остаётся в плане с пометкой и вернётся сам,
+   потому что план следующего занятия строится из непройденных уроков. */
+function zanRemaining(rec){
+  var closed = {};
+  (rec.done || []).forEach(function(x){ closed[x] = 1; });
+  (rec.cut || []).forEach(function(x){ closed[x] = 1; });
+  return (rec.plan || []).filter(function(b){ return !closed[b.k + ":" + b.id]; });
+}
+function zanClosedCount(rec){ return (rec.done || []).length + (rec.cut || []).length; }
+function zanIsCut(rec, b){ return (rec.cut || []).indexOf(b.k + ":" + b.id) >= 0; }
+
+/* ================= сжатие плана =================
+   Если половина времени прошла, а сделано меньше половины, занятие само
+   убирает последний урок и оставляет проверку понимания. Смысл не в экономии
+   минут, а в том, чтобы ребёнок ВСЁ РАВНО дошёл до финала: ощущение «дошёл»
+   и держит привычку возвращаться, а брошенное на середине занятие не держит
+   ничего.
+
+   ⚠️ Сжатие обязано быть ВИДИМЫМ. Шаг остаётся в плане с пометкой «перенесли
+   на следующий раз», и в отчёте взрослому стоит отдельная строка. Молча
+   сокращённый план — это тихая ложь того же рода, что и старый счётчик
+   времени, который считал открытую вкладку за работу.
+
+   Проверка понимания не режется никогда: она единственное, что нельзя
+   подделать, и ради неё занятие и заканчивается. */
+function zanCanCut(rec){
+  /* режем только уроки и повторы, и только пока в остатке есть хоть один
+     сверх одного — оставить занятие вовсе без урока незачем */
+  return zanRemaining(rec).filter(function(b){
+    return b.k === "lesson" || b.k === "review";
+  }).length > 1;
+}
+function zanCutLast(rec, why){
+  var rest = zanRemaining(rec).filter(function(b){
+    return b.k === "lesson" || b.k === "review";
+  });
+  if (!rest.length) return false;
+  var b = rest[rest.length - 1];
+  rec.cut = rec.cut || [];
+  rec.cut.push(b.k + ":" + b.id);
+  rec.cutWhy = why || rec.cutWhy || "time";
+  return true;
+}
+/* автоматическое сжатие: зовётся при возврате на экран занятия */
+function zanSqueeze(rec){
+  if (!rec || rec.end) return false;
+  var half = (rec.len || 30) / 2;
+  if (zanMins(rec) < half) return false;
+  var closed = zanClosedCount(rec), total = (rec.plan || []).length;
+  if (!total || closed / total >= 0.5) return false;
+  var did = false;
+  while (zanCanCut(rec) && zanCutLast(rec, "time")) { did = true; break; }
+  if (did) save();
+  return did;
+}
+/* «только проверку и всё»: откладываем ВСЁ, кроме проверки понимания, — включая
+   не начатую разминку. Иначе кнопка врёт: обещали «только проверку», а по пути
+   стоит ещё один шаг.
+   Автоматическое сжатие по времени разминку не трогает: она короткая и она
+   вход в занятие. Тут же выбор делает сам ребёнок, и он выбирает конец. */
+function zanCutToCheck(rec){
+  var n = 0;
+  rec.cut = rec.cut || [];
+  zanRemaining(rec).forEach(function(b){
+    if (b.k === "predict") return;
+    rec.cut.push(b.k + ":" + b.id);
+    n++;
+  });
+  if (n) rec.cutWhy = "choice";
+  save();
+  return n;
 }
 function zanMins(rec){ return Math.round((rec.sec || 0) / 60); }
 function zanPauseMins(rec){ return Math.round((rec.pause || 0) / 60); }
@@ -13856,7 +13931,8 @@ function zanReport(rec, st){
   var was = "Занятие " + mins + " " + plural(mins, "минута", "минуты", "минут");
   if (pause >= 2) was += " работы и " + pause + " " + plural(pause, "минута", "минуты", "минут") + " перерыва";
   was += ", " + lessons.length + " " + plural(lessons.length, "урок", "урока", "уроков");
-  if (rec.done.length < rec.plan.length) was += " — занятие закончили раньше плана";
+  var cutN = (rec.cut || []).length;
+  if (zanRemaining(rec).length) was += " — занятие закончили раньше плана";
 
   /* 2. за что похвалить: ищем конкретное, а не общее */
   var praise = null;
@@ -13907,9 +13983,20 @@ function zanReport(rec, st){
       "Верный ответ: " + pick.it.what + "."
     : "Вопрос появится, когда будет пройден первый урок.";
 
-  return { was: was, praise: praise, got: got, ask: ask,
-           mins: mins, pause: pause, lessons: lessons.length,
-           full: rec.done.length >= rec.plan.length };
+  /* ⚠️ Отдельная строка про сжатие. Если план сокращён, взрослый должен узнать
+     об этом от нас, а не догадаться по числу уроков: сжатие ради красивой
+     картинки — это ровно то, чем плох отчёт репетитора. */
+  var cut = "";
+  if (cutN)
+    cut = (rec.cutWhy === "choice"
+      ? "Ребёнок сам решил закончить проверкой: "
+      : "План сжали, сегодня шло тяжелее обычного: ") +
+      cutN + " " + plural(cutN, "шаг перенесён", "шага перенесены", "шагов перенесены") +
+      " на следующее занятие.";
+
+  return { was: was, praise: praise, got: got, ask: ask, cut: cut,
+           mins: mins, pause: pause, lessons: lessons.length, cutN: cutN,
+           full: !zanRemaining(rec).length && !cutN };
 }
 
 /* ================= задание от взрослого =================
@@ -17541,8 +17628,12 @@ function winLesson(l, body){
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
     takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
     '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
-      (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
-            : '<button class="bigbtn" id="wlist">К списку уроков</button>') +
+      /* Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в следующий урок. Иначе
+         «Дальше →» уносит мимо плана, и разговор «время вышло, что дальше»
+         не случается никогда: ребёнок просто едет вперёд, пока не надоест. */
+      (zanOpen() ? '<button class="bigbtn" id="wzan">← К занятию</button>'
+                 : (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
+                         : '<button class="bigbtn" id="wlist">К списку уроков</button>')) +
       '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>' +
       workShareHTML(session && session.code) + '</div>';
   document.getElementById("win").classList.add("show");
@@ -17556,6 +17647,8 @@ function winLesson(l, body){
   if (wn) wn.onclick = function(){ closeWin(); openLesson(next.id); };
   var wl = document.getElementById("wlist");
   if (wl) wl.onclick = function(){ closeWin(); screenWorld(l.world); };
+  var wz = document.getElementById("wzan");
+  if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
   document.getElementById("wstay").onclick = closeWin;
 }
 function closeWin(){ document.getElementById("win").classList.remove("show"); }
@@ -18268,10 +18361,12 @@ function zanCardHTML(){
   var doneToday = zanOfDay(dayKey()).filter(function(z){ return z.end; }).length;
   var restDay = frameOn() && !frameStudyDay(dayKey());
   if (open){
-    var pct = Math.min(100, Math.round((open.done.length / Math.max(1, open.plan.length)) * 100));
+    var closed = zanClosedCount(open);
+    var pct = Math.min(100, Math.round((closed / Math.max(1, open.plan.length)) * 100));
     return '<div class="card zancard on"><h3>⏱ Занятие идёт</h3>' +
       '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
-      '<p>Сделано ' + open.done.length + ' из ' + open.plan.length + '. Работы: ' +
+      '<p>Сделано ' + open.done.length + ' из ' + open.plan.length +
+      ((open.cut || []).length ? ', перенесено ' + open.cut.length : '') + '. Работы: ' +
       zanMins(open) + ' ' + plural(zanMins(open), "минута", "минуты", "минут") + '.</p>' +
       '<div class="winrow"><button class="bigbtn" id="zancont">Продолжить занятие</button></div></div>';
   }
@@ -18710,7 +18805,11 @@ function winWarmup(w){
     ? '<p>' + esc(w.note || "Ты справился с сегодняшней задачей.") + '</p>' + savedNote +
       '<div class="streakline">🔥 <b>' + streak + '</b> ' + plural(streak, "день", "дня", "дней") + ' подряд</div>'
     : '<p>' + esc(w.note || (isBlocks ? "Ты собрал программу в правильном порядке." : "Ты правильно предсказал, что напечатает программа.")) + '</p>' + savedNote;
-  var buttons = isDaily
+  var inZan = !!zanOpen();
+  var buttons = inZan
+    ? '<button class="bigbtn" id="wzan">← К занятию</button>' +
+      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>'
+    : isDaily
     ? '<button class="bigbtn" id="wtoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="wmore">Ещё размяться</button>'
     : (next ? '<button class="bigbtn" id="wnext">Следующая →</button>'
@@ -18730,6 +18829,8 @@ function winWarmup(w){
   if (wt) wt.onclick = function(){ closeWin(); screenToday(); };
   var wm = document.getElementById("wmore");
   if (wm) wm.onclick = function(){ closeWin(); screenWarmups(); };
+  var wz2 = document.getElementById("wzan");
+  if (wz2) wz2.onclick = function(){ closeWin(); screenZan(); };
   var wstay = document.getElementById("wstay");
   if (wstay) wstay.onclick = closeWin;
 }
@@ -20272,45 +20373,105 @@ function screenZan(){
     return;
   }
 
+  /* сжатие проверяется при каждом возврате на экран: время могло выйти, пока
+     ребёнок сидел в уроке */
+  var squeezed = zanSqueeze(rec);
+  rec = zanOpen() || rec;
+
   var doneSet = {};
   (rec.done || []).forEach(function(x){ doneSet[x] = 1; });
-  var next = null;
-  rec.plan.forEach(function(b){ if (!next && !doneSet[b.k + ":" + b.id]) next = b; });
+  var rest = zanRemaining(rec);
+  var next = rest[0] || null;
   var mins = zanMins(rec), pause = zanPauseMins(rec);
-  var pct = Math.min(100, Math.round((rec.done.length / Math.max(1, rec.plan.length)) * 100));
+  var closed = zanClosedCount(rec);
+  var pct = Math.min(100, Math.round((closed / Math.max(1, rec.plan.length)) * 100));
 
-  app.innerHTML =
-    '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
+  /* ⚠️ Спрашиваем ТОЛЬКО между шагами — урок посередине не режется ни при
+     каких обстоятельствах. Экран занятия и есть это «между», потому что
+     попасть сюда можно только закончив шаг или уйдя из него самому.
+     rec.ask помнит, на каком месте ребёнок сказал «ещё один урок»: пока он его
+     не СДЕЛАЛ, вопрос не повторяется. Считаем именно сделанные шаги, а не
+     закрытые: перенос по сжатию — не работа ребёнка, и засчитывать его за
+     обещанный урок было бы обманом в свою пользу. */
+  var askNow = zanTimeUp(rec) && rest.length && (rec.done || []).length >= (rec.ask || 0);
+  var restLessons = rest.filter(function(b){ return b.k === "lesson" || b.k === "review"; });
+  var hasCheck = rest.some(function(b){ return b.k === "predict"; });
+
+  var head = '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
       '<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
-      '<div class="right"><span class="tag">' + rec.done.length + ' из ' + rec.plan.length + '</span></div></div>' +
+      '<div class="right"><span class="tag">' + closed + ' из ' + rec.plan.length + '</span></div></div>' +
     '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
     '<p class="zanmeta">Работы: <b>' + mins + ' ' + plural(mins, "минута", "минуты", "минут") + '</b>' +
-      (pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') +
-      (zanTimeUp(rec) ? ' · <b>время вышло — можно заканчивать</b>' : '') + '</p>' +
-    '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
+      (pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') + '</p>';
+
+  /* видимая пометка о сжатии: молча сокращать план нельзя */
+  var cutNote = "";
+  if (squeezed)
+    cutNote = '<div class="daybanner rest">📌 <b>Сегодня идёт тяжелее обычного.</b> ' +
+      'Последний шаг перенесли на следующее занятие, чтобы ты успел дойти до конца. ' +
+      'Он не пропал — вернётся сам.</div>';
+
+  var plan = '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
       rec.plan.map(function(b){
-        var done = !!doneSet[b.k + ":" + b.id];
-        var cur = !done && next && next.id === b.id && next.k === b.k;
-        return '<li class="' + (done ? "done" : (cur ? "cur" : "")) + '">' +
-          '<span class="zi">' + (done ? "✓" : zanBlockEmoji(b)) + '</span>' +
+        var isDone = !!doneSet[b.k + ":" + b.id];
+        var isCut = zanIsCut(rec, b);
+        var cur = !isDone && !isCut && next && next.id === b.id && next.k === b.k;
+        return '<li class="' + (isDone ? "done" : (isCut ? "cut" : (cur ? "cur" : ""))) + '">' +
+          '<span class="zi">' + (isDone ? "✓" : (isCut ? "📌" : zanBlockEmoji(b))) + '</span>' +
           '<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) +
-          (cur ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + esc(b.id) + '">Открыть</button>' : '') +
+          (isCut ? ' <span class="dim">перенесли на следующий раз</span>' : '') +
+          (cur && !askNow ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + esc(b.id) + '">Открыть</button>' : '') +
         '</li>';
-      }).join("") + '</ol></div>' +
-    '<div class="winrow">' +
+      }).join("") + '</ol></div>';
+
+  /* ---------- выбор, когда время вышло ----------
+     Три кнопки, а не две. Средняя — это СОГЛАСОВАННЫЙ объём: ребёнок сам
+     называет, сколько ещё сделает, вместо открытой двери «продолжай сколько
+     хочешь». Хвалить за продолжение нельзя ни словом: «молодец, что не
+     остановился» превращает занятие в гонку. */
+  var tail;
+  if (askNow){
+    tail = '<div class="card zanask"><h3>⏱ ' + rec.len + ' минут прошло</h3>' +
+      '<p>Занятие можно закрывать — ты своё отработал. Или сделать ещё шаг, если сегодня идёт хорошо. ' +
+      'Решай сам.</p><div class="winrow">' +
+        '<button class="bigbtn" id="zstop">Закончить занятие</button>' +
+        (restLessons.length ? '<button class="bigbtn ghost" id="zone">Ещё один урок</button>' : '') +
+        (hasCheck && restLessons.length ? '<button class="bigbtn ghost" id="zcheck">Только проверку и всё</button>' : '') +
+      '</div><p class="dim">Что не успели — не пропадёт: перенесётся на следующее занятие.</p></div>';
+  } else {
+    tail = '<div class="winrow">' +
       (next ? '<button class="bigbtn" id="zgo2">Продолжить занятие</button>' : '') +
       '<button class="bigbtn ghost" id="zend">Закончить занятие</button></div>' +
-    '<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
-    'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
+      '<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
+      'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
+  }
+
+  app.innerHTML = head + cutNote + plan + tail;
 
   app.querySelectorAll(".zopen").forEach(function(b){
     b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
   });
   var zg2 = document.getElementById("zgo2");
   if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
-  document.getElementById("zend").onclick = function(){
-    var fin = zanFinish("hand");
-    screenZanDone(fin || rec);
+  var zend = document.getElementById("zend");
+  if (zend) zend.onclick = function(){ screenZanDone(zanFinish("hand") || rec); };
+  var zstop = document.getElementById("zstop");
+  if (zstop) zstop.onclick = function(){ screenZanDone(zanFinish("time") || rec); };
+  var zone = document.getElementById("zone");
+  if (zone) zone.onclick = function(){
+    var r = zanAll()[rec.key];
+    if (r){ r.ask = (r.done || []).length + 1; save(); }
+    var step = zanRemaining(r || rec)[0];
+    if (step) zanOpenBlock(step); else screenZan();
+  };
+  var zcheck = document.getElementById("zcheck");
+  if (zcheck) zcheck.onclick = function(){
+    var r = zanAll()[rec.key];
+    if (!r) return screenZan();
+    zanCutToCheck(r);
+    var step = zanRemaining(r)[0];
+    if (step) zanOpenBlock(step);
+    else screenZanDone(zanFinish("choice") || r);
   };
   refreshTop();
 }
@@ -20329,11 +20490,14 @@ function screenZanDone(rec){
       '<p class="zanwas"><b>' + esc(r.was) + '.</b></p>' +
       (r.full ? '<p>Весь план сделан.</p>'
               : '<p>План сделан не весь — и это нормально: занятие засчитано, потому что ты сел и работал.</p>') +
+      (r.cutN ? '<p class="dim">📌 Перенесли на следующее занятие: ' + r.cutN + ' ' +
+        plural(r.cutN, "шаг", "шага", "шагов") + '. Они не пропали.</p>' : '') +
       '<p class="dim">' + esc(r.got) + '</p>' +
     '</div>' +
     '<div class="card"><h3>Что увидит взрослый</h3>' +
       '<p class="dim">Ровно эти строки — ничего сверх них мы никому не показываем.</p>' +
       '<ul class="zanrep"><li>' + esc(r.was) + '</li><li>Похвалить: ' + esc(r.praise) + '</li>' +
+      (r.cut ? '<li>' + esc(r.cut) + '</li>' : '') +
       '<li>' + esc(r.got) + '</li><li>' + esc(r.ask) + '</li></ul></div>' +
     '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
@@ -20415,6 +20579,7 @@ function screenAdult(){
       '<p class="dim">' + fmtWhen(last.end) + '</p>' +
       '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
       '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
+      (r.cut ? '<li><b>План.</b> ' + esc(r.cut) + '</li>' : '') +
       '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
       '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
   } else {
@@ -23675,6 +23840,8 @@ window.__game = {
   zanSlots: zanSlots, zanPlanFor: zanPlanFor, zanStart: zanStart, zanOpen: zanOpen,
   zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
   zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
+  zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
+  zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
   screenAssign: screenAssign, heatHTML: heatHTML, heatLevel: heatLevel,
   hoursAdd: hoursAdd, hoursRow: hoursRow, pruneHours: pruneHours,

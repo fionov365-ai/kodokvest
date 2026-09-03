@@ -3929,6 +3929,76 @@ function checkEncoding(){
       if (r2.predOk !== 0) bad("[отчёт] предсказание со второй попытки засчитано как понимание");
     }
     g.zanFinish("hand");
+
+    /* --- время вышло: выбор из трёх, а не «стоп/дальше» --- */
+    g.state.zan = {};
+    const rec3 = g.zanStart();
+    const r3 = g.zanAll()[rec3.key];
+    r3.sec = (r3.len + 1) * 60;              /* время вышло */
+    g.screenZan();
+    await tick();
+    if (!doc.getElementById("zstop")) bad("[занятие] по истечении времени нет кнопки «закончить»");
+    if (!doc.getElementById("zone")) bad("[занятие] нет средней кнопки «ещё один урок»");
+    if (!doc.getElementById("zcheck")) bad("[занятие] нет варианта «только проверку и всё»");
+    if (/молодец|не остановился/i.test(doc.getElementById("app").textContent))
+      bad("[занятие] продолжение похвалено — занятие превращается в гонку");
+
+    /* «ещё один урок»: вопрос не повторяется, пока шаг не сделан */
+    r3.ask = (r3.done || []).length + 1;
+    g.screenZan();
+    await tick();
+    if (doc.getElementById("zstop"))
+      bad("[занятие] после «ещё один урок» вопрос задан снова, не дав его сделать");
+
+    /* --- сжатие плана: видимое, а не молчаливое --- */
+    g.state.zan = {};
+    const rec4 = g.zanStart();
+    const r4 = g.zanAll()[rec4.key];
+    const planLen = r4.plan.length;
+    const lessonsInPlan = r4.plan.filter(b => b.k === "lesson" || b.k === "review").length;
+    r4.sec = Math.ceil(r4.len / 2) * 60 + 60;   /* половина времени прошла */
+    if (lessonsInPlan > 1){
+      const did = g.zanSqueeze(r4);
+      if (!did) bad("[сжатие] план не сжался, хотя половина времени прошла, а сделано ноль");
+      if ((r4.cut || []).length !== 1) bad("[сжатие] перенесено не то число шагов: " + JSON.stringify(r4.cut));
+      if (r4.plan.length !== planLen) bad("[сжатие] шаг вычеркнут из плана — он должен остаться с пометкой");
+      /* проверку понимания не режем никогда */
+      if ((r4.cut || []).some(x => x.indexOf("predict:") === 0))
+        bad("[сжатие] срезана проверка понимания — единственное, что нельзя подделать");
+      g.screenZan();
+      await tick();
+      const txt = doc.getElementById("app").textContent;
+      if (!/перенесли на следующий раз/.test(txt))
+        bad("[сжатие] перенос не помечен в плане — молча сокращать нельзя");
+      if (!/тяжелее обычного/.test(txt)) bad("[сжатие] ребёнку не сказано, что план сжали");
+      const rep4 = g.zanReport(r4, g.state);
+      if (!/перенесен/i.test(rep4.cut || "")) bad("[сжатие] в отчёте взрослому нет строки про перенос: " + rep4.cut);
+      if (rep4.full) bad("[сжатие] сжатое занятие названо полным");
+    }
+
+    /* --- «только проверку и всё» --- */
+    g.state.zan = {};
+    const rec5 = g.zanStart();
+    const r5 = g.zanAll()[rec5.key];
+    if (r5.plan.some(b => b.k === "predict")){
+      g.zanCutToCheck(r5);
+      const restKinds = g.zanRemaining(r5).map(b => b.k);
+      if (restKinds.filter(k => k !== "predict").length)
+        bad("[выбор] после «только проверку» в остатке остались лишние шаги: " + JSON.stringify(restKinds));
+      if (!restKinds.length) bad("[выбор] проверка понимания тоже срезана");
+      const rep5 = g.zanReport(r5, g.state);
+      if (!/сам решил/.test(rep5.cut || "")) bad("[выбор] отчёт не отличает выбор ребёнка от сжатия по времени");
+    }
+
+    /* закрытие само, когда в остатке пусто (сделано + перенесено = план) */
+    g.state.zan = {};
+    const rec6 = g.zanStart();
+    const r6 = g.zanAll()[rec6.key];
+    r6.done = r6.plan.filter(b => b.k === "predict").map(b => b.k + ":" + b.id);
+    r6.cut = r6.plan.filter(b => b.k !== "predict").map(b => b.k + ":" + b.id);
+    if (g.zanRemaining(r6).length) bad("[занятие] остаток считается неверно при переносе");
+    g.zanFinish("plan");
+
     g.state.zan = {};
     if (problems.length === p0) zanChecked++;
   }
