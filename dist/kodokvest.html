@@ -17027,7 +17027,7 @@ function screenWorlds(){
   /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
   h += '<div class="sect"><h2>Тренировки</h2>' + qm("train", "Что такое тренировки") +
     '<div class="line"></div>' +
-    '<span class="cnt">вне сотни уроков</span></div>' +
+    '<span class="cnt">без звёзд, по желанию</span></div>' +
     '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
     'Звёзд они не дают, но день занятий засчитывают.</p>' +
     '<div class="hubgrid">' +
@@ -17049,6 +17049,7 @@ function screenWorlds(){
   var ctAll = certList(), ctDone = 0;
   ctAll.forEach(function(c){ if (c.ready) ctDone++; });
   var pics = galleryList().length, mine = myTasksList().length;
+  var shelfN = partsList().length, madeN = buildsList().length;
   h += '<div class="sect"><h2>Моё</h2>' + qm("folio", "Что лежит в «Моём»") +
     '<div class="line"></div>' +
     '<span class="cnt">' + (pjDone + pics + mine) + ' ' +
@@ -17093,6 +17094,20 @@ function screenWorlds(){
     'что они делают, ещё до того, как дойдёшь до них</span>' +
     '<span class="pjnote">Эту страницу удобно показать родителям, если спросят, чем ты тут занят.</span></span>' +
     '<button class="bigbtn ghost" id="goworks">Посмотреть</button>' +
+    '</div>' +
+    /* Мастерская жила только внутри портфолио: про полку ребёнок узнавал из
+       окна победы урока и, если пропустил, не узнавал больше нигде.
+       Накопление, которого не видно, не удерживает. */
+    '<div class="projcard' + (shelfN ? " done" : "") + '"><span class="pjemoji">🔧</span>' +
+    '<span class="pjbody"><span class="pjkicker">полка деталей</span>' +
+    '<b>Мастерская</b>' +
+    '<span>функции, которые ты написал сам, остаются на полке — из них потом ' +
+    'собирается своя программа</span>' +
+    '<span class="pjnote">' + (shelfN
+      ? "На полке " + shelfN + " " + plural(shelfN, "деталь", "детали", "деталей") +
+        (madeN ? ", собрано вещей: " + madeN : "")
+      : "Полка наполнится сама: детали появляются с уроков про функции.") + '</span></span>' +
+    '<button class="bigbtn' + (shelfN ? "" : " ghost") + '" id="goshop">Открыть мастерскую</button>' +
     '</div>';
 
   /* ===== достижения ===== */
@@ -17123,6 +17138,8 @@ function screenWorlds(){
   document.getElementById("gomine").onclick = function(){ screenMyTasks(); };
   var gw = document.getElementById("goworks");
   if (gw) gw.onclick = screenShowcase;
+  var gs = document.getElementById("goshop");
+  if (gs) gs.onclick = screenShop;
   var cards = trainCards();
   app.querySelectorAll("[data-train]").forEach(function(b){
     var id = b.getAttribute("data-train");
@@ -17146,7 +17163,7 @@ function screenWorlds(){
 function screenTrain(){
   enterScreen("train", "train");
   session = { id:null, attempts:0, hints:0, shown:false };
-  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">без звёзд, по желанию</div>' +
     '<h1>🎯 Тренировки</h1></div></div>' +
     '<p class="lede">Уроки — главное, а это то, куда заходят между ними. Звёзд тут не дают ' +
     'и по порядку проходить не надо: выбирай по настроению. Но день занятий засчитывается ' +
@@ -17233,7 +17250,7 @@ function screenWorld(n){
             : "Откроется, когда пройдёшь все уроки этого мира.");
       h += '<div class="projcard' + (popen ? "" : " locked") + (pdone ? " done" : "") + '">' +
         '<span class="pjemoji">' + proj.emoji + '</span>' +
-        '<span class="pjbody"><span class="pjkicker">Проект мира ' + n + ' · вне сотни уроков</span>' +
+        '<span class="pjbody"><span class="pjkicker">Проект мира ' + n + ' · звёзд не даёт</span>' +
         '<b>' + esc(proj.title) + (pdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
         '<span>' + esc(proj.tagline) + '</span>' +
         '<span class="pjnote">' + esc(pnote) + '</span></span>' +
@@ -17251,7 +17268,7 @@ function screenWorld(n){
     var shelfN = partsList().length;
     if (shelfN >= 3)
       h += '<div class="projcard"><span class="pjemoji">🔧</span>' +
-        '<span class="pjbody"><span class="pjkicker">Мастерская · вне сотни уроков</span>' +
+        '<span class="pjbody"><span class="pjkicker">Мастерская · звёзд не даёт</span>' +
         '<b>Собери вещь из своих деталей</b>' +
         '<span>На полке уже ' + shelfN + ' ' + plural(shelfN, "деталь", "детали", "деталей") +
         ' — функций, которые ты написал сам.</span>' +
@@ -19439,7 +19456,7 @@ function screenReview(){
   var later = all.filter(function(x){ return x.at > now; });
   var got = reviewGraduatedCount();
 
-  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div><h1>🔁 Повторить</h1></div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">то, что уже проходили</div><h1>🔁 Повторить</h1></div>' +
     '<div class="right"><span class="tag">' + (due.length ? "пора: " + due.length : "долгов нет") + '</span></div></div>' +
     '<p class="lede">Урок, который дался тяжело, забывается первым. Сюда сами попадают те, где были ' +
     'подсказки, показанное решение или много попыток. Каждый возвращается сначала через два дня, ' +
@@ -19522,7 +19539,7 @@ function screenAILab(){
     var apopen = projectOpen(aproj), apdone = projectDone(aproj.id), apst = projectState(aproj.id);
     h += '<div class="projcard' + (apopen ? "" : " locked") + (apdone ? " done" : "") + '">' +
       '<span class="pjemoji">' + aproj.emoji + '</span>' +
-      '<span class="pjbody"><span class="pjkicker">Проект раздела · вне сотни уроков</span>' +
+      '<span class="pjbody"><span class="pjkicker">Проект раздела · звёзд не даёт</span>' +
       '<b>' + esc(aproj.title) + (apdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
       '<span>' + esc(aproj.tagline) + '</span>' +
       '<span class="pjnote">' + esc(apdone
@@ -20022,7 +20039,7 @@ function openProject(id, forceStep){
       '<div class="lvlhead"><div><div class="idx">' + kicker +
         ' · шаг ' + (i + 1) + ' из ' + p.steps.length + '</div>' +
       '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
-      '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+      '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
       '<p class="lede">' + esc(p.intro) + '</p>' +
       '<div class="pstepbar">' + dots + '</div>';
 
@@ -20616,7 +20633,7 @@ function screenFolio(){
 
   var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
     '<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Моё") + '</h1></div>' +
-    '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+    '<div class="right"><span class="tag">твои работы</span></div></div>' +
     '<p class="lede">Здесь собрано всё сделанное своими руками: программы из проектов, рисунки, ' +
     'свои задания для друзей и сертификаты. Эту страницу можно показать кому угодно — ' +
     'родителям, учителю, друзьям.</p>';
@@ -22752,7 +22769,7 @@ function screenMyTasks(edit){
   var start = edit || draft || { title:"", goal:"", code:"" };
 
   var got = solvedCount();
-  var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">без звёзд, по желанию</div>' +
     '<h1>✍️ Задай задачу взрослому</h1></div>' +
     '<div class="right"><span class="tag">взрослому или другу</span></div></div>' +
     '<p class="lede">Обычно задания раздают тебе. Здесь наоборот: задачу придумываешь ты, ' +
@@ -22917,7 +22934,7 @@ function openFriendTask(t, opts){
   var h = '<div class="lvlhead"><div><div class="idx">' +
     (opts.own ? "твоё задание глазами друга" : who) + '</div>' +
     '<h1>✍️ ' + esc(t.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">вне сотни уроков</span></div></div>' +
+    '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
     '<p class="lede">' + (opts.own
       ? 'Так задание видит тот, кому ты отправил ссылку: условие есть, а твоей программы нет. Попробуй решить сам — заодно проверишь, всё ли понятно из условия.'
       : 'Это задание придумал человек, а не тренажёр. Твоя задача — написать программу, которая печатает то же самое. ' +
@@ -24635,15 +24652,25 @@ function installIsIOS(){
   } catch(e){ return false; }
 }
 /* В одном файле и с диска ставить нечего: там нет ни манифеста, ни sw.js. */
+var INSTALL_AFTER = 3;     /* столько уроков — и предложение перестаёт быть навязчивым */
 function installPossible(){
   if (window.__SINGLE_FILE__) return false;
   try { if (location.protocol === "file:") return false; } catch(e){ return false; }
   return !installDone();
 }
+/* ⚠️ Новичку предложение не показываем. Оно стояло ПЕРВЫМ блоком на Главном:
+   первое, что видел ребёнок, зайдя в первый раз, — «адресная строка», «меню
+   браузера», «добавить на главный экран». Он пришёл писать код, а не ставить
+   приложение, и половина слов ему незнакома. Предлагаем после трёх уроков —
+   тому, кто уже понял, зачем возвращаться. В профиле карточка есть всегда
+   (там force), и это правильно: туда заходят нарочно. */
+function installReady(){
+  return installPossible() && Object.keys(S.stars || {}).length >= INSTALL_AFTER;
+}
 
 /* force — для карточки в профиле: там подсказка нужна и после «не сейчас». */
 function installTipHTML(force){
-  if (!installPossible()) return "";
+  if (force ? !installPossible() : !installReady()) return "";
   if (!force && installHidden()) return "";
   var how = deferredInstall
     ? '<button class="bigbtn" id="instalgo">Установить</button>'
@@ -25100,7 +25127,7 @@ var HELP = {
   tools: { t:"🧰 Кнопки наверху", h:
     '<div class="iconlist">' +
     '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
-    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — всё, что вне сотни уроков</span></div>' +
+    '<div class="iconrow"><span class="ic">🎯</span><span><b>Тренировки</b> — разминки, игры и песочница: звёзд не дают, заходят по желанию</span></div>' +
     '<div class="iconrow"><span class="ic">🎒</span><span><b>Моё</b> — сделанное своими руками</span></div>' +
     '<div class="iconrow"><span class="ic">🔥</span><span><b>Сегодня</b> — дни подряд и задача дня</span></div>' +
     '<div class="iconrow"><span class="ic">📖</span><span><b>Шпаргалка</b> — справочник по командам, открывается прямо посреди урока</span></div>' +
@@ -25566,7 +25593,8 @@ window.__game = {
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
   doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
-  installTipHTML: installTipHTML, installPossible: installPossible, installDone: installDone,
+  installTipHTML: installTipHTML, installPossible: installPossible,
+  installReady: installReady, INSTALL_AFTER: INSTALL_AFTER, installDone: installDone,
   installHidden: installHidden, installHide: installHide, installIsIOS: installIsIOS,
   sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx, voiceAuto: voiceAuto, voiceAutoSet: voiceAutoSet,
   voiceSupported: voiceSupported, speak: speak, voiceStop: voiceStop, plainText: plainText,

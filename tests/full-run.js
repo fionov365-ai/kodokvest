@@ -3463,6 +3463,55 @@ function checkEncoding(){
     if (doc.querySelector(".top-in .tbtn#btn-back"))
       bad("[устройство] «Назад» записана в инструменты — она навигация, а не инструмент");
 
+    /* ⚠️ Новичку предложение поставить приложение не показывается. Оно стояло
+       первым блоком на Главном: первое, что видел ребёнок в первый заход, —
+       «адресная строка» и «меню браузера». Он пришёл писать код. */
+    {
+      /* ⚠️ Проверяем ПРАВИЛО, а не разметку: в однофайловой сборке ставить
+         нечего (нет манифеста), поэтому баннера там не будет никогда, и
+         проверка по DOM молча прошла бы, ничего не проверив (грабля 59). */
+      const starsWas = JSON.parse(JSON.stringify(g.state.stars));
+      g.state.stars = {};
+      if (g.installReady())
+        bad("[новичок] предложение поставить приложение готово тому, кто не сделал ни урока");
+      for (let i = 0; i < g.INSTALL_AFTER; i++) g.state.stars["ur" + i] = 3;
+      if (g.installPossible() !== g.installReady())
+        bad("[новичок] после " + g.INSTALL_AFTER + " уроков предложение так и не появилось");
+      g.state.stars = starsWas;
+      viewReset(g);
+    }
+
+    /* Мастерская обязана быть видна с Главного: про полку ребёнок узнавал
+       только из окна победы урока, а накопление, которого не видно, не
+       удерживает. */
+    {
+      g.screenWorlds(); await tick();
+      if (!doc.getElementById("goshop")) bad("[главное] на Главном нет входа в мастерскую");
+      else {
+        doc.getElementById("goshop").click(); await tick();
+        if (!/Полка и верстак/.test(doc.getElementById("app").textContent))
+          bad("[главное] кнопка мастерской ведёт не туда");
+      }
+      viewReset(g);
+    }
+
+    /* Внутренний язык на детских экранах: «вне сотни уроков» — это наша
+       формулировка, а не детская. В подписях-чипах её быть не должно. */
+    {
+      const screens = [() => g.screenTrain(), () => g.screenFolio(),
+                       () => g.screenMyTasks(), () => g.screenReview()];
+      for (const go of screens){
+        go(); await tick();
+        const chips = [...doc.querySelectorAll(".lvlhead .idx, .lvlhead .tag, .sect .cnt")]
+          .map(x => x.textContent.trim());
+        chips.forEach(c => {
+          if (/вне сотни/i.test(c))
+            bad("[новичок] в подписи остался наш внутренний язык: " + JSON.stringify(c));
+        });
+      }
+      viewReset(g);
+    }
+
     /* Дорога назад обязана быть на КАЖДОМ экране, кроме Главного: раньше уйти
        можно было только кнопкой в самом низу страницы, то есть за экраном. */
     {
