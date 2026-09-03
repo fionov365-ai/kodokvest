@@ -13259,6 +13259,8 @@ var STAR_XP = [0, 25, 60, 100];
    списками. Объявление через var подняло бы имя, но не значение. */
 var ZAN_LEN = [20, 30, 45];
 var ZAN_MIX = ["new", "balanced", "repeat"];
+/* потолок дня: сколько минут в тренажёре взрослый считает достаточным */
+var CAP_CHOICES = [0, 30, 45, 60, 90];
 
 /* ===== код входа в панель наставника =====
    Панель открывается адресом сайта с #admin на конце, например
@@ -13606,7 +13608,7 @@ function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(d
    вернуло бы снятый на другом устройстве день. */
 function blankFrame(){
   return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true,
-           perLesson:null, setAt:0 };
+           perLesson:null, cap:0, capHard:false, setAt:0 };
 }
 function frameShape(f){
   var o = (f && typeof f === "object") ? f : {};
@@ -13626,6 +13628,9 @@ function frameShape(f){
      взрослым. Пока не принят, план считается по общему числу (zanSlots). */
   if (typeof o.perLesson === "number" && o.perLesson >= 2 && o.perLesson <= 40)
     out.perLesson = Math.round(o.perLesson * 10) / 10;
+  /* потолок экранного времени на день, в минутах. 0 — не ограничиваем. */
+  if (CAP_CHOICES.indexOf(o.cap) >= 0) out.cap = o.cap;
+  out.capHard = o.capHard === true;
   out.setAt = typeof o.setAt === "number" ? o.setAt : 0;
   return out;
 }
@@ -13704,6 +13709,36 @@ function paceCheck(goal, days, len){
     fits: Math.max(1, Math.floor(((len || frame().len) - MIN_AROUND) / per)),
     byMeasure: !!frame().perLesson
   };
+}
+
+/* ================= потолок дня =================
+   Замер 03.09.2026: первое, чего боится родитель в любом экранном продукте, —
+   не «не научится», а экранное время. Занятие с обещанной длиной уже отвечает
+   на этот страх наполовину; потолок отвечает прямо.
+
+   ⚠️ По умолчанию потолок МЯГКИЙ: тренажёр говорит «на сегодня хватит», но
+   ничего не запирает. Жёсткая блокировка наказывает за увлечённость и
+   противоречит всему остальному в продукте — поэтому запирать можно только
+   если взрослый отдельно этого попросил галочкой.
+   Считаем по карте часов, то есть по активным минутам ВЕЗДЕ в тренажёре, а не
+   только на занятии: родитель мерит экранное время, а не учебное. */
+function todayMinutes(){
+  var row = (S.hours || {})[dayKey()] || [], sec = 0;
+  for (var i = 0; i < 24; i++) sec += row[i] || 0;
+  return Math.round(sec / 60);
+}
+function capOn(){ return frame().cap > 0; }
+function capLeft(){ return Math.max(0, frame().cap - todayMinutes()); }
+function capReached(){ return capOn() && todayMinutes() >= frame().cap; }
+function capHard(){ return capReached() && frame().capHard; }
+function capNoteHTML(){
+  if (!capReached()) return "";
+  var m = todayMinutes();
+  return '<div class="daybanner rest">🌙 <b>Сегодня уже ' + m + ' ' +
+    plural(m, "минута", "минуты", "минут") + ' за тренажёром.</b> ' +
+    (frame().capHard
+      ? 'На сегодня всё — так договорились дома. Начатое доделать можно, новое откроется завтра.'
+      : 'Взрослый считает, что на сегодня хватит. Дальше — на твоё усмотрение.') + '</div>';
 }
 
 /* ================= занятие =================
@@ -13918,6 +13953,30 @@ function zanCutToCheck(rec){
   if (n) rec.cutWhy = "choice";
   save();
   return n;
+}
+/* ===== перерыв внутри занятия =====
+   45 минут подряд восьмилетний не работает — школа делит их переменой, и мы
+   тоже. Перерыв берётся только МЕЖДУ шагами и длится ZAN_BREAK минут.
+   Время перерыва не идёт ни в работу, ни в карту часов: оно записывается в
+   паузу, как и всякое отсутствие. Разница в том, что у перерыва есть кнопка, а
+   у «ушёл и не вернулся» её нет, — и в отчёте это видно. */
+var ZAN_BREAK = 5;
+function zanOnBreak(rec){ return !!(rec && rec.breakUntil && rec.breakUntil > Date.now()); }
+function zanBreakStart(rec){
+  if (!rec || rec.end) return;
+  rec.breakUntil = Date.now() + ZAN_BREAK * 60000;
+  rec.breaksTaken = (rec.breaksTaken || 0) + 1;
+  save();
+}
+function zanBreakEnd(rec){
+  if (!rec) return;
+  rec.breakUntil = 0;
+  save();
+}
+/* пора предложить перерыв: длинное занятие, половина позади, перерыва не было */
+function zanBreakDue(rec){
+  return rec && !rec.end && (rec.len || 30) >= 45 && !(rec.breaksTaken || 0) &&
+         zanMins(rec) >= (rec.len || 30) / 2 && zanRemaining(rec).length > 0;
 }
 function zanMins(rec){ return Math.round((rec.sec || 0) / 60); }
 function zanPauseMins(rec){ return Math.round((rec.pause || 0) / 60); }
@@ -14278,6 +14337,9 @@ function pruneHours(){
 /* один тик: раздать десять секунд тем, кто их заслужил */
 function tickOnce(){
   var live = pageActive();
+  /* перерыв — это пауза по определению, даже если ребёнок остался у экрана */
+  var openZ = zanOpen();
+  if (openZ && zanOnBreak(openZ)) live = false;
   var g = curLessonId ? logOf(curLessonId) : null;
   if (live){
     if (g){ g.timeMs += 10000; g.last = Date.now(); }
@@ -18451,6 +18513,11 @@ function zanCardHTML(){
       ' Можно заниматься дальше просто так — это ничего не меняет и ни на что не влияет.</p>' +
       '<div class="winrow"><button class="bigbtn ghost" id="zanmore">Открыть ещё занятие</button></div></div>';
   }
+  if (capHard())
+    return '<div class="card zancard"><h3>🌙 На сегодня всё</h3>' +
+      '<p>Сегодня за тренажёром уже ' + todayMinutes() + ' ' +
+      plural(todayMinutes(), "минута", "минуты", "минут") +
+      ' — столько вы договорились со взрослым. Новое занятие откроется завтра.</p></div>';
   return '<div class="card zancard"><h3>⏱ Занятие на ' + f.len + ' минут</h3>' +
     '<p>' + (restDay
       ? "Сегодня по расписанию день отдыха — но если хочется, занятие можно провести."
@@ -18567,7 +18634,7 @@ function screenToday(){
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    installTipHTML() + saved + banner + zanCardHTML() + ptaskCardHTML() + hero + taskCard + schedBox +
+    installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   wireInstallTip(app);
@@ -20472,12 +20539,41 @@ function screenZan(){
   var restLessons = rest.filter(function(b){ return b.k === "lesson" || b.k === "review"; });
   var hasCheck = rest.some(function(b){ return b.k === "predict"; });
 
+  /* идёт перерыв — экран занятия превращается в экран перерыва и ничего
+     больше не предлагает: смысл перерыва в том, чтобы отойти */
+  if (zanOnBreak(rec)){
+    var left = Math.max(1, Math.ceil((rec.breakUntil - Date.now()) / 60000));
+    app.innerHTML =
+      '<div class="lvlhead"><div><div class="idx">занятие на паузе</div>' +
+        '<h1>☕ Перерыв</h1></div></div>' +
+      '<div class="card"><p class="asktext">Отойди от экрана: попей воды, разомнись, посмотри в окно. ' +
+      'Вернись примерно через <b>' + left + ' ' + plural(left, "минуту", "минуты", "минут") + '</b>.</p>' +
+      '<p class="dim">Это время не считается работой — оно и не должно.</p>' +
+      '<div class="winrow"><button class="bigbtn" id="zback2">Я вернулся</button></div></div>';
+    document.getElementById("zback2").onclick = function(){
+      var r = zanAll()[rec.key];
+      zanBreakEnd(r);
+      actMark();
+      screenZan();
+    };
+    refreshTop();
+    return;
+  }
+
   var head = '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
       '<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
       '<div class="right"><span class="tag">' + closed + ' из ' + rec.plan.length + '</span></div></div>' +
     '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
     '<p class="zanmeta">Работы: <b>' + mins + ' ' + plural(mins, "минута", "минуты", "минут") + '</b>' +
       (pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') + '</p>';
+
+  var capNote = capNoteHTML();
+  /* мягкое предложение перерыва: длинное занятие, половина позади */
+  var breakNote = zanBreakDue(rec)
+    ? '<div class="daybanner rest">☕ <b>Работаешь уже ' + mins + ' ' +
+      plural(mins, "минуту", "минуты", "минут") + '.</b> Самое время сделать перерыв — ' +
+      'после него дальше пойдёт легче.</div>'
+    : "";
 
   /* видимая пометка о сжатии: молча сокращать план нельзя */
   var cutNote = "";
@@ -20521,7 +20617,21 @@ function screenZan(){
       'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
   }
 
-  app.innerHTML = head + cutNote + plan + tail;
+  /* ⚠️ Жёсткий потолок не обрывает начатое: кнопки «открыть» просто нет, а
+     занятие можно закрыть. Резать посередине нельзя ни таймеру, ни потолку. */
+  if (capHard() && !askNow){
+    tail = '<div class="card"><h3>🌙 На сегодня всё</h3>' +
+      '<p>Дневной предел, о котором вы договорились со взрослым, уже пройден. ' +
+      'Новые шаги откроются завтра — занятие можно закрыть.</p>' +
+      '<div class="winrow"><button class="bigbtn" id="zend">Закончить занятие</button></div></div>';
+    plan = plan.replace(/<button class="rbtn check zopen"[^<]*<\/button>/g, "");
+  }
+
+  var breakBtn = (!askNow && !capHard() && next)
+    ? '<div class="winrow"><button class="bigbtn ghost" id="zbreak">☕ Перерыв ' + ZAN_BREAK + ' минут</button></div>'
+    : "";
+
+  app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn;
 
   app.querySelectorAll(".zopen").forEach(function(b){
     b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
@@ -20530,6 +20640,8 @@ function screenZan(){
   if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
   var zend = document.getElementById("zend");
   if (zend) zend.onclick = function(){ screenZanDone(zanFinish("hand") || rec); };
+  var zbr = document.getElementById("zbreak");
+  if (zbr) zbr.onclick = function(){ zanBreakStart(zanAll()[rec.key]); screenZan(); };
   var zstop = document.getElementById("zstop");
   if (zstop) zstop.onclick = function(){ screenZanDone(zanFinish("time") || rec); };
   var zone = document.getElementById("zone");
@@ -20714,6 +20826,25 @@ function screenAdult(){
       '<button class="rbtn sec" data-act="bradd">Добавить</button></div>' +
     '<p class="dim">В эти дни пропуск запланирован, и отчёт не назовёт его прогулом.</p>';
 
+  /* потолок дня */
+  var caps = CAP_CHOICES.map(function(n){
+    return '<button class="rbtn ' + (f.cap === n ? "check" : "sec") + '" data-fcap="' + n + '">' +
+      (n ? n + " минут" : "Без потолка") + '</button>';
+  }).join("");
+  h += '<div class="admlbl">Сколько минут в день достаточно</div>' +
+    '<div class="admrow">' + caps + '</div>' +
+    (f.cap
+      ? '<div class="admrow"><button class="rbtn ' + (f.capHard ? "check" : "sec") + '" data-act="fcaphard">' +
+        (f.capHard ? "✓ После предела не пускать дальше" : "После предела только напоминать") + '</button></div>' +
+        '<p class="dim">Сегодня за тренажёром <b>' + todayMinutes() + '</b> ' +
+        plural(todayMinutes(), "минута", "минуты", "минут") + ' из ' + f.cap + '. ' +
+        'Считается всё время в тренажёре, а не только занятие — вы мерите экранное время, а не учебное.</p>' +
+        '<p class="dim">⚠️ По умолчанию тренажёр только напоминает. Жёсткий запрет наказывает за увлечённость, ' +
+        'поэтому включается отдельно и никогда не обрывает начатый урок.</p>'
+      : '<p class="dim">Потолок не задан. Если задать — тренажёр скажет ребёнку «на сегодня хватит», ' +
+        'когда время выйдет.</p>') +
+    '';
+
   /* галочка отчётов */
   h += '<div class="admlbl">Отчёты</div>' +
     '<div class="admrow"><button class="rbtn ' + (f.report ? "check" : "sec") + '" data-act="freport">' +
@@ -20866,6 +20997,9 @@ function wireAdult(){
       screenAdult();
     };
   });
+  app.querySelectorAll("[data-fcap]").forEach(function(b){
+    b.onclick = function(){ frameSet({ cap: +b.getAttribute("data-fcap") }); screenAdult(); };
+  });
   app.querySelectorAll("[data-flen]").forEach(function(b){
     b.onclick = function(){ frameSet({ len: +b.getAttribute("data-flen") }); screenAdult(); };
   });
@@ -20915,6 +21049,7 @@ function wireAdult(){
         return screenAdult();
       }
       if (act === "perloff"){ frameSet({ perLesson: null }); return screenAdult(); }
+      if (act === "fcaphard"){ frameSet({ capHard: !frame().capHard }); return screenAdult(); }
       if (act === "perlen"){ frameSet({ len: +b.getAttribute("data-len") }); return screenAdult(); }
       if (act === "fgoal"){
         var v = (document.getElementById("fgoal") || {}).value || "";
@@ -23976,6 +24111,10 @@ window.__game = {
   zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
   zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
   zanStats: zanStats, zanSlotsFor: zanSlotsFor, median: median, ZAN_STAT_MIN: ZAN_STAT_MIN,
+  todayMinutes: todayMinutes, capOn: capOn, capLeft: capLeft, capReached: capReached,
+  capHard: capHard, capNoteHTML: capNoteHTML, CAP_CHOICES: CAP_CHOICES,
+  zanOnBreak: zanOnBreak, zanBreakStart: zanBreakStart, zanBreakEnd: zanBreakEnd,
+  zanBreakDue: zanBreakDue, ZAN_BREAK: ZAN_BREAK,
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,

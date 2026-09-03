@@ -3814,6 +3814,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
+  let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
   if (typeof g.tickOnce === "function"){
@@ -4062,6 +4063,76 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 2в. перерыв и потолок дня --- */
+  if (typeof g.zanBreakStart === "function"){
+    const p0 = problems.length;
+    g.state.zan = {}; g.state.hours = {};
+    g.frameSet({ len:45, cap:0, capHard:false, perLesson:null });
+
+    /* перерыв: время идёт в паузу, а не в работу и не в карту часов */
+    const rec = g.zanStart();
+    const r = g.zanAll()[rec.key];
+    g.setIdleForTest(600000); g.actMark();
+    g.zanBreakStart(r);
+    if (!g.zanOnBreak(r)) bad("[перерыв] не начался");
+    const secBefore = r.sec, pauseBefore = r.pause;
+    g.tickOnce();
+    if (r.sec !== secBefore) bad("[перерыв] время перерыва засчитано как работа");
+    if (r.pause !== pauseBefore + 10) bad("[перерыв] время перерыва не попало в паузу");
+    const row = g.state.hours[g.dayKey()] || [];
+    if (row.reduce((a, b) => a + b, 0) !== 0) bad("[перерыв] перерыв попал в карту активности");
+    g.screenZan(); await tick();
+    if (!/Перерыв/.test(doc.getElementById("app").textContent))
+      bad("[перерыв] экран перерыва не показан");
+    if (doc.querySelector(".zopen")) bad("[перерыв] во время перерыва предлагается открыть шаг");
+    g.zanBreakEnd(r);
+    g.screenZan(); await tick();
+    if (/☕ Перерыв<\/h1>/.test(doc.getElementById("app").innerHTML))
+      bad("[перерыв] не закончился по кнопке");
+
+    /* предложение перерыва: только на длинном занятии и только с середины */
+    r.sec = 5 * 60;
+    if (g.zanBreakDue(r)) bad("[перерыв] предложен в самом начале занятия");
+    r.sec = 30 * 60; r.breaksTaken = 0;
+    if (!g.zanBreakDue(r)) bad("[перерыв] не предложен на 45-минутном занятии после половины");
+    r.len = 20;
+    if (g.zanBreakDue(r)) bad("[перерыв] предложен на коротком занятии");
+    r.len = 45; r.breaksTaken = 1;
+    if (g.zanBreakDue(r)) bad("[перерыв] предложен второй раз, хотя уже был");
+
+    /* потолок дня: мягкий говорит, жёсткий не пускает дальше */
+    g.state.zan = {};
+    const rowNow = g.hoursRow(g.dayKey());
+    rowNow[10] = 70 * 60;                        /* 70 минут за сегодня */
+    if (g.todayMinutes() !== 70) bad("[потолок] минуты за день посчитаны неверно: " + g.todayMinutes());
+    g.frameSet({ cap:60, capHard:false });
+    if (!g.capReached()) bad("[потолок] предел не распознан");
+    if (g.capHard()) bad("[потолок] мягкий предел ведёт себя как жёсткий");
+    g.screenToday(); await tick();
+    const t1 = doc.getElementById("app").textContent;
+    if (!/на сегодня хватит/.test(t1)) bad("[потолок] мягкое напоминание не показано");
+    if (!doc.getElementById("zanstart")) bad("[потолок] мягкий предел запретил начать занятие");
+
+    g.frameSet({ capHard:true });
+    if (!g.capHard()) bad("[потолок] жёсткий предел не включился");
+    g.screenToday(); await tick();
+    if (doc.getElementById("zanstart")) bad("[потолок] жёсткий предел пустил в новое занятие");
+    if (!/На сегодня всё/.test(doc.getElementById("app").textContent))
+      bad("[потолок] жёсткий предел не объяснил, почему нельзя");
+
+    /* ⚠️ жёсткий предел не обрывает НАЧАТОЕ занятие: шаги не открываются, но
+       закрыть занятие можно */
+    const rec2 = g.zanStart();
+    g.screenZan(); await tick();
+    if (doc.querySelector(".zopen")) bad("[потолок] жёсткий предел оставил кнопку «открыть шаг»");
+    if (!doc.getElementById("zend")) bad("[потолок] занятие нельзя закрыть при жёстком пределе");
+
+    g.frameSet({ cap:0, capHard:false, len:30 });
+    g.state.zan = {}; g.state.hours = {};
+    if (problems.length === p0) breakChecked++;
+    viewReset(g);
+  }
+
   /* --- 3. рамка взрослого: гейт разумности, каникулы, слияние --- */
   if (typeof g.paceCheck === "function"){
     const p0 = problems.length;
@@ -4197,6 +4268,7 @@ function checkEncoding(){
   console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
+  console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
