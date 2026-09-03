@@ -3813,7 +3813,7 @@ function checkEncoding(){
      которого никто не увидит. Здесь проверяется всё, что добавлено разом:
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
-  let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0;
+  let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
   if (typeof g.tickOnce === "function"){
@@ -4003,6 +4003,65 @@ function checkEncoding(){
     if (problems.length === p0) zanChecked++;
   }
 
+  /* --- 2б. самоизмерение длины занятия --- */
+  if (typeof g.zanStats === "function"){
+    const p0 = problems.length;
+    g.state.zan = {};
+    g.frameSet({ len:30, perLesson:null });
+
+    /* пока занятий мало — молчим: одно занятие это случай, а не замер */
+    const few = g.zanStats();
+    if (few.enough) bad("[замер] замер объявлен по нулю занятий");
+    g.screenAdult(); await tick();
+    if (!/Замер появится после/.test(doc.getElementById("app").textContent))
+      bad("[замер] при нехватке данных нет честного «пока рано»");
+
+    /* три занятия: 33 минуты на 3 урока, 30 на 3, 36 на 3 → около 11 мин на урок */
+    const mk = (key, sec, lessons) => {
+      g.zanAll()[key] = { start:1, end:2, len:30, sec:sec, pause:0, predOk:0, predAll:0,
+        plan:[], cut:[],
+        done: Array.from({length:lessons}, (_, i) => "lesson:x" + i) };
+    };
+    mk("2026-01-01#1", 33*60, 3);
+    mk("2026-01-02#1", 30*60, 3);
+    mk("2026-01-03#1", 36*60, 3);
+    /* мусор, который в замер попасть не должен */
+    mk("2026-01-04#1", 60, 1);                    /* открыл и закрыл */
+    g.zanAll()["2026-01-05#1"] = { start:1, end:2, len:30, sec:40*60, pause:0,
+      plan:[], cut:[], done:[] };                 /* ни одного урока */
+    const st = g.zanStats();
+    if (!st.enough) bad("[замер] трёх занятий не хватило: " + JSON.stringify(st));
+    if (st.n !== 3) bad("[замер] в замер попал мусор: занятий " + st.n + ", ожидалось 3");
+    if (Math.abs(st.per - 11) > 0.4) bad("[замер] минут на урок посчитано неверно: " + st.per);
+    if (st.mins !== 33) bad("[замер] медиана длины занятия неверна: " + st.mins);
+
+    /* ⚠️ сам замер ничего не меняет, пока взрослый его не принял */
+    if (g.zanSlotsFor(30) !== g.zanSlots(30))
+      bad("[замер] план перестроился без согласия взрослого");
+    g.screenAdult(); await tick();
+    const txt = doc.getElementById("app").textContent;
+    if (!/помещается/.test(txt)) bad("[замер] в кабинете нет вывода про число уроков");
+    const on = doc.querySelector('[data-act="peron"]');
+    if (!on) bad("[замер] нет кнопки «считать план по этому замеру»");
+    else {
+      on.click(); await tick();
+      if (!g.frame().perLesson) bad("[замер] замер не принят кнопкой");
+      if (g.zanSlotsFor(30) !== 2)
+        bad("[замер] после принятия план не пересчитался: " + g.zanSlotsFor(30));
+      /* и дата-цель считается по нему же, а не по среднему */
+      const pc = g.paceCheck(g.dayKey(new Date(Date.now() + 120*864e5)), [1,3,5], 30);
+      if (!pc.byMeasure) bad("[замер] план от даты считает по среднему, зная темп ребёнка");
+      const off = doc.querySelector('[data-act="perloff"]');
+      if (!off) bad("[замер] принятый замер нельзя отключить");
+      else { off.click(); await tick(); }
+      if (g.frame().perLesson) bad("[замер] замер не отключился");
+    }
+    g.state.zan = {};
+    g.frameSet({ perLesson:null, len:30 });
+    if (problems.length === p0) statChecked++;
+    viewReset(g);
+  }
+
   /* --- 3. рамка взрослого: гейт разумности, каникулы, слияние --- */
   if (typeof g.paceCheck === "function"){
     const p0 = problems.length;
@@ -4137,6 +4196,7 @@ function checkEncoding(){
   console.log(`занятие как единица: ${zanChecked ? "да" : "нет"}`);
   console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
+  console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

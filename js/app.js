@@ -393,7 +393,8 @@ function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(d
    Слияние: как у расписания, побеждает более свежее сохранение. Объединение
    вернуло бы снятый на другом устройстве день. */
 function blankFrame(){
-  return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true, setAt:0 };
+  return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true,
+           perLesson:null, setAt:0 };
 }
 function frameShape(f){
   var o = (f && typeof f === "object") ? f : {};
@@ -409,6 +410,10 @@ function frameShape(f){
              /^\d{4}-\d{2}-\d{2}$/.test(b[0]) && /^\d{4}-\d{2}-\d{2}$/.test(b[1]);
     }).slice(0, 12);
   out.report = o.report !== false;
+  /* сколько минут на урок уходит у ЭТОГО ребёнка — по замеру, принятому
+     взрослым. Пока не принят, план считается по общему числу (zanSlots). */
+  if (typeof o.perLesson === "number" && o.perLesson >= 2 && o.perLesson <= 40)
+    out.perLesson = Math.round(o.perLesson * 10) / 10;
   out.setAt = typeof o.setAt === "number" ? o.setAt : 0;
   return out;
 }
@@ -438,6 +443,14 @@ function frameStudyDay(key){
    а не четыре. Обещать больше, чем влезает, нельзя: первое же занятие
    опровергнет. */
 function zanSlots(len){ return len <= 20 ? 2 : (len <= 30 ? 3 : 4); }
+/* Сколько уроков ставить ЭТОМУ ребёнку. Пока замера нет или взрослый его не
+   принял — общее число выше (оно посчитано из длины текста уроков, а не снято
+   с ребёнка). Как только замер принят, план считается по нему. */
+function zanSlotsFor(len){
+  var per = frame().perLesson;
+  if (!per) return zanSlots(len);
+  return Math.max(1, Math.min(6, Math.round((len - MIN_AROUND) / per)));
+}
 
 /* ⚠️ Гейт разумности. Родитель, поставивший «пройти курс за месяц», получит
    занятие на полтора часа и брошенного ребёнка — а виноваты будем мы.
@@ -468,12 +481,16 @@ function paceCheck(goal, days, len){
   var sessions = studyDaysUntil(goal, days || frame().days);
   if (!goal || !sessions) return { ok:true, sessions:sessions, left:left, need:0 };
   var perSession = Math.ceil(left / sessions);
-  var mins = perSession * MIN_PER_LESSON + MIN_AROUND;
+  /* если замер принят, считаем по НЁМУ: обещать родителю дату, исходя из
+     среднего темпа, когда известен темп его ребёнка, — это врать вежливо */
+  var per = frame().perLesson || MIN_PER_LESSON;
+  var mins = Math.round(perSession * per + MIN_AROUND);
   return {
     ok: mins <= ZAN_SANE, sessions: sessions, left: left,
     per: perSession, mins: mins, len: len || frame().len,
-    /* сколько занятий в неделю понадобилось бы при выбранной длине */
-    fits: Math.max(1, Math.floor(((len || frame().len) - MIN_AROUND) / MIN_PER_LESSON))
+    /* сколько уроков помещается в занятие выбранной длины при этом темпе */
+    fits: Math.max(1, Math.floor(((len || frame().len) - MIN_AROUND) / per)),
+    byMeasure: !!frame().perLesson
   };
 }
 
@@ -532,7 +549,7 @@ function zanPredictPick(key){
    устройствах в один день выходит одно и то же. */
 function zanPlanFor(key){
   key = key || dayKey();
-  var f = frame(), slots = zanSlots(f.len), plan = [];
+  var f = frame(), slots = zanSlotsFor(f.len), plan = [];
   var warm = dailyPick(key);
   if (warm) plan.push({ k:"warm", id:warm.id, title:warm.title });
 
@@ -695,6 +712,64 @@ function zanPauseMins(rec){ return Math.round((rec.pause || 0) / 60); }
 function zanTimeUp(rec){ return zanMins(rec) >= (rec.len || 30); }
 function zanDoneList(rec){
   return (rec.done || []).map(function(x){ return x.split(":")[1]; });
+}
+
+/* ================= замер: сколько на самом деле длится занятие =================
+   Число уроков в занятии посчитано из длины текста урока (5–8 минут по замеру
+   курса) — то есть из замысла, а не с живого ребёнка. Вместо того чтобы гадать
+   дальше, тренажёр меряет сам: сколько активных минут уходит на один урок
+   ИМЕННО У ЭТОГО ребёнка, и предлагает взрослому поправить рамку.
+
+   Четыре честности, без которых замер врал бы:
+     1. считаем только ЗАКРЫТЫЕ занятия, где сделан хотя бы один урок;
+     2. занятия короче трёх активных минут не в счёт — это открыл и закрыл;
+     3. берём МЕДИАНУ, а не среднее: одно занятие «не пошло» не должно двигать
+        оценку;
+     4. пока занятий меньше ZAN_STAT_MIN, не говорим ничего. Одно занятие —
+        не замер, а случай.
+
+   И главное: замер ничего не меняет сам. План перестраивается только после
+   того, как взрослый его принял, — рамку ставит он, а не мы за его спиной. */
+var ZAN_STAT_MIN = 3;
+function median(a){
+  if (!a.length) return 0;
+  var v = a.slice().sort(function(x, y){ return x - y; });
+  var m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+function zanStats(){
+  var mins = [], per = [], lessons = [], all = zanAll();
+  Object.keys(all).forEach(function(k){
+    var r = all[k];
+    if (!r || !r.end) return;
+    var m = (r.sec || 0) / 60;
+    if (m < 3) return;
+    var n = (r.done || []).filter(function(x){
+      return x.indexOf("lesson:") === 0 || x.indexOf("review:") === 0;
+    }).length;
+    if (!n) return;
+    mins.push(m); per.push(m / n); lessons.push(n);
+  });
+  var out = {
+    n: mins.length,
+    enough: mins.length >= ZAN_STAT_MIN,
+    mins: Math.round(median(mins)),
+    per: Math.round(median(per) * 10) / 10,
+    lessons: Math.round(median(lessons) * 10) / 10
+  };
+  if (!out.enough) return out;
+  /* какая из трёх длин ближе к тому, что выходит на деле */
+  out.bestLen = ZAN_LEN.reduce(function(a, b){
+    return Math.abs(b - out.mins) < Math.abs(a - out.mins) ? b : a;
+  }, ZAN_LEN[0]);
+  /* сколько уроков помещается в нынешнюю длину при таком темпе */
+  var f = frame();
+  out.len = f.len;
+  out.fits = Math.max(1, Math.min(6, Math.round((f.len - MIN_AROUND) / out.per)));
+  out.slotsNow = zanSlotsFor(f.len);
+  out.accepted = !!f.perLesson;
+  out.differs = out.fits !== out.slotsNow || (out.bestLen !== f.len);
+  return out;
 }
 
 /* ================= отчёт по занятию =================
@@ -7376,6 +7451,7 @@ function screenAdult(){
   }
 
   h += heatHTML(S);
+  h += paceStatHTML();
 
   /* ---------- рамка ---------- */
   var chips = WD_ORDER.map(function(n){
@@ -7447,6 +7523,57 @@ function screenAdult(){
   wireAdult();
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ---------- что показывает практика ----------
+   Единственное место в продукте, где тренажёр правит собственное обещание по
+   факту, а не по замыслу. Число уроков в занятии посчитано из длины текста
+   урока; здесь оно сверяется с тем, сколько ребёнок работает на самом деле.
+   ⚠️ Сам ничего не меняем: показываем и предлагаем. Рамку ставит взрослый. */
+function paceStatHTML(){
+  var st = zanStats(), f = frame();
+  if (!st.enough){
+    return '<div class="card"><h3>📏 Что показывает практика</h3>' +
+      '<p class="dim">Замер появится после ' + ZAN_STAT_MIN + ' занятий, на которых сделан хотя бы один урок. ' +
+      'Пока таких ' + st.n + '. Одно занятие — это случай, а не замер, и гадать по нему мы не будем.</p>' +
+      '<p class="dim">Сейчас в занятие ставится ' + zanSlotsFor(f.len) + ' ' +
+      plural(zanSlotsFor(f.len), "урок", "урока", "уроков") +
+      ' — это посчитано из длины текста уроков, а не с вашего ребёнка.</p></div>';
+  }
+  var slower = st.per > MIN_PER_LESSON + 1.5, faster = st.per < MIN_PER_LESSON - 1.5;
+  var h = '<div class="card"><h3>📏 Что показывает практика</h3>' +
+    '<p>По ' + st.n + ' ' + plural(st.n, "занятию", "занятиям", "занятиям") +
+    ': занятие идёт <b>' + st.mins + ' ' + plural(st.mins, "минуту", "минуты", "минут") + '</b> ' +
+    'при заявленных ' + f.len + '. Один урок занимает <b>' + st.per + ' ' +
+    plural(Math.round(st.per), "минуту", "минуты", "минут") + '</b>' +
+    (slower ? ' — дольше, чем средние ' + MIN_PER_LESSON
+            : (faster ? ' — быстрее, чем средние ' + MIN_PER_LESSON : '')) + '.</p>' +
+    '<p class="dim">Считаются только активные минуты и только занятия, где сделан хотя бы один урок. ' +
+    'Берётся медиана: одно занятие «не пошло» оценку не двигает.</p>';
+
+  if (st.fits !== st.slotsNow)
+    h += '<p>В занятие на ' + f.len + ' минут при таком темпе помещается <b>' + st.fits + '</b> ' +
+      plural(st.fits, "урок", "урока", "уроков") + ', а ставится <b>' + st.slotsNow + '</b>. ' +
+      (st.fits < st.slotsNow
+        ? 'Отсюда и переносы в конце занятия.'
+        : 'То есть занятие можно сделать плотнее.') + '</p>';
+  else
+    h += '<p>Число уроков в занятии совпадает с тем, что выходит на деле. Менять нечего.</p>';
+
+  h += '<div class="admrow">' +
+    (f.perLesson
+      ? '<button class="rbtn check" data-act="perloff">✓ Замер учитывается — отключить</button>'
+      : '<button class="rbtn check" data-act="peron">Считать план по этому замеру</button>') +
+    (st.bestLen !== f.len
+      ? '<button class="rbtn sec" data-act="perlen" data-len="' + st.bestLen + '">Поставить ' +
+        st.bestLen + ' минут</button>'
+      : '') +
+    '</div>' +
+    '<p class="dim">' + (f.perLesson
+      ? 'План собирается по вашему ребёнку, а не по среднему.'
+      : 'Пока план собирается по общему числу. Нажмите — и он будет собираться по вашему ребёнку.') +
+    '</p></div>';
+  return h;
 }
 
 /* ---------- «задать задание» ---------- */
@@ -7570,6 +7697,13 @@ function wireAdult(){
       if (act === "tomap") return screenWorlds();
       if (act === "toadmin"){ location.hash = "#admin"; return screenAdmin(); }
       if (act === "freport"){ frameSet({ report: !frame().report }); return screenAdult(); }
+      if (act === "peron"){
+        var st = zanStats();
+        if (st.enough) frameSet({ perLesson: st.per });
+        return screenAdult();
+      }
+      if (act === "perloff"){ frameSet({ perLesson: null }); return screenAdult(); }
+      if (act === "perlen"){ frameSet({ len: +b.getAttribute("data-len") }); return screenAdult(); }
       if (act === "fgoal"){
         var v = (document.getElementById("fgoal") || {}).value || "";
         frameSet({ goal: v || null });
@@ -10625,9 +10759,11 @@ window.__game = {
   frame: frame, frameSet: frameSet, frameOn: frameOn, frameShape: frameShape,
   blankFrame: blankFrame, isBreakDay: isBreakDay, frameStudyDay: frameStudyDay,
   paceCheck: paceCheck, lessonsLeft: lessonsLeft, studyDaysUntil: studyDaysUntil,
+  paceStatHTML: paceStatHTML, MIN_PER_LESSON: MIN_PER_LESSON, MIN_AROUND: MIN_AROUND,
   zanSlots: zanSlots, zanPlanFor: zanPlanFor, zanStart: zanStart, zanOpen: zanOpen,
   zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
   zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
+  zanStats: zanStats, zanSlotsFor: zanSlotsFor, median: median, ZAN_STAT_MIN: ZAN_STAT_MIN,
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
