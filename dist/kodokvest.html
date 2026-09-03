@@ -8827,7 +8827,10 @@ window.CHEATSHEET = [
      emoji     значок
      brief     что просили у напарника — словами, как заказчик
      fn        имя функции, которую принимаем
-     params    имена аргументов (по ним нотация строит перебор примеров)
+     params    имена аргументов (по ним нотация строит перебор примеров).
+               ⚠️ Имена ЛАТИНСКИЕ: русские имена переменных курс вводит только
+               в 81-м уроке, а сюда ребёнок заходит когда угодно. Условие при
+               этом по-русски — по-русски здесь нотация, а не Python
      code      что прислал напарник. Иногда сломанное — в этом и смысл
      truth     ЭТАЛОН: заведомо правильная реализация.
                ⚠️ Без неё нотацию можно было бы пройти строкой «пример f(1) = 999»:
@@ -8852,20 +8855,20 @@ window.SPECS = [
   id: "sum-empty",
   emoji: "➕",
   title: "Сумма списка",
-  brief: "Попросили напарника: функция «сумма» получает список чисел и возвращает их сумму. " +
+  brief: "Попросили напарника: функция total получает список чисел и возвращает их сумму. " +
          "Пустой список — это ноль.",
-  fn: "сумма",
-  params: ["числа"],
-  code: "def сумма(числа):\n" +
-        "    итог = числа[0]\n" +
-        "    for x in числа[1:]:\n" +
-        "        итог = итог + x\n" +
-        "    return итог",
-  truth: "def сумма(числа):\n" +
-         "    итог = 0\n" +
-         "    for x in числа:\n" +
-         "        итог = итог + x\n" +
-         "    return итог",
+  fn: "total",
+  params: ["nums"],
+  code: "def total(nums):\n" +
+        "    acc = nums[0]\n" +
+        "    for x in nums[1:]:\n" +
+        "        acc = acc + x\n" +
+        "    return acc",
+  truth: "def total(nums):\n" +
+         "    acc = 0\n" +
+         "    for x in nums:\n" +
+         "        acc = acc + x\n" +
+         "    return acc",
   broken: true,
   note: "Напарник начал складывать с первого числа списка, а не с нуля. " +
         "На обычных списках это даёт верный ответ — и падает ровно на пустом, " +
@@ -8873,31 +8876,31 @@ window.SPECS = [
         "код работает на том примере, что был в просьбе, и разваливается рядом.",
   want: 2,
   hints: [
-    "Начни с примеров: «пример сумма([1, 2, 3]) = 6». Их нужно хотя бы два.",
+    "Начни с примеров: «пример total([1, 2, 3]) = 6». Их нужно хотя бы два.",
     "Вспомни, о чём просили отдельной фразой. Пустой список — тоже случай, и его надо записать примером.",
-    "Строка «пример сумма([]) = 0» — это и есть та проверка, которую напарник не прошёл."
+    "Строка «пример total([]) = 0» — это и есть та проверка, которую напарник не прошёл."
   ]
 },
 {
   id: "max-neg",
   emoji: "🔝",
   title: "Самое большое число",
-  brief: "Попросили: функция «наибольшее» получает непустой список чисел и возвращает самое большое из них. " +
+  brief: "Попросили: функция biggest получает непустой список чисел и возвращает самое большое из них. " +
          "Числа могут быть и отрицательными.",
-  fn: "наибольшее",
-  params: ["числа"],
-  code: "def наибольшее(числа):\n" +
-        "    лучшее = 0\n" +
-        "    for x in числа:\n" +
-        "        if x > лучшее:\n" +
-        "            лучшее = x\n" +
-        "    return лучшее",
-  truth: "def наибольшее(числа):\n" +
-         "    лучшее = числа[0]\n" +
-         "    for x in числа:\n" +
-         "        if x > лучшее:\n" +
-         "            лучшее = x\n" +
-         "    return лучшее",
+  fn: "biggest",
+  params: ["nums"],
+  code: "def biggest(nums):\n" +
+        "    best = 0\n" +
+        "    for x in nums:\n" +
+        "        if x > best:\n" +
+        "            best = x\n" +
+        "    return best",
+  truth: "def biggest(nums):\n" +
+         "    best = nums[0]\n" +
+         "    for x in nums:\n" +
+         "        if x > best:\n" +
+         "            best = x\n" +
+         "    return best",
   broken: true,
   note: "Напарник начал сравнение с нуля. На положительных числах не отличить, " +
         "а на списке из одних отрицательных функция возвращает ноль — число, " +
@@ -8906,24 +8909,24 @@ window.SPECS = [
   hints: [
     "Два примера с обычными числами код пройдёт. Подумай, о чём была отдельная оговорка в просьбе.",
     "Отрицательные числа — это и есть та оговорка. Запиши пример со списком, где все числа меньше нуля.",
-    "Хорошая строка правила: «всегда результат in числа» — ответ обязан быть одним из чисел списка."
+    "Хорошая строка правила: «всегда результат in nums» — ответ обязан быть одним из чисел списка."
   ]
 },
 {
   id: "sale-price",
   emoji: "🏷",
   title: "Цена со скидкой",
-  brief: "Попросили: функция «скидка» получает цену и процент, возвращает новую цену. " +
+  brief: "Попросили: функция sale получает цену и процент, возвращает новую цену. " +
          "Цена не может стать отрицательной.",
-  fn: "скидка",
-  params: ["цена", "процент"],
-  code: "def скидка(цена, процент):\n" +
-        "    return цена - цена * процент // 100",
-  truth: "def скидка(цена, процент):\n" +
-         "    новая = цена - цена * процент // 100\n" +
-         "    if новая < 0:\n" +
+  fn: "sale",
+  params: ["price", "percent"],
+  code: "def sale(price, percent):\n" +
+        "    return price - price * percent // 100",
+  truth: "def sale(price, percent):\n" +
+         "    fresh = price - price * percent // 100\n" +
+         "    if fresh < 0:\n" +
          "        return 0\n" +
-         "    return новая",
+         "    return fresh",
   broken: true,
   note: "При скидке больше ста процентов цена уходит в минус. Напарник посчитал " +
         "формулу правильно и не подумал о границе — а про границу просили прямо.",
@@ -8938,14 +8941,14 @@ window.SPECS = [
   id: "count-words",
   emoji: "🔠",
   title: "Сколько слов",
-  brief: "Попросили: функция «слов» получает строку и возвращает, сколько в ней слов. " +
+  brief: "Попросили: функция words получает строку и возвращает, сколько в ней слов. " +
          "Лишние пробелы по краям и между словами считать не надо.",
-  fn: "слов",
-  params: ["текст"],
-  code: "def слов(текст):\n" +
-        "    return len(текст.split(\" \"))",
-  truth: "def слов(текст):\n" +
-         "    return len(текст.split())",
+  fn: "words",
+  params: ["text"],
+  code: "def words(text):\n" +
+        "    return len(text.split(\" \"))",
+  truth: "def words(text):\n" +
+         "    return len(text.split())",
   broken: true,
   note: "split(\" \") режет ровно по одному пробелу, поэтому два пробела подряд " +
         "дают лишнее пустое «слово». Правильный ответ — split() без аргумента: " +
@@ -8954,25 +8957,25 @@ window.SPECS = [
   hints: [
     "Обычная фраза с одиночными пробелами проходит. Читай просьбу ещё раз: про что там сказано отдельно?",
     "«Лишние пробелы между словами» — это пример, который надо записать: строка с двумя пробелами подряд.",
-    "Например: пример слов(\"кот  пёс\") = 2."
+    "Например: пример words(\"кот  пёс\") = 2."
   ]
 },
 {
   id: "clean-ok",
   emoji: "✅",
   title: "Средняя оценка",
-  brief: "Попросили: функция «средняя» получает список оценок и возвращает среднее, " +
+  brief: "Попросили: функция average получает список оценок и возвращает среднее, " +
          "округлённое до двух знаков. Пустой список — ноль.",
-  fn: "средняя",
-  params: ["оценки"],
-  code: "def средняя(оценки):\n" +
-        "    if len(оценки) == 0:\n" +
+  fn: "average",
+  params: ["marks"],
+  code: "def average(marks):\n" +
+        "    if len(marks) == 0:\n" +
         "        return 0\n" +
-        "    return round(sum(оценки) / len(оценки), 2)",
-  truth: "def средняя(оценки):\n" +
-         "    if len(оценки) == 0:\n" +
+        "    return round(sum(marks) / len(marks), 2)",
+  truth: "def average(marks):\n" +
+         "    if len(marks) == 0:\n" +
          "        return 0\n" +
-         "    return round(sum(оценки) / len(оценки), 2)",
+         "    return round(sum(marks) / len(marks), 2)",
   broken: false,
   note: "В этот раз напарник всё сделал верно — и такое бывает чаще, чем кажется. " +
         "Приёмка нужна не чтобы обязательно найти ошибку, а чтобы знать, что её нет. " +
@@ -8982,6 +8985,362 @@ window.SPECS = [
     "Не ищи поломку любой ценой. Задача приёмки — записать, что должно быть верно, и убедиться.",
     "Запиши то, о чём просили: обычный список, пустой список, округление до двух знаков.",
     "Правило «всегда результат >= 0» тоже верно и делает приёмку сильнее."
+  ]
+}
+];
+
+</script>
+
+<script>
+/* ============================================================
+   Алгоритмы и задачи в формате ОГЭ.
+
+   Вторая дверь под новую вывеску (docs/vyveska.md): рынок ищет «информатику»,
+   а не «Python», и внутри информатики самое искомое — экзамен и алгоритмы.
+
+   ⚠️ ЧЕСТНАЯ ГРАНИЦА, И ОНА НАПИСАНА НА ЭКРАНЕ. Мы не готовим к ОГЭ целиком:
+   в экзамене пятнадцать заданий, и большинство из них — про кодирование
+   информации, таблицы и файлы, а не про программирование. Мы закрываем
+   **задание 15.2** (написать программу) и алгоритмическую часть. Обещать
+   больше — врать, а вранью тут цена особая: родитель узнает о нём в мае.
+
+   Чем это отличается от всех тренажёров ЕГЭ/ОГЭ: **цену алгоритма здесь можно
+   измерить, а не рассказать.** Наш интерпретатор считает шаги (он и так их
+   считает ради защиты от вечного цикла), поэтому «двоичный поиск дешевле
+   линейного» — не фраза из учебника, а число на экране. Сложность обычно
+   объясняют буквой O; ребёнку 14 лет буква ничего не говорит, а «837 шагов
+   против 11» говорит всё.
+
+   Устройство записи:
+     id, group, emoji, title    свои
+     tag        подпись на карточке
+     intro      зачем это надо — одной фразой
+     goal       что сделать
+     list       требования списком
+     starter    заготовка
+     solution   эталон
+     check      { kind:"tests", calls:[...] } — скрытые вызовы
+                { kind:"output" } — сверка напечатанного с эталоном
+     stdin      ответы на input() — для задач в формате ОГЭ
+     budget     необязательно: уложиться в столько шагов. Это и есть наш
+                козырь, и требование пишется в list словами
+     note       разбор после победы
+     hints      подсказки
+
+   Правила (их проверяет tests/full-run.js):
+     - эталон обязан проходить собственную проверку;
+     - заготовка обязана НЕ проходить, иначе задание засчитывается само;
+     - никакой случайности: вердикт обязан быть воспроизводимым;
+     - если задан budget, эталон обязан в него укладываться;
+     - имена переменных латинские: русские курс вводит только в 81-м уроке,
+       а сюда заходят когда угодно.
+   ============================================================ */
+window.ALGO = [
+/* ---------- поиск ---------- */
+{
+  id: "find-linear",
+  group: "search",
+  emoji: "🔎",
+  title: "Линейный поиск",
+  tag: "поиск",
+  intro: "Самый честный способ найти: посмотреть подряд всё, пока не встретится нужное.",
+  goal: "Напиши функцию find(nums, want): она возвращает номер первого совпадения " +
+        "или -1, если такого числа в списке нет. Нумерация с нуля, как в Python.",
+  list: ["Идти по списку с начала и возвращать номер сразу, как только нашёл",
+         "Если не нашёл — вернуть -1",
+         "Встроенным .index() не пользоваться: смысл задания в том, чтобы написать поиск самому"],
+  starter: "def find(nums, want):\n    # твой код\n    return -1\n",
+  solution: "def find(nums, want):\n" +
+            "    for i in range(len(nums)):\n" +
+            "        if nums[i] == want:\n" +
+            "            return i\n" +
+            "    return -1\n",
+  check: { kind:"tests", calls:[
+    "find([3, 7, 2, 9], 2)", "find([3, 7, 2, 9], 3)", "find([3, 7, 2, 9], 9)",
+    "find([3, 7, 2, 9], 5)", "find([], 1)", "find([4, 4, 4], 4)"
+  ] },
+  note: "Линейный поиск на списке из миллиона чисел в худшем случае заглянет " +
+        "в миллион ячеек. Это не «плохо» — это цена, которую надо знать. " +
+        "Следующее задание показывает, за счёт чего её можно сбить.",
+  hints: [
+    "Нужен номер, а не само число, — значит перебирать надо range(len(nums)), а не сам список.",
+    "return внутри цикла выходит из функции сразу: это и есть «первое совпадение».",
+    "Строка return -1 стоит ПОСЛЕ цикла: до неё доходят, только если ничего не нашлось."
+  ]
+},
+{
+  id: "find-binary",
+  group: "search",
+  emoji: "✂️",
+  title: "Двоичный поиск",
+  tag: "поиск",
+  intro: "Если список отсортирован, половину можно выбрасывать одним сравнением.",
+  goal: "Напиши функцию bfind(nums, want) для ОТСОРТИРОВАННОГО списка: она возвращает " +
+        "номер найденного числа или -1. Смотри середину и выбрасывай ту половину, " +
+        "в которой числа быть не может.",
+  list: ["Список отсортирован по возрастанию — на это и опирается алгоритм",
+         "Каждый шаг обязан выбрасывать половину оставшегося",
+         "Если не нашёл — вернуть -1"],
+  starter: "def bfind(nums, want):\n    low = 0\n    high = len(nums) - 1\n    # твой код\n    return -1\n",
+  solution: "def bfind(nums, want):\n" +
+            "    low = 0\n" +
+            "    high = len(nums) - 1\n" +
+            "    while low <= high:\n" +
+            "        mid = (low + high) // 2\n" +
+            "        if nums[mid] == want:\n" +
+            "            return mid\n" +
+            "        if nums[mid] < want:\n" +
+            "            low = mid + 1\n" +
+            "        else:\n" +
+            "            high = mid - 1\n" +
+            "    return -1\n",
+  check: { kind:"tests", calls:[
+    "bfind([1, 3, 5, 7, 9, 11], 1)", "bfind([1, 3, 5, 7, 9, 11], 11)",
+    "bfind([1, 3, 5, 7, 9, 11], 7)", "bfind([1, 3, 5, 7, 9, 11], 4)",
+    "bfind([], 1)", "bfind([5], 5)", "bfind([5], 6)"
+  ] },
+  note: "На списке из миллиона чисел двоичный поиск заглянет примерно в двадцать " +
+        "ячеек вместо миллиона. Разница не в скорости компьютера, а в самом плане " +
+        "работы — и это главное, что даёт алгоритмика.",
+  hints: [
+    "Держи две границы: low и high. Пока low <= high, есть где искать.",
+    "Середина — это (low + high) // 2. Сравни nums[mid] с want.",
+    "Если середина меньше нужного — искать надо правее: low = mid + 1. Иначе high = mid - 1."
+  ]
+},
+{
+  id: "cost-compare",
+  group: "cost",
+  emoji: "⚖️",
+  title: "Во сколько раз дешевле",
+  tag: "цена алгоритма",
+  intro: "Цену алгоритма здесь не рассказывают, а измеряют: движок считает каждый шаг.",
+  goal: "Функция steps_of уже написана — она возвращает, сколько раз алгоритм заглянул " +
+        "в список. Заполни counted(n) так, чтобы она печатала два числа: сколько " +
+        "заглядываний нужно линейному поиску и сколько двоичному, чтобы найти " +
+        "последнее число в списке из n элементов.",
+  list: ["Печатай два числа в одной строке через пробел: сначала линейный, потом двоичный",
+         "Линейный ищет подряд с начала — значит последнее число он найдёт за n заглядываний",
+         "Двоичный каждый раз делит остаток пополам — считай, сколько раз n можно поделить на 2"],
+  starter: "def counted(n):\n    linear = 0\n    binary = 0\n    # твой код\n    print(linear, binary)\n\n\ncounted(1000)\n",
+  solution: "def counted(n):\n" +
+            "    linear = n\n" +
+            "    binary = 0\n" +
+            "    left = n\n" +
+            "    while left > 0:\n" +
+            "        left = left // 2\n" +
+            "        binary = binary + 1\n" +
+            "    print(linear, binary)\n\n\n" +
+            "counted(1000)\n",
+  check: { kind:"output" },
+  note: "Тысяча против десяти. На миллионе будет миллион против двадцати. " +
+        "Именно поэтому сортированные данные так ценны: сортировка стоит один раз, " +
+        "а поиск после неё дешевеет навсегда.",
+  hints: [
+    "Линейному поиску, чтобы дойти до последнего числа, нужно ровно n заглядываний.",
+    "Двоичный делит остаток пополам, пока тот не кончится: while left > 0: left = left // 2.",
+    "Считай, сколько раз выполнилось деление, — это и есть число заглядываний."
+  ]
+},
+
+/* ---------- сортировка ---------- */
+{
+  id: "sort-bubble",
+  group: "sort",
+  emoji: "🫧",
+  title: "Сортировка пузырьком",
+  tag: "сортировка",
+  intro: "Самый простой способ упорядочить: менять местами соседей, пока меняется хоть что-то.",
+  goal: "Напиши функцию bubble(nums): она возвращает НОВЫЙ список, отсортированный " +
+        "по возрастанию. Исходный список менять нельзя.",
+  list: ["Сравнивать соседей и менять местами, если левый больше правого",
+         "Повторять, пока за целый проход не будет ни одного обмена",
+         "Встроенными sorted() и .sort() не пользоваться: смысл в том, чтобы написать самому",
+         "Вернуть новый список, а не менять тот, что пришёл"],
+  starter: "def bubble(nums):\n    out = list(nums)\n    # твой код\n    return out\n",
+  solution: "def bubble(nums):\n" +
+            "    out = list(nums)\n" +
+            "    swapped = True\n" +
+            "    while swapped:\n" +
+            "        swapped = False\n" +
+            "        for i in range(len(out) - 1):\n" +
+            "            if out[i] > out[i + 1]:\n" +
+            "                out[i], out[i + 1] = out[i + 1], out[i]\n" +
+            "                swapped = True\n" +
+            "    return out\n",
+  check: { kind:"tests", calls:[
+    "bubble([3, 1, 2])", "bubble([])", "bubble([5])",
+    "bubble([9, 8, 7, 6])", "bubble([2, 2, 1])",
+    "bubble([-3, 0, -7, 4])"
+  ] },
+  note: "Пузырёк — не самый быстрый способ, и знать это важнее, чем уметь его писать. " +
+        "Зато он показывает главное свойство сортировки: чем длиннее список, " +
+        "тем непропорционально дороже работа.",
+  hints: [
+    "out[i], out[i + 1] = out[i + 1], out[i] — так в Python меняют местами две ячейки.",
+    "Заведи флажок swapped: перед проходом False, при обмене True.",
+    "Внешний цикл while swapped: пока хоть что-то поменялось, надо пройти ещё раз."
+  ]
+},
+{
+  id: "sort-key",
+  group: "sort",
+  emoji: "🗝",
+  title: "Сортировка по своему правилу",
+  tag: "сортировка",
+  intro: "Готовая сортировка умеет больше, чем «по возрастанию»: ей можно объяснить правило.",
+  goal: "Напиши функцию by_len(words): она возвращает список слов, отсортированный " +
+        "по длине — от короткого к длинному. Слова одинаковой длины должны " +
+        "остаться в исходном порядке.",
+  list: ["Пользоваться встроенной sorted() — здесь смысл именно в ней",
+         "Правило сортировки задаётся через key",
+         "Исходный список менять нельзя"],
+  starter: "def by_len(words):\n    # твой код\n    return []\n",
+  solution: "def by_len(words):\n    return sorted(words, key=len)\n",
+  check: { kind:"tests", calls:[
+    'by_len(["кот", "бегемот", "ёж"])',
+    'by_len([])',
+    'by_len(["раз", "два", "три"])',
+    'by_len(["а", "бб", "в", "гггг"])'
+  ] },
+  note: "sorted с key — устойчивая сортировка: одинаковые по ключу элементы сохраняют " +
+        "исходный порядок. Это не мелочь: на устойчивости держится приём " +
+        "«отсортировать по одному, потом по другому».",
+  hints: [
+    "sorted(список, key=len) — длина каждого слова становится ключом сравнения.",
+    "Функция len передаётся БЕЗ скобок: не len(), а len.",
+    "sorted всегда возвращает новый список, исходный не трогает."
+  ]
+},
+
+/* ---------- формат ОГЭ ---------- */
+{
+  id: "oge-count",
+  group: "oge",
+  emoji: "📄",
+  title: "Сколько чисел подходит",
+  tag: "формат ОГЭ · 15.2",
+  intro: "Типовая формулировка экзамена: сначала количество чисел, потом сами числа.",
+  goal: "Программа получает на вход количество чисел N, а затем N целых чисел. " +
+        "Напечатай, сколько среди них чисел, которые делятся на 3 и оканчиваются на 6.",
+  list: ["Первая строка ввода — количество чисел",
+         "Дальше по одному числу в строке",
+         "Напечатать одно число — ответ",
+         "Ввод читается через input(), как на экзамене"],
+  stdin: ["6", "36", "12", "6", "26", "96", "7"],
+  starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
+  solution: "n = int(input())\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if x % 3 == 0 and x % 10 == 6:\n" +
+            "        count = count + 1\n" +
+            "print(count)\n",
+  check: { kind:"output" },
+  note: "Два условия через and — вся суть этого типа задач. «Оканчивается на 6» — " +
+        "это остаток от деления на 10, и заучивать тут нечего: цифру единиц " +
+        "всегда даёт % 10.",
+  hints: [
+    "«Делится на 3» — это x % 3 == 0.",
+    "«Оканчивается на 6» — последняя цифра, то есть x % 10 == 6.",
+    "Оба условия должны выполняться одновременно: if x % 3 == 0 and x % 10 == 6."
+  ]
+},
+{
+  id: "oge-maxmin",
+  group: "oge",
+  emoji: "📈",
+  title: "Наибольшее по условию",
+  tag: "формат ОГЭ · 15.2",
+  intro: "Второй частый вид: найти не просто максимум, а максимум среди подходящих.",
+  goal: "Программа получает количество чисел N, затем N целых чисел. " +
+        "Напечатай наибольшее среди чётных. Если чётных нет, напечатай -1.",
+  list: ["Первая строка — количество чисел, дальше сами числа",
+         "Считать только чётные",
+         "Если чётных не встретилось — напечатать -1",
+         "Встроенным max() не пользоваться: смысл в том, чтобы вести максимум самому"],
+  stdin: ["5", "7", "12", "3", "40", "9"],
+  starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
+  solution: "n = int(input())\n" +
+            "best = -1\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if x % 2 == 0 and (best == -1 or x > best):\n" +
+            "        best = x\n" +
+            "print(best)\n",
+  check: { kind:"output" },
+  note: "Ловушка этого типа — начальное значение. Начать с нуля нельзя: " +
+        "если все чётные окажутся отрицательными, ответом станет ноль, " +
+        "которого во вводе не было. Поэтому «ещё ничего не нашли» отмечают " +
+        "отдельно, а не числом-заглушкой.",
+  hints: [
+    "Чётное — это x % 2 == 0.",
+    "Начальное best = -1 значит «ещё ничего не нашли»: сравнивать с ним напрямую нельзя.",
+    "Условие: if x % 2 == 0 and (best == -1 or x > best)."
+  ]
+},
+{
+  id: "oge-pairs",
+  group: "oge",
+  emoji: "🔗",
+  title: "Соседи в последовательности",
+  tag: "формат ОГЭ · 15.2",
+  intro: "Третий вид: смотреть не на одно число, а на пару соседних.",
+  goal: "Программа получает количество чисел N, затем N целых чисел. " +
+        "Напечатай, сколько раз соседняя пара чисел давала в сумме число, кратное 5.",
+  list: ["Считаются пары стоящих рядом чисел: первое со вторым, второе с третьим и так далее",
+         "Всего пар на одну меньше, чем чисел",
+         "Напечатать одно число"],
+  stdin: ["6", "2", "3", "7", "8", "1", "4"],
+  starter: "n = int(input())\nprev = -1\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n    prev = x\nprint(count)\n",
+  solution: "n = int(input())\n" +
+            "prev = -1\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if i > 0 and (prev + x) % 5 == 0:\n" +
+            "        count = count + 1\n" +
+            "    prev = x\n" +
+            "print(count)\n",
+  check: { kind:"output" },
+  note: "Хранить предыдущее число вместо всего списка — приём, который на экзамене " +
+        "экономит и время, и память. Главное не забыть: у первого числа соседа слева нет.",
+  hints: [
+    "Заведи переменную prev — в ней лежит предыдущее число.",
+    "Пару можно считать только начиная со второго числа: i > 0.",
+    "«Кратно 5» — это (prev + x) % 5 == 0. И в конце шага не забудь prev = x."
+  ]
+},
+{
+  id: "oge-digits",
+  group: "oge",
+  emoji: "🔢",
+  title: "Сумма цифр числа",
+  tag: "формат ОГЭ · 15.2",
+  intro: "Классика: разобрать число на цифры, не превращая его в строку.",
+  goal: "Напиши функцию digit_sum(x): она возвращает сумму цифр неотрицательного числа. " +
+        "Превращать число в строку нельзя — только арифметика.",
+  list: ["Работать только числами: str() и списки цифр не использовать",
+         "Последнюю цифру даёт % 10, отбросить её — // 10",
+         "У нуля сумма цифр равна нулю"],
+  starter: "def digit_sum(x):\n    total = 0\n    # твой код\n    return total\n",
+  solution: "def digit_sum(x):\n" +
+            "    total = 0\n" +
+            "    while x > 0:\n" +
+            "        total = total + x % 10\n" +
+            "        x = x // 10\n" +
+            "    return total\n",
+  check: { kind:"tests", calls:[
+    "digit_sum(0)", "digit_sum(7)", "digit_sum(123)",
+    "digit_sum(9999)", "digit_sum(1000000)"
+  ] },
+  note: "Пара «% 10 и // 10» — самый переиспользуемый приём в задачах про числа: " +
+        "проверка на палиндром, перевод в другую систему счисления, поиск нужной цифры. " +
+        "Выучив её один раз, закрываешь целый класс заданий.",
+  hints: [
+    "x % 10 — последняя цифра числа.",
+    "x // 10 — то же число без последней цифры.",
+    "Цикл while x > 0: пока число не кончилось, добавляй последнюю цифру и отбрасывай её."
   ]
 }
 ];
@@ -13578,7 +13937,7 @@ var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
-                     "hours","zan","ptasks","specs","parts","builds","solved"];
+                     "hours","zan","ptasks","specs","parts","builds","solved","algo"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -14830,8 +15189,9 @@ function backTarget(){
     case "guide": case "account": case "admin": case "adult":
       return { label:"На главную", go: screenWorlds };
 
-    case "warm": case "games": case "sand": case "viz": case "ai":
+    case "warm": case "games": case "sand": case "viz": case "ai": case "algo":
       return { label:"К тренировкам", go: screenTrain };
+    case "algoone":  return { label:"Ко всем задачам", go: screenAlgo };
     /* Приёмка — ступень раздела «Ты и ИИ», а не сосед по тренировкам:
        и дорога назад обязана это подтверждать. */
     case "specs":    return { label:"В «Ты и ИИ»", go: screenAILab };
@@ -14990,6 +15350,8 @@ function mergeProgress(a, b){
   /* принятые работы — множество ключей, как разминки: сделанное на любом
      устройстве остаётся сделанным */
   out.specs = mergeSet(a.specs, b.specs);
+  /* решённые задачи алгоритмов — тоже множество ключей */
+  out.algo = mergeSet(a.algo, b.algo);
 
   /* какие игры вообще открывали: объединяем, как разминки */
   out.gamesPlayed = mergeSet(a.gamesPlayed, b.gamesPlayed);
@@ -17079,6 +17441,14 @@ function trainCards(){
         var sOk = sAll ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
+      })() },
+    { id:"algo", em:"🧮", title:"Алгоритмы и ОГЭ", go: screenAlgo,
+      why: "Поиск, сортировка и типовые задания экзамена. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
+      when: "Когда нужна школьная информатика, а не просто Python.",
+      stat: (function(){
+        var all = algoList().length;
+        var d = all ? algoList().filter(function(x){ return algoDone(x.id); }).length : 0;
+        return all ? d + " из " + all + " решено" : "";
       })() },
     { id:"sand", em:"🎨", title:"Песочница", go: screenSandbox,
       why: "Пустой лист без заданий и проверок: пиши что угодно, рисуй черепашкой, ломай и чини.",
@@ -19747,6 +20117,206 @@ function revCard(x){
     '<b>' + esc(l.title) + '</b><span>' + esc(x.why) + '</span></span>' +
     '<span class="rvright"><span class="rvwhen">' + reviewWhen(x.at) + '</span>' +
     '<span class="rdots">' + dots + '</span></span></button>';
+}
+
+/* ================= алгоритмы и формат ОГЭ =================
+   Вторая дверь под вывеску «информатика» (docs/vyveska.md). Внутри предмета
+   самое искомое — экзамен и алгоритмы, и на наш движок это ложится целиком:
+   задачи в формате ОГЭ 15.2 читают input() и печатают ответ, а судит их тот
+   же интерпретатор, что и уроки.
+
+   ⚠️ ЧЕСТНАЯ ГРАНИЦА, И ОНА НАПИСАНА НА ЭКРАНЕ. Мы не готовим к ОГЭ целиком:
+   в экзамене пятнадцать заданий, и большинство — про кодирование информации,
+   таблицы и файлы, а не про программирование. Мы закрываем задание 15.2 и
+   алгоритмическую часть. Обещать больше — врать, и вранью тут цена особая:
+   родитель узнает о нём в мае.
+
+   ⚠️ Чем это отличается от всех тренажёров ЕГЭ/ОГЭ: **цену алгоритма здесь
+   можно измерить, а не рассказать.** Движок считает шаги и так, ради защиты
+   от вечного цикла. Сложность обычно объясняют буквой O; четырнадцатилетнему
+   буква не говорит ничего, а «1000 шагов против 10» говорит всё.
+   ============================================================ */
+var ALGO_GROUPS = [
+  { id:"search", em:"🔎", title:"Поиск",
+    why:"Найти нужное — самая частая работа программы. И самая разная по цене." },
+  { id:"cost",   em:"⚖️", title:"Цена алгоритма",
+    why:"Здесь цену не рассказывают, а считают: движок знает, сколько шагов ушло." },
+  { id:"sort",   em:"🫧", title:"Сортировка",
+    why:"Упорядочить данные один раз — и всё, что после, станет дешевле." },
+  { id:"oge",    em:"📄", title:"Формат ОГЭ · задание 15.2",
+    why:"Те самые формулировки: сначала количество чисел, потом сами числа." }
+];
+function algoList(){ return (window.ALGO || []); }
+function algoById(id){
+  return algoList().filter(function(x){ return x.id === id; })[0] || null;
+}
+function algoDone(id){ return !!(S.algo && S.algo[id]); }
+function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
+
+function screenAlgo(){
+  enterScreen("train", "algo");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var xs = algoList(), done = xs.filter(function(x){ return algoDone(x.id); }).length;
+
+  var h = '<div class="lvlhead"><div><div class="idx">информатика: алгоритмы</div>' +
+    '<h1>🧮 Алгоритмы и ОГЭ</h1></div>' +
+    '<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
+    '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
+    'сортировка, цена алгоритма и типовые задания экзамена. Заходить можно с любого места ' +
+    'курса — всё, что нужно, объясняется прямо в задании.</p>';
+
+  /* ⚠️ Граница обещания стоит ДО заданий, а не мелким шрифтом внизу. */
+  h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
+    '<li><b>Закрываем задание 15.2</b> — то, где надо написать программу, — и алгоритмическую часть.</li>' +
+    '<li><b>Не закрываем экзамен целиком.</b> В ОГЭ пятнадцать заданий, и большинство про ' +
+    'кодирование информации, таблицы и файлы. Это не программирование, и мы этого не умеем.</li>' +
+    '<li><b>Цену алгоритма здесь считает движок.</b> Не «двоичный поиск быстрее», а ' +
+    '«1000 шагов против 10» — числом на экране.</li>' +
+    '</ul></div>';
+
+  ALGO_GROUPS.forEach(function(g){
+    var items = xs.filter(function(x){ return x.group === g.id; });
+    if (!items.length) return;
+    var d = items.filter(function(x){ return algoDone(x.id); }).length;
+    h += '<div class="sect"><h2>' + g.em + ' ' + esc(g.title) + '</h2><div class="line"></div>' +
+      '<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
+      '<p class="dim">' + esc(g.why) + '</p><div class="gamegrid">';
+    items.forEach(function(x){
+      h += '<button class="gamecard" data-algo="' + esc(x.id) + '">' +
+        '<span class="gemoji">' + x.emoji + '</span>' +
+        '<b>' + esc(x.title) + (algoDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+        '<span>' + esc(x.intro) + '</span>' +
+        '<span class="wtag">' + esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
+  });
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll("[data-algo]").forEach(function(b){
+    b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
+  });
+  document.getElementById("tomap").onclick = screenTrain;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openAlgo(id){
+  var x = algoById(id);
+  if (!x) return screenAlgo();
+  enterScreen("train", "algoone");
+  session = { id:id, attempts:0, hints:0, shown:false, algo:true };
+
+  var h = '<div class="crumbs"><span data-go="back">Алгоритмы</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
+    '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
+    '<p class="lede">' + esc(x.intro) + '</p>' +
+    '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
+    x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul></div>';
+
+  h += '<div id="studio"></div>' +
+    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
+    '<div class="hintout" id="hintout"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем задачам</button></div>';
+  app.innerHTML = h;
+
+  var studio = makeStudio({
+    engine: "mini", code: x.starter, lint: true,
+    stdin: x.stdin || null,
+    label: "твоя программа",
+    viz: function(o){
+      screenViz({ code: o.code, env: o.env,
+        backTo: { label: "← Вернуться к задаче", go: function(){ openAlgo(id); } } });
+    },
+    check: function(ed, showMsg){ runAlgoCheck(x, ed, showMsg); }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  session.lesson = "algo-" + id;
+  session.starter = [{ name:"main.py", code: x.starter }];
+  var d = draftGet(session.lesson);
+  if (d) draftApply(studio.editor, d.files);
+  studio.editor.onEdit = draftSchedule;
+
+  wireHint(x.hints);
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function runAlgoCheck(x, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini"), code = ed.getCode();
+  var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (x.stdin || []);
+
+  /* Запрет на готовое решение пишется в требованиях словами, и проверяется
+     здесь: без него «напиши поиск сам» закрывается одной строкой .index(). */
+  if (x.check.kind === "tests" || x.check.kind === "output"){
+    var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
+                   "find-binary":[".index("], "oge-maxmin":["max("],
+                   "oge-digits":["str(", "list("] };
+    var ban = banned[x.id] || [];
+    for (var b = 0; b < ban.length; b++){
+      if (code.indexOf(ban[b]) >= 0){
+        showMsg("warn", "<b>Так нельзя</b>В этой задаче нельзя пользоваться <code>" +
+          esc(ban[b]) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
+          "Требование стоит в условии.");
+        return;
+      }
+    }
+  }
+
+  var res = eng.run(code, { stdin: stdin.slice() });
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+
+  var problem = null;
+  if (x.check.kind === "tests"){
+    problem = runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
+  } else {
+    var exp = eng.run(x.solution, { stdin: stdin.slice() }).lines, got = res.lines;
+    if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
+      problem = diffBlock(exp, got);
+  }
+  if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+
+  /* ⚠️ Бюджет шагов — наш козырь, и проверяется он ПОСЛЕ правильности:
+     сначала должно работать, и только потом «сколько это стоило». */
+  if (x.budget){
+    var cost = res.steps || 0;
+    if (cost > x.budget){
+      showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
+        "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
+        "дело не в скорости компьютера, а в плане работы.");
+      return;
+    }
+  }
+  winAlgo(x, res);
+}
+
+function winAlgo(x, res){
+  var first = !algoDone(x.id);
+  algoMark(x.id);
+  markActiveToday();
+  save(); refreshTop();
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
+    '<h2>' + (session.attempts === 1 ? "Решено с первой попытки" : "Задача решена") + '</h2>' +
+    '<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
+    'а не сверил буквы кода.</p>' +
+    '<div class="stepnote"><b>Что тут было.</b> ' + esc(x.note) + '</div>' +
+    (res && res.steps
+      ? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
+        plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
+        'и её всегда можно попробовать сбить.</div>'
+      : '') +
+    '<div class="winrow"><button class="bigbtn" id="walgo">Ко всем задачам</button>' +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(first ? 2 : 1);
+  document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("wstay").onclick = closeWin;
 }
 
 /* ===== ступени раздела «Ты и ИИ» =====
@@ -24611,6 +25181,7 @@ var HASH_SCREENS = {
   "#works":   function(){ screenShowcase(); },
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
+  "#algo":    function(){ screenAlgo(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
 };
@@ -26618,6 +27189,8 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
+  screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
+  algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,

@@ -77,7 +77,7 @@ var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
-                     "hours","zan","ptasks","specs","parts","builds","solved"];
+                     "hours","zan","ptasks","specs","parts","builds","solved","algo"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -1329,8 +1329,9 @@ function backTarget(){
     case "guide": case "account": case "admin": case "adult":
       return { label:"На главную", go: screenWorlds };
 
-    case "warm": case "games": case "sand": case "viz": case "ai":
+    case "warm": case "games": case "sand": case "viz": case "ai": case "algo":
       return { label:"К тренировкам", go: screenTrain };
+    case "algoone":  return { label:"Ко всем задачам", go: screenAlgo };
     /* Приёмка — ступень раздела «Ты и ИИ», а не сосед по тренировкам:
        и дорога назад обязана это подтверждать. */
     case "specs":    return { label:"В «Ты и ИИ»", go: screenAILab };
@@ -1489,6 +1490,8 @@ function mergeProgress(a, b){
   /* принятые работы — множество ключей, как разминки: сделанное на любом
      устройстве остаётся сделанным */
   out.specs = mergeSet(a.specs, b.specs);
+  /* решённые задачи алгоритмов — тоже множество ключей */
+  out.algo = mergeSet(a.algo, b.algo);
 
   /* какие игры вообще открывали: объединяем, как разминки */
   out.gamesPlayed = mergeSet(a.gamesPlayed, b.gamesPlayed);
@@ -3578,6 +3581,14 @@ function trainCards(){
         var sOk = sAll ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
+      })() },
+    { id:"algo", em:"🧮", title:"Алгоритмы и ОГЭ", go: screenAlgo,
+      why: "Поиск, сортировка и типовые задания экзамена. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
+      when: "Когда нужна школьная информатика, а не просто Python.",
+      stat: (function(){
+        var all = algoList().length;
+        var d = all ? algoList().filter(function(x){ return algoDone(x.id); }).length : 0;
+        return all ? d + " из " + all + " решено" : "";
       })() },
     { id:"sand", em:"🎨", title:"Песочница", go: screenSandbox,
       why: "Пустой лист без заданий и проверок: пиши что угодно, рисуй черепашкой, ломай и чини.",
@@ -6246,6 +6257,206 @@ function revCard(x){
     '<b>' + esc(l.title) + '</b><span>' + esc(x.why) + '</span></span>' +
     '<span class="rvright"><span class="rvwhen">' + reviewWhen(x.at) + '</span>' +
     '<span class="rdots">' + dots + '</span></span></button>';
+}
+
+/* ================= алгоритмы и формат ОГЭ =================
+   Вторая дверь под вывеску «информатика» (docs/vyveska.md). Внутри предмета
+   самое искомое — экзамен и алгоритмы, и на наш движок это ложится целиком:
+   задачи в формате ОГЭ 15.2 читают input() и печатают ответ, а судит их тот
+   же интерпретатор, что и уроки.
+
+   ⚠️ ЧЕСТНАЯ ГРАНИЦА, И ОНА НАПИСАНА НА ЭКРАНЕ. Мы не готовим к ОГЭ целиком:
+   в экзамене пятнадцать заданий, и большинство — про кодирование информации,
+   таблицы и файлы, а не про программирование. Мы закрываем задание 15.2 и
+   алгоритмическую часть. Обещать больше — врать, и вранью тут цена особая:
+   родитель узнает о нём в мае.
+
+   ⚠️ Чем это отличается от всех тренажёров ЕГЭ/ОГЭ: **цену алгоритма здесь
+   можно измерить, а не рассказать.** Движок считает шаги и так, ради защиты
+   от вечного цикла. Сложность обычно объясняют буквой O; четырнадцатилетнему
+   буква не говорит ничего, а «1000 шагов против 10» говорит всё.
+   ============================================================ */
+var ALGO_GROUPS = [
+  { id:"search", em:"🔎", title:"Поиск",
+    why:"Найти нужное — самая частая работа программы. И самая разная по цене." },
+  { id:"cost",   em:"⚖️", title:"Цена алгоритма",
+    why:"Здесь цену не рассказывают, а считают: движок знает, сколько шагов ушло." },
+  { id:"sort",   em:"🫧", title:"Сортировка",
+    why:"Упорядочить данные один раз — и всё, что после, станет дешевле." },
+  { id:"oge",    em:"📄", title:"Формат ОГЭ · задание 15.2",
+    why:"Те самые формулировки: сначала количество чисел, потом сами числа." }
+];
+function algoList(){ return (window.ALGO || []); }
+function algoById(id){
+  return algoList().filter(function(x){ return x.id === id; })[0] || null;
+}
+function algoDone(id){ return !!(S.algo && S.algo[id]); }
+function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
+
+function screenAlgo(){
+  enterScreen("train", "algo");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var xs = algoList(), done = xs.filter(function(x){ return algoDone(x.id); }).length;
+
+  var h = '<div class="lvlhead"><div><div class="idx">информатика: алгоритмы</div>' +
+    '<h1>🧮 Алгоритмы и ОГЭ</h1></div>' +
+    '<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
+    '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
+    'сортировка, цена алгоритма и типовые задания экзамена. Заходить можно с любого места ' +
+    'курса — всё, что нужно, объясняется прямо в задании.</p>';
+
+  /* ⚠️ Граница обещания стоит ДО заданий, а не мелким шрифтом внизу. */
+  h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
+    '<li><b>Закрываем задание 15.2</b> — то, где надо написать программу, — и алгоритмическую часть.</li>' +
+    '<li><b>Не закрываем экзамен целиком.</b> В ОГЭ пятнадцать заданий, и большинство про ' +
+    'кодирование информации, таблицы и файлы. Это не программирование, и мы этого не умеем.</li>' +
+    '<li><b>Цену алгоритма здесь считает движок.</b> Не «двоичный поиск быстрее», а ' +
+    '«1000 шагов против 10» — числом на экране.</li>' +
+    '</ul></div>';
+
+  ALGO_GROUPS.forEach(function(g){
+    var items = xs.filter(function(x){ return x.group === g.id; });
+    if (!items.length) return;
+    var d = items.filter(function(x){ return algoDone(x.id); }).length;
+    h += '<div class="sect"><h2>' + g.em + ' ' + esc(g.title) + '</h2><div class="line"></div>' +
+      '<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
+      '<p class="dim">' + esc(g.why) + '</p><div class="gamegrid">';
+    items.forEach(function(x){
+      h += '<button class="gamecard" data-algo="' + esc(x.id) + '">' +
+        '<span class="gemoji">' + x.emoji + '</span>' +
+        '<b>' + esc(x.title) + (algoDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+        '<span>' + esc(x.intro) + '</span>' +
+        '<span class="wtag">' + esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
+  });
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll("[data-algo]").forEach(function(b){
+    b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
+  });
+  document.getElementById("tomap").onclick = screenTrain;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openAlgo(id){
+  var x = algoById(id);
+  if (!x) return screenAlgo();
+  enterScreen("train", "algoone");
+  session = { id:id, attempts:0, hints:0, shown:false, algo:true };
+
+  var h = '<div class="crumbs"><span data-go="back">Алгоритмы</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
+    '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
+    '<p class="lede">' + esc(x.intro) + '</p>' +
+    '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
+    x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul></div>';
+
+  h += '<div id="studio"></div>' +
+    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
+    '<div class="hintout" id="hintout"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем задачам</button></div>';
+  app.innerHTML = h;
+
+  var studio = makeStudio({
+    engine: "mini", code: x.starter, lint: true,
+    stdin: x.stdin || null,
+    label: "твоя программа",
+    viz: function(o){
+      screenViz({ code: o.code, env: o.env,
+        backTo: { label: "← Вернуться к задаче", go: function(){ openAlgo(id); } } });
+    },
+    check: function(ed, showMsg){ runAlgoCheck(x, ed, showMsg); }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  session.lesson = "algo-" + id;
+  session.starter = [{ name:"main.py", code: x.starter }];
+  var d = draftGet(session.lesson);
+  if (d) draftApply(studio.editor, d.files);
+  studio.editor.onEdit = draftSchedule;
+
+  wireHint(x.hints);
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function runAlgoCheck(x, ed, showMsg){
+  session.attempts++;
+  var eng = Runtime.get("mini"), code = ed.getCode();
+  var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (x.stdin || []);
+
+  /* Запрет на готовое решение пишется в требованиях словами, и проверяется
+     здесь: без него «напиши поиск сам» закрывается одной строкой .index(). */
+  if (x.check.kind === "tests" || x.check.kind === "output"){
+    var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
+                   "find-binary":[".index("], "oge-maxmin":["max("],
+                   "oge-digits":["str(", "list("] };
+    var ban = banned[x.id] || [];
+    for (var b = 0; b < ban.length; b++){
+      if (code.indexOf(ban[b]) >= 0){
+        showMsg("warn", "<b>Так нельзя</b>В этой задаче нельзя пользоваться <code>" +
+          esc(ban[b]) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
+          "Требование стоит в условии.");
+        return;
+      }
+    }
+  }
+
+  var res = eng.run(code, { stdin: stdin.slice() });
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+
+  var problem = null;
+  if (x.check.kind === "tests"){
+    problem = runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
+  } else {
+    var exp = eng.run(x.solution, { stdin: stdin.slice() }).lines, got = res.lines;
+    if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
+      problem = diffBlock(exp, got);
+  }
+  if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+
+  /* ⚠️ Бюджет шагов — наш козырь, и проверяется он ПОСЛЕ правильности:
+     сначала должно работать, и только потом «сколько это стоило». */
+  if (x.budget){
+    var cost = res.steps || 0;
+    if (cost > x.budget){
+      showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
+        "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
+        "дело не в скорости компьютера, а в плане работы.");
+      return;
+    }
+  }
+  winAlgo(x, res);
+}
+
+function winAlgo(x, res){
+  var first = !algoDone(x.id);
+  algoMark(x.id);
+  markActiveToday();
+  save(); refreshTop();
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
+    '<h2>' + (session.attempts === 1 ? "Решено с первой попытки" : "Задача решена") + '</h2>' +
+    '<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
+    'а не сверил буквы кода.</p>' +
+    '<div class="stepnote"><b>Что тут было.</b> ' + esc(x.note) + '</div>' +
+    (res && res.steps
+      ? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
+        plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
+        'и её всегда можно попробовать сбить.</div>'
+      : '') +
+    '<div class="winrow"><button class="bigbtn" id="walgo">Ко всем задачам</button>' +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(first ? 2 : 1);
+  document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("wstay").onclick = closeWin;
 }
 
 /* ===== ступени раздела «Ты и ИИ» =====
@@ -11110,6 +11321,7 @@ var HASH_SCREENS = {
   "#works":   function(){ screenShowcase(); },
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
+  "#algo":    function(){ screenAlgo(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
 };
@@ -13117,6 +13329,8 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) screenWorlds
 window.__game = {
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
+  screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
+  algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,

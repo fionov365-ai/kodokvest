@@ -3942,7 +3942,7 @@ function checkEncoding(){
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
-  let groupChecked = 0, specChecked = 0, aiPackChecked = 0;
+  let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5301,15 +5301,15 @@ function checkEncoding(){
     /* 11.5. Приёмка целиком: слабая спецификация пропускает поломку, сильная
        её ловит, и обе получают разный ответ. */
     {
-      const t = w.SPECS.filter(x => x.broken && x.fn === "сумма")[0];
+      const t = w.SPECS.filter(x => x.broken && x.fn === "total")[0];
       if (!t) bad("[приёмка] нет сломанной работы про сумму — проверка ослабла");
       else {
-        const слабая = "пример сумма([1, 2, 3]) = 6\nпример сумма([5, 5]) = 10";
+        const слабая = "пример total([1, 2, 3]) = 6\nпример total([5, 5]) = 10";
         const v1 = g.specVerdict(g.specParse(слабая, t), t, слабая);
         if (v1.state !== "missed")
           bad("[приёмка] слабая спецификация не названа пропустившей поломку: " + v1.state);
 
-        const сильная = слабая + "\nпример сумма([]) = 0";
+        const сильная = слабая + "\nпример total([]) = 0";
         const v2 = g.specVerdict(g.specParse(сильная, t), t, сильная);
         if (v2.state !== "caught")
           bad("[приёмка] сильная спецификация не поймала поломку: " + v2.state);
@@ -5322,7 +5322,7 @@ function checkEncoding(){
           bad("[приёмка] в вердикте не видно, что пошло не так: " + упавшая.why);
 
         /* одной строки мало: приёмка из одной строки ничего не доказывает */
-        const тонкая = "пример сумма([]) = 0";
+        const тонкая = "пример total([]) = 0";
         if (g.specVerdict(g.specParse(тонкая, t), t, тонкая).state !== "thin")
           bad("[приёмка] приёмка из одной строки засчитана");
       }
@@ -5382,7 +5382,7 @@ function checkEncoding(){
           bad("[приёмка] не сказано, что это обычный Python, а не наш диалект");
         /* приёмка засчитывается и попадает в прогресс */
         g.state.specs = {};
-        ta.value = "пример сумма([1, 2, 3]) = 6\nпример сумма([]) = 0";
+        ta.value = "пример total([1, 2, 3]) = 6\nпример total([]) = 0";
         doc.getElementById("specgo").click();
         await tick();
         if (!won()) bad("[приёмка] верная приёмка не засчитана");
@@ -5480,6 +5480,136 @@ function checkEncoding(){
     if (problems.length === p0) aiPackChecked++;
   }
 
+  /* --- 13. алгоритмы и формат ОГЭ --- */
+  if (typeof g.algoList === "function"){
+    const p0 = problems.length;
+    const XS = g.algoList();
+    const MP = w.MiniPy;
+
+    /* 13.1. Содержание: эталон проходит собственную проверку, заготовка — нет.
+       Задание, которое засчитывается заготовкой, не задание. */
+    {
+      if (XS.length < 6) bad("[алгоритмы] задач подозрительно мало: " + XS.length);
+      XS.forEach(t => {
+        ["id","group","title","tag","intro","goal","starter","solution","note"].forEach(f => {
+          if (!t[f]) bad("[алгоритмы] у «" + t.id + "» пустое поле «" + f + "»");
+        });
+        if (!Array.isArray(t.list) || !t.list.length)
+          bad("[алгоритмы] у «" + t.id + "» нет требований списком");
+        if (!Array.isArray(t.hints) || t.hints.length < 3)
+          bad("[алгоритмы] у «" + t.id + "» меньше трёх подсказок");
+        if (!g.ALGO_GROUPS.some(gr => gr.id === t.group))
+          bad("[алгоритмы] «" + t.id + "» в неизвестной группе «" + t.group + "»");
+        if (/random|randint|choice|shuffle/.test(t.solution))
+          bad("[алгоритмы] в «" + t.id + "» есть случайность — вердикт станет невоспроизводимым");
+
+        const stdin = () => (t.stdin || []).slice();
+        const sol = MP.run(t.solution, { stdin: stdin() });
+        if (sol.error)
+          return bad("[алгоритмы] эталон «" + t.id + "» падает: " + sol.error.kind + " " + sol.error.msg);
+        if (t.budget && (sol.steps || 0) > t.budget)
+          bad("[алгоритмы] эталон «" + t.id + "» сам не влезает в бюджет: " + sol.steps + " из " + t.budget);
+
+        if (t.check.kind === "output"){
+          if (!sol.lines.length) bad("[алгоритмы] эталон «" + t.id + "» ничего не печатает");
+          const st = MP.run(t.starter, { stdin: stdin() });
+          if (!st.error && JSON.stringify(st.lines) === JSON.stringify(sol.lines))
+            bad("[алгоритмы] заготовка «" + t.id + "» проходит проверку сама");
+        } else {
+          if (!t.check.calls || t.check.calls.length < 3)
+            bad("[алгоритмы] у «" + t.id + "» меньше трёх скрытых проверок");
+          let same = true;
+          (t.check.calls || []).forEach(c => {
+            const probe = "\nprint(repr(" + c + "))\n";
+            const wr = MP.run(t.solution + probe, { stdin: stdin() });
+            const gr = MP.run(t.starter + probe, { stdin: stdin() });
+            if (wr.error)
+              return bad("[алгоритмы] эталон «" + t.id + "» падает на " + c + ": " + wr.error.msg);
+            const wl = wr.lines[wr.lines.length - 1];
+            const gl = gr.error ? undefined : gr.lines[gr.lines.length - 1];
+            if (wl !== gl) same = false;
+          });
+          if (same) bad("[алгоритмы] заготовка «" + t.id + "» проходит все скрытые проверки");
+        }
+      });
+    }
+
+    /* 13.2. ⚠️ Граница обещания. Мы закрываем задание 15.2, а не экзамен, и
+       это обязано стоять на экране ДО задач, а не мелким шрифтом внизу:
+       про невыполненное обещание родитель узнаёт в мае. */
+    {
+      g.screenAlgo(); await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/15\.2/.test(t)) bad("[алгоритмы] не сказано, какое задание ОГЭ мы закрываем");
+      if (!/не закрываем экзамен целиком/i.test(t))
+        bad("[алгоритмы] не сказано, чего мы НЕ закрываем");
+      if (!/шаг/i.test(t)) bad("[алгоритмы] не названо главное отличие — измеренная цена");
+      const rules = doc.querySelector(".trrules"), first = doc.querySelector(".gamegrid");
+      if (!rules) bad("[алгоритмы] нет рамки с границей обещания");
+      if (rules && first && !(rules.compareDocumentPosition(first) & 4))
+        bad("[алгоритмы] задачи стоят раньше границы обещания");
+      if (doc.querySelectorAll("[data-algo]").length !== XS.length)
+        bad("[алгоритмы] показаны не все задачи");
+    }
+
+    /* 13.3. Задача решается, эталон засчитывается, обход по требованию — нет. */
+    {
+      const t = XS.filter(x => x.id === "find-linear")[0];
+      if (!t) bad("[алгоритмы] нет задачи про линейный поиск");
+      else {
+        g.state.algo = {};
+        g.openAlgo(t.id); await tick();
+        const st = studioOf();
+        if (!st) bad("[алгоритмы] редактор задачи не открылся");
+        else {
+          /* обход: .index() запрещён условием, и запрет обязан работать */
+          st.editor.setCode("def find(nums, want):\n    if want in nums:\n        return nums.index(want)\n    return -1\n");
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()) bad("[алгоритмы] решение через .index() засчитано, хотя условие его запрещает");
+          if (!/нельзя/i.test(msgText())) bad("[алгоритмы] про запрет ничего не сказано: " + msgText());
+
+          st.editor.setCode(t.solution);
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[алгоритмы] эталон не засчитан: " + msgText());
+          const card = doc.getElementById("wincard").textContent;
+          if (!/шаг/i.test(card)) bad("[алгоритмы] в победе не названа цена программы в шагах");
+          closeWin();
+          if (!g.algoDone(t.id)) bad("[алгоритмы] решённая задача не попала в прогресс");
+        }
+      }
+    }
+
+    /* 13.4. Формат ОГЭ: ввод читается через input(), как на экзамене. */
+    {
+      const t = XS.filter(x => x.group === "oge" && x.stdin)[0];
+      if (!t) bad("[алгоритмы] нет ни одной задачи с вводом в формате ОГЭ");
+      else {
+        if (!/input\(/.test(t.starter + t.solution))
+          bad("[алгоритмы] задача формата ОГЭ не читает ввод");
+        g.openAlgo(t.id); await tick();
+        const st = studioOf();
+        st.editor.setCode(t.solution);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()) bad("[алгоритмы] задача с вводом не решается эталоном: " + msgText());
+        closeWin();
+      }
+    }
+
+    /* 13.5. Слияние двух устройств не теряет решённое. */
+    {
+      const m = g.mergeProgress({ savedAt:1, algo:{ a:1 } }, { savedAt:2, algo:{ b:1 } });
+      if (Object.keys(m.algo || {}).length !== 2)
+        bad("[алгоритмы] слияние потеряло решённую задачу");
+    }
+
+    g.state.algo = {};
+    viewReset(g);
+    if (problems.length === p0) algoChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -5534,6 +5664,7 @@ function checkEncoding(){
   console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
+  console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
