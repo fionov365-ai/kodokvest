@@ -1351,6 +1351,63 @@ body.focus .toTop{display:none}
   border:1px solid var(--line);font-size:14.5px;line-height:1.6;color:var(--ink)}
 .askans b{display:block;margin-bottom:6px;color:var(--acc)}
 
+/* ===== занятие: полоса, план, карточки ===== */
+.zanbar{height:10px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);
+  overflow:hidden;margin:10px 0 6px}
+.zanbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-lt));
+  transition:width .3s ease}
+.zanmeta{color:var(--soft);font-size:14px;margin:0 0 12px}
+.zanplan{list-style:none;padding:0;margin:6px 0 0;display:grid;gap:8px}
+.zanplan li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--soft)}
+.zanplan li.done{border-color:var(--okline);background:var(--okbg);color:var(--okink)}
+.zanplan li.cur{border-color:var(--acc);background:var(--panel);color:var(--ink)}
+.zanplan li b{color:inherit}
+.zanplan .zi{width:26px;text-align:center;font-size:18px}
+.zancard.on{border-color:var(--acc)}
+.zancard.done{border-color:var(--okline)}
+.zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
+.zanrep li{line-height:1.5}
+.zanwas{font-size:16px;margin:0 0 6px}
+.ptcard .ptrow{display:flex;gap:10px;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--line)}
+.ptcard .ptrow:last-of-type{border-bottom:none}
+.asktext{font-size:17px;line-height:1.5}
+
+/* ===== карта активности: день × час ===== */
+.heat{display:grid;gap:3px;margin:8px 0 6px;overflow-x:auto}
+.heatrow,.heathead{display:flex;align-items:center;gap:8px}
+.heat .hd{width:52px;flex:none;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.heat .hcells{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;flex:1;min-width:300px}
+.heathead .hcells{color:var(--faint);font-size:11px}
+.heathead .hcells b{grid-column:span 6;font-weight:600}
+.heat i{display:block;height:13px;border-radius:3px;background:var(--sunken);border:1px solid var(--line)}
+.heat i.hl1{background:var(--glow1);border-color:var(--line2)}
+.heat i.hl2{background:var(--acc-lt);opacity:.45;border-color:transparent}
+.heat i.hl3{background:var(--acc-lt);opacity:.72;border-color:transparent}
+.heat i.hl4{background:var(--acc);border-color:transparent}
+.heatscale{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--faint)}
+.heatscale i{display:block;width:13px;height:13px;border-radius:3px;background:var(--sunken);
+  border:1px solid var(--line)}
+.heatscale i.hl1{background:var(--glow1);border-color:var(--line2)}
+.heatscale i.hl2{background:var(--acc-lt);opacity:.45;border-color:transparent}
+.heatscale i.hl3{background:var(--acc-lt);opacity:.72;border-color:transparent}
+.heatscale i.hl4{background:var(--acc);border-color:transparent}
+
+/* ===== кабинет взрослого ===== */
+.warnline{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
+  border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
+.brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
+.brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+.prow{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
+.madelink{border:1px solid var(--okline);background:var(--okbg);border-radius:12px;
+  padding:10px 12px;margin:10px 0;font-size:14px;line-height:1.5}
+.brk{word-break:break-all;font-family:'JetBrains Mono',monospace;font-size:12px}
+.adrep .zanrep{padding-left:20px}
+.lblin{background:var(--sunken);border:1px solid var(--line2);border-radius:8px;padding:5px 8px;
+  color:var(--ink);font-size:13px;min-width:150px}
+.lblin:focus{outline:none;border-color:var(--acc)}
+
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
      это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
@@ -8642,6 +8699,141 @@ window.CHEATSHEET = [
 
 <script>
 /* ============================================================
+   Кодоквест — задания, которые взрослый задаёт ребёнку.
+   Только данные: сам механизм лежит в app.js.
+
+   Главное ограничение, из которого выросла вся эта конструкция: взрослый
+   НЕ УМЕЕТ ПРОГРАММИРОВАТЬ. Значит он не может написать ни задачу, ни
+   правильный ответ к ней. Но и «пусть напишет условие словами» не годится:
+   у задачи без эталона нет проверки, а судья-движок — единственное, чего нет
+   у конкурентов. Пустить сюда свободный текст значит убрать движок из
+   продукта ровно там, где взрослый на него смотрит.
+
+   Выход: программу пишет ШАБЛОН, а взрослый даёт ЧИСЛА из своей жизни.
+   Дальше всё как в разделе «Своё задание»: движок прогоняет программу и сам
+   вычисляет ожидаемый вывод, задание уезжает ребёнку ссылкой, сервера не надо.
+
+   Правила для шаблона (их проверяет taskProblem в app.js, а заодно тест
+   tests/parent-tasks.js):
+     — никакой случайности и никакого input(): у ребёнка выпало бы другое;
+     — программа обязана что-то печатать, иначе сверять нечего;
+     — только то, что объяснено в курсе: переменные, арифметика, while, for,
+       списки, round. Задание не должно требовать незнакомой команды.
+   ============================================================ */
+var PARENT_TASKS = [
+  {
+    id: "kopilka",
+    title: "Копилка",
+    emoji: "🐷",
+    what: "Сколько недель копить на покупку",
+    goal: function(v){
+      return "Мы даём " + v.week + " ₽ в неделю, а вещь стоит " + v.price + " ₽. " +
+             "Напиши программу, которая печатает, сколько недель придётся копить " +
+             "и сколько денег накопится к этому моменту.";
+    },
+    params: [
+      { k:"price", label:"Цена вещи, ₽", def:4500, min:10, max:1000000 },
+      { k:"week",  label:"Даём в неделю, ₽", def:300, min:1, max:100000 }
+    ],
+    code: function(v){
+      return "price = " + v.price + "\n" +
+             "week = " + v.week + "\n" +
+             "saved = 0\n" +
+             "weeks = 0\n" +
+             "while saved < price:\n" +
+             "    saved = saved + week\n" +
+             "    weeks = weeks + 1\n" +
+             'print("Недель копить:", weeks)\n' +
+             'print("Накопится:", saved)';
+    }
+  },
+  {
+    id: "magazin",
+    title: "Поход в магазин",
+    emoji: "🛒",
+    what: "Сумма покупки и сдача",
+    goal: function(v){
+      return "Купили " + v.count + " тетрадей по " + v.price + " ₽ и дали кассиру " +
+             v.give + " ₽. Напиши программу, которая печатает сумму покупки и сдачу.";
+    },
+    params: [
+      { k:"count", label:"Сколько тетрадей", def:7, min:1, max:1000 },
+      { k:"price", label:"Цена одной, ₽", def:45, min:1, max:100000 },
+      { k:"give",  label:"Дали кассиру, ₽", def:500, min:1, max:1000000 }
+    ],
+    code: function(v){
+      return "count = " + v.count + "\n" +
+             "price = " + v.price + "\n" +
+             "give = " + v.give + "\n" +
+             "total = count * price\n" +
+             'print("Сумма:", total)\n' +
+             'print("Сдача:", give - total)';
+    }
+  },
+  {
+    id: "srednee",
+    title: "Средняя оценка",
+    emoji: "📊",
+    what: "Среднее по списку оценок",
+    goal: function(v){
+      return "Вот оценки за неделю: " + v.marks + ". Напиши программу, которая печатает " +
+             "их количество, сумму и среднюю оценку, округлённую до двух знаков.";
+    },
+    params: [
+      { k:"marks", label:"Оценки через запятую", def:"4, 5, 3, 5, 4", text:true }
+    ],
+    code: function(v){
+      return "marks = [" + v.marks + "]\n" +
+             'print("Оценок:", len(marks))\n' +
+             'print("Сумма:", sum(marks))\n' +
+             'print("Средняя:", round(sum(marks) / len(marks), 2))';
+    }
+  },
+  {
+    id: "dney",
+    title: "Сколько это недель",
+    emoji: "📅",
+    what: "Дни переводятся в недели и дни",
+    goal: function(v){
+      return "До события осталось " + v.days + " дней. Напиши программу, которая печатает, " +
+             "сколько это полных недель и сколько дней сверху.";
+    },
+    params: [
+      { k:"days", label:"Сколько дней осталось", def:52, min:1, max:100000 }
+    ],
+    code: function(v){
+      return "days = " + v.days + "\n" +
+             'print("Недель:", days // 7)\n' +
+             'print("И ещё дней:", days % 7)';
+    }
+  },
+  {
+    id: "tablica",
+    title: "Таблица умножения",
+    emoji: "✖️",
+    what: "Столбик умножения на одно число",
+    goal: function(v){
+      return "Напечатай таблицу умножения на " + v.n + ": от " + v.n + " × 1 до " +
+             v.n + " × " + v.upto + ", каждая строка отдельно, в виде «" + v.n + " x 1 = " + v.n + "».";
+    },
+    params: [
+      { k:"n",    label:"На какое число", def:7, min:2, max:99 },
+      { k:"upto", label:"До скольких", def:10, min:2, max:30 }
+    ],
+    code: function(v){
+      return "n = " + v.n + "\n" +
+             "for i in range(1, " + (Number(v.upto) + 1) + "):\n" +
+             '    print(n, "x", i, "=", n * i)';
+    }
+  }
+];
+
+if (typeof window !== "undefined") window.PARENT_TASKS = PARENT_TASKS;
+
+</script>
+
+<script>
+/* ============================================================
    НАСТРОЙКА СИНХРОНИЗАЦИИ С СЕРВЕРОМ
    Это единственный файл, который нужно править для подключения сервера.
    Пока оба поля пустые — тренажёр работает как раньше: прогресс лежит
@@ -13059,6 +13251,13 @@ var RANKS = [
 ];
 var STAR_XP = [0, 25, 60, 100];
 
+/* Длина занятия и состав — константы рамки взрослого (раздел «рамка занятий»
+   ниже). Объявлены здесь, а не там, по одной причине: ensureShape(S) зовётся
+   при загрузке файла, до строчек ниже, и frameShape сверяется с этими
+   списками. Объявление через var подняло бы имя, но не значение. */
+var ZAN_LEN = [20, 30, 45];
+var ZAN_MIX = ["new", "balanced", "repeat"];
+
 /* ===== код входа в панель наставника =====
    Панель открывается адресом сайта с #admin на конце, например
      https://fionov365-ai.github.io/kodokvest/#admin
@@ -13085,7 +13284,8 @@ var ADMIN_CODE = "kodokvest-2026";
 var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
-                     "mytasks","friendTasks","errs","gallery","certAt"];
+                     "mytasks","friendTasks","errs","gallery","certAt",
+                     "hours","zan","ptasks"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -13097,7 +13297,8 @@ function blankProgress(){
   /* mytaskDraft — недособранное «своё задание» (название, условие, код).
      Живёт рядом с sandbox и по той же причине: это не результат занятий,
      а незаконченная работа ребёнка, и терять её на переходе нельзя. */
-  var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] } };
+  var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] },
+            frame: blankFrame() };
   PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
   PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
   return o;
@@ -13114,7 +13315,13 @@ function ensureShape(o){
   if (typeof o.name !== "string") o.name = "";
   if (!o.schedule || typeof o.schedule !== "object") o.schedule = { days:[] };
   if (!Array.isArray(o.schedule.days)) o.schedule.days = [];
+  o.frame = frameShape(o.frame);
   if (!o.admin || typeof o.admin !== "object") o.admin = { unlockAll:false };
+  /* Подписи учеников у наставника. Живут в admin, то есть на ЕГО устройстве,
+     и на сервер не уходят — как и все настройки устройства. Это прямое
+     следствие того, что имя ребёнка больше не синхронизируется (cloudSnapshot):
+     сервер знает только код, а «Петя, 5 класс» знает наставник у себя. */
+  if (!o.admin.labels || typeof o.admin.labels !== "object") o.admin.labels = {};
   return o;
 }
 /* стереть результаты занятий, оставив имя, расписание и сделанное ребёнком */
@@ -13129,6 +13336,7 @@ function clearAll(o){
   clearResults(o);
   KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
   o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
+  o.frame = blankFrame();
   return ensureShape(o);
 }
 
@@ -13375,6 +13583,392 @@ function toggleStudyDay(n){
 /* сегодня учебный день, а заниматься ещё не садились */
 function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(dayKey()); }
 
+/* ================= рамка занятий: её ставит взрослый =================
+   Расписание выше — настройка ребёнка: он сам отмечает дни. Рамка — то же
+   самое, но от взрослого, и она сильнее: если рамка задана, экран «Сегодня»
+   показывает её и не даёт ребёнку двигать.
+
+   Что в рамке и почему именно это:
+     days   дни недели занятий (как schedule.days)
+     len    длина занятия: 20, 30 или 45 минут
+     mix    чего больше — нового или повторения
+     goal   дата, к которой надо успеть (для семейного обучения — аттестация)
+     breaks каникулы: отрезки дат, в которые пропуск запланирован
+     report получать ли отчёт (галочка снимает ЦЕЛЬ «рассылка», а не статус)
+   Чего в рамке НЕТ и не будет: выбора конкретных уроков. Порядок курса держит
+   проверка «конструкция объяснена раньше, чем понадобилась» (README, «Порядок
+   объяснений»), и взрослый, тасующий уроки, сломает именно её — а упрётся
+   ребёнок. Взрослый ставит рамку и темп, курс отвечает за порядок.
+
+   Слияние: как у расписания, побеждает более свежее сохранение. Объединение
+   вернуло бы снятый на другом устройстве день. */
+function blankFrame(){
+  return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true, setAt:0 };
+}
+function frameShape(f){
+  var o = (f && typeof f === "object") ? f : {};
+  var out = blankFrame();
+  if (Array.isArray(o.days))
+    out.days = o.days.filter(function(n){ return typeof n === "number" && n >= 0 && n <= 6; });
+  if (ZAN_LEN.indexOf(o.len) >= 0) out.len = o.len;
+  if (ZAN_MIX.indexOf(o.mix) >= 0) out.mix = o.mix;
+  if (typeof o.goal === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.goal)) out.goal = o.goal;
+  if (Array.isArray(o.breaks))
+    out.breaks = o.breaks.filter(function(b){
+      return Array.isArray(b) && b.length === 2 &&
+             /^\d{4}-\d{2}-\d{2}$/.test(b[0]) && /^\d{4}-\d{2}-\d{2}$/.test(b[1]);
+    }).slice(0, 12);
+  out.report = o.report !== false;
+  out.setAt = typeof o.setAt === "number" ? o.setAt : 0;
+  return out;
+}
+function frame(){ S.frame = frameShape(S.frame); return S.frame; }
+function frameOn(){ return frame().days.length > 0; }
+function frameSet(patch){
+  var f = frameShape(Object.assign({}, frame(), patch || {}));
+  f.setAt = Date.now();
+  S.frame = f;
+  save();
+  return f;
+}
+/* день внутри запланированных каникул: пропуск, о котором договорились.
+   В отчёте он не должен выглядеть как прогул — иначе отчёт начнёт обвинять
+   семью в том, что она сама и запланировала, и его перестанут читать. */
+function isBreakDay(key){
+  key = key || dayKey();
+  return frame().breaks.some(function(b){ return key >= b[0] && key <= b[1]; });
+}
+function frameStudyDay(key){
+  key = key || dayKey();
+  if (!frameOn() || isBreakDay(key)) return false;
+  return frame().days.indexOf(weekdayOf(key)) >= 0;
+}
+/* сколько уроков ставить в занятие. Замер по курсу: урок 5–8 минут, плюс
+   разминка и проверка в начале и в конце — поэтому 20 минут это два урока,
+   а не четыре. Обещать больше, чем влезает, нельзя: первое же занятие
+   опровергнет. */
+function zanSlots(len){ return len <= 20 ? 2 : (len <= 30 ? 3 : 4); }
+
+/* ⚠️ Гейт разумности. Родитель, поставивший «пройти курс за месяц», получит
+   занятие на полтора часа и брошенного ребёнка — а виноваты будем мы.
+   Считаем честно и вслух: сколько уроков осталось, сколько занятий до даты,
+   сколько минут выходит на занятие. Больше ZAN_SANE минут — не даём. */
+var ZAN_SANE = 60;
+var MIN_PER_LESSON = 7;      /* 5–8 минут по замеру, берём середину */
+var MIN_AROUND = 8;          /* разминка, повтор и проверка вокруг уроков */
+function lessonsLeft(){
+  var n = 0;
+  CURRICULUM.forEach(function(w){
+    worldReadyLessons(w).forEach(function(l){ if (!solved(l.id)) n++; });
+  });
+  return n;
+}
+/* сколько учебных дней между сегодня и датой, с учётом дней недели и каникул */
+function studyDaysUntil(goal, days){
+  if (!goal) return 0;
+  var cur = dayKey(), n = 0, guard = 0;
+  while (cur < goal && guard++ < 1200){
+    cur = shiftDay(cur, 1);
+    if (days.indexOf(weekdayOf(cur)) >= 0 && !isBreakDay(cur)) n++;
+  }
+  return n;
+}
+function paceCheck(goal, days, len){
+  var left = lessonsLeft();
+  var sessions = studyDaysUntil(goal, days || frame().days);
+  if (!goal || !sessions) return { ok:true, sessions:sessions, left:left, need:0 };
+  var perSession = Math.ceil(left / sessions);
+  var mins = perSession * MIN_PER_LESSON + MIN_AROUND;
+  return {
+    ok: mins <= ZAN_SANE, sessions: sessions, left: left,
+    per: perSession, mins: mins, len: len || frame().len,
+    /* сколько занятий в неделю понадобилось бы при выбранной длине */
+    fits: Math.max(1, Math.floor(((len || frame().len) - MIN_AROUND) / MIN_PER_LESSON))
+  };
+}
+
+/* ================= занятие =================
+   До сих пор уроки шли сплошным потоком: сто штук подряд, без начала и конца.
+   Из этого росли сразу три беды — ребёнок не видел, когда конец (а порог
+   входа создаёт неизвестность, а не трудность), родитель не мог планировать,
+   и у продукта не было единицы, о которой отчитываться: урок в шесть минут
+   мелок для отчёта, неделя — поздна.
+
+   Занятие эту единицу вводит. Разбор целиком: docs/zanyatie-i-vzroslyj.md § 2.
+
+   Пять правил, без которых механика навредит, и все пять держатся кодом:
+     1. урок не режется посередине — время лишь предлагает закончить;
+     2. занятие закрывается, даже если не получилось («сегодня было трудно»);
+     3. план детерминирован по дате — иначе на двух устройствах разные планы;
+     4. перевыполнение не наказывается и не поощряется: занятие засчитано;
+     5. пропуск не «сгорает» — за это отвечает щит стрика, а не занятие.
+
+   ⚠️ Это НЕ блиц на таймере (README, «Планы»): тот таймер стоит внутри задачи
+   и торопит думать, этот ограничивает сеанс и, наоборот, разрешает закончить.
+   Смешивать их в одном экране нельзя. */
+function zanAll(){ S.zan = S.zan || {}; return S.zan; }
+function zanKeyOf(key, n){ return (key || dayKey()) + "#" + n; }
+function zanOfDay(key){
+  key = key || dayKey();
+  var all = zanAll();
+  return Object.keys(all).filter(function(k){ return k.indexOf(key + "#") === 0; })
+    .sort().map(function(k){ return Object.assign({ key:k }, all[k]); });
+}
+/* открытое занятие сегодня, если оно есть */
+function zanOpen(){
+  var list = zanOfDay(dayKey());
+  for (var i = 0; i < list.length; i++) if (!list[i].end) return list[i];
+  return null;
+}
+function zanLast(){
+  var all = zanAll(), keys = Object.keys(all).sort();
+  for (var i = keys.length - 1; i >= 0; i--) if (all[keys[i]].end)
+    return Object.assign({ key:keys[i] }, all[keys[i]]);
+  return null;
+}
+/* разминка типа predict для проверки понимания в конце занятия: берём не ту,
+   что уже стоит задачей дня, и детерминированно по дате */
+function zanPredictPick(key){
+  var daily = dailyPick(key);
+  var pool = warmupsOpen().filter(function(w){
+    return w.type === "predict" && (!daily || w.id !== daily.id);
+  });
+  if (!pool.length) return null;
+  var s = String(key) + "p", h = 0;
+  for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
+/* План занятия. Детерминирован по дате и текущему прогрессу: на двух
+   устройствах в один день выходит одно и то же. */
+function zanPlanFor(key){
+  key = key || dayKey();
+  var f = frame(), slots = zanSlots(f.len), plan = [];
+  var warm = dailyPick(key);
+  if (warm) plan.push({ k:"warm", id:warm.id, title:warm.title });
+
+  var due = reviewDue();
+  var wantRepeat = f.mix === "repeat" ? Math.min(due.length, slots - 1)
+                 : f.mix === "new" ? 0
+                 : Math.min(due.length, 1);
+  var newCount = Math.max(0, slots - wantRepeat);
+
+  /* новые уроки: следующие непройденные по порядку курса */
+  var picked = [];
+  CURRICULUM.forEach(function(w){
+    if (picked.length >= newCount) return;
+    var ready = worldReadyLessons(w);
+    for (var i = 0; i < ready.length && picked.length < newCount; i++)
+      if (!solved(ready[i].id)) picked.push(ready[i]);
+  });
+  picked.forEach(function(l){ plan.push({ k:"lesson", id:l.id, title:l.title }); });
+
+  due.slice(0, wantRepeat).forEach(function(r){
+    plan.push({ k:"review", id:r.lesson.id, title:r.lesson.title });
+  });
+
+  var pred = zanPredictPick(key);
+  if (pred) plan.push({ k:"predict", id:pred.id, title:pred.title });
+  return plan;
+}
+function zanStart(){
+  var open = zanOpen();
+  if (open) return open;
+  var key = dayKey(), n = zanOfDay(key).length + 1;
+  var rec = { start: Date.now(), end: 0, len: frame().len, plan: zanPlanFor(key),
+              done: [], sec: 0, pause: 0, predOk: 0, predAll: 0 };
+  zanAll()[zanKeyOf(key, n)] = rec;
+  save();
+  return Object.assign({ key: zanKeyOf(key, n) }, rec);
+}
+/* десять секунд от общего счётчика: активные идут в работу, остальные в паузу */
+function zanTick(sec, active){
+  var open = zanOpen();
+  if (!open) return;
+  var rec = zanAll()[open.key];
+  if (!rec) return;
+  if (active) rec.sec += sec; else rec.pause += sec;
+}
+/* блок сделан. Зовётся из победы урока, разминки и повтора — то есть из уже
+   существующих мест, а не из нового обработчика: занятие не должно требовать
+   от ребёнка ходить по особому экрану. */
+function zanNote(kind, id, extra){
+  var open = zanOpen();
+  if (!open) return;
+  var rec = zanAll()[open.key];
+  if (!rec) return;
+  var mark = null;
+  rec.plan.forEach(function(b){
+    if (b.id !== id) return;
+    /* урок из плана мог быть отмечен и как «новый», и как «повтор» — засчитываем
+       тот блок, который ещё не закрыт */
+    if (rec.done.indexOf(b.k + ":" + b.id) < 0) mark = b.k + ":" + b.id;
+  });
+  if (!mark) return;
+  rec.done.push(mark);
+  /* проверка понимания считается по блоку плана, а не по слову вызывающего:
+     «предсказал верно» — это разминка predict, пройденная с первой попытки.
+     Со второй попытки предсказание уже подсмотрено движком, и засчитывать его
+     как понимание значило бы врать взрослому. */
+  if (mark.indexOf("predict:") === 0){
+    rec.predAll++;
+    if (extra && extra.ok) rec.predOk++;
+  }
+  save();
+  /* всё по плану сделано — занятие закрывается само */
+  if (rec.done.length >= rec.plan.length) zanFinish("plan");
+}
+function zanFinish(reason){
+  var open = zanOpen();
+  if (!open) return null;
+  var rec = zanAll()[open.key];
+  if (!rec || rec.end) return null;
+  rec.end = Date.now();
+  rec.why = reason || "hand";
+  save();
+  return Object.assign({ key: open.key }, rec);
+}
+function zanMins(rec){ return Math.round((rec.sec || 0) / 60); }
+function zanPauseMins(rec){ return Math.round((rec.pause || 0) / 60); }
+function zanTimeUp(rec){ return zanMins(rec) >= (rec.len || 30); }
+function zanDoneList(rec){
+  return (rec.done || []).map(function(x){ return x.split(":")[1]; });
+}
+
+/* ================= отчёт по занятию =================
+   Четыре строки, двадцать секунд чтения. Больше взрослый не прочитает, а
+   репетитор в мессенджере пишет одну («занимались, всё хорошо») — наше
+   преимущество в точности, а не в объёме.
+
+   ⚠️ Отчёт обязан иногда содержать плохие новости. Отчёт, в котором всегда
+   «молодец», через три недели становится рекламой самого себя и его
+   перестают читать. Подсказки и показанные решения поэтому НЕ прячем: строка
+   «взял две подсказки» — это то, из-за чего поверят остальным строкам.
+   И это же то, чего репетитор про себя не напишет: он оценивает собственную
+   работу, за которую получает деньги. */
+function zanReport(rec, st){
+  st = st || S;
+  var lg = st.log || {};
+  var ids = zanDoneList(rec);
+  var lessons = ids.filter(function(id){ return CURRICULUM.byId(id); });
+  var mins = zanMins(rec), pause = zanPauseMins(rec);
+
+  /* 1. что было */
+  var was = "Занятие " + mins + " " + plural(mins, "минута", "минуты", "минут");
+  if (pause >= 2) was += " работы и " + pause + " " + plural(pause, "минута", "минуты", "минут") + " перерыва";
+  was += ", " + lessons.length + " " + plural(lessons.length, "урок", "урока", "уроков");
+  if (rec.done.length < rec.plan.length) was += " — занятие закончили раньше плана";
+
+  /* 2. за что похвалить: ищем конкретное, а не общее */
+  var praise = null;
+  lessons.forEach(function(id){
+    if (praise) return;
+    var g = lg[id] || {};
+    var l = CURRICULUM.byId(id);
+    if (!l) return;
+    if ((g.attempts || 0) >= 3 && !g.shown && !(g.hints || 0))
+      praise = "не сдался на уроке «" + l.title + "»: " + g.attempts + " " +
+               plural(g.attempts, "попытка", "попытки", "попыток") + " и ни одной подсказки";
+    else if ((g.stars || 0) === 3 && (g.attempts || 0) === 1)
+      praise = "прошёл «" + l.title + "» с первой попытки, без подсказок";
+  });
+  if (!praise && rec.predAll && rec.predOk === rec.predAll)
+    praise = "в конце занятия точно предсказал, что напечатает программа";
+  if (!praise && lessons.length) praise = "дошёл до конца занятия и закрыл " +
+    lessons.length + " " + plural(lessons.length, "урок", "урока", "уроков");
+  if (!praise) praise = "сел заниматься — в этот раз дальше не пошло, и это тоже бывает";
+
+  /* 3. понял или прошёл. Предсказание вывода до запуска — единственная
+     проверка, которую нельзя обмануть: подделать понимание нечем. */
+  var got;
+  var hadPredict = (rec.plan || []).some(function(b){ return b.k === "predict"; });
+  if (rec.predAll)
+    got = "Проверка понимания: предсказал вывод верно " + rec.predOk + " из " + rec.predAll + ".";
+  else if (hadPredict)
+    /* проверка стояла в плане, но занятие закончили раньше. Написать «проверки
+       не было» значило бы соврать взрослому в удобную сторону. */
+    got = "До проверки понимания сегодня не дошли — занятие закончилось раньше.";
+  else
+    got = "Проверки понимания в этом занятии не было — она появится, когда откроются разминки «угадай вывод».";
+  var hints = 0, shown = 0;
+  lessons.forEach(function(id){
+    var g = lg[id] || {};
+    hints += g.hints || 0;
+    if (g.shown) shown++;
+  });
+  if (hints || shown){
+    got += " Подсказок взято: " + hints + ".";
+    if (shown) got += " Решение показывалось: " + shown + " " + plural(shown, "раз", "раза", "раз") + ".";
+  }
+
+  /* 4. что спросить — вопрос за ужином, он уже написан и берётся из шпаргалки */
+  var pick = dinnerPickFrom(st, dayKey());
+  var ask = pick
+    ? "Спроси: «что делает " + pick.it.sig + "?» — и попроси показать на примере. " +
+      "Верный ответ: " + pick.it.what + "."
+    : "Вопрос появится, когда будет пройден первый урок.";
+
+  return { was: was, praise: praise, got: got, ask: ask,
+           mins: mins, pause: pause, lessons: lessons.length,
+           full: rec.done.length >= rec.plan.length };
+}
+
+/* ================= задание от взрослого =================
+   Три жанра, и все три судимы (docs/zanyatie-i-vzroslyj.md § 10):
+     task   задача с числами взрослого — судит движок (уезжает как #task=)
+     lesson назначение: «пройди следующий урок» / «повтори трудное» — судит движок
+     ask    вопрос на объяснение — судит ВЗРОСЛЫЙ, и это правильно: понимание
+            объяснения он оценить может, код нет
+   Свободной задачи текстом здесь нет намеренно: у неё нет эталона, а значит
+   нет судьи — и движок исчезает ровно там, где взрослый на него смотрит.
+
+   ⚠️ Задание взрослого НЕ даёт звёзд и не входит в сотню уроков — иначе
+   взрослый сможет ломать прогресс из лучших побуждений. И не чаще одного в
+   неделю: иначе продукт превращается в «мама ещё задала», то есть в наказание. */
+var PTASK_WEEK_LIMIT = 1;
+function ptaskAll(){ S.ptasks = S.ptasks || {}; return S.ptasks; }
+function assignPack(o){ return b64urlEnc(JSON.stringify(o)); }
+function assignUnpack(s){
+  var o = null;
+  try { o = JSON.parse(b64urlDec(s)); } catch(e){ return null; }
+  if (!o || o.v !== 1) return null;
+  if (["lesson","review","ask"].indexOf(o.t) < 0) return null;
+  if (typeof o.text !== "string" || o.text.length > 400) return null;
+  if (o.ref !== null && o.ref !== undefined && typeof o.ref !== "string") return null;
+  return { t:o.t, ref:o.ref || "", text:o.text, from: typeof o.f === "string" ? o.f.slice(0, 16) : "" };
+}
+function assignLink(o){
+  var base = "";
+  try { base = location.origin + location.pathname; } catch(e){}
+  return base + "#assign=" + assignPack({ v:1, t:o.t, ref:o.ref || "", text:o.text, f:o.from || "" });
+}
+function ptaskKey(o){
+  var src = o.t + "\n" + (o.ref || "") + "\n" + o.text;
+  var h = 5381;
+  for (var i = 0; i < src.length; i++) h = ((h * 33) ^ src.charCodeAt(i)) >>> 0;
+  return "p" + h.toString(36);
+}
+function ptaskAdd(o){
+  var k = ptaskKey(o), d = ptaskAll();
+  if (!d[k]) d[k] = { t:o.t, ref:o.ref || "", text:o.text, at: Date.now(), done:0 };
+  save();
+  return k;
+}
+function ptaskList(){
+  var d = ptaskAll();
+  return Object.keys(d).map(function(k){ return Object.assign({ key:k }, d[k]); })
+    .sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function ptaskPending(){ return ptaskList().filter(function(x){ return !x.done; }); }
+function ptaskMarkDone(key){
+  var d = ptaskAll();
+  if (d[key]){ d[key].done = Date.now(); save(); }
+}
+/* сколько заданий взрослый выдал за последние семь дней */
+function ptaskWeekCount(){
+  var since = Date.now() - 7 * 864e5;
+  return ptaskList().filter(function(x){ return (x.at || 0) >= since; }).length;
+}
+
 /* ================= регистрация по имени =================
    Настоящих аккаунтов с паролями тут нет намеренно (сайт статический и
    публичный). «Регистрация» — это дружелюбный вход: ребёнок вводит имя, сайт
@@ -13451,8 +14045,9 @@ function doLogout(){
 
 /* ===== журнал занятий: попытки, подсказки, время по каждому уроку ===== */
 function logOf(id){
-  if (!S.log[id]) S.log[id] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0,
+  if (!S.log[id]) S.log[id] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0, pauseMs:0,
                                 first:null, last:null, solvedAt:null, stars:0, bestSteps:0 };
+  if (typeof S.log[id].pauseMs !== "number") S.log[id].pauseMs = 0;
   return S.log[id];
 }
 function touchLog(id){
@@ -13460,14 +14055,95 @@ function touchLog(id){
   if (!g.first) g.first = now;
   g.last = now; save();
 }
-var timeTick = null;
-function startTimer(id){
-  stopTimer();
-  timeTick = setInterval(function(){
-    var g = logOf(id); g.timeMs += 10000; g.last = Date.now(); save();
-  }, 10000);
+
+/* ================= честное время =================
+   Раньше здесь стоял простой интервал: каждые 10 секунд прибавить 10 секунд,
+   пока открыт экран урока. Ребёнок, ушедший ужинать с открытой вкладкой,
+   «занимался» всё это время. Пока цифра жила в панели наставника, это была
+   мелкая неточность. С того дня, как время уезжает взрослому в отчёт, она
+   становится ложью, которая обесценивает весь отчёт целиком — поэтому счёт
+   переписан (разбор: docs/zanyatie-i-vzroslyj.md § 8.2).
+
+   Тик по-прежнему десятисекундный: от этого зависит формат хранения и
+   слияние двух устройств. Изменилось, ЧТО считается активной секундой:
+     — вкладка видима (document.visibilityState) и окно в фокусе;
+     — последнее касание было не позже IDLE_MS назад.
+   Всё остальное время считается ПАУЗОЙ и хранится отдельно. Пауза не
+   преступление и не прячется: «28 минут работы, 12 минут перерыв» — это
+   нормальное занятие, а не провал.
+
+   Порог в шесть минут выбран по замеру самого курса: урок целиком занимает
+   5–8 минут, значит шесть минут без единого касания — это уже не чтение
+   карточки, а отсутствие. */
+var IDLE_MS = 6 * 60 * 1000;
+var actAt = Date.now();          /* когда последний раз касались страницы */
+var winFocused = true;
+var curLessonId = null;          /* какой урок открыт прямо сейчас */
+var actTick = null;
+
+function actMark(){ actAt = Date.now(); }
+/* Страница считается работающей, а не открытой: видима, в фокусе и её
+   недавно касались. jsdom не умеет фокус — там считаем, что окно в фокусе. */
+function pageActive(){
+  try { if (document.visibilityState === "hidden") return false; } catch(e){}
+  if (!winFocused) return false;
+  return (Date.now() - actAt) < IDLE_MS;
 }
-function stopTimer(){ if (timeTick){ clearInterval(timeTick); timeTick = null; } }
+/* карта активности: на день массив из 24 ячеек, в ячейке СЕКУНДЫ работы */
+function hoursRow(key){
+  S.hours = S.hours || {};
+  var row = S.hours[key];
+  if (!Array.isArray(row) || row.length !== 24){
+    row = [];
+    for (var i = 0; i < 24; i++) row.push(0);
+    S.hours[key] = row;
+  }
+  return row;
+}
+function hoursAdd(sec, when){
+  var d = when || new Date();
+  var row = hoursRow(dayKey(d));
+  row[d.getHours()] += sec;
+  pruneHours();
+}
+/* взрослому нужны последние недели, а не два года */
+function pruneHours(){
+  var keys = Object.keys(S.hours || {});
+  if (keys.length <= 200) return;
+  keys.sort();
+  keys.slice(0, keys.length - 200).forEach(function(k){ delete S.hours[k]; });
+}
+/* один тик: раздать десять секунд тем, кто их заслужил */
+function tickOnce(){
+  var live = pageActive();
+  var g = curLessonId ? logOf(curLessonId) : null;
+  if (live){
+    if (g){ g.timeMs += 10000; g.last = Date.now(); }
+    hoursAdd(10);
+    zanTick(10, true);
+  } else {
+    if (g) g.pauseMs += 10000;
+    zanTick(10, false);
+  }
+  if (live || g) save();
+}
+function actStart(){
+  if (actTick) return;
+  actTick = setInterval(tickOnce, 10000);
+  try {
+    ["keydown","pointerdown","touchstart","wheel","mousemove","scroll"].forEach(function(ev){
+      document.addEventListener(ev, actMark, { passive:true });
+    });
+    document.addEventListener("visibilitychange", actMark);
+    window.addEventListener("focus", function(){ winFocused = true; actMark(); });
+    window.addEventListener("blur", function(){ winFocused = false; });
+  } catch(e){}
+}
+/* startTimer/stopTimer остались под своими именами: их зовут заход на урок и
+   enterScreen. Теперь они не заводят свой интервал, а лишь говорят общему
+   счётчику, какой урок открыт. */
+function startTimer(id){ curLessonId = id; actMark(); }
+function stopTimer(){ curLessonId = null; }
 /* поставить или снять звёзды вручную, честно пересчитав XP */
 function setStars(id, k){
   var prev = S.stars[id] === undefined ? 0 : S.stars[id];
@@ -13753,6 +14429,42 @@ function mergeProgress(a, b){
      и оба спасённых дня остаются закрытыми — так честнее к ребёнку. */
   out.shields = mergeSet(a.shields, b.shields);
 
+  /* ===== карта активности по часам =====
+     На день — массив из 24 ячеек, в ячейке СЕКУНДЫ работы в этот час.
+     Слияние — МАКСИМУМ по каждой ячейке, а не сумма: после первого же обмена
+     обе копии одинаковы, и сложение удваивало бы час при каждом следующем
+     (та же причина, что у попыток и времени в журнале). */
+  out.hours = {};
+  Object.keys(mergeSet(a.hours, b.hours)).forEach(function(k){
+    var x = (a.hours || {})[k] || [], y = (b.hours || {})[k] || [], row = [];
+    for (var h = 0; h < 24; h++) row.push(maxN(x[h], y[h]));
+    out.hours[k] = row;
+  });
+
+  /* ===== занятия =====
+     Ключ — «ГГГГ-ММ-ДД#номер», значение — одна запись сеанса. Объединяем по
+     ключу, а при совпадении берём ту, где сделано больше: занятие, доведённое
+     до конца на одном устройстве, не должно откатываться незаконченной копией
+     с другого. */
+  out.zan = {};
+  Object.keys(mergeSet(a.zan, b.zan)).forEach(function(k){
+    var x = (a.zan || {})[k], y = (b.zan || {})[k];
+    if (!x || !y){ out.zan[k] = x || y; return; }
+    var xw = (x.done || []).length + (x.end ? 100 : 0);
+    var yw = (y.done || []).length + (y.end ? 100 : 0);
+    out.zan[k] = yw > xw ? y : x;
+  });
+
+  /* задания от взрослого: объединяем, «сделано» побеждает «не сделано» */
+  out.ptasks = {};
+  Object.keys(mergeSet(a.ptasks, b.ptasks)).forEach(function(k){
+    var x = (a.ptasks || {})[k] || {}, y = (b.ptasks || {})[k] || {};
+    var base = (y.at || 0) > (x.at || 0) ? y : x;
+    out.ptasks[k] = { t: base.t || x.t || y.t, ref: base.ref || x.ref || y.ref,
+                      text: base.text || x.text || y.text, at: maxN(x.at, y.at),
+                      done: maxN(x.done, y.done) };
+  });
+
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
   var older = fresher === b ? a : b;
@@ -13762,8 +14474,14 @@ function mergeProgress(a, b){
      иначе снятый на одном устройстве день возвращался бы с другого */
   out.schedule = fresher.schedule || older.schedule || { days:[] };
 
-  /* имя ученика едет вместе с прогрессом (это подпись аккаунта, не результат) —
-     берём из более свежего сохранения, но не теряем, если в свежем оно пустое */
+  /* рамка занятий — тоже настройка, и ставит её взрослый. Та же логика, что у
+     расписания: свежее сохранение побеждает, объединение вернуло бы снятый день. */
+  out.frame = frameShape(fresher.frame && fresher.frame.setAt ? fresher.frame
+                                                              : (older.frame || fresher.frame));
+
+  /* имя ученика на сервер НЕ уходит (см. cloudSnapshot), но слияние всё равно
+     обязано его сохранить: при обмене с сервером одна из сторон приходит без
+     имени, и оно не должно затереть местное. Берём непустое из двух. */
   out.name = fresher.name || older.name || "";
 
   /* свои версии игр: по каждой игре это КОД, а код сложить нельзя — как
@@ -13864,6 +14582,9 @@ function mergeProgress(a, b){
       shown:    maxN(x.shown, y.shown),
       runs:     maxN(x.runs, y.runs),
       timeMs:   maxN(x.timeMs, y.timeMs),
+      /* время пауз — рядом со временем работы и по тому же правилу (максимум).
+         Пауза не результат, но и не преступление: она должна быть видна. */
+      pauseMs:  maxN(x.pauseMs, y.pauseMs),
       first:    (x.first && y.first) ? Math.min(x.first, y.first) : (x.first || y.first || null),
       last:     maxN(x.last, y.last) || null,
       solvedAt: maxN(x.solvedAt, y.solvedAt) || null,
@@ -13880,15 +14601,34 @@ function mergeProgress(a, b){
   return out;
 }
 
-/* то, что уходит на сервер: всё, кроме настроек устройства */
+/* то, что уходит на сервер: всё, кроме настроек устройства и ИМЕНИ РЕБЁНКА.
+   Имя не отправляется намеренно. Пока на сервере лежат только код входа и
+   результаты, ребёнок в нашей базе неопознаваем — и «мы не храним о ребёнке
+   ничего» остаётся правдой. Стоит положить туда имя рядом с адресом взрослого
+   (а он появится вместе с кабинетом и оплатой) — и появляется «ребёнок клиента
+   такого-то», то есть категория «несовершеннолетние» со всеми последствиями.
+   Разбор: docs/zanyatie-i-vzroslyj.md §§ 13–14.
+   Имя при этом не теряется: оно живёт в localStorage этого браузера, а при
+   слиянии mergeProgress берёт непустое из двух — с сервера приходит пустое,
+   поэтому местное остаётся. */
+var CLOUD_SKIP = ["admin", "name"];
+/* Снимок для ОТПРАВКИ: без настроек устройства и без имени ребёнка. */
 function cloudSnapshot(){
+  var o = {};
+  Object.keys(S).forEach(function(k){ if (CLOUD_SKIP.indexOf(k) < 0) o[k] = S[k]; });
+  return JSON.parse(JSON.stringify(o));
+}
+/* Снимок для СЛИЯНИЯ у себя: имя остаётся. Разделение появилось вместе с
+   решением не отправлять имя: слияние без него затирало бы местное имя пустым
+   при каждом обмене с сервером (обе стороны безымянны — значит и результат). */
+function localSnapshot(){
   var o = {};
   Object.keys(S).forEach(function(k){ if (k !== "admin") o[k] = S[k]; });
   return JSON.parse(JSON.stringify(o));
 }
 
 function applyProgress(data){
-  var merged = mergeProgress(cloudSnapshot(), data);
+  var merged = mergeProgress(localSnapshot(), data);
   Object.keys(merged).forEach(function(k){ S[k] = merged[k]; });
   saveLocal();
   awardStreak();     /* серия могла дорасти на другом устройстве */
@@ -13905,9 +14645,9 @@ function cloudPull(){
   return Cloud.load().then(function(res){
     cloudState.busy = false; cloudState.lastError = null; cloudState.lastSync = Date.now();
     if (!res.found || !res.data) return false;
-    var before = JSON.stringify(cloudSnapshot());
+    var before = JSON.stringify(localSnapshot());
     applyProgress(res.data);
-    return JSON.stringify(cloudSnapshot()) !== before;
+    return JSON.stringify(localSnapshot()) !== before;
   }, function(err){
     cloudState.busy = false; cloudState.lastError = err.message || String(err);
     throw err;
@@ -16784,6 +17524,7 @@ function winLesson(l, body){
   lg.last = Date.now();
   reviewAfterLesson(l.id);   /* трудный урок встаёт в очередь на повтор */
   markActiveToday();   /* пройденный урок держит дневной стрик живым */
+  zanNote("lesson", l.id);   /* если идёт занятие — шаг плана закрыт */
   save(); refreshTop();
 
   var ready = worldReadyLessons(w), pos = ready.indexOf(l);
@@ -17521,6 +18262,47 @@ function shieldBoxHTML(){
   '</div>';
 }
 
+/* карточка занятия на экране «Сегодня»: главная кнопка дня */
+function zanCardHTML(){
+  var open = zanOpen(), f = frame();
+  var doneToday = zanOfDay(dayKey()).filter(function(z){ return z.end; }).length;
+  var restDay = frameOn() && !frameStudyDay(dayKey());
+  if (open){
+    var pct = Math.min(100, Math.round((open.done.length / Math.max(1, open.plan.length)) * 100));
+    return '<div class="card zancard on"><h3>⏱ Занятие идёт</h3>' +
+      '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
+      '<p>Сделано ' + open.done.length + ' из ' + open.plan.length + '. Работы: ' +
+      zanMins(open) + ' ' + plural(zanMins(open), "минута", "минуты", "минут") + '.</p>' +
+      '<div class="winrow"><button class="bigbtn" id="zancont">Продолжить занятие</button></div></div>';
+  }
+  if (doneToday){
+    return '<div class="card zancard done"><h3>🏁 Занятие сегодня пройдено</h3>' +
+      '<p>' + (doneToday > 1 ? "Занятий сегодня: " + doneToday + "." : "Одно занятие закрыто.") +
+      ' Можно заниматься дальше просто так — это ничего не меняет и ни на что не влияет.</p>' +
+      '<div class="winrow"><button class="bigbtn ghost" id="zanmore">Открыть ещё занятие</button></div></div>';
+  }
+  return '<div class="card zancard"><h3>⏱ Занятие на ' + f.len + ' минут</h3>' +
+    '<p>' + (restDay
+      ? "Сегодня по расписанию день отдыха — но если хочется, занятие можно провести."
+      : "Разминка, уроки и проверка в конце. Ты заранее знаешь, сколько это займёт и когда конец.") + '</p>' +
+    '<div class="winrow"><button class="bigbtn" id="zanstart">Начать занятие</button></div></div>';
+}
+/* задания от взрослого: показываем только невыполненные */
+function ptaskCardHTML(){
+  var list = ptaskPending();
+  if (!list.length) return "";
+  return '<div class="card ptcard"><h3>✉️ Задание от взрослого</h3>' +
+    list.slice(0, 3).map(function(x){
+      var l = x.ref ? CURRICULUM.byId(x.ref) : null;
+      return '<div class="ptrow"><span>' + esc(x.text) + '</span>' +
+        (x.t === "ask"
+          ? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
+          : '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + esc(x.ref) + '">' +
+            (l ? "Открыть" : "Открыть") + '</button>') + '</div>';
+    }).join("") +
+    '<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
+}
+
 function screenToday(){
   enterScreen(undefined, "today");
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -17583,26 +18365,39 @@ function screenToday(){
       banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
   }
 
-  /* редактор дней занятий: понедельник … воскресенье */
-  var chips = WD_ORDER.map(function(n){
-    var sel = scheduleDays().indexOf(n) >= 0;
-    return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + WD_SHORT[n] + '</button>';
-  }).join("");
-  var schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
-    '<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
-    'Если не выбрано ничего — напоминаний нет.</p>' +
-    '<div class="wdrow">' + chips + '</div>' +
-    (hasSchedule() ? '<p class="dim">Учебные дни: ' +
-      scheduleDays().slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
-        .map(function(n){ return WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
-    '</div>';
+  /* редактор дней занятий: понедельник … воскресенье.
+     Если рамку задал взрослый — показываем её и НЕ даём двигать: рамка это
+     уговор двоих, а не настройка ребёнка. Своё расписание при этом никуда не
+     девается и вернётся, если рамку снимут. */
+  var schedBox;
+  if (frameOn()){
+    var fd = frame().days.slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
+      .map(function(n){ return WD_SHORT[n]; }).join(", ");
+    schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
+      '<p>Занятия по ' + fd + ', по ' + frame().len + ' минут. Это назначил взрослый.</p>' +
+      (isBreakDay(dayKey()) ? '<p class="dim">Сегодня каникулы — пропуск запланирован, это не прогул.</p>' : '') +
+      '</div>';
+  } else {
+    var chips = WD_ORDER.map(function(n){
+      var sel = scheduleDays().indexOf(n) >= 0;
+      return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + WD_SHORT[n] + '</button>';
+    }).join("");
+    schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
+      '<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
+      'Если не выбрано ничего — напоминаний нет.</p>' +
+      '<div class="wdrow">' + chips + '</div>' +
+      (hasSchedule() ? '<p class="dim">Учебные дни: ' +
+        scheduleDays().slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
+          .map(function(n){ return WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
+      '</div>';
+  }
 
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">заходи каждый день</div><h1>🔥 Сегодня</h1></div>' +
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    installTipHTML() + saved + banner + hero + taskCard + schedBox +
+    installTipHTML() + saved + banner + zanCardHTML() + ptaskCardHTML() + hero + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   wireInstallTip(app);
@@ -17612,6 +18407,22 @@ function screenToday(){
   if (dwarm) dwarm.onclick = screenWarmups;
   app.querySelectorAll("[data-wd]").forEach(function(b){
     b.onclick = function(){ toggleStudyDay(+b.getAttribute("data-wd")); screenToday(); };
+  });
+  var zs = document.getElementById("zanstart");
+  if (zs) zs.onclick = function(){ zanStart(); screenZan(); };
+  var zc = document.getElementById("zancont");
+  if (zc) zc.onclick = screenZan;
+  var zm = document.getElementById("zanmore");
+  if (zm) zm.onclick = function(){ zanStart(); screenZan(); };
+  app.querySelectorAll("[data-ptdone]").forEach(function(b){
+    b.onclick = function(){ ptaskMarkDone(b.getAttribute("data-ptdone")); screenToday(); };
+  });
+  app.querySelectorAll("[data-ptopen]").forEach(function(b){
+    b.onclick = function(){
+      ptaskMarkDone(b.getAttribute("data-ptopen"));
+      var ref = b.getAttribute("data-ptref");
+      if (ref) openLesson(ref); else screenWorlds();
+    };
   });
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
@@ -17880,6 +18691,9 @@ function winWarmup(w){
   var isDaily = session && session.daily;
   if (isDaily){ S.daily = S.daily || {}; S.daily[dayKey()] = 1; }
   markActiveToday();                 /* разминка держит дневной стрик живым */
+  /* разминка могла быть шагом занятия — и разминкой в начале, и проверкой
+     понимания в конце. Какой именно, знает план, а не это место. */
+  zanNote("warm", w.id, { ok: session.attempts === 1 && !session.hints });
   save();
   var streak = streakCurrent();
   var ws = warmupsList(), pos = ws.indexOf(w);
@@ -19409,6 +20223,472 @@ function screenFolio(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+
+/* ================= экран занятия =================
+   Ребёнок видит ПОЛОСУ занятия, а не обратный отсчёт: часы, отсчитывающие
+   время до конца, торопят, а весь продукт построен на том, что за медленность
+   не наказывают. Время здесь ничего не обрывает — оно только разрешает
+   закончить. */
+function zanBlockLabel(b){
+  if (b.k === "warm") return "Разминка";
+  if (b.k === "lesson") return "Урок";
+  if (b.k === "review") return "Повторение";
+  return "Проверка понимания";
+}
+function zanBlockEmoji(b){
+  return b.k === "warm" ? "🧩" : b.k === "lesson" ? "📘" : b.k === "review" ? "🔁" : "🔮";
+}
+function zanOpenBlock(b){
+  if (b.k === "warm" || b.k === "predict") openWarmup(b.id, {});
+  else openLesson(b.id);
+}
+function screenZan(){
+  enterScreen(undefined, "zan");
+  var rec = zanOpen();
+  var planned = frameOn();
+
+  if (!rec){
+    var plan = zanPlanFor(dayKey());
+    var f = frame();
+    var listHTML = plan.length
+      ? '<ol class="zanplan">' + plan.map(function(b){
+          return '<li><span class="zi">' + zanBlockEmoji(b) + '</span>' +
+            '<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) + '</li>';
+        }).join("") + '</ol>'
+      : '<p class="dim">План пока пустой: не открыто ни одного урока. Пройди первый урок Мира 1 — и занятие соберётся само.</p>';
+    app.innerHTML =
+      '<div class="lvlhead"><div><div class="idx">' + (planned ? "занятие по расписанию" : "занятие") + '</div>' +
+        '<h1>⏱ Занятие на ' + f.len + ' минут</h1></div>' +
+        '<div class="right"><span class="tag">' + plan.length + ' ' + plural(plan.length, "шаг", "шага", "шагов") + '</span></div></div>' +
+      '<p class="lede">Занятие — это не «сколько успеешь», а понятный кусок: вот столько минут, вот эти шаги, и всё. ' +
+      'Урок посередине не обрывается: время только разрешает закончить, а не подгоняет.</p>' +
+      '<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML + '</div>' +
+      '<div class="winrow"><button class="bigbtn" id="zgo"' + (plan.length ? "" : " disabled") + '>Начать занятие</button>' +
+      '<button class="bigbtn ghost" id="zback">← На «Сегодня»</button></div>';
+    var zg = document.getElementById("zgo");
+    if (zg && plan.length) zg.onclick = function(){ zanStart(); screenZan(); };
+    document.getElementById("zback").onclick = screenToday;
+    refreshTop();
+    return;
+  }
+
+  var doneSet = {};
+  (rec.done || []).forEach(function(x){ doneSet[x] = 1; });
+  var next = null;
+  rec.plan.forEach(function(b){ if (!next && !doneSet[b.k + ":" + b.id]) next = b; });
+  var mins = zanMins(rec), pause = zanPauseMins(rec);
+  var pct = Math.min(100, Math.round((rec.done.length / Math.max(1, rec.plan.length)) * 100));
+
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
+      '<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
+      '<div class="right"><span class="tag">' + rec.done.length + ' из ' + rec.plan.length + '</span></div></div>' +
+    '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
+    '<p class="zanmeta">Работы: <b>' + mins + ' ' + plural(mins, "минута", "минуты", "минут") + '</b>' +
+      (pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') +
+      (zanTimeUp(rec) ? ' · <b>время вышло — можно заканчивать</b>' : '') + '</p>' +
+    '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
+      rec.plan.map(function(b){
+        var done = !!doneSet[b.k + ":" + b.id];
+        var cur = !done && next && next.id === b.id && next.k === b.k;
+        return '<li class="' + (done ? "done" : (cur ? "cur" : "")) + '">' +
+          '<span class="zi">' + (done ? "✓" : zanBlockEmoji(b)) + '</span>' +
+          '<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) +
+          (cur ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + esc(b.id) + '">Открыть</button>' : '') +
+        '</li>';
+      }).join("") + '</ol></div>' +
+    '<div class="winrow">' +
+      (next ? '<button class="bigbtn" id="zgo2">Продолжить занятие</button>' : '') +
+      '<button class="bigbtn ghost" id="zend">Закончить занятие</button></div>' +
+    '<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
+    'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
+
+  app.querySelectorAll(".zopen").forEach(function(b){
+    b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
+  });
+  var zg2 = document.getElementById("zgo2");
+  if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
+  document.getElementById("zend").onclick = function(){
+    var fin = zanFinish("hand");
+    screenZanDone(fin || rec);
+  };
+  refreshTop();
+}
+/* Итог занятия. Показывается и когда всё сделано, и когда закончили руками —
+   разница только в словах. Занятие, брошенное на первом уроке, тоже
+   закрывается: иначе ребёнок, у которого не пошло, остаётся без финала, а
+   взрослый — без отчёта ровно в тот день, когда отчёт нужнее всего. */
+function screenZanDone(rec){
+  enterScreen(undefined, "zan");
+  var r = zanReport(rec, S);
+  markActiveToday();
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">занятие закрыто</div>' +
+      '<h1>' + (r.full ? "🏁 Занятие пройдено" : "🏁 Занятие закончено") + '</h1></div></div>' +
+    '<div class="card zandone">' +
+      '<p class="zanwas"><b>' + esc(r.was) + '.</b></p>' +
+      (r.full ? '<p>Весь план сделан.</p>'
+              : '<p>План сделан не весь — и это нормально: занятие засчитано, потому что ты сел и работал.</p>') +
+      '<p class="dim">' + esc(r.got) + '</p>' +
+    '</div>' +
+    '<div class="card"><h3>Что увидит взрослый</h3>' +
+      '<p class="dim">Ровно эти строки — ничего сверх них мы никому не показываем.</p>' +
+      '<ul class="zanrep"><li>' + esc(r.was) + '</li><li>Похвалить: ' + esc(r.praise) + '</li>' +
+      '<li>' + esc(r.got) + '</li><li>' + esc(r.ask) + '</li></ul></div>' +
+    '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
+      '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
+  document.getElementById("ztoday").onclick = screenToday;
+  document.getElementById("zmap").onclick = screenWorlds;
+  sfx("win");
+  refreshTop();
+}
+
+/* ================= карта активности по дням и часам =================
+   Отвечает не на «сколько», а на «КОГДА» — и это ровно то, чего взрослый не
+   видит. Строка «занимался в 23:40» говорит ему больше любых процентов.
+
+   ⚠️ Это карта ритма, а не табель. Никаких норм, красных зон и «мало
+   занимался»: вывод делает взрослый, а мы не имеем права его выносить.
+   Поэтому у клеток нет «плохих» цветов, а у карты нет оценки. */
+var HEAT_DAYS = 14;
+function heatLevel(sec){
+  if (!sec) return 0;
+  if (sec < 120) return 1;
+  if (sec < 300) return 2;
+  if (sec < 900) return 3;
+  return 4;
+}
+function heatHTML(st){
+  var hours = (st && st.hours) || {};
+  var today = dayKey(), rows = [], any = false;
+  for (var i = HEAT_DAYS - 1; i >= 0; i--){
+    var key = shiftDay(today, -i), row = hours[key] || [];
+    var cells = "";
+    for (var h = 0; h < 24; h++){
+      var sec = row[h] || 0;
+      if (sec) any = true;
+      cells += '<i class="hl' + heatLevel(sec) + '" title="' + key + ", " + h + ':00 — ' +
+        Math.round(sec / 60) + ' мин"></i>';
+    }
+    var d = new Date(key + "T12:00:00");
+    var names = ["вс","пн","вт","ср","чт","пт","сб"];
+    rows.push('<div class="heatrow"><span class="hd">' + names[d.getDay()] + " " + d.getDate() + '</span>' +
+      '<div class="hcells">' + cells + '</div></div>');
+  }
+  var scale = '<div class="heatscale"><span>меньше</span>' +
+    '<i class="hl0"></i><i class="hl1"></i><i class="hl2"></i><i class="hl3"></i><i class="hl4"></i>' +
+    '<span>больше</span></div>';
+  return '<div class="card"><h3>🗓 Когда он занимался</h3>' +
+    (any ? '' : '<p class="dim">Пока пусто: карта заполнится после первых занятий.</p>') +
+    '<div class="heat"><div class="heathead"><span class="hd"></span>' +
+      '<div class="hcells"><b>0</b><b>6</b><b>12</b><b>18</b></div></div>' +
+      rows.join("") + '</div>' + scale +
+    '<p class="dim">Каждая клетка — час суток за последние две недели. ' +
+    'Считаются только активные минуты: если вкладка была открыта, а ребёнка не было, ' +
+    'время не идёт. Это карта ритма, а не оценка.</p></div>';
+}
+
+/* ================= кабинет взрослого =================
+   Пока сайта и сервера нет, кабинет живёт на том же устройстве и открывается
+   тем же кодом, что и панель наставника. Это честная заглушка, а не
+   архитектура: когда появятся домен и почта, кабинет переедет на отдельный
+   поддомен со своим входом — граница между детским контуром (без ПДн) и
+   взрослым (с адресом) должна проходить по домену.
+   Разбор: docs/zanyatie-i-vzroslyj.md §§ 12–14. */
+function screenAdult(){
+  curPlace = "adult";
+  stopTimer(); vizStopPlay();
+  if (!adminUnlocked()) return adminGate();
+  var f = frame();
+  var last = zanLast();
+  var pace = paceCheck(f.goal, f.days, f.len);
+
+  var h = '<div class="lvlhead"><div><div class="idx">для взрослого</div>' +
+    '<h1>👨‍👩‍👦 Кабинет</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
+    '<p class="lede">Здесь взрослый ставит рамку занятий, видит, как шла работа, и задаёт ребёнку задание. ' +
+    'Десять минут в неделю — и вы знаете о занятиях больше, чем даёт любой отчёт репетитора.</p>';
+
+  /* ---------- отчёт по последнему занятию ---------- */
+  if (last){
+    var r = zanReport(last, S);
+    h += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
+      '<p class="dim">' + fmtWhen(last.end) + '</p>' +
+      '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
+      '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
+      '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
+      '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
+  } else {
+    h += '<div class="card"><h3>📨 Последнее занятие</h3>' +
+      '<p class="dim">Занятий ещё не было. Отчёт появится, как только ребёнок закончит первое.</p></div>';
+  }
+
+  h += heatHTML(S);
+
+  /* ---------- рамка ---------- */
+  var chips = WD_ORDER.map(function(n){
+    return '<button class="wdchip' + (f.days.indexOf(n) >= 0 ? " sel" : "") + '" data-fwd="' + n + '">' +
+      WD_SHORT[n] + '</button>';
+  }).join("");
+  var lens = ZAN_LEN.map(function(n){
+    return '<button class="rbtn ' + (f.len === n ? "check" : "sec") + '" data-flen="' + n + '">' + n + ' минут</button>';
+  }).join("");
+  var mixes = [["new","Идём вперёд"],["balanced","Поровну"],["repeat","Закрепляем"]].map(function(m){
+    return '<button class="rbtn ' + (f.mix === m[0] ? "check" : "sec") + '" data-fmix="' + m[0] + '">' + m[1] + '</button>';
+  }).join("");
+
+  h += '<div class="card"><h3>🗓 Рамка занятий</h3>' +
+    '<p class="dim">Дни, время и длину назначаете вы. Порядок уроков — нет: курс устроен так, что команда ' +
+    'объясняется раньше, чем понадобится, и перестановка уроков ломает именно это. ' +
+    'Вы ставите рамку и темп, курс отвечает за порядок.</p>' +
+    '<div class="admlbl">Дни занятий</div><div class="wdrow">' + chips + '</div>' +
+    '<div class="admlbl">Длина занятия</div><div class="admrow">' + lens + '</div>' +
+    '<div class="admlbl">Чего больше</div><div class="admrow">' + mixes + '</div>' +
+    '<div class="admlbl">Успеть к дате (необязательно)</div>' +
+    '<div class="admrow"><input type="date" id="fgoal" value="' + (f.goal || "") + '">' +
+      '<button class="rbtn sec" data-act="fgoal">Сохранить дату</button>' +
+      (f.goal ? '<button class="rbtn sec" data-act="fgoaloff">Убрать</button>' : '') + '</div>';
+
+  if (f.goal){
+    h += pace.ok
+      ? '<p class="dim">До ' + f.goal.split("-").reverse().join(".") + ' остаётся <b>' + pace.sessions +
+        '</b> ' + plural(pace.sessions, "занятие", "занятия", "занятий") + ' и <b>' + pace.left + '</b> ' +
+        plural(pace.left, "урок", "урока", "уроков") + '. Это примерно <b>' + pace.mins +
+        ' минут</b> на занятие.</p>'
+      : '<p class="warnline">⚠️ При таком темпе занятие выйдет примерно <b>' + pace.mins +
+        ' минут</b> — это много даже для подростка, а для десяти лет невыполнимо. ' +
+        'Либо добавьте дней в неделю, либо отодвиньте дату: ' + pace.left + ' ' +
+        plural(pace.left, "урок", "урока", "уроков") + ' на ' + pace.sessions + ' ' +
+        plural(pace.sessions, "занятие", "занятия", "занятий") + ' не помещаются.</p>';
+  }
+
+  /* каникулы */
+  h += '<div class="admlbl">Каникулы и запланированные паузы</div>' +
+    (f.breaks.length
+      ? '<ul class="brlist">' + f.breaks.map(function(b, i){
+          return '<li>' + b[0].split("-").reverse().join(".") + ' — ' + b[1].split("-").reverse().join(".") +
+            ' <button class="rbtn sec" data-brdel="' + i + '">убрать</button></li>';
+        }).join("") + '</ul>'
+      : '<p class="dim">Пока не заданы.</p>') +
+    '<div class="admrow"><input type="date" id="brfrom"><input type="date" id="brto">' +
+      '<button class="rbtn sec" data-act="bradd">Добавить</button></div>' +
+    '<p class="dim">В эти дни пропуск запланирован, и отчёт не назовёт его прогулом.</p>';
+
+  /* галочка отчётов */
+  h += '<div class="admlbl">Отчёты</div>' +
+    '<div class="admrow"><button class="rbtn ' + (f.report ? "check" : "sec") + '" data-act="freport">' +
+      (f.report ? "✓ Получать отчёты о занятиях" : "Отчёты выключены") + '</button></div>' +
+    '<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
+    'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
+    'выключенная означает «ничего не присылать».</p></div>';
+
+  /* ---------- задание ребёнку ---------- */
+  h += adultTaskHTML();
+
+  /* ---------- недельный отчёт ---------- */
+  h += weekReportHTML(S);
+
+  h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель наставника →</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
+
+  app.innerHTML = h;
+  wireAdult();
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ---------- «задать задание» ---------- */
+var adultPick = { t:"task", tpl:(window.PARENT_TASKS && PARENT_TASKS[0] ? PARENT_TASKS[0].id : ""),
+                  made:null, problem:null };
+function adultTplById(id){
+  var list = window.PARENT_TASKS || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  return list[0] || null;
+}
+function adultTaskHTML(){
+  var week = ptaskWeekCount();
+  var tabs = [["task","🔢 Задача с вашими числами"],["lesson","📘 Назначить урок"],["ask","🗣 Вопрос на объяснение"]]
+    .map(function(t){
+      return '<button class="rbtn ' + (adultPick.t === t[0] ? "check" : "sec") + '" data-ptab="' + t[0] + '">' + t[1] + '</button>';
+    }).join("");
+
+  var body = "";
+  if (adultPick.t === "task"){
+    var tpl = adultTplById(adultPick.tpl);
+    var opts = (window.PARENT_TASKS || []).map(function(t){
+      return '<option value="' + t.id + '"' + (tpl && t.id === tpl.id ? " selected" : "") + '>' +
+        t.emoji + " " + esc(t.title) + " — " + esc(t.what) + '</option>';
+    }).join("");
+    body = '<p class="dim">Программу пишет шаблон, а числа даёте вы — из своей жизни. ' +
+      'Правильный ответ вычисляет движок, вам его знать не нужно.</p>' +
+      '<div class="admrow"><select id="ptpl">' + opts + '</select></div>' +
+      (tpl ? '<div class="prow">' + tpl.params.map(function(p){
+        return '<label class="admlbl">' + esc(p.label) +
+          ' <input type="' + (p.text ? "text" : "number") + '" data-pp="' + p.k + '" value="' + esc(String(p.def)) + '"></label>';
+      }).join("") + '</div>' : '') +
+      '<div class="admrow"><button class="rbtn check" data-act="pmake">Собрать задание</button></div>';
+  } else if (adultPick.t === "lesson"){
+    var nx = nextLesson(), due = reviewDue();
+    body = '<p class="dim">Назначение — это не новая задача, а указание, что делать: ' +
+      'следующий урок по программе или возврат к трудному.</p><div class="admrow">' +
+      (nx ? '<button class="rbtn sec" data-plesson="' + esc(nx.id) + '">Следующий урок: ' + esc(nx.title) + '</button>' : '') +
+      (due.length ? '<button class="rbtn sec" data-preview="' + esc(due[0].lesson.id) + '">Повторить: ' + esc(due[0].lesson.title) + '</button>' : '') +
+      '</div>' + (!nx && !due.length ? '<p class="dim">Пока нечего назначать: уроки не открыты или всё пройдено.</p>' : '');
+  } else {
+    var pick = dinnerPickFrom(S, dayKey());
+    body = '<p class="dim">Здесь судит не движок, а вы: понимание объяснения взрослый оценить может, ' +
+      'код — нет. Ребёнок увидит вопрос и отметит, что рассказал; проверить рассказ — ваша часть.</p>' +
+      (pick
+        ? '<div class="admrow"><button class="rbtn check" data-pask="' + esc(pick.it.sig) + '">Спросить про ' +
+          '<code>' + esc(pick.it.sig) + '</code></button></div>' +
+          '<p class="dim">Верный ответ: ' + esc(pick.it.what) + '.</p>'
+        : '<p class="dim">Вопрос появится после первого пройденного урока.</p>');
+  }
+
+  var made = "";
+  if (adultPick.problem)
+    made += '<p class="warnline">⚠️ ' + esc(adultPick.problem) + '</p>';
+  if (adultPick.made){
+    made = '<div class="madelink"><b>Ссылка готова.</b> Отправьте её ребёнку тем же мессенджером, ' +
+      'которым и так пишете. Сервер для этого не нужен: задание целиком лежит в адресе.' +
+      '<div class="admrow"><button class="rbtn check" data-act="pcopy">Скопировать ссылку</button></div>' +
+      '<p class="dim brk">' + esc(adultPick.made.link) + '</p></div>';
+  }
+
+  return '<div class="card"><h3>✉️ Задать задание ребёнку</h3>' +
+    '<div class="admrow">' + tabs + '</div>' + body + made +
+    (week >= PTASK_WEEK_LIMIT
+      ? '<p class="warnline">⚠️ На этой неделе задание уже выдано. Больше одного — и занятия ' +
+        'превращаются в «мама ещё задала», то есть в наказание. Лучше подождать до следующей недели.</p>'
+      : '') +
+    '<p class="dim">Задание взрослого не даёт звёзд и не входит в сотню уроков — иначе им можно было бы ' +
+    'сломать прогресс из лучших побуждений. И самое сильное здесь — обратное направление: ' +
+    'попросите ребёнка задать задачу вам («Своё задание» у него на карте миров).</p></div>';
+}
+function wireAdult(){
+  app.querySelectorAll("[data-fwd]").forEach(function(b){
+    b.onclick = function(){
+      var n = +b.getAttribute("data-fwd"), days = frame().days.slice(), i = days.indexOf(n);
+      if (i >= 0) days.splice(i, 1); else days.push(n);
+      days.sort(function(x, y){ return x - y; });
+      frameSet({ days: days });
+      screenAdult();
+    };
+  });
+  app.querySelectorAll("[data-flen]").forEach(function(b){
+    b.onclick = function(){ frameSet({ len: +b.getAttribute("data-flen") }); screenAdult(); };
+  });
+  app.querySelectorAll("[data-fmix]").forEach(function(b){
+    b.onclick = function(){ frameSet({ mix: b.getAttribute("data-fmix") }); screenAdult(); };
+  });
+  app.querySelectorAll("[data-brdel]").forEach(function(b){
+    b.onclick = function(){
+      var br = frame().breaks.slice();
+      br.splice(+b.getAttribute("data-brdel"), 1);
+      frameSet({ breaks: br });
+      screenAdult();
+    };
+  });
+  app.querySelectorAll("[data-ptab]").forEach(function(b){
+    b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab"); adultPick.made = null; screenAdult(); };
+  });
+  var sel = document.getElementById("ptpl");
+  if (sel) sel.onchange = function(){ adultPick.tpl = sel.value; adultPick.made = null; screenAdult(); };
+  app.querySelectorAll("[data-plesson]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-plesson"), l = CURRICULUM.byId(id);
+      adultMade({ t:"lesson", ref:id, text:"Пройти урок «" + (l ? l.title : id) + "»" });
+    };
+  });
+  app.querySelectorAll("[data-preview]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-preview"), l = CURRICULUM.byId(id);
+      adultMade({ t:"review", ref:id, text:"Повторить урок «" + (l ? l.title : id) + "»" });
+    };
+  });
+  app.querySelectorAll("[data-pask]").forEach(function(b){
+    b.onclick = function(){
+      var sig = b.getAttribute("data-pask");
+      adultMade({ t:"ask", ref:"", text:"Расскажи взрослому: что делает " + sig + "? Покажи на примере." });
+    };
+  });
+  app.querySelectorAll("[data-act]").forEach(function(b){
+    var act = b.getAttribute("data-act");
+    b.onclick = function(){
+      if (act === "tomap") return screenWorlds();
+      if (act === "toadmin"){ location.hash = "#admin"; return screenAdmin(); }
+      if (act === "freport"){ frameSet({ report: !frame().report }); return screenAdult(); }
+      if (act === "fgoal"){
+        var v = (document.getElementById("fgoal") || {}).value || "";
+        frameSet({ goal: v || null });
+        return screenAdult();
+      }
+      if (act === "fgoaloff"){ frameSet({ goal: null }); return screenAdult(); }
+      if (act === "bradd"){
+        var a = (document.getElementById("brfrom") || {}).value || "";
+        var z = (document.getElementById("brto") || {}).value || "";
+        if (!a || !z || z < a) return;
+        var br = frame().breaks.slice();
+        br.push([a, z]);
+        frameSet({ breaks: br });
+        return screenAdult();
+      }
+      if (act === "pmake"){
+        var tpl = adultTplById(adultPick.tpl);
+        if (!tpl) return;
+        var v = {};
+        app.querySelectorAll("[data-pp]").forEach(function(inp){ v[inp.getAttribute("data-pp")] = inp.value; });
+        var built = taskBuild(tpl.title, tpl.goal(v), tpl.code(v));
+        if (built.problem || built.error){
+          /* сообщение рисуем в карточке, а не alert'ом: модальное окно
+             останавливает страницу целиком, и на телефоне это выглядит как
+             поломка. Плюс alert невозможно проверить тестом. */
+          adultPick.made = null;
+          adultPick.problem = built.problem || "Программа шаблона не запустилась — проверьте числа.";
+          return screenAdult();
+        }
+        adultPick.problem = null;
+        adultPick.made = { link: taskLink(built.task) };
+        return screenAdult();
+      }
+      if (act === "pcopy" && adultPick.made) return copyText(adultPick.made.link, b);
+    };
+  });
+}
+function adultMade(o){
+  o.from = "взрослый";
+  adultPick.made = { link: assignLink(o) };
+  screenAdult();
+}
+
+/* ---------- приём задания по ссылке (сторона ребёнка) ---------- */
+function screenAssign(o){
+  enterScreen(undefined, "assign");
+  var key = ptaskAdd(o);
+  var l = o.ref ? CURRICULUM.byId(o.ref) : null;
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">задание от взрослого</div>' +
+      '<h1>✉️ Тебе задание</h1></div></div>' +
+    '<div class="card"><p class="asktext">' + esc(o.text) + '</p>' +
+    (o.t === "ask"
+      ? '<p class="dim">Тут нет кнопки «проверить»: рассказать надо живому человеку. ' +
+        'Когда расскажешь — отметь, и взрослый увидит.</p>' +
+        '<div class="winrow"><button class="bigbtn" id="adone">Рассказал</button></div>'
+      : '<div class="winrow"><button class="bigbtn" id="aopen">' +
+        (l ? "Открыть урок «" + esc(l.title) + "»" : "Открыть") + '</button></div>') +
+    '</div>' +
+    '<p class="dim">Звёзд за это задание не даётся — это просьба взрослого, а не урок из сотни.</p>' +
+    '<div class="pager"><button class="bigbtn ghost" id="aback">← На «Сегодня»</button></div>';
+  var ad = document.getElementById("adone");
+  if (ad) ad.onclick = function(){ ptaskMarkDone(key); screenToday(); };
+  var ao = document.getElementById("aopen");
+  if (ao) ao.onclick = function(){
+    ptaskMarkDone(key);
+    if (o.ref) openLesson(o.ref); else screenWorlds();
+  };
+  document.getElementById("aback").onclick = screenToday;
+  refreshTop();
+}
+
 /* ================= раздел: свои задания =================
    Ребёнок перестаёт быть только решателем и становится автором: пишет
    программу, а ожидаемый ответ ВЫЧИСЛЯЕТ движок — ровно как в разминке
@@ -20553,6 +21833,8 @@ function wantsAdmin(){
   return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
 }
 var HASH_SCREENS = {
+  "#zan":     function(){ screenZan(); },
+  "#adult":   function(){ screenAdult(); },
   "#games":   function(){ screenGames(); },
   "#warmup":  function(){ screenWarmups(); },
   "#today":   function(){ screenToday(); },
@@ -20575,6 +21857,13 @@ function routeHash(){
   if (packed){
     var got = taskUnpack(packed[1]);
     if (got) openFriendTask(got, {}); else screenTaskBroken();
+    return true;
+  }
+  /* Задание от взрослого — тем же порядком и по той же причине */
+  var apk = /^#assign=(.+)$/.exec(location.hash || "");
+  if (apk){
+    var gota = assignUnpack(apk[1]);
+    if (gota) screenAssign(gota); else screenTaskBroken();
     return true;
   }
   /* Работа по ссылке — тоже до приведения к нижнему регистру: base64
@@ -20611,6 +21900,16 @@ function rankOf(xp){
   var r = RANKS[0][1];
   for (var i = 0; i < RANKS.length; i++) if (xp >= RANKS[i][0]) r = RANKS[i][1];
   return r;
+}
+/* подпись ученика у наставника: только на этом устройстве, на сервер не идёт */
+function adminLabel(code){
+  return (S.admin && S.admin.labels && S.admin.labels[code]) || "";
+}
+function adminLabelSet(code, v){
+  S.admin.labels = S.admin.labels || {};
+  v = String(v || "").trim().slice(0, 40);
+  if (v) S.admin.labels[code] = v; else delete S.admin.labels[code];
+  saveLocal();
 }
 function adminKeySaved(){
   try { return sessionStorage.getItem("kodokvest_srvkey") || ""; } catch(e){ return window.__srvKey || ""; }
@@ -20955,6 +22254,12 @@ function screenAdmin(){
     h += weekReportHTML(S);
     h += serverCardHTML();
 
+    h += '<div class="card"><h3>👨‍👩‍👦 Кабинет взрослого</h3>' +
+      '<p class="dim">Рамка занятий, отчёт по последнему занятию, карта активности по дням и часам ' +
+      'и «задать задание ребёнку». Это то, что взрослый смотрит десять минут в неделю, ' +
+      'а не служебная панель.</p><div class="admrow">' +
+      '<button class="rbtn check" data-act="toadult">Открыть кабинет →</button></div></div>';
+
     h += '<div class="card"><h3>Быстрые действия</h3><div class="admrow">' +
       '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
         (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
@@ -21015,6 +22320,7 @@ function screenAdmin(){
     if (act === "tomap"){ viewState = null; screenWorlds(); }
     else if (act === "myown"){ viewState = null; screenAdmin(); }
     else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
+    else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }
     else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
       CURRICULUM.forEach(function(w){
@@ -21097,18 +22403,41 @@ function screenAdmin(){
         if (!st.length){ srv("warn", "<b>Пока никого</b>На сервере нет ни одного ученика."); return; }
         srv("ok", "<b>Учеников на сервере: " + st.length + "</b>" +
           '<div class="admlist">' + st.map(function(s){
+            /* Имени ученика на сервере НЕТ и не будет: оно не уезжает с
+               устройства ребёнка (см. cloudSnapshot). Поэтому в списке стоит
+               код, а человеческую подпись наставник заводит себе сам — она
+               лежит в его admin.labels и никуда не отправляется. */
+            var lbl = adminLabel(s.code);
             return s.broken
               ? '<div class="admlrow"><b>' + esc(s.code) + '</b><span>файл испорчен</span></div>'
-              /* Имя пришло с сервера — но только у тех, кто сохранялся уже после
-                 того, как оно там появилось. У остальных показываем код: это
-                 честнее, чем «без имени». */
-              : '<div class="admlrow"><b>' + esc(s.name || s.code) + '</b>' +
-                '<span>' + (s.name ? esc(s.code) + ' · ' : '') +
+              : '<div class="admlrow"><b>' + esc(lbl || s.code) + '</b>' +
+                '<span>' + (lbl ? esc(s.code) + ' · ' : '') +
                 s.solved + ' уроков · ' + s.stars + '★ · ' + s.xp + ' XP · ' +
                 fmtMins(s.timeMs) + ' · ' + fmtWhen(s.serverAt) + '</span>' +
+                '<button class="minibtn" data-act="label" data-id="' + esc(s.code) + '">подписать</button>' +
                 '<button class="minibtn" data-act="viewcode" data-id="' + esc(s.code) + '">открыть</button></div>';
-          }).join("") + '</div>');
+          }).join("") + '</div>' +
+          '<p class="dim">Имени ребёнка на сервере нет намеренно: там только код и результаты. ' +
+          'Подпись «Петя, 5 класс» ставится кнопкой «подписать» и остаётся на этом устройстве.</p>');
       }, function(err){ srv("bad", "<b>Не получилось</b>" + esc(err.message || err)); });
+    }
+    else if (act === "label"){
+      /* Подпись вводится прямо в строке списка: prompt() останавливает
+         страницу и не проверяется тестом. */
+      var rowEl = b.parentNode;
+      if (rowEl.querySelector(".lblin")) return;
+      var inp = document.createElement("input");
+      inp.className = "lblin";
+      inp.value = adminLabel(id);
+      inp.placeholder = "например, Петя, 5 класс";
+      var ok = document.createElement("button");
+      ok.className = "minibtn"; ok.textContent = "готово";
+      ok.onclick = function(){
+        adminLabelSet(id, inp.value);
+        document.querySelector('[data-act="listall"]').click();
+      };
+      rowEl.appendChild(inp); rowEl.appendChild(ok);
+      inp.focus();
     }
     else if (act === "viewcode"){
       srv("warn", "<b>Загружаю…</b>");
@@ -22173,6 +23502,9 @@ window.addEventListener("resize", function(){
         ребёнок видит человеческое сообщение и кнопку «Обновить», которая
         чистит кэш и перезагружает страницу. */
 function bootRender(){
+  /* общий счётчик активных минут запускается один раз на всю сессию: он
+     считает не «сколько открыта вкладка», а сколько ребёнок реально работал */
+  actStart();
   try {
     if (!routeHash()){
       if (needsRegister()) screenRegister();   /* сервер настроен, ученик ещё не выбран */
@@ -22284,6 +23616,7 @@ window.__game = {
   stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
   getSession: function(){ return session; },
   mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
+  localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelSet,
   blankProgress: blankProgress, ensureShape: ensureShape,
   clearResults: clearResults, clearAll: clearAll,
   cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState,
@@ -22334,7 +23667,24 @@ window.__game = {
   certSectionReady: certSectionReady, certSectionAt: certSectionAt,
   certSectionNeed: certSectionNeed, SECTION_CERTS: SECTION_CERTS,
   worldWhole: worldWhole, worldStars: worldStars, worldSolvedCount: worldSolvedCount,
-  fmtDay: fmtDay
+  fmtDay: fmtDay,
+  /* занятие, рамка взрослого, карта активности и задания от взрослого */
+  frame: frame, frameSet: frameSet, frameOn: frameOn, frameShape: frameShape,
+  blankFrame: blankFrame, isBreakDay: isBreakDay, frameStudyDay: frameStudyDay,
+  paceCheck: paceCheck, lessonsLeft: lessonsLeft, studyDaysUntil: studyDaysUntil,
+  zanSlots: zanSlots, zanPlanFor: zanPlanFor, zanStart: zanStart, zanOpen: zanOpen,
+  zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
+  zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
+  screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  screenAssign: screenAssign, heatHTML: heatHTML, heatLevel: heatLevel,
+  hoursAdd: hoursAdd, hoursRow: hoursRow, pruneHours: pruneHours,
+  tickOnce: tickOnce, pageActive: pageActive, actMark: actMark,
+  assignPack: assignPack, assignUnpack: assignUnpack, assignLink: assignLink,
+  ptaskAdd: ptaskAdd, ptaskList: ptaskList, ptaskPending: ptaskPending,
+  ptaskMarkDone: ptaskMarkDone, ptaskWeekCount: ptaskWeekCount,
+  ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
+  setIdleForTest: function(ms){ IDLE_MS = ms; },
+  setLessonForTest: function(id){ curLessonId = id; }
 };
 })();
 

@@ -1332,3 +1332,60 @@ body.focus .toTop{display:none}
 .askans{margin-top:12px;padding:12px 14px;border-radius:var(--r);background:var(--sunken);
   border:1px solid var(--line);font-size:14.5px;line-height:1.6;color:var(--ink)}
 .askans b{display:block;margin-bottom:6px;color:var(--acc)}
+
+/* ===== занятие: полоса, план, карточки ===== */
+.zanbar{height:10px;border-radius:99px;background:var(--sunken);border:1px solid var(--line);
+  overflow:hidden;margin:10px 0 6px}
+.zanbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-lt));
+  transition:width .3s ease}
+.zanmeta{color:var(--soft);font-size:14px;margin:0 0 12px}
+.zanplan{list-style:none;padding:0;margin:6px 0 0;display:grid;gap:8px}
+.zanplan li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--soft)}
+.zanplan li.done{border-color:var(--okline);background:var(--okbg);color:var(--okink)}
+.zanplan li.cur{border-color:var(--acc);background:var(--panel);color:var(--ink)}
+.zanplan li b{color:inherit}
+.zanplan .zi{width:26px;text-align:center;font-size:18px}
+.zancard.on{border-color:var(--acc)}
+.zancard.done{border-color:var(--okline)}
+.zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
+.zanrep li{line-height:1.5}
+.zanwas{font-size:16px;margin:0 0 6px}
+.ptcard .ptrow{display:flex;gap:10px;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--line)}
+.ptcard .ptrow:last-of-type{border-bottom:none}
+.asktext{font-size:17px;line-height:1.5}
+
+/* ===== карта активности: день × час ===== */
+.heat{display:grid;gap:3px;margin:8px 0 6px;overflow-x:auto}
+.heatrow,.heathead{display:flex;align-items:center;gap:8px}
+.heat .hd{width:52px;flex:none;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.heat .hcells{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;flex:1;min-width:300px}
+.heathead .hcells{color:var(--faint);font-size:11px}
+.heathead .hcells b{grid-column:span 6;font-weight:600}
+.heat i{display:block;height:13px;border-radius:3px;background:var(--sunken);border:1px solid var(--line)}
+.heat i.hl1{background:var(--glow1);border-color:var(--line2)}
+.heat i.hl2{background:var(--acc-lt);opacity:.45;border-color:transparent}
+.heat i.hl3{background:var(--acc-lt);opacity:.72;border-color:transparent}
+.heat i.hl4{background:var(--acc);border-color:transparent}
+.heatscale{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--faint)}
+.heatscale i{display:block;width:13px;height:13px;border-radius:3px;background:var(--sunken);
+  border:1px solid var(--line)}
+.heatscale i.hl1{background:var(--glow1);border-color:var(--line2)}
+.heatscale i.hl2{background:var(--acc-lt);opacity:.45;border-color:transparent}
+.heatscale i.hl3{background:var(--acc-lt);opacity:.72;border-color:transparent}
+.heatscale i.hl4{background:var(--acc);border-color:transparent}
+
+/* ===== кабинет взрослого ===== */
+.warnline{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
+  border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
+.brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
+.brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+.prow{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
+.madelink{border:1px solid var(--okline);background:var(--okbg);border-radius:12px;
+  padding:10px 12px;margin:10px 0;font-size:14px;line-height:1.5}
+.brk{word-break:break-all;font-family:'JetBrains Mono',monospace;font-size:12px}
+.adrep .zanrep{padding-left:20px}
+.lblin{background:var(--sunken);border:1px solid var(--line2);border-radius:8px;padding:5px 8px;
+  color:var(--ink);font-size:13px;min-width:150px}
+.lblin:focus{outline:none;border-color:var(--acc)}

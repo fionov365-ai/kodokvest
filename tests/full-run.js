@@ -422,6 +422,15 @@ function checkEncoding(){
     const mine = g.clearAll(Object.assign({}, full));
     fields.forEach(k => {
       const v = mine[k];
+      /* frame — рамка занятий: у неё, как и у расписания, есть значения по
+         умолчанию (длина, состав, галочка отчётов), поэтому «пусто» для неё
+         означает «ровно blankFrame», а не «объект без ключей». Проверяем
+         точным сравнением: так строже, чем общее правило. */
+      if (k === "frame"){
+        if (JSON.stringify(v) !== JSON.stringify(g.blankFrame()))
+          bad(`[смена ученика] рамка прошлого взрослого осталась: ${JSON.stringify(v)}`);
+        return;
+      }
       const empty = v === null || v === "" || v === 0 ||
         (Array.isArray(v) ? v.length === 0 :
          (v && typeof v === "object" ? Object.keys(v).filter(x => x !== "days").length === 0 : false));
@@ -501,15 +510,19 @@ function checkEncoding(){
   if (!lst || (lst.students || []).length !== 2) bad(`[сервер] в списке ${lst && (lst.students||[]).length} учеников, ожидалось 2`);
   const badKey = await w.Cloud.list("не тот ключ").then(() => "пустили", () => "отказ");
   if (badKey !== "отказ") bad("[сервер] список открылся с неверным ключом наставника");
-  /* Имя в списке. Без него наставник видит одни коды, а две Ани по кодам не
-     различаются. У записи, сохранённой без имени, оно должно быть пустым —
-     и тогда в панели показывается код, а не слово «undefined». */
+  /* ⚠️ Имя ребёнка на сервер НЕ уходит — и это проверяется как обещание, а не
+     как мелочь. Пока на сервере лежат только код и результаты, ребёнок в нашей
+     базе неопознаваем, и фраза «о ребёнке мы не храним ничего» остаётся правдой.
+     Стоит положить туда имя рядом с адресом взрослого — и появляется «ребёнок
+     клиента такого-то», то есть категория «несовершеннолетние».
+     Разбор: docs/zanyatie-i-vzroslyj.md §§ 13–14. */
   const meRow = (lst && lst.students || []).filter(x => x.code === "test-kid")[0];
-  if (!meRow || meRow.name !== "Миша")
-    bad("[сервер] имя ученика не доехало до списка наставника: " + JSON.stringify(meRow));
-  const oldRow = (lst && lst.students || []).filter(x => x.code === "anya-2b")[0];
-  if (!oldRow || oldRow.name !== "")
-    bad("[сервер] у записи без имени имя не пустое: " + JSON.stringify(oldRow));
+  if (!meRow) bad("[сервер] ученик не попал в список наставника");
+  else if (meRow.name) bad("[сервер] ИМЯ РЕБЁНКА УЕХАЛО НА СЕРВЕР: " + JSON.stringify(meRow));
+  if (JSON.stringify(g.cloudSnapshot()).indexOf("Миша") >= 0)
+    bad("[сервер] имя ребёнка попало в снимок для отправки — проверь CLOUD_SKIP");
+  if (g.state.name !== "Миша")
+    bad("[сервер] имя пропало с устройства ребёнка — оно должно остаться в браузере");
 
   /* --- панель показывает чужой прогресс, не трогая свой --- */
   const myXpBefore = g.state.xp;
@@ -527,8 +540,18 @@ function checkEncoding(){
     if (!rows.length) bad("[панель] список учеников не отрисовался");
     else {
       const txt = Array.prototype.map.call(rows, r => r.textContent).join(" | ");
-      if (txt.indexOf("Миша") < 0)
-        bad("[панель] в списке учеников не видно имени: " + txt.slice(0, 160));
+      /* Имени в списке быть не должно (его нет на сервере), а человеческая
+         подпись заводится наставником у себя и на сервер не уходит. */
+      if (txt.indexOf("Миша") >= 0)
+        bad("[панель] имя ребёнка показано в списке — оно не должно доезжать: " + txt.slice(0, 160));
+      g.adminLabelSet("test-kid", "Петя, 5 класс");
+      doc.querySelector('[data-act="listall"]').click();
+      await tick(40);
+      const txt2 = Array.prototype.map.call(doc.querySelectorAll(".admlrow"), r => r.textContent).join(" | ");
+      if (txt2.indexOf("Петя, 5 класс") < 0)
+        bad("[панель] подпись наставника не показана: " + txt2.slice(0, 160));
+      if (JSON.stringify(g.cloudSnapshot()).indexOf("Петя, 5 класс") >= 0)
+        bad("[панель] подпись наставника уехала бы на сервер — она должна жить в admin");
       if (txt.indexOf("undefined") >= 0)
         bad("[панель] в списке учеников напечатано «undefined»: " + txt.slice(0, 160));
       if (txt.indexOf("anya-2b") < 0)
@@ -3783,6 +3806,223 @@ function checkEncoding(){
     viewReset(g);
   }
 
+
+  /* ================= занятие, честное время, кабинет взрослого =================
+     Новая механика выходит только вместе с машинной проверкой на неё: без
+     человека в цикле непроверенная механика — это тихий брак у ребёнка,
+     которого никто не увидит. Здесь проверяется всё, что добавлено разом:
+     активные минуты вместо «вкладка открыта», карта по часам, занятие как
+     единица, отчёт взрослому, рамка и задания от взрослого. */
+  let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0;
+
+  /* --- 1. время: считаем работу, а не открытую вкладку --- */
+  if (typeof g.tickOnce === "function"){
+    const p0 = problems.length;
+    g.state.hours = {}; g.state.log["l-time"] = undefined;
+    const lid = CUR[0].lessons[0].id;
+    g.state.log[lid] = { attempts:0, hints:0, shown:0, runs:0, timeMs:0, pauseMs:0,
+                         first:null, last:null, solvedAt:null, stars:0, bestSteps:0 };
+    g.setLessonForTest(lid);
+
+    /* активная страница: тик идёт в работу и в карту часов */
+    g.setIdleForTest(600000); g.actMark();
+    if (!g.pageActive()) bad("[время] активная страница считается неактивной");
+    g.tickOnce();
+    if (g.state.log[lid].timeMs !== 10000)
+      bad("[время] активный тик не засчитан: " + g.state.log[lid].timeMs);
+    const row = g.state.hours[g.dayKey()] || [];
+    if (row.reduce((a, b) => a + b, 0) !== 10)
+      bad("[время] карта часов не пополнилась: " + JSON.stringify(row));
+
+    /* ушёл от компьютера: вкладка открыта, но касаний нет — это ПАУЗА.
+       Порог 0 значит «любой промежуток без касания уже простой»: настоящий
+       порог шесть минут, ждать их в тесте незачем. */
+    g.setIdleForTest(0);
+    if (g.pageActive()) bad("[время] простой дольше порога считается работой");
+    g.tickOnce();
+    if (g.state.log[lid].timeMs !== 10000)
+      bad("[время] простой засчитан как работа — ровно то, из-за чего отчёт врал бы");
+    if (g.state.log[lid].pauseMs !== 10000)
+      bad("[время] пауза не записана: " + g.state.log[lid].pauseMs);
+    const row2 = g.state.hours[g.dayKey()] || [];
+    if (row2.reduce((a, b) => a + b, 0) !== 10)
+      bad("[время] простой попал в карту часов");
+
+    /* вкладка спрятана: тоже пауза, даже если только что касались */
+    let hidden = true;
+    try { Object.defineProperty(doc, "visibilityState", { get: () => hidden ? "hidden" : "visible", configurable:true }); } catch(e){}
+    g.setIdleForTest(600000); g.actMark();
+    if (g.pageActive()) bad("[время] спрятанная вкладка считается работой");
+    g.tickOnce();
+    if (g.state.log[lid].timeMs !== 10000) bad("[время] спрятанная вкладка накрутила время");
+    hidden = false;
+    g.setLessonForTest(null);
+    g.setIdleForTest(6 * 60 * 1000);   /* вернуть боевой порог остальным проверкам */
+
+    /* слияние двух устройств: по каждой ячейке МАКСИМУМ, а не сумма */
+    const dayk = g.dayKey();
+    const rowA = new Array(24).fill(0); rowA[9] = 300;
+    const rowB = new Array(24).fill(0); rowB[9] = 300; rowB[10] = 60;
+    const mh = g.mergeProgress({ savedAt:1, hours:{ [dayk]: rowA } },
+                               { savedAt:2, hours:{ [dayk]: rowB } });
+    if (mh.hours[dayk][9] !== 300)
+      bad("[время] слияние сложило один и тот же час дважды: " + mh.hours[dayk][9]);
+    if (mh.hours[dayk][10] !== 60) bad("[время] слияние потеряло час со второго устройства");
+
+    /* карта не должна расти без предела */
+    for (let i = 0; i < 260; i++) g.state.hours["2020-01-" + i] = new Array(24).fill(0);
+    g.pruneHours();
+    if (Object.keys(g.state.hours).length > 200)
+      bad("[время] карта часов растёт без предела: " + Object.keys(g.state.hours).length);
+    if (problems.length === p0) timeChecked++;
+  }
+
+  /* --- 2. занятие: план, ход, закрытие, отчёт --- */
+  if (typeof g.zanStart === "function"){
+    const p0 = problems.length;
+    g.state.zan = {};
+    g.frameSet({ days:[1,2,3,4,5], len:30, mix:"balanced" });
+
+    /* план детерминирован: два вызова в один день дают одно и то же */
+    const k = g.dayKey();
+    const p1 = JSON.stringify(g.zanPlanFor(k)), p2 = JSON.stringify(g.zanPlanFor(k));
+    if (p1 !== p2) bad("[занятие] план не детерминирован — на двух устройствах разойдётся");
+
+    /* длина занятия меняет число уроков */
+    if (g.zanSlots(20) >= g.zanSlots(45))
+      bad("[занятие] в 20 минут помещается не меньше, чем в 45");
+
+    const rec = g.zanStart();
+    if (!rec || !rec.plan.length) bad("[занятие] занятие не началось или план пуст");
+    if (!g.zanOpen()) bad("[занятие] открытое занятие не находится");
+    const again = g.zanStart();
+    if (again.key !== rec.key) bad("[занятие] второе «начать» завело второе занятие вместо продолжения");
+
+    /* шаг плана закрывается победой урока, а не отдельной кнопкой */
+    const first = rec.plan[0];
+    g.zanNote(first.k === "lesson" ? "lesson" : "warm", first.id, { ok:true });
+    const openNow = g.zanOpen();
+    if (openNow && openNow.done.length !== 1)
+      bad("[занятие] шаг плана не закрылся: " + JSON.stringify(openNow && openNow.done));
+
+    /* закрыть можно в любой момент, даже когда сделано не всё */
+    const fin = g.zanFinish("hand");
+    if (!fin || !fin.end) bad("[занятие] занятие не закрылось руками");
+    if (g.zanOpen()) bad("[занятие] после закрытия осталось открытым");
+
+    const rep = g.zanReport(fin, g.state);
+    ["was", "praise", "got", "ask"].forEach(f => {
+      if (!rep[f] || !String(rep[f]).trim()) bad("[отчёт] пустая строка отчёта: " + f);
+    });
+    if (rep.full) bad("[отчёт] незаконченное занятие названо полным");
+    if (!/закончили раньше плана/.test(rep.was))
+      bad("[отчёт] про недоделанный план не сказано: " + rep.was);
+
+    /* предсказание считается только по блоку проверки и только с первой попытки */
+    g.state.zan = {};
+    const rec2 = g.zanStart();
+    const pred = rec2.plan.filter(b => b.k === "predict")[0];
+    if (pred){
+      g.zanNote("warm", pred.id, { ok:false });
+      const r2 = g.zanAll()[rec2.key];
+      if (r2.predAll !== 1) bad("[отчёт] проверка понимания не посчитана");
+      if (r2.predOk !== 0) bad("[отчёт] предсказание со второй попытки засчитано как понимание");
+    }
+    g.zanFinish("hand");
+    g.state.zan = {};
+    if (problems.length === p0) zanChecked++;
+  }
+
+  /* --- 3. рамка взрослого: гейт разумности, каникулы, слияние --- */
+  if (typeof g.paceCheck === "function"){
+    const p0 = problems.length;
+    /* нереальный темп не должен молча приниматься */
+    const soon = g.dayKey(new Date(Date.now() + 7 * 864e5));
+    const pace = g.paceCheck(soon, [1,2,3,4,5], 30);
+    if (pace.ok && pace.left > 20)
+      bad("[рамка] «весь курс за неделю» прошло без предупреждения: " + JSON.stringify(pace));
+
+    /* каникулы: запланированный пропуск не считается учебным днём */
+    const today = g.dayKey();
+    g.frameSet({ days:[0,1,2,3,4,5,6], breaks:[[today, today]] });
+    if (!g.isBreakDay(today)) bad("[рамка] каникулы не распознаны");
+    if (g.frameStudyDay(today)) bad("[рамка] день каникул назван учебным");
+    g.frameSet({ breaks: [] });
+
+    /* слияние: рамка — настройка, побеждает свежая, а не объединение */
+    const m = g.mergeProgress(
+      { savedAt:1, frame:{ days:[1,2,3], len:45, mix:"new", report:true, breaks:[], goal:null, setAt:1 } },
+      { savedAt:2, frame:{ days:[6], len:20, mix:"repeat", report:false, breaks:[], goal:null, setAt:2 } });
+    if (JSON.stringify(m.frame.days) !== "[6]")
+      bad("[рамка] слияние объединило дни вместо «свежее побеждает»: " + JSON.stringify(m.frame.days));
+    if (m.frame.report !== false) bad("[рамка] снятая галочка отчётов вернулась при слиянии");
+
+    /* галочка отчётов и правда снимается */
+    g.frameSet({ report:false });
+    if (g.frame().report !== false) bad("[рамка] галочка отчётов не снялась");
+    g.frameSet({ report:true, days:[1,2,3,4,5], len:30, mix:"balanced" });
+
+    /* кабинет открывается и показывает карту часов */
+    g.adminUnlock();
+    g.screenAdult();
+    await tick();
+    const t = doc.getElementById("app").textContent;
+    if (!/Рамка занятий/.test(t)) bad("[кабинет] нет рамки занятий");
+    if (!/Когда он занимался/.test(t)) bad("[кабинет] нет карты активности");
+    if (!/Задать задание/.test(t)) bad("[кабинет] нет «задать задание»");
+    if (!doc.querySelector(".heat i")) bad("[кабинет] карта часов не отрисовалась");
+    if (problems.length === p0) adultChecked++;
+    viewReset(g);
+  }
+
+  /* --- 4. задание от взрослого --- */
+  if (typeof g.assignLink === "function"){
+    const p0 = problems.length;
+    g.state.ptasks = {};
+    const xpBefore = g.state.xp, starsBefore = Object.keys(g.state.stars).length;
+
+    /* назначение уезжает ссылкой и разбирается обратно */
+    const link = g.assignLink({ t:"ask", ref:"", text:"Расскажи, что делает print()", from:"взрослый" });
+    const hash = link.split("#")[1] || "";
+    const got = g.assignUnpack(hash.replace(/^assign=/, ""));
+    if (!got || got.text !== "Расскажи, что делает print()") bad("[задание] ссылка не разобралась обратно");
+    if (g.assignUnpack("это-не-base64")) bad("[задание] мусор в ссылке принят за задание");
+
+    /* задание попадает в список и отмечается сделанным */
+    const key = g.ptaskAdd(got);
+    if (!g.ptaskPending().length) bad("[задание] не попало в список невыполненных");
+    g.ptaskMarkDone(key);
+    if (g.ptaskPending().length) bad("[задание] не отметилось выполненным");
+    if (g.state.xp !== xpBefore || Object.keys(g.state.stars).length !== starsBefore)
+      bad("[задание] задание взрослого начислило звёзды или опыт — этого быть не должно");
+    if (g.ptaskWeekCount() < 1) bad("[задание] недельный счётчик не считает");
+
+    /* задача с числами взрослого: программу пишет шаблон, ответ считает движок */
+    const tpl = (w.PARENT_TASKS || [])[0];
+    if (!tpl) bad("[задание] шаблоны задач не загрузились");
+    else {
+      const v = {}; tpl.params.forEach(pp => { v[pp.k] = pp.def; });
+      const built = g.taskBuild(tpl.title, tpl.goal(v), tpl.code(v));
+      if (built.problem || built.error)
+        bad("[задание] шаблон «" + tpl.id + "» не собрался: " + (built.problem || JSON.stringify(built.error)));
+      else {
+        if (!built.task.lines.length) bad("[задание] у собранного задания пустой ответ");
+        const back = g.taskUnpack(g.taskLink(built.task).split("#task=")[1]);
+        if (!back || back.title !== tpl.title) bad("[задание] задача с числами не разобралась обратно");
+      }
+    }
+    /* все шаблоны обязаны запускаться: сломанный шаблон виден только взрослому,
+       и он решит, что сломан тренажёр */
+    (w.PARENT_TASKS || []).forEach(t => {
+      const v = {}; t.params.forEach(pp => { v[pp.k] = pp.def; });
+      const b = g.taskBuild(t.title, t.goal(v), t.code(v));
+      if (b.problem || b.error) bad("[задание] шаблон «" + t.id + "»: " + (b.problem || "ошибка запуска"));
+    });
+    g.state.ptasks = {};
+    if (problems.length === p0) ptaskChecked++;
+    viewReset(g);
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -3823,6 +4063,10 @@ function checkEncoding(){
   console.log(`поиск по урокам: ${searchChecked ? "да" : "нет"}`);
   console.log(`полная инструкция: ${guideChecked ? "да" : "нет"}`);
   console.log(`защита от пустого экрана: ${bootChecked ? "да" : "нет"}`);
+  console.log(`честное время (активные минуты и паузы): ${timeChecked ? "да" : "нет"}`);
+  console.log(`занятие как единица: ${zanChecked ? "да" : "нет"}`);
+  console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
+  console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
