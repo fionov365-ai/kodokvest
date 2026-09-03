@@ -3942,7 +3942,7 @@ function checkEncoding(){
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
-  let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0;
+  let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5640,6 +5640,56 @@ function checkEncoding(){
     if (problems.length === p0) algoChecked++;
   }
 
+  /* --- 14. чему движок научился --- */
+  if (w.MiniPy){
+    const p0 = problems.length;
+    const MP = w.MiniPy;
+    const ok = (code) => { const r = MP.run(code, { stdin: [] }); return r.error ? null : r.output.trim(); };
+
+    /* ⚠️ Это не дубль сверки с python3 (та живёт в tests/engine-vs-python.js и
+       гоняет настоящий интерпретатор). Здесь — страховка от того, что кто-то
+       выкинет возможность движка, на которой держится раздел курса: сборка
+       соберётся, тесты уроков пройдут, а половина заданий тихо умрёт. */
+    const need = [
+      ["системы счисления", 'print(int("ff", 16), bin(5), oct(8), hex(255))', "255 0b101 0o10 0xff"],
+      ["divmod и pow", "print(divmod(7, 2), pow(2, 10))", "(3, 1) 1024"],
+      ["partition", 'print("a=b".partition("="))', "('a', '=', 'b')"],
+      ["for ... else", "for x in [1]:\n    pass\nelse:\n    print('прошли')", "прошли"],
+      ["for ... else с break", "for x in [1]:\n    break\nelse:\n    print('сюда нельзя')\nprint('после')", "после"],
+      ["nonlocal", "def o():\n    n = 1\n    def i():\n        nonlocal n\n        n = 2\n    i()\n    return n\nprint(o())", "2"],
+      ["property", "class T:\n    @property\n    def x(self): return 5\nprint(T().x)", "5"],
+      ["staticmethod", "class T:\n    @staticmethod\n    def g(a): return a + 1\nprint(T.g(1))", "2"],
+      ["classmethod", "class T:\n    n = 7\n    @classmethod\n    def g(cls): return cls.n\nprint(T.g())", "7"],
+      ["__add__", "class M:\n    def __init__(s, v): s.v = v\n    def __add__(s, o): return M(s.v + o.v)\nprint((M(1) + M(2)).v)", "3"],
+      ["__len__", "class B:\n    def __len__(s): return 3\nprint(len(B()))", "3"],
+      ["__getitem__", "class R:\n    def __getitem__(s, i): return i * 2\nprint(R()[4])", "8"],
+      ["__contains__", "class G:\n    def __contains__(s, v): return v == 1\nprint(1 in G(), 2 in G())", "True False"],
+      ["распаковка со звездой", "a, *rest = [1, 2, 3]\nprint(a, rest)", "1 [2, 3]"]
+    ];
+    need.forEach(([name, code, want]) => {
+      const got = ok(code);
+      if (got === null) bad("[движок] «" + name + "» перестало работать вовсе");
+      else if (got !== want)
+        bad("[движок] «" + name + "» отвечает «" + got + "» вместо «" + want + "»");
+    });
+
+    /* ⚠️ И обратное: чего движок НЕ умеет, он обязан честно об этом сказать,
+       а не сделать «примерно». Множественное наследование сюда и не бралось:
+       порядок разрешения методов молча разошёлся бы с настоящим Python. */
+    const mustFail = [
+      ["множественное наследование",
+       "class A:\n    def hi(s): return 1\nclass B:\n    def bye(s): return 2\nclass C(A, B):\n    pass\nprint(C().bye())"],
+      ["две звёздочки в присваивании", "a, *b, *c = [1, 2, 3]\nprint(a)"],
+      ["одинокая звёздочка", "*a = [1, 2]\nprint(a)"]
+    ];
+    mustFail.forEach(([name, code]) => {
+      if (MP.run(code, { stdin: [] }).error === null || MP.run(code, { stdin: [] }).error === undefined)
+        bad("[движок] «" + name + "» молча сработало, хотя движок этого не умеет");
+    });
+
+    if (problems.length === p0) engineChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -5695,6 +5745,7 @@ function checkEncoding(){
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
+  console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

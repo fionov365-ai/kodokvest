@@ -1501,3 +1501,71 @@ print("a=b=c".rpartition("="))
 print("нет".partition("="))
 print("нет".rpartition("="))
 print("=край".partition("="))
+### dunder_property
+class Rect:
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+    @property
+    def area(self):
+        return self.w * self.h
+    @property
+    def square(self):
+        return self.w == self.h
+r = Rect(3, 4)
+print(r.area, r.square)
+print(Rect(5, 5).square)
+### dunder_static_class
+class Counter:
+    total = 0
+    @staticmethod
+    def double(x):
+        return x * 2
+    @classmethod
+    def start(cls):
+        return cls.total
+print(Counter.double(4), Counter().double(5))
+print(Counter.start(), Counter().start())
+### dunder_operators
+class Money:
+    def __init__(self, v):
+        self.v = v
+    def __add__(self, other):
+        return Money(self.v + other.v)
+    def __sub__(self, other):
+        return Money(self.v - other.v)
+    def __mul__(self, k):
+        return Money(self.v * k)
+    def __repr__(self):
+        return "Money(" + str(self.v) + ")"
+print(Money(10) + Money(5))
+print(Money(10) - Money(3))
+print(Money(10) * 3)
+### dunder_len_getitem_contains
+class Deck:
+    def __init__(self, cards):
+        self.cards = cards
+    def __len__(self):
+        return len(self.cards)
+    def __getitem__(self, i):
+        return self.cards[i]
+    def __contains__(self, v):
+        return v in self.cards
+d = Deck(["туз", "король", "дама"])
+print(len(d))
+print(d[0], d[2], d[-1])
+print("дама" in d, "шестёрка" in d)
+print("шестёрка" not in d)
+### star_unpack
+a, *rest = [1, 2, 3, 4]
+print(a, rest)
+*start, last = [1, 2, 3]
+print(start, last)
+first, *mid, end = [1, 2, 3, 4, 5]
+print(first, mid, end)
+one, *nothing = [1]
+print(one, nothing)
+x, *tail = (10, 20, 30)
+print(x, tail)
+for head, *others in [[1, 2, 3], [4, 5]]:
+    print(head, others)

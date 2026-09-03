@@ -1,6 +1,6 @@
 {
   "name": "kodokvest",
-  "version": "1.54.0",
+  "version": "1.55.0",
   "private": true,
   "description": "Кодоквест — тренажёр по информатике: программирование на Python для школьников",
   "scripts": {
