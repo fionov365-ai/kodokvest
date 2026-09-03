@@ -17,7 +17,7 @@
    старые файлы жили в кэше вечно и могли подмешаться к новой странице.
    Теперь каждый выпуск заводит свой кэш, а старые чистятся в activate.
    Версия обязана совпадать с package.json — на это есть проверка в тестах. */
-var CACHE = "kodokvest-1.50.0";
+var CACHE = "kodokvest-1.51.0";
 
 /* Оболочка: то, без чего страница не откроется. Уроки (content/worldN.js)
    тоже здесь — иначе офлайн открылась бы карта миров без самих уроков. */
@@ -31,6 +31,7 @@ var SHELL = [
   "./fonts/jetbrains-mono-latin.woff2", "./fonts/jetbrains-mono-cyrillic.woff2",
   "./js/engine-mini.js", "./js/runtime.js", "./js/curriculum.js", "./js/games.js",
   "./js/warmups.js", "./js/ailab.js", "./js/projects.js", "./js/cheatsheet.js",
+  "./js/specs.js",
   "./js/parent.js",
   "./js/cloud-config.js", "./js/cloud.js", "./js/app.js",
   "./content/world1.js", "./content/world2.js", "./content/world3.js",

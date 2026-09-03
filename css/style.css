@@ -1370,6 +1370,26 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- приёмка: нотация ---------- */
+.specref{display:grid;gap:8px;margin-top:8px}
+.specref div{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;font-size:13.5px}
+.specref code{white-space:pre-wrap}
+.specref span{color:var(--soft)}
+.specin{width:100%;min-height:150px;font-family:'JetBrains Mono',monospace;font-size:13.5px;
+  line-height:1.6;margin-bottom:10px}
+.speclist{display:grid;gap:6px;margin-top:8px}
+.specone{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:baseline;
+  font-size:13px;padding:7px 10px;border-radius:9px;border:1px solid var(--line);
+  background:var(--panel)}
+.specone code{grid-column:2}
+.specone span{grid-column:2;color:var(--soft)}
+.specone .specmark{grid-row:1 / span 2;font-weight:700}
+.specone.ok{border-color:var(--okline)}
+.specone.ok .specmark{color:var(--ok)}
+/* ⚠️ Не прошедшая строка — жёлтая, а не красная: это не ошибка ребёнка,
+   а найденное расхождение, ради которого приёмка и затевалась. */
+.specone.bad .specmark{color:var(--warn)}
+
 /* ---------- группа: рабочее место наставника ---------- */
 .grouplist{display:grid;gap:10px;margin-top:8px}
 .grouprow{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}

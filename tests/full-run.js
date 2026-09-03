@@ -3577,9 +3577,14 @@ function checkEncoding(){
     const want = ["Уроки", "Тренировки", "Моё", "Достижения"];
     if (heads().join(",") !== want.join(","))
       bad("[устройство] блоки Главного не те: " + heads().join(","));
-    /* пять тренировок и два раздела «Моё» — в один клик с Главного */
-    if (doc.querySelectorAll("[data-train]").length !== 5)
-      bad("[устройство] на Главном не пять карточек тренировок");
+    /* Все тренировки — в один клик с Главного. Число не зашито: разделы
+       добавляются (в 1.51.0 пришла «Приёмка»), а вот превратиться в свалку
+       список не должен — за этим и следит верхняя граница. */
+    const trainN = doc.querySelectorAll("[data-train]").length;
+    if (trainN !== g.trainCards().length)
+      bad("[устройство] на Главном показаны не все тренировки: " + trainN +
+          " из " + g.trainCards().length);
+    if (trainN > 8) bad("[устройство] тренировок на Главном стало " + trainN + " — это уже свалка");
     ["gofolio", "gomine", "go-train", "go-today"].forEach(id => {
       if (!doc.getElementById(id)) bad("[устройство] с Главного не попасть: " + id);
     });
@@ -3601,10 +3606,11 @@ function checkEncoding(){
     if (doc.querySelector(".howbar"))
       bad("[устройство] полоска «что дальше» осталась после первого пройденного урока");
 
-    /* Экран «Тренировки»: пять разделов, у каждого сказано зачем и когда */
+    /* Экран «Тренировки»: у каждого раздела сказано зачем и когда */
     g.screenTrain(); await tick();
     const cards = doc.querySelectorAll(".traincard");
-    if (cards.length !== 5) bad("[устройство] на «Тренировках» " + cards.length + " карточек вместо пяти");
+    if (cards.length !== g.trainCards().length)
+      bad("[устройство] на «Тренировках» " + cards.length + " карточек из " + g.trainCards().length);
     cards.forEach(c => {
       if (!c.querySelector(".trainwhen")) bad("[устройство] у тренировки не сказано, когда сюда заходить");
       if (!c.querySelector("p").textContent.trim()) bad("[устройство] у тренировки пустое объяснение");
@@ -3936,7 +3942,7 @@ function checkEncoding(){
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
-  let groupChecked = 0;
+  let groupChecked = 0, specChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5193,12 +5199,205 @@ function checkEncoding(){
       await tick();
       if (!doc.querySelector('[data-act="togroup"]'))
         bad("[группа] в панели наставника нет входа в группу");
+      /* ⚠️ Смена хэша ставит в очередь hashchange, а тот перерисовывает экран.
+         Без этого ожидания следующая проверка открывала свой экран, и его
+         тут же затирал запоздавший screenWorlds. */
       w.location.hash = "";
+      await tick();
       g.groupState.rows = null;
       viewReset(g);
     }
 
     if (problems.length === p0) groupChecked++;
+  }
+
+  /* --- 11. нотация приёмки --- */
+  if (typeof g.specVerdict === "function"){
+    const p0 = problems.length;
+    const SPECS = w.SPECS || [];
+
+    /* 11.1. Содержание. Эталон обязан работать, сломанный код обязан быть
+       ДЕЙСТВИТЕЛЬНО сломан, целый — совпадать с эталоном. Иначе приёмку
+       нельзя ни пройти, ни провалить честно. */
+    {
+      if (SPECS.length < 3) bad("[приёмка] работ подозрительно мало: " + SPECS.length);
+      const MP = w.MiniPy;
+      SPECS.forEach(t => {
+        ["id","title","brief","fn","params","code","truth","note","hints"].forEach(f => {
+          if (!t[f] || (Array.isArray(t[f]) && !t[f].length))
+            bad("[приёмка] у работы «" + t.id + "» пустое поле «" + f + "»");
+        });
+        if (!(t.want >= 2)) bad("[приёмка] у «" + t.id + "» слишком мягкий порог строк");
+        if (/random|input\(/.test(t.code + t.truth))
+          bad("[приёмка] в «" + t.id + "» есть случайность или ввод — вердикт станет невоспроизводимым");
+        const okTruth = MP.run(t.truth + "\n" + t.fn, {});
+        if (okTruth.error) bad("[приёмка] эталон «" + t.id + "» не запускается: " + okTruth.error.msg);
+        const okCode = MP.run(t.code + "\n" + t.fn, {});
+        if (okCode.error) bad("[приёмка] код напарника «" + t.id + "» не запускается: " + okCode.error.msg);
+        if (t.broken && t.code.replace(/\s+/g, "") === t.truth.replace(/\s+/g, ""))
+          bad("[приёмка] «" + t.id + "» помечен сломанным, а код совпадает с эталоном");
+        if (!t.broken && t.code.replace(/\s+/g, "") !== t.truth.replace(/\s+/g, ""))
+          bad("[приёмка] «" + t.id + "» помечен целым, а от эталона отличается");
+      });
+    }
+
+    /* 11.2. Разбор строк: четыре слова и внятная жалоба на пятое. */
+    {
+      const t = w.SPECS[0];
+      const good = g.specParse("пример " + t.fn + "([1, 2, 3]) = 6\nвсегда результат >= 0\nне дороже 200 шагов", t);
+      if (good.problem) bad("[приёмка] правильная запись не разобралась: " + JSON.stringify(good.problem));
+      if (good.rows.length !== 3) bad("[приёмка] строк разобрано " + good.rows.length + " вместо трёх");
+      if (good.examples.length !== 1) bad("[приёмка] пример не опознан");
+      /* список внутри аргументов не должен разваливаться по запятым */
+      const many = g.specSplitArgs("[1, 2, 3], \"а, б\", 7");
+      if (many.length !== 3) bad("[приёмка] аргументы разрезаны неверно: " + JSON.stringify(many));
+
+      const bads = [
+        ["сделай хорошо", /четыре/i, "неизвестное слово"],
+        ["пример " + t.fn + "([1])", /=/, "пример без ответа"],
+        ["всегда", /условие/i, "правило без условия"],
+        ["не дороже шагов", /число/i, "цена без числа"],
+        ["всегда результат >= 0", /не на чем/i, "правило без единого примера"]
+      ];
+      bads.forEach(([src, re, what]) => {
+        const r = g.specParse(src, t);
+        if (!r.problem) return bad("[приёмка] принято непонятное: " + what);
+        if (!re.test(r.problem.why))
+          bad("[приёмка] жалоба на «" + what + "» ничего не объясняет: " + r.problem.why);
+      });
+    }
+
+    /* 11.3. ⚠️ Каждая строка обязана превращаться в НАСТОЯЩИЙ Python — это
+       единственная защита от того, чтобы нотация стала нашим диалектом. */
+    {
+      const t = w.SPECS[0];
+      const parsed = g.specParse("пример " + t.fn + "([1, 2, 3]) = 6\nвсегда результат >= 0", t);
+      const py = g.specToPython(parsed, t);
+      if (!/assert /.test(py)) bad("[приёмка] в переводе на Python нет ни одного assert");
+      /* и этот перевод обязан РАБОТАТЬ на эталоне, а не просто выглядеть кодом */
+      const r = w.MiniPy.run(t.truth + "\n\n" + py, {});
+      if (r.error)
+        bad("[приёмка] перевод на Python не выполняется на эталоне: " +
+            r.error.kind + " " + r.error.msg);
+      /* а на сломанном коде — обязан упасть проверкой, а не синтаксисом */
+      if (t.broken){
+        const r2 = w.MiniPy.run(t.code + "\n\n" + py, {});
+        if (r2.error && r2.error.kind !== "AssertionError")
+          bad("[приёмка] перевод падает не проверкой, а ошибкой записи: " + r2.error.kind);
+      }
+    }
+
+    /* 11.4. ⚠️ Главное правило механики: спецификация обязана СНАЧАЛА пройти
+       на эталоне. Без этого приёмку проходили бы заведомой ложью — написал
+       «пример f(1) = 999», код её не прошёл, и мы засчитали. */
+    {
+      const t = w.SPECS[0];
+      const ложь = "пример " + t.fn + "([1]) = 999\nпример " + t.fn + "([2]) = 888";
+      const v = g.specVerdict(g.specParse(ложь, t), t, ложь);
+      if (v.state !== "wrongspec")
+        bad("[приёмка] заведомо ложная спецификация не отклонена: " + v.state);
+    }
+
+    /* 11.5. Приёмка целиком: слабая спецификация пропускает поломку, сильная
+       её ловит, и обе получают разный ответ. */
+    {
+      const t = w.SPECS.filter(x => x.broken && x.fn === "сумма")[0];
+      if (!t) bad("[приёмка] нет сломанной работы про сумму — проверка ослабла");
+      else {
+        const слабая = "пример сумма([1, 2, 3]) = 6\nпример сумма([5, 5]) = 10";
+        const v1 = g.specVerdict(g.specParse(слабая, t), t, слабая);
+        if (v1.state !== "missed")
+          bad("[приёмка] слабая спецификация не названа пропустившей поломку: " + v1.state);
+
+        const сильная = слабая + "\nпример сумма([]) = 0";
+        const v2 = g.specVerdict(g.specParse(сильная, t), t, сильная);
+        if (v2.state !== "caught")
+          bad("[приёмка] сильная спецификация не поймала поломку: " + v2.state);
+        const упавшая = (v2.rows || []).filter(r => !r.ok)[0];
+        if (!упавшая) bad("[приёмка] поломка поймана, а какой строкой — не сказано");
+        /* Вердикт обязан объяснить, ЧТО случилось: либо «ждали столько,
+           получили столько», либо честную ошибку движка — сломанный код на
+           пустом списке не возвращает неверное, он падает. */
+        else if (!/ждали|Номер за пределами|Ошибка/i.test(упавшая.why))
+          bad("[приёмка] в вердикте не видно, что пошло не так: " + упавшая.why);
+
+        /* одной строки мало: приёмка из одной строки ничего не доказывает */
+        const тонкая = "пример сумма([]) = 0";
+        if (g.specVerdict(g.specParse(тонкая, t), t, тонкая).state !== "thin")
+          bad("[приёмка] приёмка из одной строки засчитана");
+      }
+    }
+
+    /* 11.6. Целая работа: правильная спецификация её ПРИНИМАЕТ, а слишком
+       строгая — возвращает, и это разные ответы. */
+    {
+      const t = w.SPECS.filter(x => !x.broken)[0];
+      if (!t) bad("[приёмка] нет ни одной целой работы — жанр сводится к «найди ошибку»");
+      else {
+        const ok = "пример " + t.fn + "([4, 5]) = 4.5\nпример " + t.fn + "([]) = 0\nвсегда результат >= 0";
+        const v = g.specVerdict(g.specParse(ok, t), t, ok);
+        if (v.state !== "accepted")
+          bad("[приёмка] верная работа не принята: " + v.state + " " + JSON.stringify(v.rows || []));
+        const строго = ok + "\nвсегда результат > 0";
+        const v2 = g.specVerdict(g.specParse(строго, t), t, строго);
+        if (v2.state !== "wrongspec" && v2.state !== "falsealarm")
+          bad("[приёмка] слишком строгое правило прошло молча: " + v2.state);
+      }
+    }
+
+    /* 11.7. «Не дороже N шагов» — строка, которой нет ни у кого. Считаться
+       должна ЦЕНА ВЫЗОВА, а не всей программы: описание функции тоже стоит
+       шагов, и без вычитания число врало бы тем сильнее, чем длиннее код. */
+    {
+      const t = w.SPECS[0];
+      const щедро = "пример " + t.fn + "([1, 2, 3]) = 6\nне дороже 9999 шагов";
+      const v1 = g.specRunAll(g.specParse(щедро, t), t, t.truth);
+      if (!v1.ok) bad("[приёмка] щедрый бюджет шагов не прошёл");
+      const скупо = "пример " + t.fn + "([1, 2, 3]) = 6\nне дороже 1 шагов";
+      const v2 = g.specRunAll(g.specParse(скупо, t), t, t.truth);
+      if (v2.ok) bad("[приёмка] бюджет в один шаг прошёл — цена не считается");
+      const строка = v2.rows.filter(r => r.kind === "budget")[0];
+      if (!строка || !/вышло \d+/.test(строка.why))
+        bad("[приёмка] не сказано, во сколько шагов обошлось: " + JSON.stringify(строка));
+    }
+
+    /* 11.8. Экран: список, задание, перевод на Python по кнопке. */
+    {
+      g.screenSpecs(); await tick();
+      if (!doc.querySelector("[data-spec]")) bad("[приёмка] на экране нет ни одной работы");
+      const t = w.SPECS[0];
+      g.openSpec(t.id); await tick();
+      const txt = doc.getElementById("app").textContent;
+      if (!/Что прислал напарник/.test(txt)) bad("[приёмка] не показан код напарника");
+      if (!/менять этот код нельзя/i.test(txt))
+        bad("[приёмка] не сказано, что код напарника не переписывают");
+      const ta = doc.getElementById("specin");
+      if (!ta) bad("[приёмка] нет поля для спецификации");
+      else {
+        ta.value = "пример " + t.fn + "([1, 2, 3]) = 6\nвсегда результат >= 0";
+        doc.getElementById("specpy").click();
+        const py = doc.getElementById("specpyout").textContent;
+        if (!/assert/.test(py)) bad("[приёмка] кнопка не показала настоящий Python");
+        if (!/не наш выдуманный язык/i.test(py))
+          bad("[приёмка] не сказано, что это обычный Python, а не наш диалект");
+        /* приёмка засчитывается и попадает в прогресс */
+        g.state.specs = {};
+        ta.value = "пример сумма([1, 2, 3]) = 6\nпример сумма([]) = 0";
+        doc.getElementById("specgo").click();
+        await tick();
+        if (!won()) bad("[приёмка] верная приёмка не засчитана");
+        if (!g.specDone(t.id)) bad("[приёмка] принятая работа не попала в прогресс");
+        closeWin();
+      }
+      /* слияние двух устройств не теряет принятое */
+      const m = g.mergeProgress({ savedAt:1, specs:{ a:1 } }, { savedAt:2, specs:{ b:1 } });
+      if (Object.keys(m.specs || {}).length !== 2)
+        bad("[приёмка] слияние потеряло принятую работу");
+      g.state.specs = {};
+      viewReset(g);
+    }
+
+    if (problems.length === p0) specChecked++;
   }
 
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
@@ -5253,6 +5452,7 @@ function checkEncoding(){
   console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
   console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
   console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
+  console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
