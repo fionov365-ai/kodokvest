@@ -1388,6 +1388,12 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- таблица «Пример работы программы» (каркас ОГЭ) ---------- */
+.ogesample{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
+.ogesample div{border:1px solid var(--line2);border-radius:10px;padding:8px 11px;background:var(--panel)}
+.ogesample b{display:block;font-size:12.5px;color:var(--soft);margin-bottom:5px}
+.ogesample pre{margin:0;font-size:13px;line-height:1.5;white-space:pre-wrap}
+
 /* ---------- «Ты и ИИ»: отличие от курсов про нейросети ---------- */
 .aidiff{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
 .aidiff div{border:1px solid var(--line);border-radius:var(--r);padding:10px 13px;background:var(--panel)}
@@ -2121,7 +2127,7 @@ function lex(src){
 /* ============================================================
    ПАРСЕР
    ============================================================ */
-var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert","yield"];
+var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","nonlocal","raise","del","assert","yield"];
 
 function Parser(toks){ this.toks = toks; this.p = 0; }
 Parser.prototype = {
@@ -2234,6 +2240,14 @@ Parser.prototype = {
         while (this.atOp(",")){ this.next(); names.push(this.expectName()); }
         return { type:"Global", names: names, line: line };
       }
+      /* nonlocal — «эта переменная не моя и не глобальная, а той функции,
+         внутри которой я объявлена». Нужен замыканиям: без него вложенная
+         функция может внешнюю переменную только читать. */
+      if (tk.v === "nonlocal"){
+        this.next(); var nlnames = [this.expectName()];
+        while (this.atOp(",")){ this.next(); nlnames.push(this.expectName()); }
+        return { type:"Nonlocal", names: nlnames, line: line };
+      }
       if (tk.v === "print" && this.peek(1) && this.peek(1).t !== "OP")
         raise("SyntaxError", "В Python 3 print — это функция. Нужны скобки: print(...)", line);
     }
@@ -2321,7 +2335,14 @@ Parser.prototype = {
     this.next();
     var iter = this.parseExprList();
     var body = this.parseBlock("for");
-    return { type:"For", target: target, iter: iter, body: body, line: line };
+    /* «else» у цикла срабатывает, когда цикл дошёл до конца САМ, без break.
+       В учебниках информатики это стандартный приём «нашли / не нашли»:
+       нашли — break, не нашли — else. Раньше движок такой цикл не понимал
+       вовсе и падал с «else без if». */
+    var orelse = [];
+    this.skipNewlines();
+    if (this.atKw("else")){ this.next(); orelse = this.parseBlock("else"); }
+    return { type:"For", target: target, iter: iter, body: body, orelse: orelse, line: line };
   },
 
   parseTargetList: function(){
@@ -3185,7 +3206,7 @@ var OBJ_ID = 0;
 /* ============================================================
    ОКРУЖЕНИЕ
    ============================================================ */
-function Env(parent){ this.vars = new Map(); this.parent = parent || null; this.globals = []; }
+function Env(parent){ this.vars = new Map(); this.parent = parent || null; this.globals = []; this.nonlocals = []; }
 Env.prototype.get = function(name, line){
   var e = this;
   while (e){
@@ -3213,6 +3234,17 @@ Env.prototype.set = function(name, val){
   if (this.globals.indexOf(name) >= 0){
     var r = this; while (r.parent) r = r.parent;
     r.vars.set(name, val); return;
+  }
+  /* nonlocal: писать надо в ТУ область, где имя уже живёт, а не заводить своё.
+     Ищем ближайшую внешнюю, где оно есть; глобальную не трогаем — на неё есть
+     отдельное слово global, и путать их нельзя. */
+  if (this.nonlocals.indexOf(name) >= 0){
+    var e = this.parent, root = this;
+    while (root.parent) root = root.parent;
+    while (e && e !== root){
+      if (e.vars.has(name)){ e.vars.set(name, val); return; }
+      e = e.parent;
+    }
   }
   this.vars.set(name, val);
 };
@@ -3250,7 +3282,7 @@ function localNames(body){
         case "Assign": st.targets.forEach(walkTarget); break;
         case "AugAssign": walkTarget(st.target); break;
         case "AnnAssign": found[st.name] = 1; break;
-        case "For": walkTarget(st.target); walk(st.body); break;
+        case "For": walkTarget(st.target); walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "While": walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "If": walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "Try":
@@ -3260,7 +3292,12 @@ function localNames(body){
           if (st.finalbody) walk(st.finalbody);
           break;
         case "FuncDef": case "ClassDef": found[st.name] = 1; break;
-        case "Global": st.names.forEach(function(n){ globals[n] = 1; }); break;
+        /* ⚠️ И global, и nonlocal вычёркивают имя из «своих»: иначе разбор
+           решит, что переменная местная, и чтение внешней упадёт с
+           UnboundLocalError ещё до запуска. На nonlocal я на этом и попался —
+           поймала сверка с python3. */
+        case "Global": case "Nonlocal":
+          st.names.forEach(function(n){ globals[n] = 1; }); break;
         case "Import":
           st.items.forEach(function(it){ found[it.as || it.name] = 1; });
           break;
@@ -3361,20 +3398,76 @@ Interp.prototype.installBuiltins = function(){
     g.set(name, TYPES[name]);
   }
   def("str", function(args){ return args.length ? pyStr(args[0]) : ""; });
+  /* ⚠️ Второй аргумент int() — ОСНОВАНИЕ системы счисления, и он здесь не для
+     полноты: системы счисления — ядро школьной информатики, и задачи ОГЭ вида
+     «запись числа в системе с основанием 7 оканчивается цифрой 1» без него не
+     решаются вовсе. Разрешаем 2..36, как настоящий Python. */
+  var DIGITS36 = "0123456789abcdefghijklmnopqrstuvwxyz";
   def("int", function(args, kw, line){
     if (!args.length) return 0;
     var v = args[0];
+    var base = args.length > 1 ? Math.trunc(nv(args[1])) : 10;
+    if (args.length > 1){
+      if (typeof v !== "string")
+        raise("TypeError", "Основание системы счисления можно указать только для строки: " +
+              "int(\"1010\", 2).", line);
+      if (!isNum(args[1]) || base < 2 || base > 36)
+        raise("ValueError", "Основание системы счисления бывает от 2 до 36, а тут " + pyStr(args[1]) + ".", line,
+              { pymsg: "int() base must be >= 2 and <= 36, or 0" });
+    }
     if (isNum(v)) return Math.trunc(nv(v));
     if (v === true) return 1;
     if (v === false) return 0;
     if (typeof v === "string"){
-      var t = v.trim();
-      if (!/^[+-]?\d+$/.test(t))
-        raise("ValueError", "Строку «" + v + "» нельзя превратить в целое число.", line,
-              { pymsg: "invalid literal for int() with base 10: " + pyRepr(v) });
-      return parseInt(t, 10);
+      var t = v.trim(), sign = 1, body = t;
+      if (body.charAt(0) === "+" || body.charAt(0) === "-"){
+        if (body.charAt(0) === "-") sign = -1;
+        body = body.slice(1);
+      }
+      var ok = body.length > 0;
+      var allowed = DIGITS36.slice(0, base);
+      for (var di = 0; di < body.length && ok; di++)
+        if (allowed.indexOf(body.charAt(di).toLowerCase()) < 0) ok = false;
+      if (!ok)
+        raise("ValueError", base === 10
+                ? "Строку «" + v + "» нельзя превратить в целое число."
+                : "Строку «" + v + "» нельзя прочитать как число в системе счисления с основанием " + base + ".",
+              line, { pymsg: "invalid literal for int() with base " + base + ": " + pyRepr(v) });
+      return sign * parseInt(body, base);
     }
     raise("TypeError", "int() не работает с типом " + typeName(v) + ".", line);
+  });
+  /* Перевод в другую систему счисления. Возвращают строку с приставкой, как
+     в Python: bin(5) → '0b101'. Приставка часто мешает школьнику, поэтому в
+     сообщении об ошибке о ней сказано прямо, а не «читайте документацию». */
+  function baseStr(n, base, prefix, line){
+    if (!isNum(n) || isFloat(n))
+      raise("TypeError", prefix + "() работает только с целыми числами.", line);
+    var v = Math.trunc(nv(n)), sign = v < 0 ? "-" : "";
+    return sign + prefix + Math.abs(v).toString(base);
+  }
+  def("bin", function(args, kw, line){ return baseStr(args[0], 2, "0b", line); });
+  def("oct", function(args, kw, line){ return baseStr(args[0], 8, "0o", line); });
+  def("hex", function(args, kw, line){ return baseStr(args[0], 16, "0x", line); });
+  /* divmod и pow — школьная арифметика, и без них задачи про цифры числа
+     пишутся длиннее, чем нужно. */
+  def("divmod", function(args, kw, line){
+    if (!isNum(args[0]) || !isNum(args[1]))
+      raise("TypeError", "divmod() работает только с числами.", line);
+    if (nv(args[1]) === 0)
+      raise("ZeroDivisionError", "Делить на ноль нельзя.", line,
+            { pymsg: "integer division or modulo by zero" });
+    var a = nv(args[0]), b = nv(args[1]);
+    var q = Math.floor(a / b), r = a - q * b;
+    var fl = isFloat(args[0]) || isFloat(args[1]);
+    return Tup([num(q, fl), num(r, fl)]);
+  });
+  def("pow", function(args, kw, line){
+    if (!isNum(args[0]) || !isNum(args[1]))
+      raise("TypeError", "pow() работает только с числами.", line);
+    var r = Math.pow(nv(args[0]), nv(args[1]));
+    var fl = isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0;
+    return num(fl ? r : Math.round(r), fl);
   });
   def("float", function(args, kw, line){
     if (!args.length) return mkFloat(0);
@@ -3897,6 +3990,7 @@ Interp.prototype.execStmt = function*(st, env){
             return rg;
           }
         }
+        if (st.orelse && st.orelse.length) return yield* this.runBlock(st.orelse, env);
         return null;
       }
       var seq = this.iterate(src, st.line);
@@ -3910,6 +4004,7 @@ Interp.prototype.execStmt = function*(st, env){
           return r2;
         }
       }
+      if (st.orelse && st.orelse.length) return yield* this.runBlock(st.orelse, env);
       return null;
     }
 
@@ -4094,6 +4189,20 @@ Interp.prototype.execStmt = function*(st, env){
     case "Break": return new Sig("break");
     case "Continue": return new Sig("continue");
     case "Pass": return null;
+    case "Nonlocal": {
+      var rootEnv = env; while (rootEnv.parent) rootEnv = rootEnv.parent;
+      for (var nli = 0; nli < st.names.length; nli++){
+        var nm = st.names[nli], e2 = env.parent, ok = false;
+        while (e2 && e2 !== rootEnv){ if (e2.vars.has(nm)){ ok = true; break; } e2 = e2.parent; }
+        if (!ok)
+          raise("SyntaxError", "nonlocal " + nm + ": такой переменной нет ни в одной внешней функции. " +
+                "Для переменной верхнего уровня нужно слово global.", st.line,
+                { pymsg: "no binding for nonlocal '" + nm + "' found" });
+        if (env.nonlocals.indexOf(nm) < 0) env.nonlocals.push(nm);
+      }
+      return null;
+    }
+
     case "Global":
       st.names.forEach(function(n){ if (env.globals.indexOf(n) < 0) env.globals.push(n); });
       return null;
@@ -5682,6 +5791,26 @@ Interp.prototype.bindMethod = function(obj, name, line){
         return sign + "0".repeat(w - obj.length) + rest;
       },
       rfind: function(a){ return obj.lastIndexOf(pyStr(a[0])); },
+      /* partition режет строку на ТРИ части: до разделителя, сам разделитель
+         и после. Удобнее split там, где важно, нашёлся разделитель или нет:
+         не нашёлся — вторая и третья части пустые, и проверять длину списка
+         не приходится. */
+      partition: function(a){
+        var sep = pyStr(a[0]);
+        if (sep === "") raise("ValueError", "partition() не умеет делить по пустой строке.", line,
+                              { pymsg: "empty separator" });
+        var i = obj.indexOf(sep);
+        return i < 0 ? Tup([obj, "", ""])
+                     : Tup([obj.slice(0, i), sep, obj.slice(i + sep.length)]);
+      },
+      rpartition: function(a){
+        var sep2 = pyStr(a[0]);
+        if (sep2 === "") raise("ValueError", "rpartition() не умеет делить по пустой строке.", line,
+                               { pymsg: "empty separator" });
+        var j = obj.lastIndexOf(sep2);
+        return j < 0 ? Tup(["", "", obj])
+                     : Tup([obj.slice(0, j), sep2, obj.slice(j + sep2.length)]);
+      },
       index: function(a){
         var i = obj.indexOf(pyStr(a[0]));
         if (i < 0) raise("ValueError", "Подстроки " + pyRepr(a[0]) + " в строке нет.", line,
@@ -9000,9 +9129,21 @@ window.SPECS = [
 
    ⚠️ ЧЕСТНАЯ ГРАНИЦА, И ОНА НАПИСАНА НА ЭКРАНЕ. Мы не готовим к ОГЭ целиком:
    в экзамене пятнадцать заданий, и большинство из них — про кодирование
-   информации, таблицы и файлы, а не про программирование. Мы закрываем
-   **задание 15.2** (написать программу) и алгоритмическую часть. Обещать
-   больше — врать, а вранью тут цена особая: родитель узнает о нём в мае.
+   информации, таблицы и файлы, а не про программирование. Мы закрываем ту
+   часть, где надо НАПИСАТЬ ПРОГРАММУ (в кодификаторе это КЭС 3.2), и
+   алгоритмику. Обещать больше — врать, а вранью тут цена особая: родитель
+   узнает о нём в мае.
+
+   ⚠️ Номер задания в экзамене мы НЕ называем и называть не будем: нумерация
+   между годами меняется, а проверить её по спецификации я не могу — она
+   лежит архивом. Пишем «в формате ОГЭ» и «КЭС 3.2», это проверяемо.
+
+   Каркас заданий группы «oge» снят с ОТКРЫТОГО БАНКА ФИПИ 03.09.2026:
+   формулировки наши, структура их. Копировать задания дословно нельзя, а
+   держать структуру — обязательно, иначе «в формате ОГЭ» будет неправдой.
+   Что в каркасе: признак через систему счисления; обязательное «NO», если
+   подходящих нет; ограничения числами (3 ≤ N ≤ 10 000, числа ≤ 30 000);
+   отдельная фраза про формат вывода; таблица «Пример работы программы».
 
    Чем это отличается от всех тренажёров ЕГЭ/ОГЭ: **цену алгоритма здесь можно
    измерить, а не рассказать.** Наш интерпретатор считает шаги (он и так их
@@ -9022,6 +9163,9 @@ window.SPECS = [
      check      { kind:"tests", calls:[...] } — скрытые вызовы
                 { kind:"output" } — сверка напечатанного с эталоном
      stdin      ответы на input() — для задач в формате ОГЭ
+     sample     таблица «Пример работы программы»: { in:[строки], out:"ответ" }.
+                ⚠️ Обязана совпадать с тем, что печатает эталон, — на это есть
+                проверка: пример, расходящийся с решением, хуже отсутствия примера
      budget     необязательно: уложиться в столько шагов. Это и есть наш
                 козырь, и требование пишется в list словами
      note       разбор после победы
@@ -9213,110 +9357,48 @@ window.ALGO = [
   ]
 },
 
-/* ---------- формат ОГЭ ---------- */
+/* ---------- системы счисления ---------- */
 {
-  id: "oge-count",
-  group: "oge",
-  emoji: "📄",
-  title: "Сколько чисел подходит",
-  tag: "формат ОГЭ · 15.2",
-  intro: "Типовая формулировка экзамена: сначала количество чисел, потом сами числа.",
-  goal: "Программа получает на вход количество чисел N, а затем N целых чисел. " +
-        "Напечатай, сколько среди них чисел, которые делятся на 3 и оканчиваются на 6.",
-  list: ["Первая строка ввода — количество чисел",
-         "Дальше по одному числу в строке",
-         "Напечатать одно число — ответ",
-         "Ввод читается через input(), как на экзамене"],
-  stdin: ["6", "36", "12", "6", "26", "96", "7"],
-  starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
-  solution: "n = int(input())\n" +
-            "count = 0\n" +
-            "for i in range(n):\n" +
-            "    x = int(input())\n" +
-            "    if x % 3 == 0 and x % 10 == 6:\n" +
-            "        count = count + 1\n" +
-            "print(count)\n",
-  check: { kind:"output" },
-  note: "Два условия через and — вся суть этого типа задач. «Оканчивается на 6» — " +
-        "это остаток от деления на 10, и заучивать тут нечего: цифру единиц " +
-        "всегда даёт % 10.",
-  hints: [
-    "«Делится на 3» — это x % 3 == 0.",
-    "«Оканчивается на 6» — последняя цифра, то есть x % 10 == 6.",
-    "Оба условия должны выполняться одновременно: if x % 3 == 0 and x % 10 == 6."
-  ]
-},
-{
-  id: "oge-maxmin",
-  group: "oge",
-  emoji: "📈",
-  title: "Наибольшее по условию",
-  tag: "формат ОГЭ · 15.2",
-  intro: "Второй частый вид: найти не просто максимум, а максимум среди подходящих.",
-  goal: "Программа получает количество чисел N, затем N целых чисел. " +
-        "Напечатай наибольшее среди чётных. Если чётных нет, напечатай -1.",
-  list: ["Первая строка — количество чисел, дальше сами числа",
-         "Считать только чётные",
-         "Если чётных не встретилось — напечатать -1",
-         "Встроенным max() не пользоваться: смысл в том, чтобы вести максимум самому"],
-  stdin: ["5", "7", "12", "3", "40", "9"],
-  starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
-  solution: "n = int(input())\n" +
-            "best = -1\n" +
-            "for i in range(n):\n" +
-            "    x = int(input())\n" +
-            "    if x % 2 == 0 and (best == -1 or x > best):\n" +
-            "        best = x\n" +
-            "print(best)\n",
-  check: { kind:"output" },
-  note: "Ловушка этого типа — начальное значение. Начать с нуля нельзя: " +
-        "если все чётные окажутся отрицательными, ответом станет ноль, " +
-        "которого во вводе не было. Поэтому «ещё ничего не нашли» отмечают " +
-        "отдельно, а не числом-заглушкой.",
-  hints: [
-    "Чётное — это x % 2 == 0.",
-    "Начальное best = -1 значит «ещё ничего не нашли»: сравнивать с ним напрямую нельзя.",
-    "Условие: if x % 2 == 0 and (best == -1 or x > best)."
-  ]
-},
-{
-  id: "oge-pairs",
-  group: "oge",
-  emoji: "🔗",
-  title: "Соседи в последовательности",
-  tag: "формат ОГЭ · 15.2",
-  intro: "Третий вид: смотреть не на одно число, а на пару соседних.",
-  goal: "Программа получает количество чисел N, затем N целых чисел. " +
-        "Напечатай, сколько раз соседняя пара чисел давала в сумме число, кратное 5.",
-  list: ["Считаются пары стоящих рядом чисел: первое со вторым, второе с третьим и так далее",
-         "Всего пар на одну меньше, чем чисел",
-         "Напечатать одно число"],
-  stdin: ["6", "2", "3", "7", "8", "1", "4"],
-  starter: "n = int(input())\nprev = -1\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n    prev = x\nprint(count)\n",
-  solution: "n = int(input())\n" +
-            "prev = -1\n" +
-            "count = 0\n" +
-            "for i in range(n):\n" +
-            "    x = int(input())\n" +
-            "    if i > 0 and (prev + x) % 5 == 0:\n" +
-            "        count = count + 1\n" +
-            "    prev = x\n" +
-            "print(count)\n",
-  check: { kind:"output" },
-  note: "Хранить предыдущее число вместо всего списка — приём, который на экзамене " +
-        "экономит и время, и память. Главное не забыть: у первого числа соседа слева нет.",
-  hints: [
-    "Заведи переменную prev — в ней лежит предыдущее число.",
-    "Пару можно считать только начиная со второго числа: i > 0.",
-    "«Кратно 5» — это (prev + x) % 5 == 0. И в конце шага не забудь prev = x."
-  ]
-},
-{
-  id: "oge-digits",
-  group: "oge",
+  id: "base-convert",
+  group: "base",
   emoji: "🔢",
+  title: "Перевод в другую систему",
+  tag: "системы счисления",
+  intro: "Основа школьной информатики и половина заданий про числа на экзамене.",
+  goal: "Напиши функцию to_base(n, base): она возвращает СТРОКУ — запись неотрицательного " +
+        "числа n в системе счисления с основанием base (от 2 до 9). Для нуля вернуть \"0\".",
+  list: ["Работать только арифметикой: последняя цифра записи — это n % base, отбросить её — n // base",
+         "Цифры собираются с конца, поэтому новую приписывают СЛЕВА",
+         "Встроенными bin(), oct(), hex() и int(s, base) не пользоваться: смысл в том, чтобы сделать перевод самому",
+         "У нуля запись в любой системе — \"0\""],
+  starter: "def to_base(n, base):\n    out = \"\"\n    # твой код\n    return out\n",
+  solution: "def to_base(n, base):\n" +
+            "    if n == 0:\n" +
+            "        return \"0\"\n" +
+            "    out = \"\"\n" +
+            "    while n > 0:\n" +
+            "        out = str(n % base) + out\n" +
+            "        n = n // base\n" +
+            "    return out\n",
+  check: { kind:"tests", calls:[
+    "to_base(0, 2)", "to_base(5, 2)", "to_base(100, 7)",
+    "to_base(8, 8)", "to_base(63, 8)", "to_base(1, 9)"
+  ] },
+  note: "Пара «% base и // base» — тот же приём, что и в сумме цифр, только основание " +
+        "не десять. Отсюда же берётся ответ на вопрос «на какую цифру оканчивается запись " +
+        "числа в семеричной системе»: это просто n % 7, и переводить всё число не нужно.",
+  hints: [
+    "Последняя цифра записи — это остаток n % base.",
+    "Приписывать её надо СЛЕВА: out = str(n % base) + out.",
+    "Ноль надо обработать отдельно: цикл while n > 0 для него не выполнится ни разу."
+  ]
+},
+{
+  id: "digit-sum",
+  group: "base",
+  emoji: "➗",
   title: "Сумма цифр числа",
-  tag: "формат ОГЭ · 15.2",
+  tag: "системы счисления",
   intro: "Классика: разобрать число на цифры, не превращая его в строку.",
   goal: "Напиши функцию digit_sum(x): она возвращает сумму цифр неотрицательного числа. " +
         "Превращать число в строку нельзя — только арифметика.",
@@ -9341,6 +9423,134 @@ window.ALGO = [
     "x % 10 — последняя цифра числа.",
     "x // 10 — то же число без последней цифры.",
     "Цикл while x > 0: пока число не кончилось, добавляй последнюю цифру и отбрасывай её."
+  ]
+},
+
+/* ---------- формат ОГЭ ----------
+   ⚠️ Каркас снят с открытого банка заданий ФИПИ 03.09.2026 (КЭС 3.2). Свои
+   формулировки, чужой каркас: копировать задания ФИПИ дословно нельзя, а вот
+   держать их структуру — обязательно, иначе «в формате ОГЭ» будет неправдой.
+
+   Что в каркасе, чего у меня не было, пока я не сходил и не посмотрел:
+     1. признак задаётся ЧЕРЕЗ СИСТЕМУ СЧИСЛЕНИЯ («запись в системе с
+        основанием 7 оканчивается цифрой 1») — это и есть КЭС 3.2;
+     2. обязательный особый случай: «если таких элементов нет, вывести NO»;
+     3. ограничения названы числами: 3 ≤ N ≤ 10 000, числа не больше 30 000;
+     4. формат вывода описан отдельной фразой;
+     5. таблица «Пример работы программы»: вход и выход. */
+{
+  id: "oge-count-base",
+  group: "oge",
+  emoji: "📄",
+  title: "Сколько оканчивается на 1",
+  tag: "формат ОГЭ",
+  intro: "Самая частая формулировка экзамена: посчитать подходящие элементы.",
+  goal: "Напиши программу, которая в последовательности натуральных чисел определяет " +
+        "количество элементов, запись которых в системе счисления с основанием 7 оканчивается " +
+        "цифрой 1. Если таких элементов нет, программа должна вывести «NO».",
+  list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
+         "Вывести одно число — сколько нашлось, или NO, если не нашлось ни одного",
+         "Переводить число целиком не нужно: последнюю цифру записи даёт остаток"],
+  sample: { in:["6","12","15","10","71","50","11"], out:"3" },
+  stdin: ["6", "12", "15", "10", "71", "50", "11"],
+  starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
+  solution: "n = int(input())\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if x % 7 == 1:\n" +
+            "        count = count + 1\n" +
+            "if count == 0:\n" +
+            "    print(\"NO\")\n" +
+            "else:\n" +
+            "    print(count)\n",
+  check: { kind:"output" },
+  note: "Главное тут не цикл, а одна мысль: чтобы узнать последнюю цифру записи числа " +
+        "в системе с основанием 7, переводить всё число не надо — достаточно остатка x % 7. " +
+        "Вторая половина задания — «NO»: про этот случай на экзамене спрашивают всегда, " +
+        "и забыть его дороже, чем ошибиться в условии.",
+  hints: [
+    "Последняя цифра записи числа в системе с основанием 7 — это остаток x % 7.",
+    "Значит «оканчивается цифрой 1» — это x % 7 == 1.",
+    "После цикла проверь count: если ноль, печатай NO, иначе само число."
+  ]
+},
+{
+  id: "oge-max-base",
+  group: "oge",
+  emoji: "📈",
+  title: "Наибольший с нечётной цифрой",
+  tag: "формат ОГЭ",
+  intro: "Второй частый вид: найти не просто максимум, а максимум среди подходящих.",
+  goal: "Напиши программу, которая в последовательности натуральных чисел определяет " +
+        "наибольший элемент, запись которого в системе счисления с основанием 7 оканчивается " +
+        "нечётной цифрой. Если таких элементов нет, программа должна вывести «NO».",
+  list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
+         "Вывести одно число — наибольший подходящий элемент, или NO",
+         "Встроенным max() не пользоваться: смысл в том, чтобы вести максимум самому"],
+  sample: { in:["6","12","15","10","71","50","11"], out:"71" },
+  stdin: ["6", "12", "15", "10", "71", "50", "11"],
+  starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
+  solution: "n = int(input())\n" +
+            "best = -1\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if (x % 7) % 2 == 1:\n" +
+            "        if best == -1 or x > best:\n" +
+            "            best = x\n" +
+            "if best == -1:\n" +
+            "    print(\"NO\")\n" +
+            "else:\n" +
+            "    print(best)\n",
+  check: { kind:"output" },
+  note: "Ловушка этого типа — начальное значение. Начать с нуля нельзя: тогда ноль и " +
+        "окажется ответом там, где подходящих чисел не было вовсе. Поэтому «ещё ничего " +
+        "не нашли» отмечают отдельно — и то же самое значение потом даёт ответ NO.",
+  hints: [
+    "Последняя цифра записи в системе с основанием 7 — это x % 7.",
+    "«Нечётная» — значит (x % 7) % 2 == 1.",
+    "best = -1 значит «ещё ничего не нашли»: сравнивать с ним напрямую нельзя, проверяй best == -1 отдельно."
+  ]
+},
+{
+  id: "oge-sum-base",
+  group: "oge",
+  emoji: "➕",
+  title: "Сумма подходящих",
+  tag: "формат ОГЭ",
+  intro: "Третий вид того же каркаса: сложить только те элементы, что подошли.",
+  goal: "Напиши программу, которая в последовательности натуральных чисел определяет " +
+        "сумму элементов, запись которых в системе счисления с основанием 3 оканчивается " +
+        "цифрой 0. Если таких элементов нет, программа должна вывести «NO».",
+  list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
+         "Вывести одну сумму, или NO, если подходящих элементов нет",
+         "Считать надо количество подходящих отдельно от суммы: сумма может выйти нулевой и по другой причине"],
+  sample: { in:["5","9","4","12","7","6"], out:"27" },
+  stdin: ["5", "9", "4", "12", "7", "6"],
+  starter: "n = int(input())\ntotal = 0\nfound = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(total)\n",
+  solution: "n = int(input())\n" +
+            "total = 0\n" +
+            "found = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if x % 3 == 0:\n" +
+            "        total = total + x\n" +
+            "        found = found + 1\n" +
+            "if found == 0:\n" +
+            "    print(\"NO\")\n" +
+            "else:\n" +
+            "    print(total)\n",
+  check: { kind:"output" },
+  note: "Тут спрятана ловушка, из-за которой теряют балл: по сумме нельзя понять, " +
+        "нашлось что-нибудь или нет. Ноль может значить и «подходящих не было», и " +
+        "«подошли числа, дающие в сумме ноль». Поэтому подходящие считают отдельным счётчиком.",
+  hints: [
+    "«Запись в системе с основанием 3 оканчивается на 0» — это x % 3 == 0.",
+    "Веди два числа сразу: сумму и счётчик подошедших.",
+    "NO печатается по счётчику, а не по сумме."
   ]
 }
 ];
@@ -20143,8 +20353,10 @@ var ALGO_GROUPS = [
     why:"Здесь цену не рассказывают, а считают: движок знает, сколько шагов ушло." },
   { id:"sort",   em:"🫧", title:"Сортировка",
     why:"Упорядочить данные один раз — и всё, что после, станет дешевле." },
-  { id:"oge",    em:"📄", title:"Формат ОГЭ · задание 15.2",
-    why:"Те самые формулировки: сначала количество чисел, потом сами числа." }
+  { id:"base",   em:"🔢", title:"Системы счисления",
+    why:"Ядро школьной информатики: перевод числа в другую систему и цифры без превращения в строку." },
+  { id:"oge",    em:"📄", title:"Формат ОГЭ",
+    why:"Каркас снят с открытого банка ФИПИ: признак через систему счисления, обязательное «NO», ограничения числами." }
 ];
 function algoList(){ return (window.ALGO || []); }
 function algoById(id){
@@ -20167,9 +20379,12 @@ function screenAlgo(){
 
   /* ⚠️ Граница обещания стоит ДО заданий, а не мелким шрифтом внизу. */
   h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
-    '<li><b>Закрываем задание 15.2</b> — то, где надо написать программу, — и алгоритмическую часть.</li>' +
+    '<li><b>Закрываем ту часть, где надо написать программу</b> (в кодификаторе — КЭС 3.2) ' +
+    'и алгоритмику. Каркас заданий снят с открытого банка ФИПИ: формулировки наши, структура их.</li>' +
     '<li><b>Не закрываем экзамен целиком.</b> В ОГЭ пятнадцать заданий, и большинство про ' +
     'кодирование информации, таблицы и файлы. Это не программирование, и мы этого не умеем.</li>' +
+    '<li><b>Номер задания не называем.</b> Нумерация между годами меняется, а сверить её ' +
+    'по спецификации мы пока не смогли — она лежит архивом. Поэтому «в формате ОГЭ», а не «задание №».</li>' +
     '<li><b>Цену алгоритма здесь считает движок.</b> Не «двоичный поиск быстрее», а ' +
     '«1000 шагов против 10» — числом на экране.</li>' +
     '</ul></div>';
@@ -20213,7 +20428,14 @@ function openAlgo(id){
     '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
     '<p class="lede">' + esc(x.intro) + '</p>' +
     '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
-    x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul></div>';
+    x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
+    /* Таблица «Пример работы программы» — часть каркаса ОГЭ, а не украшение:
+       по ней школьник понимает формат ввода быстрее, чем по любому описанию. */
+    (x.sample
+      ? '<div class="ogesample"><div><b>Входные данные</b><pre>' +
+        esc(x.sample.in.join("\n")) + '</pre></div>' +
+        '<div><b>Выходные данные</b><pre>' + esc(x.sample.out) + '</pre></div></div>'
+      : '') + '</div>';
 
   h += '<div id="studio"></div>' +
     '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
@@ -20255,8 +20477,9 @@ function runAlgoCheck(x, ed, showMsg){
      здесь: без него «напиши поиск сам» закрывается одной строкой .index(). */
   if (x.check.kind === "tests" || x.check.kind === "output"){
     var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
-                   "find-binary":[".index("], "oge-maxmin":["max("],
-                   "oge-digits":["str(", "list("] };
+                   "find-binary":[".index("], "oge-max-base":["max("],
+                   "digit-sum":["str(", "list("],
+                   "base-convert":["bin(", "oct(", "hex("] };
     var ban = banned[x.id] || [];
     for (var b = 0; b < ban.length; b++){
       if (code.indexOf(ban[b]) >= 0){

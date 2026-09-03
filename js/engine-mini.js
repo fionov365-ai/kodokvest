@@ -483,7 +483,7 @@ function lex(src){
 /* ============================================================
    ПАРСЕР
    ============================================================ */
-var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","raise","del","assert","yield"];
+var KW_STMT = ["if","elif","else","while","for","def","return","break","continue","pass","import","from","class","try","except","finally","with","global","nonlocal","raise","del","assert","yield"];
 
 function Parser(toks){ this.toks = toks; this.p = 0; }
 Parser.prototype = {
@@ -596,6 +596,14 @@ Parser.prototype = {
         while (this.atOp(",")){ this.next(); names.push(this.expectName()); }
         return { type:"Global", names: names, line: line };
       }
+      /* nonlocal — «эта переменная не моя и не глобальная, а той функции,
+         внутри которой я объявлена». Нужен замыканиям: без него вложенная
+         функция может внешнюю переменную только читать. */
+      if (tk.v === "nonlocal"){
+        this.next(); var nlnames = [this.expectName()];
+        while (this.atOp(",")){ this.next(); nlnames.push(this.expectName()); }
+        return { type:"Nonlocal", names: nlnames, line: line };
+      }
       if (tk.v === "print" && this.peek(1) && this.peek(1).t !== "OP")
         raise("SyntaxError", "В Python 3 print — это функция. Нужны скобки: print(...)", line);
     }
@@ -683,7 +691,14 @@ Parser.prototype = {
     this.next();
     var iter = this.parseExprList();
     var body = this.parseBlock("for");
-    return { type:"For", target: target, iter: iter, body: body, line: line };
+    /* «else» у цикла срабатывает, когда цикл дошёл до конца САМ, без break.
+       В учебниках информатики это стандартный приём «нашли / не нашли»:
+       нашли — break, не нашли — else. Раньше движок такой цикл не понимал
+       вовсе и падал с «else без if». */
+    var orelse = [];
+    this.skipNewlines();
+    if (this.atKw("else")){ this.next(); orelse = this.parseBlock("else"); }
+    return { type:"For", target: target, iter: iter, body: body, orelse: orelse, line: line };
   },
 
   parseTargetList: function(){
@@ -1547,7 +1562,7 @@ var OBJ_ID = 0;
 /* ============================================================
    ОКРУЖЕНИЕ
    ============================================================ */
-function Env(parent){ this.vars = new Map(); this.parent = parent || null; this.globals = []; }
+function Env(parent){ this.vars = new Map(); this.parent = parent || null; this.globals = []; this.nonlocals = []; }
 Env.prototype.get = function(name, line){
   var e = this;
   while (e){
@@ -1575,6 +1590,17 @@ Env.prototype.set = function(name, val){
   if (this.globals.indexOf(name) >= 0){
     var r = this; while (r.parent) r = r.parent;
     r.vars.set(name, val); return;
+  }
+  /* nonlocal: писать надо в ТУ область, где имя уже живёт, а не заводить своё.
+     Ищем ближайшую внешнюю, где оно есть; глобальную не трогаем — на неё есть
+     отдельное слово global, и путать их нельзя. */
+  if (this.nonlocals.indexOf(name) >= 0){
+    var e = this.parent, root = this;
+    while (root.parent) root = root.parent;
+    while (e && e !== root){
+      if (e.vars.has(name)){ e.vars.set(name, val); return; }
+      e = e.parent;
+    }
   }
   this.vars.set(name, val);
 };
@@ -1612,7 +1638,7 @@ function localNames(body){
         case "Assign": st.targets.forEach(walkTarget); break;
         case "AugAssign": walkTarget(st.target); break;
         case "AnnAssign": found[st.name] = 1; break;
-        case "For": walkTarget(st.target); walk(st.body); break;
+        case "For": walkTarget(st.target); walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "While": walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "If": walk(st.body); if (st.orelse) walk(st.orelse); break;
         case "Try":
@@ -1622,7 +1648,12 @@ function localNames(body){
           if (st.finalbody) walk(st.finalbody);
           break;
         case "FuncDef": case "ClassDef": found[st.name] = 1; break;
-        case "Global": st.names.forEach(function(n){ globals[n] = 1; }); break;
+        /* ⚠️ И global, и nonlocal вычёркивают имя из «своих»: иначе разбор
+           решит, что переменная местная, и чтение внешней упадёт с
+           UnboundLocalError ещё до запуска. На nonlocal я на этом и попался —
+           поймала сверка с python3. */
+        case "Global": case "Nonlocal":
+          st.names.forEach(function(n){ globals[n] = 1; }); break;
         case "Import":
           st.items.forEach(function(it){ found[it.as || it.name] = 1; });
           break;
@@ -1723,20 +1754,76 @@ Interp.prototype.installBuiltins = function(){
     g.set(name, TYPES[name]);
   }
   def("str", function(args){ return args.length ? pyStr(args[0]) : ""; });
+  /* ⚠️ Второй аргумент int() — ОСНОВАНИЕ системы счисления, и он здесь не для
+     полноты: системы счисления — ядро школьной информатики, и задачи ОГЭ вида
+     «запись числа в системе с основанием 7 оканчивается цифрой 1» без него не
+     решаются вовсе. Разрешаем 2..36, как настоящий Python. */
+  var DIGITS36 = "0123456789abcdefghijklmnopqrstuvwxyz";
   def("int", function(args, kw, line){
     if (!args.length) return 0;
     var v = args[0];
+    var base = args.length > 1 ? Math.trunc(nv(args[1])) : 10;
+    if (args.length > 1){
+      if (typeof v !== "string")
+        raise("TypeError", "Основание системы счисления можно указать только для строки: " +
+              "int(\"1010\", 2).", line);
+      if (!isNum(args[1]) || base < 2 || base > 36)
+        raise("ValueError", "Основание системы счисления бывает от 2 до 36, а тут " + pyStr(args[1]) + ".", line,
+              { pymsg: "int() base must be >= 2 and <= 36, or 0" });
+    }
     if (isNum(v)) return Math.trunc(nv(v));
     if (v === true) return 1;
     if (v === false) return 0;
     if (typeof v === "string"){
-      var t = v.trim();
-      if (!/^[+-]?\d+$/.test(t))
-        raise("ValueError", "Строку «" + v + "» нельзя превратить в целое число.", line,
-              { pymsg: "invalid literal for int() with base 10: " + pyRepr(v) });
-      return parseInt(t, 10);
+      var t = v.trim(), sign = 1, body = t;
+      if (body.charAt(0) === "+" || body.charAt(0) === "-"){
+        if (body.charAt(0) === "-") sign = -1;
+        body = body.slice(1);
+      }
+      var ok = body.length > 0;
+      var allowed = DIGITS36.slice(0, base);
+      for (var di = 0; di < body.length && ok; di++)
+        if (allowed.indexOf(body.charAt(di).toLowerCase()) < 0) ok = false;
+      if (!ok)
+        raise("ValueError", base === 10
+                ? "Строку «" + v + "» нельзя превратить в целое число."
+                : "Строку «" + v + "» нельзя прочитать как число в системе счисления с основанием " + base + ".",
+              line, { pymsg: "invalid literal for int() with base " + base + ": " + pyRepr(v) });
+      return sign * parseInt(body, base);
     }
     raise("TypeError", "int() не работает с типом " + typeName(v) + ".", line);
+  });
+  /* Перевод в другую систему счисления. Возвращают строку с приставкой, как
+     в Python: bin(5) → '0b101'. Приставка часто мешает школьнику, поэтому в
+     сообщении об ошибке о ней сказано прямо, а не «читайте документацию». */
+  function baseStr(n, base, prefix, line){
+    if (!isNum(n) || isFloat(n))
+      raise("TypeError", prefix + "() работает только с целыми числами.", line);
+    var v = Math.trunc(nv(n)), sign = v < 0 ? "-" : "";
+    return sign + prefix + Math.abs(v).toString(base);
+  }
+  def("bin", function(args, kw, line){ return baseStr(args[0], 2, "0b", line); });
+  def("oct", function(args, kw, line){ return baseStr(args[0], 8, "0o", line); });
+  def("hex", function(args, kw, line){ return baseStr(args[0], 16, "0x", line); });
+  /* divmod и pow — школьная арифметика, и без них задачи про цифры числа
+     пишутся длиннее, чем нужно. */
+  def("divmod", function(args, kw, line){
+    if (!isNum(args[0]) || !isNum(args[1]))
+      raise("TypeError", "divmod() работает только с числами.", line);
+    if (nv(args[1]) === 0)
+      raise("ZeroDivisionError", "Делить на ноль нельзя.", line,
+            { pymsg: "integer division or modulo by zero" });
+    var a = nv(args[0]), b = nv(args[1]);
+    var q = Math.floor(a / b), r = a - q * b;
+    var fl = isFloat(args[0]) || isFloat(args[1]);
+    return Tup([num(q, fl), num(r, fl)]);
+  });
+  def("pow", function(args, kw, line){
+    if (!isNum(args[0]) || !isNum(args[1]))
+      raise("TypeError", "pow() работает только с числами.", line);
+    var r = Math.pow(nv(args[0]), nv(args[1]));
+    var fl = isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0;
+    return num(fl ? r : Math.round(r), fl);
   });
   def("float", function(args, kw, line){
     if (!args.length) return mkFloat(0);
@@ -2259,6 +2346,7 @@ Interp.prototype.execStmt = function*(st, env){
             return rg;
           }
         }
+        if (st.orelse && st.orelse.length) return yield* this.runBlock(st.orelse, env);
         return null;
       }
       var seq = this.iterate(src, st.line);
@@ -2272,6 +2360,7 @@ Interp.prototype.execStmt = function*(st, env){
           return r2;
         }
       }
+      if (st.orelse && st.orelse.length) return yield* this.runBlock(st.orelse, env);
       return null;
     }
 
@@ -2456,6 +2545,20 @@ Interp.prototype.execStmt = function*(st, env){
     case "Break": return new Sig("break");
     case "Continue": return new Sig("continue");
     case "Pass": return null;
+    case "Nonlocal": {
+      var rootEnv = env; while (rootEnv.parent) rootEnv = rootEnv.parent;
+      for (var nli = 0; nli < st.names.length; nli++){
+        var nm = st.names[nli], e2 = env.parent, ok = false;
+        while (e2 && e2 !== rootEnv){ if (e2.vars.has(nm)){ ok = true; break; } e2 = e2.parent; }
+        if (!ok)
+          raise("SyntaxError", "nonlocal " + nm + ": такой переменной нет ни в одной внешней функции. " +
+                "Для переменной верхнего уровня нужно слово global.", st.line,
+                { pymsg: "no binding for nonlocal '" + nm + "' found" });
+        if (env.nonlocals.indexOf(nm) < 0) env.nonlocals.push(nm);
+      }
+      return null;
+    }
+
     case "Global":
       st.names.forEach(function(n){ if (env.globals.indexOf(n) < 0) env.globals.push(n); });
       return null;
@@ -4044,6 +4147,26 @@ Interp.prototype.bindMethod = function(obj, name, line){
         return sign + "0".repeat(w - obj.length) + rest;
       },
       rfind: function(a){ return obj.lastIndexOf(pyStr(a[0])); },
+      /* partition режет строку на ТРИ части: до разделителя, сам разделитель
+         и после. Удобнее split там, где важно, нашёлся разделитель или нет:
+         не нашёлся — вторая и третья части пустые, и проверять длину списка
+         не приходится. */
+      partition: function(a){
+        var sep = pyStr(a[0]);
+        if (sep === "") raise("ValueError", "partition() не умеет делить по пустой строке.", line,
+                              { pymsg: "empty separator" });
+        var i = obj.indexOf(sep);
+        return i < 0 ? Tup([obj, "", ""])
+                     : Tup([obj.slice(0, i), sep, obj.slice(i + sep.length)]);
+      },
+      rpartition: function(a){
+        var sep2 = pyStr(a[0]);
+        if (sep2 === "") raise("ValueError", "rpartition() не умеет делить по пустой строке.", line,
+                               { pymsg: "empty separator" });
+        var j = obj.lastIndexOf(sep2);
+        return j < 0 ? Tup(["", "", obj])
+                     : Tup([obj.slice(0, j), sep2, obj.slice(j + sep2.length)]);
+      },
       index: function(a){
         var i = obj.indexOf(pyStr(a[0]));
         if (i < 0) raise("ValueError", "Подстроки " + pyRepr(a[0]) + " в строке нет.", line,

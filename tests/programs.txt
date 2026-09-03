@@ -1426,3 +1426,78 @@ print(("y" "z") * 2)
 "строка сама по себе"
 "вторая строка сама по себе"
 print("две отдельные строки — не склейка")
+### number_bases
+print(int("ff", 16), int("1010", 2), int("-11", 7))
+print(int("777", 8), int("z", 36), int("+101", 2))
+print(bin(5), oct(8), hex(255))
+print(bin(0), oct(0), hex(0))
+print(bin(-5), hex(-255))
+### base_digits_manual
+n = 100
+base = 7
+out = ""
+while n > 0:
+    out = str(n % base) + out
+    n = n // base
+print(out, int(out, 7))
+### divmod_pow
+print(divmod(7, 2), divmod(-7, 2), divmod(7, -2))
+print(divmod(9, 3))
+print(pow(2, 10), pow(3, 3), pow(2, 0))
+print(pow(2, -1), pow(4, 0.5))
+### for_else
+for x in [1, 2, 3]:
+    if x == 2:
+        print("нашли", x)
+        break
+else:
+    print("не нашли")
+for x in [1, 2, 3]:
+    if x == 9:
+        break
+else:
+    print("прошли весь список")
+for x in []:
+    pass
+else:
+    print("пустой тоже считается")
+### while_else
+i = 0
+while i < 3:
+    i = i + 1
+else:
+    print("while else", i)
+j = 0
+while j < 3:
+    j = j + 1
+    if j == 2:
+        break
+else:
+    print("сюда не дойдём")
+print("j =", j)
+### nonlocal_closure
+def counter():
+    n = 0
+    def step():
+        nonlocal n
+        n = n + 1
+        return n
+    step()
+    step()
+    return n
+print(counter())
+def outer():
+    total = 10
+    def add(x):
+        nonlocal total
+        total = total + x
+    add(5)
+    add(7)
+    return total
+print(outer())
+### str_partition
+print("a=b=c".partition("="))
+print("a=b=c".rpartition("="))
+print("нет".partition("="))
+print("нет".rpartition("="))
+print("=край".partition("="))
