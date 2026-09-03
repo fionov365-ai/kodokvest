@@ -1364,6 +1364,10 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* Строка «твою задачу решили» в списке своих заданий: это хорошая новость,
+   и цвет у неё соответствующий. */
+.solvedline{color:var(--ok);font-weight:600}
+
 /* ---------- мастерская: полка деталей ---------- */
 .shelf{display:grid;gap:12px;margin-top:10px}
 .partcard{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}

@@ -1522,6 +1522,14 @@ function mergeProgress(a, b){
      любом устройстве остаётся пройденным (и опыт за него не начислится второй раз) */
   out.friendTasks = mergeSet(a.friendTasks, b.friendTasks);
 
+  /* квитанции «твою задачу решили» — тоже накопление (грабля 73): решённое
+     на одном устройстве не должно исчезать из-за занятия на другом */
+  out.solved = {};
+  Object.keys(mergeSet(a.solved, b.solved)).forEach(function(k){
+    out.solved[k] = (fresher.solved || {})[k] || (older.solved || {})[k] || null;
+    if (!out.solved[k]) delete out.solved[k];
+  });
+
   /* бестиарий ошибок: по каждому типу берём БОЛЬШЕЕ, а не сумму — после
      первого же обмена обе копии одинаковы, и сложение удваивало бы встречи
      при каждом следующем (та же причина, что у попыток и времени в журнале). */
@@ -3694,6 +3702,25 @@ function screenWorlds(){
     '<div class="line"></div>' +
     '<span class="cnt">' + (pjDone + pics + mine) + ' ' +
     plural(pjDone + pics + mine, "работа", "работы", "работ") + '</span></div>' +
+    /* ⚠️ Обратное направление стоит ПЕРВЫМ в разделе, раньше портфолио.
+       Задания раздают ребёнку везде и всегда; место, где раздаёт он, —
+       единственное в продукте, и прятать его вниз значит терять ровно ту
+       механику, которая даёт интерес, а не контроль. */
+    '<div class="projcard' + (mine ? " done" : "") + '">' +
+    '<span class="pjemoji">✍️</span>' +
+    '<span class="pjbody"><span class="pjkicker">роль автора · наоборот</span>' +
+    '<b>Задай задачу взрослому</b>' +
+    '<span>придумай задачу сам и отправь ссылкой маме, папе или другу — решать будут они, ' +
+    'а проверит тренажёр</span>' +
+    '<span class="pjnote">' + (solvedCount()
+      ? "Твои задачи решали: " + solvedCount() + " " + plural(solvedCount(), "раз", "раза", "раз") +
+        " · своих заданий: " + mine
+      : (mine
+        ? "Своих заданий: " + mine + ". Когда решат, тебе пришлют ссылку обратно."
+        : "Составить задание труднее, чем решить: придётся объяснить задачу словами.")) +
+    '</span></span>' +
+    '<button class="bigbtn' + (mine ? "" : " ghost") + '" id="gomine">Задать задачу</button>' +
+    '</div>' +
     '<div class="projcard' + (pjDone || pics ? " done" : "") + '">' +
     '<span class="pjemoji">🎒</span>' +
     '<span class="pjbody"><span class="pjkicker">сделано своими руками</span>' +
@@ -3705,17 +3732,6 @@ function screenWorlds(){
       : "Пока пусто: первая программа появится, когда будет собран проект первого мира.") +
     '</span></span>' +
     '<button class="bigbtn' + (pjDone || pics ? "" : " ghost") + '" id="gofolio">Открыть портфолио</button>' +
-    '</div>' +
-    '<div class="projcard' + (mine ? " done" : "") + '">' +
-    '<span class="pjemoji">✍️</span>' +
-    '<span class="pjbody"><span class="pjkicker">роль автора</span>' +
-    '<b>Своё задание</b>' +
-    '<span>придумай задачу сам и отправь её ссылкой другу — правильный ответ посчитает тренажёр</span>' +
-    '<span class="pjnote">' + (mine
-      ? "Своих заданий: " + mine
-      : "Составить задание труднее, чем решить: придётся объяснить задачу словами.") +
-    '</span></span>' +
-    '<button class="bigbtn' + (mine ? "" : " ghost") + '" id="gomine">Составить задание</button>' +
     '</div>';
 
   /* ===== достижения ===== */
@@ -7687,10 +7703,24 @@ function screenZanDone(rec){
       '<ul class="zanrep"><li>' + esc(r.was) + '</li><li>Похвалить: ' + esc(r.praise) + '</li>' +
       (r.cut ? '<li>' + esc(r.cut) + '</li>' : '') +
       '<li>' + esc(r.got) + '</li><li>' + esc(r.ask) + '</li></ul></div>' +
+    /* ⚠️ Обратное направление стоит ЗДЕСЬ, в конце занятия, и это не украшение.
+       Взрослый задаёт ребёнку — это контроль, и контролем одним подписку не
+       удержать. Ребёнок задаёт взрослому — это интерес: у работы появляется
+       зритель, а у ребёнка роль старшего (docs/foresight-2027.md § 16.4,
+       механика 3). Конец занятия — единственная точка, где оба только что
+       были рядом и оба свободны. */
+    '<div class="card"><h3>✍️ Задай задачу взрослому</h3>' +
+      '<p>Придумай задачу, отправь ссылкой маме, папе или другу — и посмотри, ' +
+      'решат ли. Проверять будет тренажёр, а не ты: сойтись должен вывод.</p>' +
+      '<p class="dim">Составить задачу труднее, чем решить: придётся объяснить её словами так, ' +
+      'чтобы человек понял без твоей программы.</p>' +
+      '<div class="admrow"><button class="rbtn check" id="zask">Задать задачу →</button></div></div>' +
     '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
   document.getElementById("ztoday").onclick = screenToday;
   document.getElementById("zmap").onclick = screenWorlds;
+  var za = document.getElementById("zask");
+  if (za) za.onclick = function(){ screenMyTasks(); };
   sfx("win");
   refreshTop();
 }
@@ -8980,6 +9010,106 @@ function taskKey(t){
   return "k" + h.toString(36);
 }
 
+/* ===== обратная ссылка: «твою задачу решили» =====
+   Механика 3 из docs/foresight-2027.md § 16.4 работала наполовину: ребёнок
+   отправлял задачу и НИКОГДА не узнавал, решил её взрослый или нет. Половина
+   петли — это не петля: ради зрителя всё и затевалось, а зритель был нем.
+
+   Обратный путь устроен как прямой — ссылкой, без сервера и без хранения:
+   решивший жмёт «отправить результат автору», получает адрес вида
+   #solved=<base64> и отправляет его тем же мессенджером.
+
+   ⚠️ Имени в квитанции НЕТ, и это не забывчивость. Ребёнок и так знает, кому
+   отправлял, а имя взрослого в детском прогрессе — это персональные данные
+   рядом с детскими, то есть ровно то, чего продукт не делает (§ 14 разбора
+   занятия). В квитанции только: какая задача, с какой попытки, когда. */
+var SOLVED_KEEP = 40;
+function solvedPack(r){
+  return b64urlEnc(JSON.stringify({ v:1, k:r.key, n:r.tries, t:r.title }));
+}
+function solvedUnpack(s){
+  var o = null;
+  try { o = JSON.parse(b64urlDec(s)); } catch(e){ return null; }
+  if (!o || o.v !== 1) return null;
+  if (typeof o.k !== "string" || !o.k) return null;
+  var n = +o.n;
+  if (!isFinite(n) || n < 1 || n > 9999) return null;
+  return { key: o.k.slice(0, 32), tries: Math.round(n),
+           title: typeof o.t === "string" ? o.t.slice(0, 80) : "" };
+}
+function solvedLink(r){
+  var base = "";
+  try { base = location.origin + location.pathname; } catch(e){}
+  return base + "#solved=" + solvedPack(r);
+}
+function solvedAll(){ S.solved = S.solved || {}; return S.solved; }
+/* Квитанция кладётся по своему ключу, а не в список: одну и ту же ссылку
+   можно открыть десять раз, и десять «решили» из этого получиться не должно.
+   Ключ — задача плюс число попыток: второе решение той же задачи с другого
+   раза это уже другое событие, и его видеть надо. */
+function solvedAdd(r){
+  var d = solvedAll(), k = r.key + "-" + r.tries;
+  if (!d[k]) d[k] = { k: r.key, n: r.tries, t: r.title || "", at: Date.now() };
+  var keys = Object.keys(d);
+  if (keys.length > SOLVED_KEEP){
+    keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+    keys.slice(0, keys.length - SOLVED_KEEP).forEach(function(x){ delete d[x]; });
+  }
+  save();
+  return k;
+}
+/* Квитанции по конкретной задаче, свежие сверху. */
+function solvedFor(key){
+  var d = solvedAll();
+  return Object.keys(d).map(function(k){ return d[k]; })
+    .filter(function(x){ return x && x.k === key; })
+    .sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function solvedCount(){ return Object.keys(solvedAll()).length; }
+
+/* Экран автора: его задачу решили. Открывается по присланной обратно ссылке.
+   ⚠️ Хвалим РЕШИВШЕГО, а не автора за сложность: «взрослый не смог с первой
+   попытки» — это повод для гордости, но не для злорадства, и разница между
+   ними целиком в словах. */
+function screenSolved(r){
+  enterScreen("mine", "solved");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  solvedAdd(r);
+  var mine = myTasksList().filter(function(t){ return taskKey(t) === r.key; })[0];
+  var title = (mine && mine.title) || r.title || "твоя задача";
+  var n = r.tries;
+
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">ответ на твою задачу</div>' +
+    '<h1>🎉 Твою задачу решили</h1></div>' +
+    '<div class="right"><span class="tag">роль автора</span></div></div>' +
+    '<p class="lede">Задачу «<b>' + esc(title) + '</b>» прошли' +
+    (n === 1 ? ' <b>с первой попытки</b>' : ' с <b>' + n + '-й</b> попытки') + '. ' +
+    'Сверял вывод тренажёр, а не человек, — значит условие ты написал понятно.</p>' +
+    '<div class="card"><h3>' + (n === 1
+      ? "С первой попытки — условие было понятным"
+      : "Не с первой попытки — и это нормально") + '</h3>' +
+    '<p>' + (n === 1
+      ? "Написать условие так, чтобы по нему получилось решить с первого раза, труднее, чем решить самому: " +
+        "приходится объяснить задачу словами, ничего не пропустив."
+      : "Попыток было " + n + ". Спроси, что оказалось непонятным в условии, — это и есть самая " +
+        "полезная часть: так учатся писать условия, а не только программы.") + '</p>' +
+    '<p class="dim">Ни имени, ни программы решавшего в ссылке нет — только какая задача ' +
+    'и с какой попытки. Мы про людей ничего не собираем.</p></div>' +
+    '<div class="pager"><button class="bigbtn" id="tomine">✍️ Задать ещё одну</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  document.getElementById("tomine").onclick = function(){
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenMyTasks();
+  };
+  document.getElementById("tomap").onclick = function(){
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenWorlds();
+  };
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 function myTasksAll(){ S.mytasks = S.mytasks || {}; return S.mytasks; }
 /* Список для показа: только целые записи, свежие сверху. Битую запись (а она
    может приехать со старой версии или из чужого файла прогресса) молча
@@ -9052,20 +9182,27 @@ function screenMyTasks(edit){
   var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
   var start = edit || draft || { title:"", goal:"", code:"" };
 
+  var got = solvedCount();
   var h = '<div class="lvlhead"><div><div class="idx">вне сотни уроков</div>' +
-    '<h1>✍️ Своё задание</h1></div>' +
-    '<div class="right"><span class="tag">для друга</span></div></div>' +
-    '<p class="lede">Придумай задачу и отправь её ссылкой другу, брату или родителям. ' +
-    'Ты пишешь программу — тренажёр сам считает, что она печатает, и это становится правильным ответом. ' +
-    'Твоего кода в ссылке нет: другу придётся написать свою программу, сойтись должен ответ.</p>';
+    '<h1>✍️ Задай задачу взрослому</h1></div>' +
+    '<div class="right"><span class="tag">взрослому или другу</span></div></div>' +
+    '<p class="lede">Обычно задания раздают тебе. Здесь наоборот: задачу придумываешь ты, ' +
+    'а решает мама, папа, брат или друг — прямо в браузере, за пару минут. ' +
+    'Ты пишешь программу, тренажёр сам считает, что она печатает, и это становится правильным ответом. ' +
+    'Твоего кода в ссылке нет: решать придётся своей головой, сойтись должен вывод.</p>' +
+    (got ? '<p class="lede">🎉 Твои задачи уже решали: <b>' + got + '</b> ' +
+           plural(got, "раз", "раза", "раз") + '.</p>' : '');
 
   h += '<div class="card"><h3>Как это работает</h3>' +
     '<ol class="tsteps"><li>Пишешь программу — такую, какой сам решил бы задачу.</li>' +
-    '<li>Пишешь условие словами: друг не увидит кода, только эти слова.</li>' +
+    '<li>Пишешь условие словами: решающий не увидит кода, только эти слова.</li>' +
     '<li>Жмёшь «Собрать задание» — движок прогоняет программу и запоминает ответ.</li>' +
-    '<li>Копируешь ссылку и отправляешь. Друг откроет и будет решать.</li></ol>' +
-    '<p class="dim">Правило одно: без случайных чисел и без input(). У друга случайное выпало бы другое, ' +
-    'и проверить было бы нечего.</p></div>';
+    '<li>Копируешь ссылку и отправляешь. Открывший будет решать.</li>' +
+    '<li>Когда решат, тебе пришлют ссылку обратно — и ты увидишь, с какой попытки.</li></ol>' +
+    '<p class="dim">Правило одно: без случайных чисел и без input(). У решающего случайное выпало бы другое, ' +
+    'и проверить было бы нечего.</p>' +
+    '<p class="dim">⚠️ Взрослому не нужно ничего устанавливать и уметь: он открывает ссылку, ' +
+    'пишет программу и жмёт «Проверить». Судит тренажёр, а не ты, — спорить не о чем.</p></div>';
 
   h += '<div class="card"><h3>Задание</h3>' +
     /* Значения полей ставятся из JS, а не подставляются в разметку: esc()
@@ -9088,10 +9225,17 @@ function screenMyTasks(edit){
   }
   list.forEach(function(t){
     var n = t.lines.length;
+    var got = solvedFor(taskKey(t));
     h += '<div class="fproj done"><div class="fptop"><span class="pjemoji">✍️</span>' +
       '<div class="fpttl"><span class="pjkicker">' + fmtDay(t.at) + '</span>' +
       '<b>' + esc(t.title) + '</b>' +
-      '<span class="fpsub">' + esc(t.goal) + '</span></div>' +
+      '<span class="fpsub">' + esc(t.goal) + '</span>' +
+      (got.length
+        ? '<span class="fpsub solvedline">🎉 Решили: ' + got.length + ' ' +
+          plural(got.length, "раз", "раза", "раз") + ' · лучшая попытка — ' +
+          Math.min.apply(null, got.map(function(x){ return x.n; })) + '-я</span>'
+        : '') +
+      '</div>' +
       '<span class="fpstat ok">' + n + " " + plural(n, "строка", "строки", "строк") + ' ответа</span></div>' +
       '<div class="fpbtns"><button class="rbtn" data-tlink="' + t.id + '">Скопировать ссылку</button>' +
       '<button class="rbtn sec" data-topen="' + t.id + '">Открыть как друг</button>' +
@@ -9214,6 +9358,18 @@ function openFriendTask(t, opts){
     '<ul><li>Проверяется напечатанное: строк должно быть столько же и слово в слово.</li>' +
     '<li>Как ты это сделаешь — твоё дело: у автора своя программа, у тебя может быть другая.</li></ul></div>';
 
+  /* Ссылку часто открывает ВЗРОСЛЫЙ, и открывает он её впервые. Ему надо
+     сказать три вещи и не больше: устанавливать ничего не нужно, судит
+     тренажёр, и зачем это вообще. Третье — не реклама: пока взрослый не
+     понимает, что происходит, он закроет вкладку. */
+  if (!opts.own)
+    h += '<div class="card"><h3>Если вы взрослый и открыли это впервые</h3>' +
+      '<p>Устанавливать ничего не нужно: пишете программу прямо здесь и жмёте «Проверить». ' +
+      'Совпадение вывода сверяет тренажёр, а не автор задачи, — спорить не о чем.</p>' +
+      '<p class="dim">Задачу придумал ребёнок, и это сложнее, чем решить: ему пришлось объяснить её ' +
+      'словами так, чтобы вы поняли без его программы. Объяснить может только тот, кто понял, — ' +
+      'поэтому пара минут здесь говорит о его понимании больше любого отчёта.</p></div>';
+
   h += '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
@@ -9273,10 +9429,28 @@ function winFriendTask(t, key, already, opts){
       : "Вывод сошёлся с ответом автора" + (t.author ? " (" + esc(t.author) + ")" : "") +
         ". Программа у тебя своя, а результат тот же — так и работают настоящие задачи.") + '</p>' +
     (gained ? '<div class="winxp">+' + gained + ' XP</div>' : '') +
-    '<div class="winrow"><button class="bigbtn" id="fmine">✍️ Составить своё</button>' +
+    /* ⚠️ Обратная ссылка — главная кнопка, а не приписка снизу. Без неё автор
+       никогда не узнает, решили его задачу или нет, и «зритель», ради которого
+       вся механика затевалась, остаётся немым. Своё же задание, открытое
+       глазами друга, отправлять некому — там кнопки нет. */
+    (opts.own ? '' : '<div class="winrow"><button class="bigbtn" id="fback">🔗 Отправить результат автору</button></div>' +
+      '<div class="msg" id="fbackmsg"></div>') +
+    '<div class="winrow"><button class="bigbtn' + (opts.own ? '' : ' ghost') + '" id="fmine">✍️ Составить своё</button>' +
     '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
   document.getElementById("win").classList.add("show");
   confetti(first ? 3 : 1);
+  var fb = document.getElementById("fback");
+  if (fb) fb.onclick = function(){
+    var link = solvedLink({ key: key, tries: session.attempts, title: t.title });
+    var box = document.getElementById("fbackmsg");
+    box.className = "msg show ok";
+    box.innerHTML = '<b>Ссылка с результатом</b>Отправьте её автору тем же мессенджером. ' +
+      'Ни имени, ни программы в ней нет — только какая задача и с какой попытки.' +
+      '<div class="admrow"><button class="rbtn check" id="fbackcopy">Скопировать</button></div>' +
+      '<p class="dim brk">' + esc(link) + '</p>';
+    var cb = document.getElementById("fbackcopy");
+    if (cb) cb.onclick = function(){ copyText(link, cb); };
+  };
   document.getElementById("fmine").onclick = function(){ closeWin(); screenMyTasks(); };
   document.getElementById("wstay").onclick = closeWin;
 }
@@ -10084,6 +10258,13 @@ function routeHash(){
   if (apk){
     var gota = assignUnpack(apk[1]);
     if (gota) screenAssign(gota); else screenTaskBroken();
+    return true;
+  }
+  /* Квитанция «твою задачу решили» — обратный путь той же ссылочной механики */
+  var spk = /^#solved=(.+)$/.exec(location.hash || "");
+  if (spk){
+    var gots = solvedUnpack(spk[1]);
+    if (gots) screenSolved(gots); else screenTaskBroken();
     return true;
   }
   /* Работа по ссылке — тоже до приведения к нижнему регистру: base64
@@ -11904,6 +12085,8 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
+  solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,
   screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,
   partDrop: partDrop, partsHarvest: partsHarvest, partWorks: partWorks, PART_MAX: PART_MAX,
   buildsList: buildsList, buildSave: buildSave, buildDrop: buildDrop, BUILD_MAX: BUILD_MAX,

@@ -3846,7 +3846,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let authorChecked = 0, myPredChecked = 0, shopChecked = 0;
+  let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -4769,6 +4769,160 @@ function checkEncoding(){
     if (problems.length === p0) shopChecked++;
   }
 
+  /* --- 8. обратное направление: ребёнок задаёт задачу взрослому --- */
+  if (typeof g.solvedLink === "function"){
+    const p0 = problems.length;
+    g.state.solved = {}; g.state.mytasks = {}; g.state.friendTasks = {};
+
+    /* 8.1. Квитанция уезжает и разбирается обратно. ⚠️ Имени в ней нет и быть
+       не должно: имя взрослого в детском прогрессе — это персональные данные
+       рядом с детскими, то есть ровно то, чего продукт не делает. */
+    {
+      const link = g.solvedLink({ key:"kabc", tries:3, title:"Считалка" });
+      const raw = decodeURIComponent(link.split("#solved=")[1] || "");
+      const back = g.solvedUnpack(link.split("#solved=")[1]);
+      if (!back) bad("[наоборот] квитанция не разобралась обратно");
+      else {
+        if (back.key !== "kabc" || back.tries !== 3)
+          bad("[наоборот] квитанция потеряла данные: " + JSON.stringify(back));
+      }
+      let payload = "";
+      try { payload = g.b64urlDec(link.split("#solved=")[1]); } catch(e){ payload = ""; }
+      if (/имя|name|author|"a"/i.test(payload))
+        bad("[наоборот] в квитанции появилось поле про человека: " + payload);
+      if (g.solvedUnpack("это-не-base64")) bad("[наоборот] мусор принят за квитанцию");
+      if (g.solvedUnpack(g.b64urlEnc(JSON.stringify({ v:1, k:"k1", n:0 }))))
+        bad("[наоборот] принята квитанция с нулём попыток");
+    }
+
+    /* 8.2. Одну ссылку можно открыть десять раз — «решили» от этого не
+       десять. А вот решение с другого раза это другое событие. */
+    {
+      g.state.solved = {};
+      g.solvedAdd({ key:"k1", tries:2, title:"Задача" });
+      g.solvedAdd({ key:"k1", tries:2, title:"Задача" });
+      if (g.solvedFor("k1").length !== 1)
+        bad("[наоборот] повторное открытие ссылки посчиталось вторым решением");
+      g.solvedAdd({ key:"k1", tries:5, title:"Задача" });
+      if (g.solvedFor("k1").length !== 2)
+        bad("[наоборот] второе решение той же задачи не записалось");
+      if (g.solvedFor("другая").length)
+        bad("[наоборот] квитанция прилипла к чужой задаче");
+    }
+
+    /* 8.3. Слияние: решённое на одном устройстве не пропадает из-за занятия
+       на другом (то же правило, что у полки деталей). */
+    {
+      const m = g.mergeProgress(
+        { savedAt:1, solved:{ "k1-2":{ k:"k1", n:2, at:1 } } },
+        { savedAt:2, solved:{ "k9-1":{ k:"k9", n:1, at:2 } } });
+      if (Object.keys(m.solved || {}).length !== 2)
+        bad("[наоборот] слияние потеряло квитанцию: " + JSON.stringify(Object.keys(m.solved || {})));
+    }
+
+    /* 8.4. Петля целиком: собрали задание → решили как «друг» → получили
+       обратную ссылку → автор её открыл и увидел, с какой попытки. */
+    {
+      g.state.solved = {}; g.state.mytasks = {};
+      const built = g.taskBuild("Считалка", "Напечатай числа от 1 до 3, каждое с новой строки.",
+                                "for i in range(1, 4):\n    print(i)");
+      if (built.problem || built.error)
+        bad("[наоборот] задание не собралось: " + (built.problem || "ошибка"));
+      else {
+        const id = g.myTaskSave(built.task);
+        const key = g.taskKey(built.task);
+
+        g.openFriendTask(built.task, {});
+        await tick();
+        const t = doc.getElementById("app").textContent;
+        if (!/вы взрослый/i.test(t))
+          bad("[наоборот] решающему не сказано, что делать, если он взрослый");
+        if (!/устанавливать ничего не нужно/i.test(t))
+          bad("[наоборот] не снят главный страх взрослого — что надо что-то ставить");
+
+        const st = studioOf();
+        if (!st) bad("[наоборот] редактор решателя не открылся");
+        else {
+          st.editor.setCode("print(9)");           /* первая попытка мимо */
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()) bad("[наоборот] неверный ответ засчитан");
+          st.editor.setCode("print(1)\nprint(2)\nprint(3)");
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[наоборот] верный ответ не засчитан");
+
+          const fb = doc.getElementById("fback");
+          if (!fb) bad("[наоборот] решившему негде взять обратную ссылку — петля не замкнута");
+          else {
+            fb.click();
+            const shown = doc.getElementById("fbackmsg").textContent;
+            const m = /#solved=([A-Za-z0-9_-]+)/.exec(shown);
+            if (!m) bad("[наоборот] обратная ссылка не показана: " + shown.slice(0, 80));
+            else {
+              const rec = g.solvedUnpack(m[1]);
+              if (!rec) bad("[наоборот] обратная ссылка не читается");
+              else {
+                if (rec.key !== key) bad("[наоборот] квитанция не про эту задачу");
+                if (rec.tries !== 2) bad("[наоборот] число попыток в квитанции: " + rec.tries);
+                closeWin();
+                /* автор открывает присланное */
+                g.screenSolved(rec);
+                await tick();
+                const t2 = doc.getElementById("app").textContent;
+                if (!/Твою задачу решили/.test(t2)) bad("[наоборот] автор не увидел, что задачу решили");
+                if (!/2-й попытки/.test(t2)) bad("[наоборот] автору не сказано, с какой попытки: " + t2.slice(0, 200));
+                if (!g.solvedFor(key).length) bad("[наоборот] квитанция не записалась автору");
+                /* и это видно в списке его заданий */
+                g.screenMyTasks();
+                await tick();
+                if (!/Решили/.test(doc.getElementById("app").textContent))
+                  bad("[наоборот] в списке своих заданий не видно, что задачу решили");
+              }
+            }
+          }
+        }
+        g.myTaskDrop(id);
+      }
+    }
+
+    /* 8.5. Своё же задание, открытое «глазами друга», отправлять некому. */
+    {
+      const built = g.taskBuild("Проба", "Напечатай слово привет одной строкой.", 'print("привет")');
+      if (!built.task) bad("[наоборот] пробное задание не собралось");
+      else {
+        g.openFriendTask(built.task, { own:true });
+        await tick();
+        const st = studioOf();
+        st.editor.setCode('print("привет")');
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()) bad("[наоборот] своё задание не проходится");
+        if (doc.getElementById("fback"))
+          bad("[наоборот] у своего же задания предложено отправить результат самому себе");
+        closeWin();
+      }
+    }
+
+    /* 8.6. Видное место. Задания раздают ребёнку везде; место, где раздаёт
+       он, — единственное, и оно обязано стоять раньше портфолио. */
+    {
+      g.screenWorlds();
+      await tick();
+      const mineBtn = doc.getElementById("gomine"), folio = doc.getElementById("gofolio");
+      if (!mineBtn) bad("[наоборот] на главной нет входа в «задай задачу»");
+      else if (folio && !(mineBtn.compareDocumentPosition(folio) & 4))
+        bad("[наоборот] «задай задачу» стоит ниже портфолио");
+      const card = mineBtn && mineBtn.closest(".projcard");
+      if (card && !/взрослому|маме/i.test(card.textContent))
+        bad("[наоборот] карточка не говорит, что задачу задают взрослому: " + card.textContent.slice(0, 120));
+    }
+
+    g.state.solved = {}; g.state.mytasks = {}; g.state.friendTasks = {};
+    viewReset(g);
+    if (problems.length === p0) backChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -4818,6 +4972,7 @@ function checkEncoding(){
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
   console.log(`проверка понимания на своём коде: ${myPredChecked ? "да" : "нет"}`);
   console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
+  console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
