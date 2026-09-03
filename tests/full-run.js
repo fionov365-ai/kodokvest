@@ -3846,7 +3846,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let authorChecked = 0, myPredChecked = 0;
+  let authorChecked = 0, myPredChecked = 0, shopChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -4608,6 +4608,167 @@ function checkEncoding(){
     if (problems.length === p0) myPredChecked++;
   }
 
+  /* --- 7. мастерская: полка деталей и верстак --- */
+  if (typeof g.partsFrom === "function"){
+    const p0 = problems.length;
+
+    /* 7.1. Что считается деталью: функция верхнего уровня целиком, с телом. */
+    {
+      const code = 'СТАВКА = 5\n\n' +
+        'def налог(сумма):\n    """сколько платить"""\n    return сумма * СТАВКА // 100\n\n\n' +
+        'def привет(имя):\n    return "Привет, " + имя\n\n' +
+        'print(налог(1000))';
+      const parts = g.partsFrom(code);
+      if (parts.length !== 2)
+        bad("[мастерская] деталей найдено " + parts.length + " вместо двух: " +
+            JSON.stringify(parts.map(x => x.name)));
+      else {
+        if (parts[0].name !== "налог" || parts[1].name !== "привет")
+          bad("[мастерская] имена деталей прочитаны неверно: " + JSON.stringify(parts.map(x => x.name)));
+        if (!/return сумма/.test(parts[0].code))
+          bad("[мастерская] тело детали не попало в неё: " + JSON.stringify(parts[0].code));
+        if (/print\(/.test(parts[0].code))
+          bad("[мастерская] в деталь затянуло код за её пределами");
+        if (!/сколько платить/.test(parts[0].code))
+          bad("[мастерская] строка документации выпала из детали");
+      }
+    }
+
+    /* 7.2. «def» внутри текстовой строки деталью не становится: это текст,
+       а не функция. Ловится тем, что режем по скелету кода. */
+    {
+      const code = 'подсказка = """\ndef так_нельзя():\n    pass\n"""\nprint(подсказка)';
+      if (g.partsFrom(code).length)
+        bad("[мастерская] в деталь попал def из текстовой строки");
+    }
+    /* объявление без тела деталью тоже не считается */
+    if (g.partsFrom("def пусто():").length)
+      bad("[мастерская] пустое объявление названо деталью");
+
+    /* 7.3. Сломанная деталь на полку не кладётся. */
+    if (g.partWorks("def кривая(:\n    pass"))
+      bad("[мастерская] сломанный код признан рабочей деталью");
+    if (!g.partWorks("def годная(x):\n    return x + 1"))
+      bad("[мастерская] рабочая деталь признана сломанной");
+
+    /* 7.4. Сбор при сдаче урока. ⚠️ Показанное решение деталью НЕ становится:
+       это код автора, и назвать его «твоей деталью» — соврать ребёнку в самом
+       важном для него месте. То же с функцией, выданной в заготовке. */
+    {
+      g.state.parts = {};
+      const sess = g.getSession();
+      const own = 'def удвой(x):\n    return x * 2\n\n\nprint(удвой(4))';
+
+      /* показанное решение */
+      Object.assign(sess, { shown:true, code: own, starter:[{ name:"main.py", code:"" }] });
+      g.partsHarvest({ num:1, title:"Урок" }, {});
+      if (g.partsList().length)
+        bad("[мастерская] показанное решение легло на полку как своя деталь");
+
+      /* выдано в заготовке */
+      Object.assign(sess, { shown:false, code: own, starter:[{ name:"main.py", code: own }] });
+      g.partsHarvest({ num:1, title:"Урок" }, {});
+      if (g.partsList().length)
+        bad("[мастерская] функция из заготовки записана как написанная ребёнком");
+
+      /* написано самим */
+      Object.assign(sess, { shown:false, code: own,
+                            starter:[{ name:"main.py", code:"# напиши функцию удвой\n" }] });
+      const n = g.partsHarvest({ num:7, title:"Функции" }, {});
+      if (n !== 1) bad("[мастерская] своя функция не попала на полку: собрано " + n);
+      const list = g.partsList();
+      if (list.length !== 1) bad("[мастерская] на полке не одна деталь: " + list.length);
+      else {
+        if (list[0].name !== "удвой") bad("[мастерская] имя детали: " + list[0].name);
+        if (!/урок 7/.test(list[0].from)) bad("[мастерская] не записано, откуда деталь: " + list[0].from);
+      }
+      /* тот же урок второй раз дубля не даёт */
+      g.partsHarvest({ num:7, title:"Функции" }, {});
+      if (g.partsList().length !== 1)
+        bad("[мастерская] одна и та же деталь легла на полку дважды");
+
+      /* полка не растёт без предела */
+      for (let i = 0; i < g.PART_MAX + 5; i++)
+        g.partAdd("ф" + i, "def ф" + i + "():\n    return " + i, "урок");
+      if (g.partsList().length > g.PART_MAX)
+        bad("[мастерская] полка растёт без предела: " + g.partsList().length);
+    }
+
+    /* 7.5. Слияние двух устройств. ⚠️ Полка — это НАКОПЛЕНИЕ: деталь,
+       сделанная на планшете, не должна пропадать из-за занятия на ноутбуке.
+       Поэтому здесь объединение, а не «свежее побеждает». */
+    {
+      const m = g.mergeProgress(
+        { savedAt:1, parts:{ d1:{ name:"а", code:"def а():\n    return 1", at:1 } },
+          builds:{ b1:{ title:"Вещь", code:"print(1)", at:1 } } },
+        { savedAt:2, parts:{ d2:{ name:"б", code:"def б():\n    return 2", at:2 } },
+          builds:{} });
+      if (Object.keys(m.parts).length !== 2)
+        bad("[мастерская] слияние потеряло деталь с одного из устройств: " +
+            JSON.stringify(Object.keys(m.parts)));
+      if (!m.builds || !m.builds.b1)
+        bad("[мастерская] слияние потеряло собранную вещь");
+    }
+
+    /* 7.6. Экран: полка, верстак, деталь встаёт в код кнопкой, вещь
+       сохраняется. И уход с экрана не стирает написанное (грабля 43). */
+    {
+      g.state.parts = {}; g.state.builds = {}; g.state.shop = "";
+      g.partAdd("удвой", "def удвой(x):\n    return x * 2", "урок 7 · Функции");
+      g.screenShop();
+      await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/Полка/.test(t)) bad("[мастерская] на экране нет полки");
+      if (!doc.querySelector(".partcard")) bad("[мастерская] деталь не показана на полке");
+      const take = doc.querySelector("[data-take]");
+      if (!take) bad("[мастерская] у детали нет кнопки «на верстак»");
+      else {
+        take.click();
+        await tick();
+        const st = studioOf();
+        if (!st) bad("[мастерская] верстак не открылся");
+        else if (!/def удвой/.test(st.editor.getCode()))
+          bad("[мастерская] деталь не встала в код верстака");
+        else {
+          /* сохранение вещи */
+          st.editor.setCode("# Мой калькулятор\ndef удвой(x):\n    return x * 2\n\n\nprint(удвой(21))");
+          doc.getElementById("tobuild").click();
+          await tick();
+          const builds = g.buildsList();
+          if (builds.length !== 1) bad("[мастерская] вещь не сохранилась: " + builds.length);
+          else if (builds[0].title !== "Мой калькулятор")
+            bad("[мастерская] название вещи взято не из комментария: " + builds[0].title);
+        }
+      }
+      /* одни комментарии — сохранять нечего, и об этом надо сказать, а не
+         молча завести пустую вещь */
+      const st2 = studioOf();
+      if (st2){
+        const wasN = g.buildsList().length;
+        st2.editor.setCode("# просто мысли\n# и ещё\n");
+        doc.getElementById("tobuild").click();
+        await tick();
+        if (g.buildsList().length !== wasN)
+          bad("[мастерская] сохранилась вещь из одних комментариев");
+        if (!/нечего сохранять/i.test(doc.getElementById("buildmsg").textContent))
+          bad("[мастерская] про пустую вещь ничего не сказано");
+      }
+      /* уход с экрана не должен стирать написанное */
+      const st3 = studioOf();
+      if (st3){
+        st3.editor.setCode("print('не потеряй меня')");
+        g.screenWorlds();
+        await tick();
+        if (!/не потеряй меня/.test(g.state.shop || ""))
+          bad("[мастерская] уход с верстака стёр написанное");
+      }
+      g.state.parts = {}; g.state.builds = {}; g.state.shop = "";
+      viewReset(g);
+    }
+
+    if (problems.length === p0) shopChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -4656,6 +4817,7 @@ function checkEncoding(){
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
   console.log(`проверка понимания на своём коде: ${myPredChecked ? "да" : "нет"}`);
+  console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

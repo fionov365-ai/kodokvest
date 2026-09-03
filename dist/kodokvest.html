@@ -1382,6 +1382,15 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- мастерская: полка деталей ---------- */
+.shelf{display:grid;gap:12px;margin-top:10px}
+.partcard{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}
+.parthead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:14px;margin-bottom:6px}
+.partcard pre{margin:0;overflow-x:auto;font-size:12.5px;line-height:1.5}
+.partbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.shopcard{margin-bottom:14px}
+
 /* ---------- запись авторства («Как шла работа») ---------- */
 /* Пометки красим тремя цветами, и ни один из них не красный: красный на
    экране взрослого читается как «поймали», а мы ничего не ловим. Сильная
@@ -14784,6 +14793,23 @@ function mergeProgress(a, b){
     if (!out.gallery[k]) delete out.gallery[k];
   });
 
+  /* мастерская. Деталь — это КОД, и она НАКОПЛЕНИЕ: то, что сделано на одном
+     устройстве, не должно пропадать из-за занятия на другом. Поэтому здесь
+     объединение по ключу, а ключ — это хеш самой детали: одинаковые детали
+     с двух устройств склеиваются сами и дубля не дают. Верстак — одна
+     программа, и он как песочница: побеждает свежее сохранение. */
+  out.parts = {};
+  Object.keys(mergeSet(a.parts, b.parts)).forEach(function(k){
+    out.parts[k] = (fresher.parts || {})[k] || (older.parts || {})[k] || null;
+    if (!out.parts[k]) delete out.parts[k];
+  });
+  out.builds = {};
+  Object.keys(mergeSet(a.builds, b.builds)).forEach(function(k){
+    out.builds[k] = (fresher.builds || {})[k] || (older.builds || {})[k] || null;
+    if (!out.builds[k]) delete out.builds[k];
+  });
+  out.shop = fresher.shop || older.shop || null;
+
   /* черновики уроков: это КОД, и сложить две версии нельзя — берём из более
      свежего сохранения, как песочницу и как свои версии игр. Урок, который
      правили только на одном устройстве, при этом не теряется. */
@@ -17088,6 +17114,22 @@ function screenWorld(n){
       '</div>';
     }
 
+    /* Мастерская — в конце мира, сразу за проектом. Здесь и только здесь у
+       предложения «собери из накопленного» есть смысл: уроки мира позади,
+       и на полке уже что-то лежит. Раньше трёх деталей не зовём — из одной
+       функции вещь не собирается, а пустое приглашение обесценивает саму
+       мысль о накоплении. */
+    var shelfN = partsList().length;
+    if (shelfN >= 3)
+      h += '<div class="projcard"><span class="pjemoji">🔧</span>' +
+        '<span class="pjbody"><span class="pjkicker">Мастерская · вне сотни уроков</span>' +
+        '<b>Собери вещь из своих деталей</b>' +
+        '<span>На полке уже ' + shelfN + ' ' + plural(shelfN, "деталь", "детали", "деталей") +
+        ' — функций, которые ты написал сам.</span>' +
+        '<span class="pjnote">Решённая задача обычно исчезает. Здесь она остаётся ' +
+        'и идёт в дело.</span></span>' +
+        '<button class="bigbtn" id="openshop">Открыть мастерскую</button></div>';
+
     h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button><span class="sp"></span>' +
       (n < 5 ? '<button class="bigbtn ghost" id="wnext">Мир ' + (n+1) + ' →</button>' : '') + '</div>';
 
@@ -17101,6 +17143,8 @@ function screenWorld(n){
       var pr = projectOfWorld(n);
       if (projectDone(pr.id)) screenProjectDone(pr.id); else openProject(pr.id);
     };
+    var osh = document.getElementById("openshop");
+    if (osh) osh.onclick = screenShop;
     var wn = document.getElementById("wnext");
     if (wn) wn.onclick = function(){ screenWorld(n+1); };
     refreshTop();
@@ -17196,6 +17240,9 @@ function draftFlush(){
   try {
     if (!document.body.contains(s.studio)) return;
     if (s.sandbox){ S.sandbox = s.studio.editor.getCode(); save(); return; }
+    /* верстак мастерской — такой же экран с редактором, как песочница, и
+       теряет написанное ровно так же, если про него забыть (грабля 43) */
+    if (s.shop){ S.shop = s.studio.editor.getCode(); save(); return; }
     /* своё задание — это три поля сразу (название, условие, код), поэтому
        экран сам отдаёт их одной функцией, а не только код редактора */
     if (s.mytask && s.mytaskStash){ s.mytaskStash(); save(); return; }
@@ -17854,6 +17901,16 @@ function lintCount(l, body){
     { needCode: (body.task.check && body.task.check.needCode) || null });
   return found ? found.length : 0;
 }
+/* Про полку говорим ровно в тот момент, когда на неё что-то легло. Отдельного
+   экрана-объявления не заводим: накопление должно ощущаться как побочный
+   подарок за работу, а не как ещё одна вкладка, которую надо изучить. */
+function partsNote(n){
+  if (!n) return "";
+  return '<p class="stepnote">🔧 На полку мастерской ' +
+    (n === 1 ? 'легла деталь' : 'легли детали') + ': ' + n + ' ' +
+    plural(n, "функция", "функции", "функций") + ', которые ты написал сам. ' +
+    'Из деталей потом собирается вещь — «Моё» → «Мастерская».</p>';
+}
 function lintNote(n){
   if (!n) return "";
   return '<p class="stepnote">🧹 Программа работает — и её можно сделать чище: ' +
@@ -17912,6 +17969,7 @@ function winLesson(l, body){
      положенная после, легла бы в уже закрытое занятие. Многофайловые уроки
      не кладём — вопрос задаётся про одну страницу кода. */
   if (!(body.task && body.task.files)) zanKeepProg(l.id, session.code || "");
+  var gotParts = partsHarvest(l, body);   /* функции, написанные самим, идут на полку */
   zanNote("lesson", l.id);   /* если идёт занятие — шаг плана закрыт */
   save(); refreshTop();
 
@@ -17928,6 +17986,7 @@ function winLesson(l, body){
           : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
     takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
+    partsNote(gotParts) +
     '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
       /* Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в следующий урок. Иначе
          «Дальше →» уносит мимо плана, и разговор «время вышло, что дальше»
@@ -20443,6 +20502,19 @@ function screenFolio(){
     folioStat(gotCerts + ' <i>из ' + certs.length + '</i>', "сертификатов") +
     '</div>';
 
+  /* Мастерская стоит ПЕРЕД готовыми программами: проекты показывают, что
+     ребёнок прошёл курс, а полка — что он сделал сам и что из этого осталось.
+     Для накопления важно, чтобы оно попадалось на глаза первым. */
+  var shelfN = partsList().length, madeN = buildsList().length;
+  h += '<div class="card shopcard"><h3>🔧 Мастерская</h3>' +
+    (shelfN
+      ? '<p>На полке <b>' + shelfN + '</b> ' + plural(shelfN, "деталь", "детали", "деталей") +
+        ' — функции, которые ты написал сам' +
+        (madeN ? ', и собрано вещей: <b>' + madeN + '</b>' : '') + '.</p>'
+      : '<p class="dim">Полка пока пустая. Деталью становится функция, которую ты написал сам, — ' +
+        'они начинаются в уроке про <code>def</code>.</p>') +
+    '<div class="admrow"><button class="rbtn check" id="toshop">Открыть мастерскую →</button></div></div>';
+
   h += '<div class="sect"><h2>Готовые программы</h2><div class="line"></div>' +
     '<span class="cnt">' + built + ' из ' + projects.length + '</span></div>';
 
@@ -20550,6 +20622,8 @@ function screenFolio(){
   h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   app.innerHTML = h;
+  var tsh = document.getElementById("toshop");
+  if (tsh) tsh.onclick = screenShop;
   app.querySelectorAll("[data-open]").forEach(function(b){
     b.onclick = function(){
       var id = b.getAttribute("data-open");
@@ -20916,6 +20990,273 @@ function heatHTML(st){
     'время не идёт. Это карта ритма, а не оценка.</p></div>';
 }
 
+/* ================= мастерская: полка деталей и верстак =================
+   Ставка Г из docs/foresight-2027.md § 3, дешёвый вход по § 12 п. 5:
+   НЕ переписывать сто уроков в сквозную линию, а надстроить сверху.
+
+   Дефект, в который она бьёт, общий для всех тренажёров мира, включая наш:
+   **сделанное на уроке никуда не идёт.** Решил задачу — она исчезла. Сто
+   уроков ощущаются как сто выброшенных вечеров, и это одна из причин, по
+   которым бросают. Накопление — единственный известный заменитель
+   дисциплины, работающий без взрослого: ребёнок не бросает не потому, что
+   ему напомнили, а потому что бросить значит потерять построенное.
+
+   Что считается деталью: функция, которую ребёнок написал САМ в сданном
+   уроке. Функция выбрана не случайно — это и есть готовая деталь по смыслу
+   языка: у неё есть имя, вход и выход, и её можно позвать откуда угодно.
+
+   ⚠️ Четыре правила честности:
+     1. показанное решение деталью не становится. Это код автора, и назвать
+        его «твоей деталью» значит соврать ребёнку в самом важном для него
+        месте;
+     2. функция из заготовки — тоже не деталь: её выдали, а не написали;
+     3. деталь обязана хотя бы определяться без ошибки — сломанную вещь на
+        полку не кладут;
+     4. полка не растёт без предела: она уезжает на сервер вместе с
+        прогрессом, как и черновики.
+
+   Верстак нарочно устроен как ОДИН файл, а не как модуль «полка.py»: модуль
+   пришлось бы держать неизменяемым (иначе правки в нём некуда сохранять),
+   а неизменяемый файл в редакторе — это ловушка вида «пишу, а не пишется».
+   Деталь кладётся кнопкой прямо в код, и дальше это обычная программа.
+   ============================================================ */
+var PART_MAX = 40;          /* столько деталей держим на полке */
+var PART_CODE_MAX = 900;    /* длиннее — это уже не деталь, а программа */
+var BUILD_MAX = 12;         /* столько собранных вещей храним */
+
+function partsAll(){ S.parts = S.parts || {}; return S.parts; }
+function partsList(){
+  var d = partsAll();
+  return Object.keys(d).map(function(k){
+    var x = d[k];
+    if (!x || typeof x.code !== "string" || !x.code.trim()) return null;
+    return { id:k, name:x.name || "деталь", code:x.code, from:x.from || "", at:x.at || 0 };
+  }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function partKey(code){
+  var h = 5381, src = String(code);
+  for (var i = 0; i < src.length; i++) h = ((h * 33) ^ src.charCodeAt(i)) >>> 0;
+  return "d" + h.toString(36);
+}
+function partDrop(id){ delete partsAll()[id]; save(); }
+function partAdd(name, code, from){
+  var d = partsAll(), k = partKey(code);
+  if (d[k]) return k;                       /* та же деталь второй раз не кладётся */
+  d[k] = { name:name, code:code, from:from || "", at: Date.now() };
+  var keys = Object.keys(d);
+  if (keys.length > PART_MAX){
+    keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+    keys.slice(0, keys.length - PART_MAX).forEach(function(x){ delete d[x]; });
+  }
+  save();
+  return k;
+}
+
+/* Функции верхнего уровня из программы. Границы блока считаем по отступу:
+   тело функции — это всё, что идёт после «def» с отступом больше нуля, плюс
+   пустые строки внутри. Разбираем СКЕЛЕТ (строки и комментарии в нём
+   вычищены), а режем исходный код по тем же номерам строк — поэтому «def»
+   внутри текстовой строки деталью не станет. */
+function partsFrom(code){
+  var src = String(code || "");
+  var lines = src.split("\n"), skel = codeSkeleton(src).split("\n"), out = [];
+  var re = /^def\s+([A-Za-z_А-Яа-яЁё][A-Za-z_0-9А-Яа-яЁё]*)\s*\(/;
+  for (var i = 0; i < skel.length; i++){
+    var m = re.exec(skel[i] || "");
+    if (!m) continue;
+    var j = i + 1;
+    while (j < skel.length && (!skel[j].trim() || /^[ \t]/.test(skel[j]))) j++;
+    /* пустые строки на хвосте в деталь не берём */
+    var end = j;
+    while (end > i + 1 && !lines[end - 1].trim()) end--;
+    var body = lines.slice(i, end).join("\n");
+    if (body.length <= PART_CODE_MAX && end > i + 1) out.push({ name: m[1], code: body });
+    i = j - 1;
+  }
+  return out;
+}
+/* Деталь обязана хотя бы определяться без ошибки: сломанную вещь на полку
+   не кладут. Позвать её мы не можем — аргументов не знаем, — и это честно
+   сказано ребёнку на экране мастерской. */
+function partWorks(code){
+  try {
+    var r = Runtime.get("mini").run(String(code || ""), {});
+    return !r.error;
+  } catch(e){ return false; }
+}
+/* Собрать детали из только что сданного урока. Зовётся из победы урока. */
+function partsHarvest(l, body){
+  if (session.shown) return 0;                     /* это код автора, а не его */
+  var mine = session.code || "";
+  if (!mine.trim()) return 0;
+  var starter = (session.starter || []).map(function(f){ return f.code || ""; }).join("\n");
+  var given = {};
+  partsFrom(starter).forEach(function(p){ given[p.code.replace(/\s+/g, " ")] = 1; });
+  var n = 0;
+  partsFrom(mine).forEach(function(p){
+    if (given[p.code.replace(/\s+/g, " ")]) return;  /* выдано в заготовке */
+    if (!partWorks(p.code)) return;
+    partAdd(p.name, p.code, l ? ("урок " + l.num + " · " + l.title) : "");
+    n++;
+  });
+  return n;
+}
+
+/* ---------- собранные вещи ---------- */
+function buildsAll(){ S.builds = S.builds || {}; return S.builds; }
+function buildsList(){
+  var d = buildsAll();
+  return Object.keys(d).map(function(k){
+    var x = d[k];
+    if (!x || typeof x.code !== "string" || !x.code.trim()) return null;
+    return { id:k, code:x.code, title:x.title || "Вещь", at:x.at || 0 };
+  }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function buildSave(code){
+  var d = buildsAll(), id = "b" + Date.now().toString(36);
+  d[id] = { code:String(code), title: galleryTitleOf(code, buildsList().length + 1).replace(/^Рисунок /, "Вещь "),
+            at: Date.now() };
+  var keys = Object.keys(d);
+  if (keys.length > BUILD_MAX){
+    keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+    keys.slice(0, keys.length - BUILD_MAX).forEach(function(k){ delete d[k]; });
+  }
+  save();
+  return id;
+}
+function buildDrop(id){ delete buildsAll()[id]; save(); }
+
+var SHOP_START = "# Здесь собирается вещь из твоих деталей.\n" +
+  "# Возьми деталь с полки кнопкой «↓ На верстак» и позови её отсюда.\n";
+
+function screenShop(){
+  enterScreen("mine", "shop");
+  session = { id:null, attempts:0, hints:0, shown:false, shop:true };
+  var parts = partsList(), builds = buildsList();
+
+  var h = '<div class="lvlhead"><div><div class="idx">мастерская</div>' +
+    '<h1>🔧 Полка и верстак</h1></div><div class="right">' +
+    '<span class="tag">деталей: ' + parts.length + '</span></div></div>' +
+    '<p class="lede">Обычно решённая задача исчезает — и сто уроков превращаются в сто ' +
+    'выброшенных вечеров. Здесь не так: каждая функция, которую ты написал сам, ' +
+    'остаётся на полке. Из деталей собирается вещь, которой можно пользоваться.</p>';
+
+  if (!parts.length){
+    h += '<div class="card"><h3>Полка пока пустая</h3>' +
+      '<p class="dim">Деталью становится <b>функция, которую ты написал сам</b>: у неё есть имя, ' +
+      'вход и выход, и позвать её можно откуда угодно. Функции начинаются в уроке про <code>def</code> — ' +
+      'дойдёшь до него, и полка начнёт наполняться сама.</p>' +
+      '<p class="dim">Показанное решение деталью не становится: это код автора, а не твой.</p></div>';
+  } else {
+    h += '<div class="card"><h3>📦 Полка</h3>' +
+      '<p class="dim">Нажми «↓ На верстак» — деталь встанет в начало программы внизу, и её можно будет позвать.</p>' +
+      '<div class="shelf">';
+    parts.forEach(function(p){
+      h += '<div class="partcard"><div class="parthead"><b><code>' + esc(p.name) + '()</code></b>' +
+        '<span class="dim">' + esc(p.from) + '</span></div>' +
+        '<pre><code>' + hl(p.code) + '</code></pre>' +
+        '<div class="partbar"><button class="rbtn check" data-take="' + p.id + '">↓ На верстак</button>' +
+        '<button class="rbtn sec" data-pdel="' + p.id + '" title="убрать с полки">✕</button></div></div>';
+    });
+    h += '</div><p class="dim">⚠️ Деталь могла опираться на то, что стояло рядом в уроке. ' +
+      'Если при запуске ругается — допиши недостающее прямо в программе: движок скажет словами, чего не хватает.</p></div>';
+  }
+
+  h += '<div class="card"><h3>🛠 Верстак</h3>' +
+    '<p class="dim">Проверок тут нет — это твоя вещь, а не задание. Код сохраняется между заходами.</p></div>' +
+    '<div id="studio"></div>' +
+    '<div class="savepic"><button class="rbtn" id="tobuild">💾 Сохранить вещь</button>' +
+    '<span class="tip">Первая строка-комментарий станет названием. Сохранённое можно показать и отправить ссылкой.</span>' +
+    '<div class="msg" id="buildmsg"></div></div>';
+
+  if (builds.length){
+    h += '<div class="card"><h3>🎁 Что уже собрано</h3><div class="shelf">';
+    builds.forEach(function(b){
+      h += '<div class="partcard"><div class="parthead"><b>' + esc(b.title) + '</b>' +
+        '<span class="dim">' + fmtWhen(b.at) + '</span></div>' +
+        '<pre><code>' + hl(b.code) + '</code></pre>' +
+        '<div class="partbar"><button class="rbtn check" data-open="' + b.id + '">↓ Открыть на верстаке</button>' +
+        '<button class="rbtn sec" data-bshare="' + b.id + '">🔗 Ссылка</button>' +
+        '<button class="rbtn sec" data-bdel="' + b.id + '" title="удалить">✕</button></div>' +
+        '<div class="msg" data-bmsg="' + b.id + '"></div></div>';
+    });
+    h += '</div></div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  app.innerHTML = h;
+
+  var studio = makeStudio({
+    engine:"mini", draw:true, lint:true,
+    code: S.shop || SHOP_START,
+    onRun: function(){ S.shop = studio.editor.getCode(); save(); },
+    viz: function(o){
+      screenViz({ code: o.code, env: o.env,
+        backTo: { label: "← Вернуться в мастерскую", go: screenShop } });
+    }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  studio.editor.onEdit = draftSchedule;
+
+  function put(code){
+    var was = studio.editor.getCode();
+    studio.editor.setCode(code + "\n\n\n" + was);
+    S.shop = studio.editor.getCode(); save();
+    studio.editor.focusEditor();
+    if (studio.scrollIntoView) studio.scrollIntoView({ behavior:"smooth", block:"center" });
+  }
+  app.querySelectorAll("[data-take]").forEach(function(b){
+    b.onclick = function(){
+      var p = partsAll()[b.getAttribute("data-take")];
+      if (p) put(p.code);
+    };
+  });
+  app.querySelectorAll("[data-pdel]").forEach(function(b){
+    b.onclick = function(){ partDrop(b.getAttribute("data-pdel")); screenShop(); };
+  });
+  app.querySelectorAll("[data-open]").forEach(function(b){
+    b.onclick = function(){
+      var x = buildsAll()[b.getAttribute("data-open")];
+      if (!x) return;
+      studio.editor.setCode(x.code);
+      S.shop = x.code; save();
+      if (studio.scrollIntoView) studio.scrollIntoView({ behavior:"smooth", block:"center" });
+    };
+  });
+  app.querySelectorAll("[data-bdel]").forEach(function(b){
+    b.onclick = function(){ buildDrop(b.getAttribute("data-bdel")); screenShop(); };
+  });
+  app.querySelectorAll("[data-bshare]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-bshare"), x = buildsAll()[id];
+      var box = app.querySelector('[data-bmsg="' + id + '"]');
+      if (!x || !box) return;
+      var link = workLink({ title: x.title, code: x.code, author: myName() });
+      box.className = "msg show ok";
+      box.innerHTML = '<b>Ссылка готова</b>Отправь её кому хочешь: программа лежит прямо в адресе, ' +
+        'сервер для этого не нужен.' +
+        '<div class="admrow"><button class="rbtn check" data-bcopy="1">Скопировать ссылку</button></div>' +
+        '<p class="dim brk">' + esc(link) + '</p>';
+      var cb = box.querySelector("[data-bcopy]");
+      if (cb) cb.onclick = function(){ copyText(link, cb); };
+    };
+  });
+  document.getElementById("tobuild").onclick = function(){
+    var code = studio.editor.getCode(), box = document.getElementById("buildmsg");
+    if (!code.trim() || code.replace(/^#[^\n]*\n?/gm, "").trim() === ""){
+      box.className = "msg show warn";
+      box.innerHTML = "<b>Пока нечего сохранять</b>В программе только комментарии. Возьми деталь с полки и позови её.";
+      return;
+    }
+    buildSave(code);
+    screenShop();
+  };
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ================= запись авторства =================
    Ставка А из docs/foresight-2027.md § 3, граница честности — в
    docs/zanyatie-i-vzroslyj.md § 5. Отдельный экран в кабинете, который
@@ -20953,13 +21294,20 @@ function heatHTML(st){
    меняем, ищется в скелете, а правится в настоящем коде. */
 function codeSkeleton(src){
   var s = String(src || ""), out = "", i = 0, n = s.length;
-  function blank(k){ var r = ""; while (r.length < k) r += " "; return r; }
+  /* Переносы строк сохраняются как есть: на выравнивании по СТРОКАМ держится
+     сбор деталей мастерской (partsFrom), а на выравнивании по знакам —
+     «предскажи свою программу». Нужно и то, и другое сразу. */
+  function blank(from, to){
+    var r = "";
+    for (var q = from; q < to; q++) r += (s[q] === "\n" ? "\n" : " ");
+    return r;
+  }
   while (i < n){
     var c = s[i];
     if (c === "#"){
       var e = i;
       while (e < n && s[e] !== "\n") e++;
-      out += blank(e - i); i = e; continue;
+      out += blank(i, e); i = e; continue;
     }
     if (c === '"' || c === "'"){
       var q = c, triple = s.substr(i, 3) === q + q + q, end;
@@ -20967,13 +21315,13 @@ function codeSkeleton(src){
         end = i + 3;
         while (end < n && s.substr(end, 3) !== q + q + q) end++;
         end = Math.min(n, end + 3);
-        out += q + q + q + blank(Math.max(0, end - i - 6)) + (end - i >= 6 ? q + q + q : "");
+        out += q + q + q + blank(i + 3, Math.max(i + 3, end - 3)) + (end - i >= 6 ? q + q + q : "");
       } else {
         end = i + 1;
         while (end < n && s[end] !== q && s[end] !== "\n"){ if (s[end] === "\\") end++; end++; }
         if (end < n && s[end] === q) end++;
         var closed = end - i >= 2 && s[end - 1] === q;
-        out += q + blank(Math.max(0, end - i - (closed ? 2 : 1))) + (closed ? q : "");
+        out += q + blank(i + 1, closed ? end - 1 : end) + (closed ? q : "");
       }
       i = end; continue;
     }
@@ -24806,6 +25154,9 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,
+  partDrop: partDrop, partsHarvest: partsHarvest, partWorks: partWorks, PART_MAX: PART_MAX,
+  buildsList: buildsList, buildSave: buildSave, buildDrop: buildDrop, BUILD_MAX: BUILD_MAX,
   myPredictMake: myPredictMake, myPredictPick: myPredictPick, myPredSafe: myPredSafe,
   zanOpenBlock: zanOpenBlock,
   openMyPredict: openMyPredict, zanKeepProg: zanKeepProg, normPred: normPred,
