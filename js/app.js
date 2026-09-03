@@ -870,7 +870,9 @@ function zanReport(rec, st){
       praise = "прошёл «" + l.title + "» с первой попытки, без подсказок";
   });
   if (!praise && rec.predAll && rec.predOk === rec.predAll)
-    praise = "в конце занятия точно предсказал, что напечатает программа";
+    praise = rec.predMine
+      ? "в конце занятия прочитал собственную программу и точно сказал, что она напечатает"
+      : "в конце занятия точно предсказал, что напечатает программа";
   if (!praise && lessons.length) praise = "дошёл до конца занятия и закрыл " +
     lessons.length + " " + plural(lessons.length, "урок", "урока", "уроков");
   if (!praise) praise = "сел заниматься — в этот раз дальше не пошло, и это тоже бывает";
@@ -880,7 +882,10 @@ function zanReport(rec, st){
   var got;
   var hadPredict = (rec.plan || []).some(function(b){ return b.k === "predict"; });
   if (rec.predAll)
-    got = "Проверка понимания: предсказал вывод верно " + rec.predOk + " из " + rec.predAll + ".";
+    got = "Проверка понимания: предсказал вывод верно " + rec.predOk + " из " + rec.predAll + "." +
+      (rec.predMine
+        ? " Спрашивали про его СОБСТВЕННУЮ программу с изменённым числом — прошлый ответ к ней не подходит."
+        : "");
   else if (hadPredict)
     /* проверка стояла в плане, но занятие закончили раньше. Написать «проверки
        не было» значило бы соврать взрослому в удобную сторону. */
@@ -4662,6 +4667,10 @@ function winLesson(l, body){
   lg.last = Date.now();
   reviewAfterLesson(l.id);   /* трудный урок встаёт в очередь на повтор */
   markActiveToday();   /* пройденный урок держит дневной стрик живым */
+  /* ⚠️ ДО zanNote: последний блок плана закрывает занятие сам, и программа,
+     положенная после, легла бы в уже закрытое занятие. Многофайловые уроки
+     не кладём — вопрос задаётся про одну страницу кода. */
+  if (!(body.task && body.task.files)) zanKeepProg(l.id, session.code || "");
   zanNote("lesson", l.id);   /* если идёт занятие — шаг плана закрыт */
   save(); refreshTop();
 
@@ -7396,6 +7405,19 @@ function zanBlockEmoji(b){
   return b.k === "warm" ? "🧩" : b.k === "lesson" ? "📘" : b.k === "review" ? "🔁" : "🔮";
 }
 function zanOpenBlock(b){
+  /* Проверка понимания: если сегодня ребёнок написал программу, из которой
+     получается честный вопрос, спрашиваем про НЕЁ, а не про чужую разминку.
+     Не получилось — разминка, как и раньше. Молча: обещать «спросим про твой
+     код» и не спросить хуже, чем не обещать. */
+  if (b.k === "predict"){
+    var mine = myPredictPick();
+    if (mine) return openMyPredict(mine, b.id);
+    /* id «mine» — это блок, заведённый ради своей программы, и разминки за
+       ним нет вовсе. Такое возможно, если программа успела вытесниться из
+       списка занятия: тогда честнее вернуть в занятие, чем высадить ребёнка
+       в чужом разделе. */
+    if (b.id === "mine") return screenZan();
+  }
   if (b.k === "warm" || b.k === "predict") openWarmup(b.id, {});
   else openLesson(b.id);
 }
@@ -7680,26 +7702,39 @@ function heatHTML(st){
      подсказки, решение  S.log — считались с самого начала
      понял или прошёл    predOk/predAll занятий (проверка предсказанием) */
 
-/* Код без строк и комментариев. Нужен обоим сигналам: искать конструкцию
+/* Код без строк и комментариев. Нужен всем сигналам сразу: искать конструкцию
    внутри текстовой строки — значит ловить слово «for» в строке «форма».
-   Кавычки оставляем пустой парой, чтобы не склеивать соседние знаки. */
+
+   ⚠️ Длина сохраняется знак в знак: содержимое строк и комментариев заменяется
+   пробелами, а сами кавычки остаются на месте. Это не украшение — это условие
+   того, чтобы по найденному месту можно было вернуться в ИСХОДНЫЙ код по тому
+   же индексу. На этом держится «предскажи свою программу»: число, которое мы
+   меняем, ищется в скелете, а правится в настоящем коде. */
 function codeSkeleton(src){
   var s = String(src || ""), out = "", i = 0, n = s.length;
+  function blank(k){ var r = ""; while (r.length < k) r += " "; return r; }
   while (i < n){
     var c = s[i];
-    if (c === "#"){ while (i < n && s[i] !== "\n") i++; continue; }
+    if (c === "#"){
+      var e = i;
+      while (e < n && s[e] !== "\n") e++;
+      out += blank(e - i); i = e; continue;
+    }
     if (c === '"' || c === "'"){
       var q = c, triple = s.substr(i, 3) === q + q + q, end;
       if (triple){
         end = i + 3;
         while (end < n && s.substr(end, 3) !== q + q + q) end++;
         end = Math.min(n, end + 3);
+        out += q + q + q + blank(Math.max(0, end - i - 6)) + (end - i >= 6 ? q + q + q : "");
       } else {
         end = i + 1;
         while (end < n && s[end] !== q && s[end] !== "\n"){ if (s[end] === "\\") end++; end++; }
         if (end < n && s[end] === q) end++;
+        var closed = end - i >= 2 && s[end - 1] === q;
+        out += q + blank(Math.max(0, end - i - (closed ? 2 : 1))) + (closed ? q : "");
       }
-      out += q + q; i = end; continue;
+      i = end; continue;
     }
     out += c; i++;
   }
@@ -7841,13 +7876,14 @@ function authorList(){
    поняв её. Подделать нечем — и потому это же метрика «понял» для родителя
    и приложение к аттестации на семейном обучении. */
 function authorPredict(){
-  var ok = 0, all = 0, d = zanAll();
+  var ok = 0, all = 0, mine = 0, d = zanAll();
   Object.keys(d).forEach(function(k){
     var r = d[k];
     if (!r || !r.end || !r.predAll) return;
     ok += r.predOk || 0; all += r.predAll;
+    mine += r.predMine || 0;
   });
-  return { ok: ok, all: all };
+  return { ok: ok, all: all, mine: mine };
 }
 
 function authorSummary(){
@@ -7860,6 +7896,200 @@ function authorSummary(){
     });
   });
   return { n: list.length, hand: hand, ready: ready, ahead: ahead, pred: authorPredict() };
+}
+
+/* ================= проверка понимания на СВОЁМ коде =================
+   Сильнейший сигнал из таблицы docs/zanyatie-i-vzroslyj.md § 5, и до 1.44.1
+   единственный не снятый: «не может предсказать вывод СВОЕГО кода».
+
+   Почему это сильнее всего остального. Вставку можно объяснить («это я своё
+   скопировал»), незнакомую команду — тоже («в интернете подсмотрел, но понял»).
+   А непонимание собственной программы не объясняется ничем и не подделывается
+   ничем: либо ты знаешь, что она делает, либо не знаешь.
+
+   Как устроен вопрос. Берём программу, которую ребёнок только что сдал сам,
+   и меняем в ней ОДНО число. Дальше как в разминке «угадай вывод»: он пишет,
+   что она напечатает, а движок сверяет. Смысл замены в том, что запомнить
+   ответ нельзя — прошлый вывод к новому числу не подходит; чтобы ответить,
+   программу надо прочитать.
+
+   ⚠️ Пять условий, без которых вопрос был бы нечестным:
+     1. программа должна печатать — иначе сверять нечего;
+     2. никакой случайности, ввода с клавиатуры, файлов и черепашки: у ребёнка
+        вышло бы другое, и он был бы прав, а мы — нет;
+     3. изменённая программа обязана работать и печатать НЕ ТО ЖЕ САМОЕ:
+        иначе правильный ответ — это ровно тот вывод, который он уже видел,
+        и проверка не проверяет ничего;
+     4. вывод короткий (до шести строк): мы спрашиваем понимание, а не
+        усидчивость переписывания;
+     5. не нашлось подходящей программы — молча берём обычную разминку.
+        Придумывать вопрос из ничего нельзя. */
+var MYPRED_MAX_LINES = 6;
+var MYPRED_MAX_OUT = 240;
+var MYPRED_MAX_CODE = 800;
+var MYPRED_KEEP = 6;        /* столько программ занятия держим для вопроса */
+
+/* Программа не годится, если её вывод зависит не только от кода. */
+function myPredSafe(code){
+  var k = codeSkeleton(code);
+  if (!k || k.length > MYPRED_MAX_CODE) return false;
+  if (/(^|[^A-Za-z_0-9.А-Яа-яЁё])(input|open)\s*\(/.test(k)) return false;
+  if (/(^|[^A-Za-z_0-9.А-Яа-яЁё])random\b/.test(k)) return false;
+  if (/(^|[^A-Za-z_0-9.А-Яа-яЁё])(randint|choice|shuffle|sample)\s*\(/.test(k)) return false;
+  if (/(^|\n)[ \t]*(import|from)\s/.test(k)) return false;
+  /* черепашка: рисунок — не вывод, спрашивать про него текстом нельзя */
+  if (/(^|[^A-Za-z_0-9.А-Яа-яЁё])(forward|backward|circle|penup|pendown|goto|setheading)\s*\(/.test(k)) return false;
+  return true;
+}
+function myPredRun(code){
+  try {
+    var r = Runtime.get("mini").run(code, {});
+    if (r.error) return null;
+    var out = String(r.output || "").replace(/\n+$/, "");
+    if (!out.trim()) return null;
+    if (out.length > MYPRED_MAX_OUT) return null;
+    if (out.split("\n").length > MYPRED_MAX_LINES) return null;
+    return out;
+  } catch(e){ return null; }
+}
+/* Меняем ровно одно целое число. Ищем его в СКЕЛЕТЕ (иначе поменяли бы цифру
+   внутри текстовой строки, и вопрос стал бы про кавычки, а не про программу),
+   а правим в настоящем коде — скелет для того и сохраняет длину знак в знак. */
+function myPredictMake(code){
+  if (!myPredSafe(code)) return null;
+  var was = myPredRun(code);
+  if (!was) return null;
+  var k = codeSkeleton(code);
+  var re = /(^|[^A-Za-z_0-9.А-Яа-яЁё])(\d+)(?![.\dA-Za-z_])/g, m, spots = [];
+  while ((m = re.exec(k)) !== null && spots.length < 12)
+    spots.push({ at: m.index + m[1].length, txt: m[2] });
+  for (var i = 0; i < spots.length; i++){
+    var v = parseInt(spots[i].txt, 10);
+    if (!isFinite(v)) continue;
+    var tries = [v + 1, v + 2, v * 2, v - 1, v + 3];
+    for (var j = 0; j < tries.length; j++){
+      var nv = tries[j];
+      if (nv === v || nv < 0 || nv > 9999) continue;
+      var mut = code.slice(0, spots[i].at) + String(nv) + code.slice(spots[i].at + spots[i].txt.length);
+      var out = myPredRun(mut);
+      if (!out || normPred(out) === normPred(was)) continue;
+      return { code: mut, out: out, was: was, from: v, to: nv };
+    }
+  }
+  return null;
+}
+
+/* Программы этого занятия. Кладутся победой урока, живут до конца занятия и
+   нужны ровно для одного — задать вопрос про СВОЙ код. Многофайловые уроки
+   сюда не идут: вопрос про одну страницу кода, а не про сборку из модулей. */
+function zanKeepProg(id, code){
+  var open = zanOpen();
+  if (!open) return;
+  var rec = zanAll()[open.key];
+  if (!rec || !code || code.length > MYPRED_MAX_CODE) return;
+  rec.progs = (rec.progs || []).filter(function(x){ return x.id !== id; });
+  rec.progs.push({ id: id, code: code });
+  if (rec.progs.length > MYPRED_KEEP) rec.progs = rec.progs.slice(-MYPRED_KEEP);
+
+  /* ⚠️ Проверка понимания появляется в плане, даже если разминки «угадай
+     вывод» для неё не нашлось. Так бывает: все девять таких разминок
+     открываются по прогрессу, а та, что открыта, может уже стоять задачей
+     дня — и тогда занятие заканчивалось БЕЗ проверки понимания ровно у того
+     ребёнка, про которого родитель и спрашивает «он вообще что-нибудь
+     понял?». Своей программе ничего этого не нужно: она только что написана.
+
+     Блок дописывается в план не заранее, а в тот момент, когда из программы
+     и правда получается вопрос: блок, который нечем открыть, хуже, чем его
+     отсутствие. */
+  var hasCheck = (rec.plan || []).some(function(b){ return b.k === "predict"; });
+  if (!hasCheck && myPredictMake(code))
+    rec.plan.push({ k:"predict", id:"mine", title:"Проверка понимания" });
+}
+/* Свежая своя программа, из которой получается честный вопрос. Не нашлось —
+   null, и занятие возьмёт обычную разминку. */
+function myPredictPick(){
+  var open = zanOpen();
+  if (!open) return null;
+  var rec = zanAll()[open.key];
+  var progs = (rec && rec.progs) || [];
+  for (var i = progs.length - 1; i >= 0; i--){
+    var made = myPredictMake(progs[i].code);
+    if (made) return { lesson: progs[i].id, made: made };
+  }
+  return null;
+}
+
+/* Экран вопроса. Студия та же, что у разминки «угадай вывод», — новый вид
+   ввода тут ни к чему, а привычный ребёнку экран сам объясняет, что делать. */
+function openMyPredict(pick, blockId){
+  enterScreen(undefined, "warmup");
+  session = { id:null, attempts:0, hints:0, shown:false, mypred:true };
+  var l = CURRICULUM.byId(pick.lesson);
+  var made = pick.made;
+
+  var head = '<div class="crumbs"><button class="backbtn" data-go="zan">← К занятию</button>' +
+    '<span data-go="zan">Занятие</span> › 🔮 Проверка понимания</div>' +
+    '<div class="lvlhead"><div><div class="idx">проверка понимания</div>' +
+    '<h1>🔮 Что напечатает твоя программа?</h1></div>' +
+    '<div class="right"><span class="tag">твой код</span></div></div>' +
+    '<p class="lede">Это программа, которую ты написал' +
+    (l ? ' в уроке ' + l.num + ' «' + esc(l.title) + '»' : '') +
+    '. В ней поменяли одно число: было <b>' + made.from + '</b>, стало <b>' + made.to + '</b>. ' +
+    'Запускать нельзя — прочитай её и напиши, что она напечатает теперь.</p>' +
+    '<div class="goal"><h3>🎯 Твоя задача</h3>' +
+    '<p>Прошлый ответ не подойдёт: с новым числом программа печатает другое. ' +
+    'По строке на каждый <code>print</code>.</p></div>';
+
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="zan">← К занятию</button></div>';
+  app.innerHTML = head + '<div id="studio"></div>' + pager;
+
+  var studio = makePredictStudio({
+    code: made.code,
+    check: function(ed, showMsg){
+      session.attempts++;
+      var got = ed.getCode();
+      studio.reveal(made.out);
+      if (normPred(made.out) === normPred(got)) winMyPredict(pick, blockId);
+      else showMsg("bad", "<b>Ещё не совпало</b>" + predictDiff(made.out, got) +
+        "Настоящий вывод теперь виден справа. Найди строку, где разошлось, и попробуй снова.");
+    }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenZan; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function winMyPredict(pick, blockId){
+  var firstTry = session.attempts === 1;
+  markActiveToday();
+  /* ⚠️ Блок плана закрывается тем же путём, что и разминка: занятие знает
+     свой блок «проверка понимания» по id из плана, и подменять учёт из-за
+     того, что вопрос оказался про свой код, нельзя — иначе отчёт разошёлся бы
+     с планом. А вот ПОМЕТКУ, что проверка была на своём коде, ставим: для
+     взрослого это принципиально другой вес. */
+  var open = zanOpen();
+  if (open){
+    var rec = zanAll()[open.key];
+    if (rec) rec.predMine = (rec.predMine || 0) + 1;
+  }
+  if (blockId) zanNote("warm", blockId, { ok: firstTry });
+  save();
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (firstTry ? "🔮" : "✅") + '</div>' +
+    '<h2>' + (firstTry ? "Ты понял свою программу" : "Сошлось") + '</h2>' +
+    '<p>' + (firstTry
+      ? "Предсказал вывод собственного кода с первой попытки, не запуская его. Это и значит «понял», а не «прошёл»."
+      : "Сошлось не с первого раза — и это нормально: главное, что ты нашёл, где разошлось.") + '</p>' +
+    '<div class="winrow"><button class="bigbtn" id="wzan">← К занятию</button>' +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(2);
+  var wz = document.getElementById("wzan");
+  if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
+  var ws = document.getElementById("wstay");
+  if (ws) ws.onclick = closeWin;
 }
 
 function screenTrace(){
@@ -7886,7 +8116,9 @@ function screenTrace(){
     '<li><b>Мы не следим за ребёнком.</b> Видно только нашу страницу: ни других вкладок, ' +
     'ни камеры, ни микрофона, ни того, чем он занят вне тренажёра.</li>' +
     '<li><b>Это повод спросить, а не наказать.</b> Самая сильная проверка — попросить объяснить ' +
-    'свою же программу: непонимание собственного кода не подделывается ничем.</li>' +
+    'свою же программу: непонимание собственного кода не подделывается ничем. ' +
+    'Тренажёр делает это сам в конце занятия: берёт написанную ребёнком программу, ' +
+    'меняет в ней одно число и спрашивает, что она напечатает теперь.</li>' +
     '</ul></div>';
 
   if (!list.length){
@@ -7901,7 +8133,8 @@ function screenTrace(){
       (sum.ready ? '<li>Уроков, где часть работы пришла готовой: <b>' + sum.ready + '</b>.</li>' : '') +
       (sum.ahead ? '<li>Уроков, где в решении есть непройденное: <b>' + sum.ahead + '</b>.</li>' : '') +
       '<li>Проверка понимания: ' + (pr.all
-        ? 'предсказал вывод верно <b>' + pr.ok + '</b> из ' + pr.all + '.'
+        ? 'предсказал вывод верно <b>' + pr.ok + '</b> из ' + pr.all + '.' +
+          (pr.mine ? ' Из них про его СОБСТВЕННУЮ программу: <b>' + pr.mine + '</b>.' : '')
         : 'ещё не было — она идёт в конце занятия.') + '</li>' +
       '</ul>' +
       (sum.ready || sum.ahead
@@ -11332,6 +11565,9 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  myPredictMake: myPredictMake, myPredictPick: myPredictPick, myPredSafe: myPredSafe,
+  zanOpenBlock: zanOpenBlock,
+  openMyPredict: openMyPredict, zanKeepProg: zanKeepProg, normPred: normPred,
   screenTrace: screenTrace, authorMarks: authorMarks, authorList: authorList,
   authorSummary: authorSummary, authorPredict: authorPredict,
   aheadIn: aheadIn, codeSkeleton: codeSkeleton, AHEAD_PROBES: AHEAD_PROBES,

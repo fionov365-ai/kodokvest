@@ -3846,7 +3846,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let authorChecked = 0;
+  let authorChecked = 0, myPredChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -4452,6 +4452,162 @@ function checkEncoding(){
     if (problems.length === p0) authorChecked++;
   }
 
+  /* --- 6. проверка понимания на СВОЁМ коде --- */
+  if (typeof g.myPredictMake === "function"){
+    const p0 = problems.length;
+
+    /* 6.1. Что спрашивать НЕЛЬЗЯ. Программа, вывод которой зависит не только
+       от кода, дала бы у ребёнка другой ответ — и он был бы прав, а мы нет. */
+    [
+      ['имя = input()\nprint(имя)', "ввод с клавиатуры"],
+      ['import random\nprint(random.randint(1, 6))', "случайность"],
+      ['forward(50)\nprint(1)', "черепашка"],
+      ['x = 2 + 2', "программа ничего не печатает"]
+    ].forEach(([code, why]) => {
+      if (g.myPredictMake(code))
+        bad("[своя программа] вопрос задан по программе, где " + why);
+    });
+
+    /* 6.2. Вопрос обязан быть НОВЫМ: с изменённым числом программа печатает
+       не то, что ребёнок уже видел. Иначе правильный ответ — это ровно тот
+       вывод, который у него перед глазами, и проверка не проверяет ничего. */
+    {
+      const code = 'цена = 45\nсколько = 3\nprint("Итого:", цена * сколько)';
+      const made = g.myPredictMake(code);
+      if (!made) bad("[своя программа] из обычной программы вопрос не получился");
+      else {
+        if (made.from === made.to) bad("[своя программа] число «поменяли» на то же самое");
+        if (g.normPred(made.out) === g.normPred(made.was))
+          bad("[своя программа] с новым числом печатается ровно то же самое — спрашивать нечего");
+        if (made.code === code) bad("[своя программа] программа не изменилась");
+        if (made.code.length !== code.length - String(made.from).length + String(made.to).length)
+          bad("[своя программа] правка задела не только число");
+      }
+    }
+
+    /* 6.3. Цифра ВНУТРИ текстовой строки — это не число программы. Поменять
+       её значит спросить про кавычки, а не про то, как работает код. */
+    {
+      const code = 'print("Мне 12 лет")';
+      const made = g.myPredictMake(code);
+      if (made) bad("[своя программа] изменена цифра внутри текстовой строки: " + made.code);
+    }
+
+    /* 6.4. Программы занятия копятся и не растут без предела. */
+    {
+      g.state.zan = {};
+      g.frameSet({ days:[1,2,3,4,5], len:30, mix:"balanced" });
+      const rec = g.zanStart();
+      for (let i = 0; i < 9; i++) g.zanKeepProg("ur" + i, "print(" + i + ")");
+      const kept = (g.zanAll()[rec.key].progs || []);
+      if (kept.length > 6) bad("[своя программа] программы занятия копятся без предела: " + kept.length);
+      if (!kept.length) bad("[своя программа] программа занятия не сохранилась");
+      /* повтор того же урока не плодит записей */
+      const was = (g.zanAll()[rec.key].progs || []).length;
+      g.zanKeepProg("ur8", "print(8)");
+      if ((g.zanAll()[rec.key].progs || []).length !== was)
+        bad("[своя программа] повторная сдача урока завела вторую запись");
+      g.zanFinish("hand");
+      g.state.zan = {};
+    }
+
+    /* 6.4б. У новичка разминок «угадай вывод» ещё не открыто ни одной — то
+       есть занятие заканчивалось БЕЗ проверки понимания ровно тогда, когда
+       родителю она нужнее всего. Своя программа для вопроса ниоткуда не
+       нужна, поэтому блок дописывается в план сам. */
+    {
+      g.state.zan = {};
+      const starsWas = JSON.parse(JSON.stringify(g.state.stars));
+      const warmWas = JSON.parse(JSON.stringify(g.state.warmups || {}));
+      const admWas = g.state.admin && g.state.admin.unlockAll;
+      g.state.stars = {};                 /* новичок: разминок не открыто */
+      g.state.warmups = {};
+      /* ⚠️ Снятые замки наставника открывают ВСЕ разминки — без этой строки
+         проверка молча тестировала бы не новичка, а панель наставника. */
+      if (g.state.admin) g.state.admin.unlockAll = false;
+      const rec = g.zanStart();
+      if (g.zanAll()[rec.key].plan.some(b => b.k === "predict"))
+        bad("[своя программа] у новичка в плане откуда-то взялась чужая разминка-проверка");
+      g.zanKeepProg("vars", 'дней = 52\nprint("Недель:", дней // 7)');
+      const plan = g.zanAll()[rec.key].plan;
+      if (!plan.some(b => b.k === "predict" && b.id === "mine"))
+        bad("[своя программа] проверка понимания не появилась в плане новичка");
+      /* второй урок не заводит второй такой же блок */
+      g.zanKeepProg("math", 'x = 3\nprint(x * 4)');
+      if (plan.filter(b => b.k === "predict").length !== 1)
+        bad("[своя программа] проверок понимания в плане завелось больше одной");
+      g.zanFinish("hand");
+      g.state.zan = {};
+      g.state.stars = starsWas;
+      g.state.warmups = warmWas;
+      if (g.state.admin) g.state.admin.unlockAll = admWas;
+    }
+
+    /* 6.5. Занятие целиком: сдал урок — и проверка понимания в конце спрашивает
+       про ЕГО программу, а не про чужую разминку. */
+    {
+      g.state.zan = {};
+      const rec = g.zanStart();
+      g.zanKeepProg("vars", 'всего = 7\nprint("Осталось:", всего - 2)');
+      const pick = g.myPredictPick();
+      if (!pick) bad("[своя программа] своя программа занятия не нашлась для вопроса");
+      else {
+        const block = g.zanAll()[rec.key].plan.filter(b => b.k === "predict")[0];
+        if (!block) bad("[своя программа] в плане занятия нет блока проверки понимания");
+        else {
+          /* ⚠️ Главная точка соединения: занятие открывает блок «проверка
+             понимания» САМО, и оно обязано выбрать свою программу, а не
+             чужую разминку. Проверять только openMyPredict напрямую значит
+             не проверить ровно того, ради чего всё делалось. */
+          g.zanOpenBlock(block);
+          await tick();
+          if (!/твоя программа/i.test(doc.getElementById("app").textContent))
+            bad("[своя программа] занятие открыло чужую разминку, хотя своя программа была");
+
+          g.openMyPredict(pick, block.id);
+          await tick();
+          const t = doc.getElementById("app").textContent;
+          if (!/твоя программа|твой код/i.test(t))
+            bad("[своя программа] экран не говорит, что программа его собственная");
+          if (!/поменяли одно число/i.test(t))
+            bad("[своя программа] не сказано, что именно изменили");
+          const st = studioOf();
+          if (!st) bad("[своя программа] студия предсказания не открылась");
+          else {
+            /* неверный ответ шаг плана не закрывает */
+            st.editor.setCode("что-то не то");
+            st.querySelector('[data-role="check"]').click();
+            await tick();
+            if (won()) bad("[своя программа] неверное предсказание засчитано");
+            if ((g.zanAll()[rec.key].done || []).indexOf("predict:" + block.id) >= 0)
+              bad("[своя программа] неверный ответ закрыл блок плана");
+
+            st.editor.setCode(pick.made.out);
+            st.querySelector('[data-role="check"]').click();
+            await tick();
+            if (!won()) bad("[своя программа] верное предсказание не засчитано");
+            closeWin();
+            const r = g.zanAll()[rec.key] || {};
+            if (!r.predAll) bad("[своя программа] проверка понимания не попала в отчёт");
+            if (!r.predMine) bad("[своя программа] не помечено, что спрашивали про свой код");
+            if (r.predOk !== 0)
+              bad("[своя программа] ответ со второй попытки засчитан как понимание");
+          }
+        }
+      }
+      /* отчёт обязан сказать взрослому, что проверка была на собственном коде:
+         для него это принципиально другой вес */
+      const fin = g.zanFinish("hand");
+      const rep = g.zanReport(fin, g.state);
+      if (!/СОБСТВЕННУЮ|собственн/i.test(rep.got))
+        bad("[своя программа] отчёт не сказал, что спрашивали про его же программу: " + rep.got);
+      g.state.zan = {};
+      viewReset(g);
+    }
+
+    if (problems.length === p0) myPredChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -4499,6 +4655,7 @@ function checkEncoding(){
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
+  console.log(`проверка понимания на своём коде: ${myPredChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
