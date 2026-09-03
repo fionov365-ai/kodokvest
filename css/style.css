@@ -1364,6 +1364,15 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- витрина «что создают ученики» ---------- */
+.showout{margin:8px 0 0;padding:9px 11px;border-radius:10px;background:var(--sunken);
+  border:1px solid var(--line);overflow-x:auto;font-size:12.5px;line-height:1.55;
+  white-space:pre;color:var(--ink)}
+.showout[hidden]{display:none}
+.drawstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:10px}
+.drawcell{display:grid;gap:5px}
+.drawcell canvas{width:100%;border-radius:10px;border:1px solid var(--line)}
+
 /* Строка «твою задачу решили» в списке своих заданий: это хорошая новость,
    и цвет у неё соответствующий. */
 .solvedline{color:var(--ok);font-weight:600}

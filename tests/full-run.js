@@ -3846,7 +3846,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0;
+  let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -4923,6 +4923,93 @@ function checkEncoding(){
     if (problems.length === p0) backChecked++;
   }
 
+  /* --- 9. витрина «что создают ученики» --- */
+  if (typeof g.screenShowcase === "function"){
+    const p0 = problems.length;
+
+    /* 9.1. Каждая программа курса обязана запускаться и что-то печатать:
+       витрина, на которой половина карточек пустая, продаёт против нас. */
+    {
+      const list = g.showcaseProjects();
+      if (list.length !== (w.PROJECTS || []).length)
+        bad("[витрина] показаны не все программы курса: " + list.length);
+      list.forEach(x => {
+        if (!x.code || !x.code.trim())
+          bad("[витрина] у программы «" + x.p.title + "» нет готового кода");
+        if (x.out === null)
+          bad("[витрина] программа «" + x.p.title + "» падает при запуске на витрине");
+        else if (!x.out.trim())
+          bad("[витрина] программа «" + x.p.title + "» ничего не печатает — показывать нечего");
+        if (!/после/.test(g.showcaseAfter(x.p)))
+          bad("[витрина] не сказано, когда до неё доходят: " + g.showcaseAfter(x.p));
+      });
+    }
+
+    /* 9.2. Экран. ⚠️ Кода непройденного проекта на витрине быть не должно:
+       выложить решение рядом с курсом значит своими руками сломать курс. */
+    {
+      const pj = (w.PROJECTS || [])[0];
+      const before = JSON.parse(JSON.stringify(g.state.projects || {}));
+      g.state.projects = {};                    /* ничего не собрано */
+      g.screenShowcase();
+      await tick(60);
+      const t = doc.getElementById("app").textContent;
+      if (!/Что создают ученики/.test(t)) bad("[витрина] экран не открылся");
+      if (!doc.querySelector("[data-show]")) bad("[витрина] нечего запустить");
+      if (doc.querySelector("[data-showopen]"))
+        bad("[витрина] предложено открыть проект, который ещё не собран");
+
+      /* кусок решения непройденного проекта не должен лежать на странице */
+      const tail = (pj.steps[pj.steps.length - 1].solution || "").split("\n")
+        .map(x => x.trim()).filter(x => x.length > 25)[0];
+      if (tail && doc.getElementById("app").innerHTML.indexOf(tail) >= 0)
+        bad("[витрина] на витрине лежит код непройденного проекта: " + tail.slice(0, 50));
+
+      /* вывод показывается по нажатию и не целиком */
+      const btn = doc.querySelector("[data-show]");
+      const id = btn.getAttribute("data-show");
+      const box = doc.querySelector('[data-out="' + id + '"]');
+      if (!box.hidden) bad("[витрина] вывод показан до нажатия");
+      btn.click();
+      if (box.hidden || !box.textContent.trim()) bad("[витрина] вывод не показался");
+      const shownLines = box.textContent.split("\n").length;
+      if (shownLines > 14) bad("[витрина] вывод вывален целиком: строк " + shownLines);
+
+      /* честный блок про отсутствие чужих детей — не сноска, а раздел */
+      if (!/имен|имён/i.test(t)) bad("[витрина] не сказано, почему тут нет чужих работ с именами");
+      if (!/публичн/i.test(t)) bad("[витрина] не сказано, что публичной ленты не будет");
+
+      /* рисунки дорисовываются после загрузки мира */
+      await tick(120);
+      const strip = doc.getElementById("drawstrip");
+      if (strip && /Загружаем/.test(strip.textContent))
+        bad("[витрина] полоска рисунков осталась в загрузке");
+
+      g.state.projects = before;
+    }
+
+    /* 9.3. Входы: с главной и из кабинета взрослого — это его страница. */
+    {
+      g.screenWorlds();
+      await tick();
+      if (!doc.getElementById("goworks")) bad("[витрина] на главной нет входа в витрину");
+      g.adminUnlock();
+      g.screenAdult();
+      await tick();
+      const b = doc.querySelector('[data-act="toworks"]');
+      if (!b) bad("[витрина] в кабинете взрослого нет входа в витрину");
+      else {
+        b.click();
+        await tick(60);
+        if (!/Что создают ученики/.test(doc.getElementById("app").textContent))
+          bad("[витрина] кнопка кабинета не открыла витрину");
+      }
+      viewReset(g);
+    }
+
+    if (problems.length === p0) showChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -4973,6 +5060,7 @@ function checkEncoding(){
   console.log(`проверка понимания на своём коде: ${myPredChecked ? "да" : "нет"}`);
   console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
   console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
+  console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
