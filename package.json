@@ -1,8 +1,8 @@
 {
   "name": "kodokvest",
-  "version": "1.48.0",
+  "version": "1.49.0",
   "private": true,
-  "description": "Кодоквест — тренажёр Python для подростков",
+  "description": "Кодоквест — тренажёр по информатике: программирование на Python для школьников",
   "scripts": {
     "build": "node build.js",
     "test": "node tests/engine-vs-python.js && node tests/lessons.js && node tests/content-vs-python.js && node tests/cloud-function.js && node build.js && node tests/full-run.js",
