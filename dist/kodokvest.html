@@ -1388,6 +1388,17 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- группа: рабочее место наставника ---------- */
+.grouplist{display:grid;gap:10px;margin-top:8px}
+.grouprow{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}
+.grouprow.ok{border-color:var(--okline)}
+.grphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  flex-wrap:wrap;font-size:14px}
+/* ⚠️ Ни одной красной пометки: красный на экране наставника читается как
+   «поймали ребёнка», а мы никого не ловим. Тишина и трудный урок — жёлтым,
+   ровный ход — зелёным. */
+.trmarks li.quiet,.trmarks li.tough,.trmarks li.pred{color:var(--warn)}
+
 /* ---------- витрина «что создают ученики» ---------- */
 .showout{margin:8px 0 0;padding:9px 11px;border-radius:10px;background:var(--sunken);
   border:1px solid var(--line);overflow-x:auto;font-size:12.5px;line-height:1.55;
@@ -14622,6 +14633,7 @@ function backTarget(){
     case "shop":      return { label:"В портфолио", go: screenFolio };
     case "friendtask":return { label:"К заданиям", go: function(){ screenMyTasks(); } };
     case "trace":     return { label:"В кабинет", go: screenAdult };
+    case "group":     return { label:"В панель", go: function(){ location.hash = "#admin"; screenAdmin(); } };
     default:          return { label:"На главную", go: screenWorlds };
   }
 }
@@ -23826,6 +23838,7 @@ var HASH_SCREENS = {
   "#mine":    function(){ screenMyTasks(); },
   "#train":   function(){ screenTrain(); },
   "#works":   function(){ screenShowcase(); },
+  "#group":   function(){ screenGroup(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
 };
@@ -24193,6 +24206,12 @@ function serverCardHTML(){
     '</div>' +
     '<p class="dim">При обмене прогресс не перезаписывается, а сливается: по каждому уроку ' +
     'остаётся лучший результат из двух копий. Поэтому «Забрать» ничего не портит.</p>' +
+    /* Экран группы — главный вход для наставника, а не строчка в настройках
+       сервера: он сюда ходит каждую неделю, а в настройки один раз. */
+    '<h3 style="margin-top:20px">👨‍🏫 Работа с группой</h3>' +
+    '<p class="dim">Одна таблица на всех: кто сколько сдал за неделю, где было тяжело ' +
+    'и с кем стоит поговорить. Проверять код руками не нужно — его уже проверил движок.</p>' +
+    '<div class="admrow"><button class="rbtn check" data-act="togroup">Открыть группу →</button></div>' +
     '<h3 style="margin-top:20px">Прогресс другого ученика</h3>' +
     '<div class="admrow">' +
       '<label class="admlbl">код <input type="text" id="othercode" placeholder="misha-7f3a" ' +
@@ -24206,6 +24225,252 @@ function serverCardHTML(){
     '</div>' +
     '<p class="dim">Чужой прогресс только показывается — на этом устройстве ничего не меняется.</p>' +
     '<div id="srvout"></div></div>';
+}
+
+/* ================= экран группы: рабочее место наставника =================
+   Приоритет C из docs/market-research.md § 5: лицензия кружку или репетитору,
+   один договор — 10–30 детей. Это единственный покупатель, у которого болит
+   уже сегодня и который уже платит за то, что мы делаем сами.
+
+   Что показал замер ниши (§ 3в). Конкуренты — `cloudtext.ru`, `sokratai.ru`,
+   `finch.study` — построены на том, чтобы репетитору было УДОБНЕЕ проверять
+   руками: комментирование кода по фото, выделение ошибок мышкой, пересчёт
+   баллов. Обещание «экономит до 6 часов в неделю» — это признание, что часы
+   уходят на ручную проверку. ⚠️ Код у них не запускается ни у кого.
+
+   Значит наше обещание не «удобнее проверять», а **проверять не надо**: вот
+   что уже проверено движком, и вот на кого посмотреть в первую очередь.
+
+   ⚠️ Три ограничения, каждое из устройства продукта:
+     1. имени ребёнка на сервере НЕТ и не будет — там код и результаты.
+        Человеческую подпись наставник заводит у себя (`admin.labels`), и она
+        никуда не уходит. Это не неудобство, а снятое юридическое ограничение;
+     2. только чтение. Наставник ничего не меняет в чужом прогрессе;
+     3. ⚠️ это не табель. «На кого посмотреть» — приглашение поговорить, а не
+        список отстающих: вывод делает человек, и мы не имеем права выносить
+        его за него. Тот же запрет, что на карте активности.
+   ============================================================ */
+var GROUP_MAX = 30;         /* столько учеников тянем за раз */
+var GROUP_QUIET_DAYS = 5;   /* столько дней тишины — повод посмотреть */
+
+/* Сводка по одному ученику из его прогресса. Работает на ЛЮБОМ снимке — и на
+   своём, и на чужом, — потому что ничего не берёт из S. */
+function groupRow(code, st){
+  st = st || {};
+  var lg = st.log || {}, sm = st.stars || {};
+  var today = dayKey(), keys = [];
+  for (var i = WEEK_DAYS - 1; i >= 0; i--) keys.push(shiftDay(today, -i));
+
+  var week = 0, tries = 0, lastAt = 0, tough = null;
+  Object.keys(lg).forEach(function(id){
+    var g = lg[id] || {};
+    if (g.last && g.last > lastAt) lastAt = g.last;
+    if (!g.solvedAt || sm[id] === undefined) return;
+    if (keys.indexOf(dayKey(new Date(g.solvedAt))) < 0) return;
+    week++;
+    tries += g.attempts || 0;
+    var цена = (g.attempts || 0) + (g.hints || 0) * 2 + (g.shown ? 5 : 0);
+    if (цена >= 4 && (!tough || цена > tough.цена)) tough = { id:id, цена:цена, log:g };
+  });
+
+  /* проверка понимания: по закрытым занятиям, как в отчёте */
+  var pred = { ok:0, all:0, mine:0 }, zan = st.zan || {};
+  Object.keys(zan).forEach(function(k){
+    var r = zan[k];
+    if (!r || !r.end || !r.predAll) return;
+    pred.ok += r.predOk || 0; pred.all += r.predAll; pred.mine += r.predMine || 0;
+  });
+
+  /* запись авторства: сколько уроков с пометкой «пришло готовым» или «вперёд» */
+  var ready = 0, ahead = 0;
+  Object.keys(lg).forEach(function(id){
+    var t = (lg[id] || {}).tr;
+    if (!t) return;
+    if ((t.pasted || 0) >= AUTHOR_PASTE_MIN) ready++;
+    if ((t.ahead || []).length) ahead++;
+  });
+
+  var quiet = lastAt ? Math.floor((Date.now() - lastAt) / 864e5) : 999;
+  /* ⚠️ Это ПРИГЛАШЕНИЕ ПОГОВОРИТЬ, а не оценка. Поэтому каждая пометка
+     называет факт, а не ставит диагноз, и ни одна не говорит «плохо». */
+  var marks = [];
+  if (!lastAt) marks.push({ k:"quiet", txt:"занятий ещё не было" });
+  else if (quiet >= GROUP_QUIET_DAYS)
+    marks.push({ k:"quiet", txt:"не занимался " + quiet + " " + plural(quiet, "день", "дня", "дней") });
+  if (tough){
+    var l = CURRICULUM.byId(tough.id);
+    marks.push({ k:"tough", txt:"тяжело шёл урок «" + (l ? l.title : tough.id) + "»" });
+  }
+  if (pred.all && pred.ok < pred.all)
+    marks.push({ k:"pred", txt:"вывод предсказал " + pred.ok + " из " + pred.all });
+  if (ready) marks.push({ k:"ready", txt:"часть работы пришла готовой: " + ready +
+    " " + plural(ready, "урок", "урока", "уроков") });
+  if (ahead) marks.push({ k:"ahead", txt:"в решении непройденное: " + ahead +
+    " " + plural(ahead, "урок", "урока", "уроков") });
+
+  return { code: code, label: adminLabel(code) || "", week: week, tries: tries,
+           solved: Object.keys(sm).length, lastAt: lastAt, quiet: quiet,
+           pred: pred, marks: marks,
+           /* Чем выше, тем раньше показать. Молчание весит больше всего:
+              «не сел вовсе» — самая частая и самая дорогая из трёх подмен. */
+           rank: (quiet >= GROUP_QUIET_DAYS ? 100 : 0) + marks.length * 10 - week };
+}
+
+var groupState = { rows: null, busy: false, error: "", loaded: 0, total: 0 };
+
+function groupLoad(key){
+  if (!cloudEnabled()) return Promise.reject(new Error("Сервер не настроен."));
+  groupState.busy = true; groupState.error = ""; groupState.loaded = 0;
+  return Cloud.list(key).then(function(r){
+    var st = (r.students || []).filter(function(x){ return x && x.code && !x.broken; });
+    groupState.total = Math.min(st.length, GROUP_MAX);
+    var rows = [], i = 0;
+    /* Тянем по одному, а не всё разом: тридцать одновременных запросов к
+       функции — это тридцать холодных стартов и очередь. Медленнее, зато
+       предсказуемо, и видно, сколько уже пришло. */
+    function next(){
+      if (i >= groupState.total) return rows;
+      var code = st[i++].code;
+      return Cloud.load(code).then(function(res){
+        if (res && res.found && res.data) rows.push(groupRow(code, ensureShape(res.data)));
+        groupState.loaded++;
+        var bar = document.getElementById("grpbar");
+        if (bar) bar.textContent = "Загружено " + groupState.loaded + " из " + groupState.total + "…";
+        return next();
+      }, function(){ groupState.loaded++; return next(); });
+    }
+    return next();
+  }).then(function(rows){
+    rows.sort(function(a, b){ return b.rank - a.rank; });
+    groupState.rows = rows; groupState.busy = false;
+    return rows;
+  }, function(err){
+    groupState.busy = false;
+    groupState.error = err && err.message ? err.message : String(err);
+    throw err;
+  });
+}
+
+function screenGroup(){
+  curPlace = "group";
+  stopTimer(); vizStopPlay();
+  if (!adminUnlocked()) return adminGate();
+  var rows = groupState.rows;
+
+  var h = '<div class="lvlhead"><div><div class="idx">рабочее место наставника</div>' +
+    '<h1>👨‍🏫 Группа</h1></div><div class="right"><span class="tag">только чтение</span></div></div>' +
+    '<p class="lede">Проверять код руками не нужно: всё, что здесь показано, ребёнок сделал сам, ' +
+    'а проверил движок. Ваше дело — посмотреть, с кем поговорить.</p>';
+
+  h += '<div class="card"><h3>🔑 Ключ наставника</h3>' +
+    '<div class="admrow"><label class="admlbl">ключ ' +
+      '<input type="password" id="grpkey" value="' + esc(adminKeySaved()) + '" autocomplete="off"></label>' +
+      '<button class="rbtn check" id="grpload">Загрузить группу</button></div>' +
+    '<p class="dim" id="grpbar">' + (groupState.busy
+      ? "Загружено " + groupState.loaded + " из " + groupState.total + "…"
+      : "Тот же ключ, что задан в настройках функции как ADMIN_KEY. Больше " +
+        GROUP_MAX + " учеников за раз не тянем.") + '</p>' +
+    (groupState.error ? '<div class="msg show bad"><b>Не получилось</b>' + esc(groupState.error) + '</div>' : '') +
+    '</div>';
+
+  /* ⚠️ Рамка честности стоит до цифр — как на записи авторства, и по той же
+     причине: список «на кого посмотреть» без неё читается как список плохих. */
+  h += '<div class="card"><h3>⚖️ Что это за таблица</h3><ul class="trrules">' +
+    '<li><b>Это не табель.</b> «Посмотреть в первую очередь» — приглашение поговорить, ' +
+    'а не список отстающих. Вывод делаете вы, мы его за вас не выносим.</li>' +
+    '<li><b>Имён детей на сервере нет.</b> Там код и результаты. Подпись «Петя, 5 класс» ' +
+    'вы ставите у себя, и она никуда не уходит — поэтому согласие родителя на обработку ' +
+    'данных ребёнка вам не нужно.</li>' +
+    '<li><b>Только чтение.</b> Отсюда ничего нельзя изменить в чужом прогрессе.</li>' +
+    '</ul></div>';
+
+  if (rows && rows.length){
+    var weekAll = 0, triesAll = 0;
+    rows.forEach(function(r){ weekAll += r.week; triesAll += r.tries; });
+    h += '<div class="card"><h3>📊 За неделю</h3><ul class="trsum">' +
+      '<li>Учеников: <b>' + rows.length + '</b>.</li>' +
+      '<li>Уроков сдано: <b>' + weekAll + '</b>.</li>' +
+      /* Число, ради которого всё и затевалось: столько раз движок прочитал
+         и выполнил код вместо человека. У конкурентов это ручные часы. */
+      '<li>Проверок сделал движок: <b>' + triesAll + '</b> — столько программ ' +
+      'не пришлось читать глазами.</li>' +
+      '</ul></div>';
+
+    h += '<div class="card"><h3>👥 Кто как шёл</h3><div class="grouplist">';
+    rows.forEach(function(r){
+      /* Подпись читаем ЖИВУЮ, а не ту, что легла в строку при загрузке:
+         наставник подписывает учеников уже после того, как группа пришла с
+         сервера, и кэшированное имя показывало бы старое. */
+      var lbl = adminLabel(r.code) || "";
+      h += '<div class="grouprow' + (r.marks.length ? "" : " ok") + '">' +
+        '<div class="grphead"><b>' + esc(lbl || r.code) + '</b>' +
+        '<span class="dim">' + (lbl ? esc(r.code) + " · " : "") +
+        'за неделю ' + r.week + ' · всего ' + r.solved + ' · ' +
+        (r.lastAt ? fmtWhen(r.lastAt) : "занятий не было") + '</span></div>' +
+        (r.marks.length
+          ? '<ul class="trmarks">' + r.marks.map(function(m){
+              return '<li class="' + m.k + '">' + esc(m.txt) + '</li>';
+            }).join("") + '</ul>'
+          : '<p class="dim">Шёл ровно: сам, без подсказок и без пауз.</p>') +
+        '<div class="partbar">' +
+        '<button class="rbtn check" data-gview="' + esc(r.code) + '">Открыть прогресс</button>' +
+        '<button class="rbtn sec" data-glabel="' + esc(r.code) + '">Подписать</button></div></div>';
+    });
+    h += '</div></div>';
+  } else if (!groupState.busy){
+    h += '<div class="card"><h3>Группа не загружена</h3>' +
+      '<p class="dim">Введите ключ наставника и нажмите «Загрузить группу». ' +
+      'Если сервер не настроен, сначала пройдите настройку в панели наставника.</p></div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" data-gback="1">← В панель наставника</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-ghome="1">На главную</button></div>';
+
+  app.innerHTML = h;
+  var lb = document.getElementById("grpload");
+  if (lb) lb.onclick = function(){
+    var key = (document.getElementById("grpkey").value || "").trim();
+    if (!key){ groupState.error = "Нужен ключ наставника."; return screenGroup(); }
+    adminKeyRemember(key);
+    groupState.busy = true; groupState.error = ""; screenGroup();
+    groupLoad(key).then(screenGroup, screenGroup);
+  };
+  app.querySelectorAll("[data-gview]").forEach(function(b){
+    b.onclick = function(){
+      var code = b.getAttribute("data-gview");
+      Cloud.load(code).then(function(r){
+        if (!r.found || !r.data) return;
+        viewState = { code: code, data: r.data, serverAt: r.serverAt || 0 };
+        screenAdmin();
+      }, function(){});
+    };
+  });
+  app.querySelectorAll("[data-glabel]").forEach(function(b){
+    b.onclick = function(){
+      var code = b.getAttribute("data-glabel"), row = b.parentNode;
+      if (row.querySelector(".lblin")) return;
+      var inp = document.createElement("input");
+      inp.className = "lblin";
+      inp.value = adminLabel(code) || "";
+      inp.placeholder = "Петя, 5 класс";
+      row.appendChild(inp);
+      inp.focus();
+      inp.onkeydown = function(e){
+        if (e.key !== "Enter") return;
+        adminLabelSet(code, inp.value);
+        if (groupState.rows) groupState.rows.forEach(function(r){
+          if (r.code === code) r.label = adminLabel(code) || "";
+        });
+        screenGroup();
+      };
+    };
+  });
+  app.querySelectorAll("[data-gback]").forEach(function(b){
+    b.onclick = function(){ location.hash = "#admin"; screenAdmin(); };
+  });
+  app.querySelectorAll("[data-ghome]").forEach(function(b){ b.onclick = screenWorlds; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
 }
 
 function screenAdmin(){
@@ -24370,6 +24635,7 @@ function screenAdmin(){
           ". Ключ наставника " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
       }, function(err){ srv("bad", "<b>Проверка не прошла</b>" + esc(err.message || err)); });
     }
+    else if (act === "togroup"){ location.hash = ""; return screenGroup(); }
     else if (act === "viewother"){
       var code = (document.getElementById("othercode").value || "").trim().toLowerCase();
       if (!code){ srv("bad", "<b>Пусто</b>Введите код ученика."); return; }
@@ -25684,6 +25950,8 @@ window.__game = {
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
   backTarget: backTarget, syncBack: syncBack,
+  screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
+  groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
   showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,

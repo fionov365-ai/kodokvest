@@ -1370,6 +1370,17 @@ body.focus .toTop{display:none}
 .zanrep{margin:6px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--soft);font-size:14px}
 .zanrep li{line-height:1.5}
 
+/* ---------- группа: рабочее место наставника ---------- */
+.grouplist{display:grid;gap:10px;margin-top:8px}
+.grouprow{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}
+.grouprow.ok{border-color:var(--okline)}
+.grphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  flex-wrap:wrap;font-size:14px}
+/* ⚠️ Ни одной красной пометки: красный на экране наставника читается как
+   «поймали ребёнка», а мы никого не ловим. Тишина и трудный урок — жёлтым,
+   ровный ход — зелёным. */
+.trmarks li.quiet,.trmarks li.tough,.trmarks li.pred{color:var(--warn)}
+
 /* ---------- витрина «что создают ученики» ---------- */
 .showout{margin:8px 0 0;padding:9px 11px;border-radius:10px;background:var(--sunken);
   border:1px solid var(--line);overflow-x:auto;font-size:12.5px;line-height:1.55;

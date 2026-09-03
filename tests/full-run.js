@@ -3936,6 +3936,7 @@ function checkEncoding(){
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
+  let groupChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5099,6 +5100,107 @@ function checkEncoding(){
     if (problems.length === p0) showChecked++;
   }
 
+  /* --- 10. группа: рабочее место наставника --- */
+  if (typeof g.groupRow === "function"){
+    const p0 = problems.length;
+
+    /* 10.1. Сводка по ученику считается из ЛЮБОГО снимка прогресса, а не из
+       своего: наставник смотрит чужие данные, взятые с сервера. */
+    {
+      const day = 864e5, now = Date.now();
+      const st = g.ensureShape({
+        stars: { "print-first":3, "vars":2 },
+        log: {
+          "print-first": { solvedAt: now - day, last: now - day, attempts:1, hints:0, shown:0 },
+          "vars":        { solvedAt: now - 2*day, last: now - 2*day, attempts:6, hints:2, shown:1,
+                           tr: { at: now, pasted: 120, ahead: ["comp"] } }
+        },
+        zan: { "z1": { end: now - day, predAll: 2, predOk: 1, predMine: 1 } }
+      });
+      const r = g.groupRow("misha-7f3a", st);
+      if (r.week !== 2) bad("[группа] уроков за неделю посчитано " + r.week + " вместо двух");
+      if (r.tries !== 7) bad("[группа] попытки не сложились: " + r.tries);
+      if (r.pred.all !== 2 || r.pred.ok !== 1)
+        bad("[группа] проверка понимания посчитана неверно: " + JSON.stringify(r.pred));
+      const kinds = r.marks.map(m => m.k);
+      if (kinds.indexOf("tough") < 0) bad("[группа] трудный урок не замечен: " + JSON.stringify(kinds));
+      if (kinds.indexOf("ready") < 0) bad("[группа] «часть работы пришла готовой» не замечено");
+      if (kinds.indexOf("ahead") < 0) bad("[группа] «непройденное в решении» не замечено");
+      if (kinds.indexOf("quiet") >= 0) bad("[группа] занимавшийся вчера назван молчащим");
+      /* ⚠️ ни одна пометка не выносит приговор: это приглашение поговорить */
+      r.marks.forEach(m => {
+        if (/плох|лен|отста|прогул|спис/i.test(m.txt))
+          bad("[группа] пометка выносит приговор: " + m.txt);
+      });
+    }
+
+    /* 10.2. Молчание весит больше всего: «не сел вовсе» — самая частая и самая
+       дорогая из трёх подмен, и такой ученик обязан быть сверху списка. */
+    {
+      const now = Date.now(), day = 864e5;
+      const тихий = g.groupRow("a", g.ensureShape({
+        stars: { "print-first":3 },
+        log: { "print-first": { solvedAt: now - 20*day, last: now - 20*day, attempts:1 } } }));
+      const бодрый = g.groupRow("b", g.ensureShape({
+        stars: { "print-first":3, "vars":3 },
+        log: { "print-first": { solvedAt: now - day, last: now - day, attempts:1 },
+               "vars":        { solvedAt: now - day, last: now - day, attempts:1 } } }));
+      if (тихий.rank <= бодрый.rank)
+        bad("[группа] молчащий ученик не поднялся выше активного: " + тихий.rank + " против " + бодрый.rank);
+      if (тихий.marks.map(m => m.k).indexOf("quiet") < 0)
+        bad("[группа] двадцать дней тишины не отмечены");
+      if (бодрый.marks.length)
+        bad("[группа] у ровно идущего появились пометки: " + JSON.stringify(бодрый.marks));
+      /* пустой снимок не должен ронять экран */
+      const пусто = g.groupRow("c", g.ensureShape({}));
+      if (!пусто || пусто.week !== 0) bad("[группа] пустой прогресс посчитан неверно");
+    }
+
+    /* 10.3. Экран: рамка честности до цифр, только чтение, вход из панели. */
+    {
+      g.adminUnlock();
+      g.groupState.rows = [
+        g.groupRow("misha-7f3a", g.ensureShape({ stars:{}, log:{} })),
+        g.groupRow("anya-2b81", g.ensureShape({ stars:{ "vars":3 },
+          log:{ "vars": { solvedAt: Date.now(), last: Date.now(), attempts:1 } } }))
+      ];
+      g.screenGroup();
+      await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/Группа/.test(t)) bad("[группа] экран не открылся");
+      if (!/не табель/i.test(t)) bad("[группа] не сказано, что это не табель");
+      if (!/имён детей на сервере нет/i.test(t))
+        bad("[группа] не сказано, что имён на сервере нет");
+      if (!/только чтение/i.test(t)) bad("[группа] не сказано, что менять ничего нельзя");
+      if (!/проверок сделал движок/i.test(t))
+        bad("[группа] не названо число проверок, которые не пришлось делать руками");
+      const rules = doc.querySelector(".trrules"), sum = doc.querySelector(".trsum");
+      if (!rules) bad("[группа] нет рамки честности");
+      if (rules && sum && !(rules.compareDocumentPosition(sum) & 4))
+        bad("[группа] цифры стоят раньше рамки честности");
+      if (doc.querySelectorAll(".grouprow").length !== 2)
+        bad("[группа] показаны не все ученики");
+      /* подпись ставится у наставника и никуда не уходит */
+      g.adminLabelSet("misha-7f3a", "Петя, 5 класс");
+      if (g.cloudSnapshot().admin) bad("[группа] настройки наставника уезжают на сервер");
+      g.screenGroup();
+      await tick();
+      if (!/Петя, 5 класс/.test(doc.getElementById("app").textContent))
+        bad("[группа] подпись наставника не показалась");
+      /* вход из панели наставника */
+      w.location.hash = "#admin";
+      g.screenAdmin();
+      await tick();
+      if (!doc.querySelector('[data-act="togroup"]'))
+        bad("[группа] в панели наставника нет входа в группу");
+      w.location.hash = "";
+      g.groupState.rows = null;
+      viewReset(g);
+    }
+
+    if (problems.length === p0) groupChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -5150,6 +5252,7 @@ function checkEncoding(){
   console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
   console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
   console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
+  console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
