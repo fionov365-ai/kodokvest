@@ -1605,7 +1605,12 @@ function mergeProgress(a, b){
          Ноль значит «рекорда нет», поэтому он не должен победить настоящий. */
       bestSteps: minPos(x.bestSteps, y.bestSteps),
       /* цель по шагам взята — это результат, и на любом устройстве он остаётся */
-      lean:     maxN(x.lean, y.lean)
+      lean:     maxN(x.lean, y.lean),
+      /* Запись авторства — свидетельство о ПЕРВОЙ сдаче, поэтому при слиянии
+         побеждает ранняя, а не свежая. Без этой строки поле молча терялось
+         бы на каждой синхронизации: слияние собирает запись журнала заново,
+         поле за полем. */
+      tr: (x.tr && y.tr) ? ((x.tr.at || 0) <= (y.tr.at || 0) ? x.tr : y.tr) : (x.tr || y.tr || null)
     };
   });
 
@@ -2089,6 +2094,7 @@ function makeEditor(initial, label, files){
     var caret = a + (pair ? 1 : ins.length);   /* внутрь пары, иначе за знаком */
     fileList[active].code = ta.value;
     box._errLine = 0; box._curLine = 0; box._watch = null;
+    traceTyped(ins.length);          /* панель символов — это тоже набор */
     sync();
     ta.focus();
     ta.setSelectionRange(caret, caret);
@@ -2101,11 +2107,62 @@ function makeEditor(initial, label, files){
     insertKey(k === "tab" ? "tab" : KEYBAR_KEYS[+k]);
   });
 
+  /* ===== запись работы: набрано или пришло готовым =====
+     Первый из сигналов «печати авторства» (docs/foresight-2027.md § 3,
+     docs/zanyatie-i-vzroslyj.md § 5). Считаем ровно то, что видим у себя на
+     странице, и ничего сверх того.
+
+       typed   знаков прибавилось набором с клавиатуры
+       pasted  знаков пришло вставкой, которой НЕТ в материалах урока
+       own     знаков пришло вставкой из самого урока (пример, заготовка,
+               показанное решение) — это обычная работа, а не сигнал
+       pastes  сколько раз вставляли
+       edits   сколько было правок вообще
+       jump    самая большая прибавка за одну правку
+
+     ⚠️ Разделение pasted/own — не придирка, а условие честности. Ребёнок
+     законно копирует пример объяснения кнопкой «→ В редактор» и руками; без
+     этого разделения каждый второй урок выглядел бы «пришедшим готовым», и
+     взрослый перестал бы верить записи. Материал урока кладёт сюда экран
+     урока (box.knownText).
+
+     Программная подстановка кода (setCode, setFiles, переключение файла) в
+     счёт НЕ идёт: там пишет не ребёнок. Поэтому у неё свой сброс длины. */
+  box.trace = { typed:0, pasted:0, own:0, pastes:0, edits:0, jump:0 };
+  box.knownText = "";
+  var traceLen = ta.value.length, pastedNow = null;
+  function traceSynced(){ traceLen = ta.value.length; }
+  function traceTyped(n){
+    box.trace.edits++;
+    if (n > 0){ box.trace.typed += n; if (n > box.trace.jump) box.trace.jump = n; }
+    traceSynced();
+  }
+  ta.addEventListener("paste", function(e){
+    var t = "";
+    try { t = ((e.clipboardData || window.clipboardData).getData("text") || ""); } catch(err){}
+    pastedNow = t;
+  });
+
   /* onEdit — крючок для того, кто открыл редактор: экран урока вешает на него
      отложенное сохранение черновика. Программная подстановка кода (setCode,
      setFiles) его НЕ дёргает: там сохраняет тот, кто подставил. */
   box.onEdit = null;
   ta.addEventListener("input", function(){
+    var len = ta.value.length, d = len - traceLen;
+    traceLen = len;
+    box.trace.edits++;
+    if (d > box.trace.jump) box.trace.jump = d;
+    if (pastedNow !== null){
+      /* Длину берём из самой вставки, а не из прироста: вставка поверх
+         выделенного куска даёт прирост меньше вставленного, а пришло всё
+         равно столько, сколько вставили. */
+      var n = pastedNow.length || Math.max(0, d);
+      box.trace.pastes++;
+      var chunk = pastedNow.replace(/^\s+|\s+$/g, "");
+      if (chunk && box.knownText && box.knownText.indexOf(chunk) >= 0) box.trace.own += n;
+      else box.trace.pasted += n;
+      pastedNow = null;
+    } else if (d > 0) box.trace.typed += d;
     box._errLine = 0; box._curLine = 0; box._watch = null; sync();
     if (box.onEdit) box.onEdit();
   });
@@ -2114,7 +2171,7 @@ function makeEditor(initial, label, files){
       e.preventDefault();
       var s = ta.selectionStart;
       ta.value = ta.value.slice(0,s) + "    " + ta.value.slice(ta.selectionEnd);
-      ta.selectionStart = ta.selectionEnd = s + 4; sync(); return;
+      ta.selectionStart = ta.selectionEnd = s + 4; traceTyped(4); sync(); return;
     }
     if (e.key === "Enter" && !e.ctrlKey && !e.metaKey){
       var pos = ta.selectionStart, before = ta.value.slice(0,pos);
@@ -2123,7 +2180,8 @@ function makeEditor(initial, label, files){
       if (/:\s*$/.test(line)) ind += "    ";
       e.preventDefault();
       ta.value = before + "\n" + ind + ta.value.slice(ta.selectionEnd);
-      ta.selectionStart = ta.selectionEnd = pos + 1 + ind.length; sync(); return;
+      ta.selectionStart = ta.selectionEnd = pos + 1 + ind.length;
+      traceTyped(1 + ind.length); sync(); return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
       e.preventDefault();
@@ -2138,6 +2196,7 @@ function makeEditor(initial, label, files){
     box._errLine = 0; box._curLine = 0; box._watch = null;
     box.querySelector(".lbl").textContent = fileList[i].name;
     box.querySelectorAll(".ftab").forEach(function(b, k){ b.className = "ftab" + (k === i ? " on" : ""); });
+    traceSynced();
     sync();
   }
   if (many) box.querySelector(".ftabs").addEventListener("click", function(e){
@@ -2152,7 +2211,7 @@ function makeEditor(initial, label, files){
     sync();
   };
   box.getCode = function(){ stash(); return fileList[0].code; };
-  box.setCode = function(v){ ta.value = v; fileList[active].code = v; box._errLine = 0; box._curLine = 0; box._watch = null; sync(); };
+  box.setCode = function(v){ ta.value = v; fileList[active].code = v; box._errLine = 0; box._curLine = 0; box._watch = null; traceSynced(); sync(); };
   /* Все файлы, кроме главного: именно они уходят в движок как модули. */
   box.getSources = function(){
     stash();
@@ -2164,7 +2223,7 @@ function makeEditor(initial, label, files){
   box.setFiles = function(list){
     for (var i = 0; i < fileList.length && i < list.length; i++) fileList[i].code = list[i].code;
     ta.value = fileList[active].code;
-    box._errLine = 0; box._curLine = 0; box._watch = null; sync();
+    box._errLine = 0; box._curLine = 0; box._watch = null; traceSynced(); sync();
   };
   box.fileCount = fileList.length;
   box.focusEditor = function(){ ta.focus(); };
@@ -3990,7 +4049,18 @@ function openLesson(id){
     var ready = worldReadyLessons(w);
     var pos = ready.indexOf(l);
 
-    var head = '<div class="crumbs"><span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
+    /* ===== кнопка «Назад» наверху =====
+       Хлебные крошки её не заменяют: они выглядят подписью, а не кнопкой, и
+       на них не нажимают. Единственная дорога назад была внизу страницы —
+       то есть за экраном, как только ребёнок уехал в редактор.
+       ⚠️ Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в список уроков. Иначе
+       кнопка уносит мимо плана ровно так же, как это делало «Дальше →» в
+       победной карточке до правки 1.41.0. */
+    var backToZan = !!zanOpen();
+    var head = '<div class="crumbs"><button class="backbtn" data-go="' +
+        (backToZan ? 'zan' : 'world') + '">← ' +
+        (backToZan ? 'К занятию' : 'К списку уроков') + '</button>' +
+      '<span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
       '<div class="lvlhead"><div><div class="idx">' + (l.boss ? "Босс мира " + w.n : "Урок " + l.num + " из 100") + '</div>' +
       '<h1>' + l.title + '</h1></div><div class="right">' +
       '<span class="tag">' + l.sub + '</span>' + (body.draw ? '<span class="tag draw">рисование</span>' : '') +
@@ -4124,12 +4194,20 @@ function openLesson(id){
              Поэтому над редактором висит строка с задачей: одной строкой,
              тап разворачивает целиком. На узком экране её нет — там задание
              и так стоит прямо над редактором. */
-          '<div class="worktask" id="worktask">' +
+          /* ⚠️ Развёрнуто ПО УМОЛЧАНИЮ. Свёрнутым этот блок экономил три
+             строки и стоил куда дороже: требования и обещанный вывод —
+             единственное место, где написано, что засчитается, — лежали
+             за словами «показать целиком», и ребёнок мог их просто не
+             открыть. Экономия места не стоит непрочитанного задания.
+             Свернуть по-прежнему можно, и свёрнутая строка — та же цель
+             в одну строку. Дублирования между строкой и раскрытым текстом
+             нет: открытый блок ПРЯЧЕТ однострочник (см. .worktask.open). */
+          '<div class="worktask open" id="worktask">' +
             '<div class="wthead">' + (isFix ? "🔧 Здесь чинишь код" : "🎯 Здесь решаешь задачу") + '</div>' +
-            '<button class="wtmain" id="wt-open" aria-expanded="false" aria-controls="wt-full">' +
-              '<span class="wttxt">' + stripTags(body.task.goal) + '</span>' +
-              '<span class="wtchev">показать целиком ▾</span></button>' +
-            '<div class="wtfull" id="wt-full" hidden><p>' + body.task.goal + '</p><ul>' +
+            '<button class="wtmain" id="wt-open" aria-expanded="true" aria-controls="wt-full">' +
+              '<span class="wttxt" hidden>' + stripTags(body.task.goal) + '</span>' +
+              '<span class="wtchev">свернуть ▴</span></button>' +
+            '<div class="wtfull" id="wt-full"><p>' + body.task.goal + '</p><ul>' +
               body.task.list.map(function(x){ return "<li>" + x + "</li>"; }).join("") + '</ul></div>' +
           '</div>' +
           '<div class="draftnote" id="draftnote" hidden></div>' +
@@ -4169,6 +4247,16 @@ function openLesson(id){
     });
     document.getElementById("studio").appendChild(studio);
     session.studio = studio;
+
+    /* Что в этом уроке копировать ЗАКОННО: примеры объяснения, заготовка,
+       решение. Вставка отсюда — обычная работа («→ В редактор» делает ровно
+       это), и в записи авторства она считается отдельно от вставки извне.
+       Без такого разделения каждый второй урок выглядел бы «пришедшим
+       готовым», и взрослый перестал бы верить записи целиком. */
+    studio.editor.knownText = [body.task.starter || "", body.task.solution || ""]
+      .concat((body.theory || []).map(function(t){ return [t.demo, t.show].filter(Boolean).join("\n"); }))
+      .concat((body.task.files || []).map(function(f){ return [f.starter, f.solution].filter(Boolean).join("\n"); }))
+      .join("\n");
 
     /* заготовка урока списком файлов — с ней сравнивается черновик, чтобы
        нетронутый урок не занимал места в прогрессе */
@@ -4274,6 +4362,7 @@ function openLesson(id){
     app.querySelectorAll("[data-go]").forEach(function(b){
       b.onclick = function(){
         var g = b.getAttribute("data-go");
+        if (g === "zan") return screenZan();
         if (g === "worlds") screenWorlds(); else screenWorld(l.world);
       };
     });
@@ -4288,6 +4377,15 @@ function openLesson(id){
       wt.classList.toggle("open", open);
       full.hidden = !open;
       wtOpen.setAttribute("aria-expanded", open ? "true" : "false");
+      /* Однострочник и раскрытый текст — это одна и та же цель задания.
+         Показывать их вместе значит напечатать её на экране дважды подряд
+         (так и было видно на уроке 6), поэтому лишний всегда спрятан. */
+      var txt = wtOpen.querySelector(".wttxt");
+      if (txt) txt.hidden = open;
+      /* Подпись обязана говорить, что случится по нажатию, а не в каком мы
+         состоянии: «показать целиком» на раскрытом блоке — прямая ложь. */
+      var chev = wtOpen.querySelector(".wtchev");
+      if (chev) chev.textContent = open ? "свернуть ▴" : "показать задание целиком ▾";
     };
 
     refreshTop();
@@ -4380,6 +4478,10 @@ function runCheck(l, body, ed, showMsg, canvas){
   session.steps = res.steps || 0;
   session.refSteps = stepsOfRef(body, refSrcs, stdin);
   session.code = code;      /* для разбора «как чище» в победной карточке */
+  /* Запись авторства снимается ЗДЕСЬ, а не в winLesson: там редактора уже нет
+     под рукой, а счётчики живут в нём. */
+  session.trace = ed.trace || null;
+  session.allCode = весьКод;
 
   /* «найди ошибку»: вывод верный — но код починен или написан заново? */
   if (body.task.type === "fix"){
@@ -4532,6 +4634,30 @@ function winLesson(l, body){
   var tidy = lintCount(l, body);   /* сколько советов «как чище» есть по этому коду */
   var lg = logOf(l.id);
   lg.stars = Math.max(lg.stars || 0, stars);
+  /* ===== запись авторства пишется ОДИН раз, на первой сдаче =====
+     Повторное прохождение того же урока запись не переписывает: она
+     свидетельствует о том, как урок был сдан впервые, а не о последнем
+     заходе. Иначе достаточно было бы пройти урок ещё раз, чтобы запись
+     «часть пришла готовой» исчезла, — и грош ей тогда цена. */
+  if (!lg.tr && session.trace){
+    var starterLen = (session.starter || []).reduce(function(a, f){ return a + (f.code || "").length; }, 0);
+    var mineCode = session.allCode || session.code || "";
+    lg.tr = {
+      at: Date.now(),
+      typed: session.trace.typed || 0,
+      pasted: session.trace.pasted || 0,
+      own: session.trace.own || 0,
+      edits: session.trace.edits || 0,
+      len: mineCode.length,
+      slen: starterLen,
+      shown: session.shown ? 1 : 0,
+      hints: session.hints || 0,
+      /* «Вперёд программы» считаем от того, что этому заданию и так нужно:
+         конструкция из эталонного решения — это работа по уроку, а не
+         забег вперёд. Проверено на всех ста уроках курса. */
+      ahead: aheadIn(mineCode, [body.task.starter || "", body.task.solution || ""].join("\n"))
+    };
+  }
   if (!lg.solvedAt) lg.solvedAt = Date.now();
   lg.last = Date.now();
   reviewAfterLesson(l.id);   /* трудный урок встаёт в очередь на повтор */
@@ -7527,6 +7653,291 @@ function heatHTML(st){
     'время не идёт. Это карта ритма, а не оценка.</p></div>';
 }
 
+/* ================= запись авторства =================
+   Ставка А из docs/foresight-2027.md § 3, граница честности — в
+   docs/zanyatie-i-vzroslyj.md § 5. Отдельный экран в кабинете, который
+   сводит сигналы, уже лежащие в прогрессе, и отвечает взрослому на вопрос,
+   которого нет ни у одного тренажёра рынка: «он это правда сам?»
+
+   ⚠️ ТРИ ПРАВИЛА, БЕЗ КОТОРЫХ ЭТО ПРЕВРАЩАЕТСЯ В НАДЗОР И УТАЩИТ БРЕНД.
+
+   1. Слова «списал» здесь нет и не будет. Мы утверждаем ровно то, что видим:
+      «часть работы пришла готовой», «в решении команда, которую ещё не
+      проходили». Приговор выносит взрослый, и то не приговор, а разговор.
+   2. Мы видим только свою страницу. Ни других вкладок, ни камеры, ни того,
+      чем ребёнок занят вне тренажёра. Это позиция, а не техническое
+      ограничение, и она написана взрослому на экране прямым текстом.
+   3. Сильный сигнал — не доказательство. Вставить можно и своё; открытое
+      решение — законный ход, за который уже снята звезда. Поэтому запись
+      заканчивается не выводом, а ВОПРОСОМ, который взрослый может задать.
+
+   Ребёнку эта запись не показывается и на звёзды, опыт и прогресс не влияет
+   никак: продукт построен на «не ругать», и запись обязана работать так же.
+
+   Что и откуда:
+     набрано/вставлено   счётчики редактора (box.trace), см. makeEditor
+     вперёд программы    aheadIn: конструкции шпаргалки, чей урок ещё не пройден
+     подсказки, решение  S.log — считались с самого начала
+     понял или прошёл    predOk/predAll занятий (проверка предсказанием) */
+
+/* Код без строк и комментариев. Нужен обоим сигналам: искать конструкцию
+   внутри текстовой строки — значит ловить слово «for» в строке «форма».
+   Кавычки оставляем пустой парой, чтобы не склеивать соседние знаки. */
+function codeSkeleton(src){
+  var s = String(src || ""), out = "", i = 0, n = s.length;
+  while (i < n){
+    var c = s[i];
+    if (c === "#"){ while (i < n && s[i] !== "\n") i++; continue; }
+    if (c === '"' || c === "'"){
+      var q = c, triple = s.substr(i, 3) === q + q + q, end;
+      if (triple){
+        end = i + 3;
+        while (end < n && s.substr(end, 3) !== q + q + q) end++;
+        end = Math.min(n, end + 3);
+      } else {
+        end = i + 1;
+        while (end < n && s[end] !== q && s[end] !== "\n"){ if (s[end] === "\\") end++; end++; }
+        if (end < n && s[end] === q) end++;
+      }
+      out += q + q; i = end; continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+
+/* Границы имени пишем руками: \b и \w в JavaScript знают только латиницу, а
+   у нас в коде живут русские имена переменных (урок 81). Из-за этого
+   «class Кот(Зверь)» не ловился шаблоном \w+ — проверено, а не предположено. */
+var W_ID = "A-Za-z_0-9А-Яа-яЁё";
+function pCall(n){ return new RegExp("(^|[^" + W_ID + ".])(?:" + n + ")\\s*\\("); }
+function pDot(n){ return new RegExp("\\.(?:" + n + ")\\s*\\("); }
+function pWord(n){ return new RegExp("(^|[^" + W_ID + "])(?:" + n + ")(?![" + W_ID + "])"); }
+function pHead(n){ return new RegExp("(^|\\n)[ \\t]*(?:" + n + ")(?![" + W_ID + "])"); }
+
+/* Конструкция → запись шпаргалки, где она объясняется. Урок берётся ОТТУДА,
+   а не пишется здесь второй раз: у шпаргалки уже есть поле lesson, и она
+   единственный источник правды про «где это проходят». Тест сверяет, что
+   каждый ключ существует и что шаблон ловит пример своей же записи. */
+var AHEAD_PROBES = {
+  "print": pCall("print"), "fstring": new RegExp("(^|[^" + W_ID + "])f[\"']"),
+  "len": pCall("len"), "upper": pDot("upper|lower"), "title": pDot("title|capitalize"),
+  "find": pDot("find"), "strip": pDot("strip|rstrip|lstrip"), "split": pDot("split|splitlines"),
+  "join": pDot("join"), "replace": pDot("replace"), "startswith": pDot("startswith|endswith"),
+  "div": /\/\//, "pow": /\*\*/, "int-str": pCall("int|float"), "round": pCall("round"),
+  "abs": pCall("abs"), "minmax": pCall("min|max|sum"),
+  "mathmod": new RegExp("(^|[^" + W_ID + ".])math\\."),
+  "append": pDot("append"), "insert": pDot("insert"), "pop-remove": pDot("pop|remove"),
+  "sorted": pCall("sorted"),
+  "sort-key": new RegExp("(^|[^" + W_ID + ".])sorted\\s*\\([^\\n]*key\\s*="),
+  "sort-inplace": pDot("sort"), "slice-back": /\[\s*::\s*-1\s*\]/,
+  "index-count": pDot("index|count"),
+  "comp": /\[[^\[\]\n]*[^A-Za-z_0-9А-Яа-яЁё]for[^A-Za-z_0-9А-Яа-яЁё][^\[\]\n]*\]/,
+  "comp-if": /\[[^\[\]\n]*[^A-Za-z_0-9А-Яа-яЁё]for[^A-Za-z_0-9А-Яа-яЁё][^\[\]\n]*[^A-Za-z_0-9А-Яа-яЁё]if[^A-Za-z_0-9А-Яа-яЁё][^\[\]\n]*\]/,
+  "comp-dict": /\{[^{}\n]*[^A-Za-z_0-9А-Яа-яЁё]for[^A-Za-z_0-9А-Яа-яЁё][^{}\n]*\}/,
+  "dict-get": pDot("get"), "dict-items": pDot("items|keys|values"), "dict-update": pDot("update"),
+  "set": pCall("set"), "set-add": pDot("add|discard"), "counter": pCall("Counter"),
+  "any-all": pCall("any|all"),
+  "for-range": new RegExp("(^|[^" + W_ID + "])for(?![" + W_ID + "])[^\\n]*[^" + W_ID + ".]range\\s*\\("),
+  "range-step": new RegExp("(^|[^" + W_ID + ".])range\\s*\\([^)\\n]*,[^)\\n]*\\)"),
+  "enumerate": pCall("enumerate"), "zip": pCall("zip"),
+  "while": pHead("while"), "break": pHead("break|continue"),
+  "def": pHead("def"), "return": pHead("return"),
+  "fn-default": /def\s[^\n(]*\([^)\n]*=[^)\n]*\)/, "fn-varargs": /def\s[^\n(]*\([^)\n]*\*/,
+  "lambda": pWord("lambda"), "global": pHead("global"), "typing": /def\s[^\n]*\)\s*->/,
+  "class": pHead("class"), "init": /def\s+__init__\s*\(/, "repr": /def\s+__repr__\s*\(/,
+  "inherit": new RegExp("(^|\\n)[ \\t]*class\\s+[" + W_ID + "]+\\s*\\("),
+  "super": pCall("super"), "try": /(^|\n)[ \t]*try\s*:/,
+  "except-as": new RegExp("(^|[^" + W_ID + "])except(?![" + W_ID + "])[^\\n:]*[^" + W_ID + "]as(?![" + W_ID + "])"),
+  "finally": /(^|\n)[ \t]*finally\s*:/, "raise": pHead("raise"), "assert": pHead("assert"),
+  "none": pWord("None"), "isinstance": pCall("isinstance"), "type": pCall("type"),
+  "with-own": /def\s+__enter__\s*\(/, "import": pHead("import"),
+  "from-import": /(^|\n)[ \t]*from\s+\S+\s+import\s/,
+  "random": new RegExp("(^|[^" + W_ID + ".])random\\.(?:randint|random|shuffle|sample)\\s*\\("),
+  "choice": new RegExp("(^|[^" + W_ID + ".])random\\.choice\\s*\\("),
+  "json": new RegExp("(^|[^" + W_ID + ".])json\\.dumps\\s*\\("),
+  "json-loads": new RegExp("(^|[^" + W_ID + ".])json\\.loads\\s*\\("),
+  "regex": new RegExp("(^|[^" + W_ID + ".])re\\.(?:findall|search|match)\\s*\\("),
+  "re-sub": new RegExp("(^|[^" + W_ID + ".])re\\.sub\\s*\\("),
+  "generator": pWord("yield"),
+  "decorator": new RegExp("(^|\\n)[ \\t]*@[" + W_ID + "]"),
+  "strftime": pDot("strftime"), "date": pCall("date"), "defaultdict": pCall("defaultdict"),
+  "combinations": pDot("combinations"), "product": pDot("product"),
+  "open-read": new RegExp("(^|[^" + W_ID + ".])with\\s+open\\s*\\("),
+  "csv": new RegExp("(^|[^" + W_ID + ".])csv\\.[" + W_ID + "]+\\s*\\("),
+  "pathlib": pCall("Path"), "grid": /\]\s*\[/
+};
+function sheetById(id){
+  var out = null;
+  (window.CHEATSHEET || []).forEach(function(g){
+    (g.items || []).forEach(function(it){ if (it.id === id) out = it; });
+  });
+  return out;
+}
+
+/* Конструкции, которые есть в коде ребёнка, ещё не пройдены и НЕ нужны
+   самому заданию. Последнее условие обязательно: без него сигнал срабатывал
+   бы на самом курсе — урок 58 законно пишет @dataclass, а декораторы вообще
+   объясняют в 72-м. Проверено прогоном по всем ста урокам: с этим условием
+   ложных срабатываний ноль, без него три. */
+function aheadIn(code, allowed){
+  var mine = codeSkeleton(code), ok = codeSkeleton(allowed || ""), out = [];
+  Object.keys(AHEAD_PROBES).forEach(function(id){
+    var re = AHEAD_PROBES[id], it = sheetById(id);
+    if (!it || !re.test(mine) || re.test(ok)) return;
+    if (solved(it.lesson)) return;
+    out.push(id);
+  });
+  return out;
+}
+
+/* Порог вставки. Две строки кода — это примерно столько знаков; всё, что
+   меньше, — имя переменной или число, и шуметь из-за этого нельзя. */
+var AUTHOR_PASTE_MIN = 40;
+/* Столько правок и меньше при таком приросте — «появилось целиком». */
+var AUTHOR_FEW_EDITS = 2;
+var AUTHOR_BIG_ADD = 60;
+
+/* Запись по одному уроку. Возвращает null, если записи нет: уроки, пройденные
+   до этой версии, честно молчат, а не выдумывают прошлое. */
+function authorMarks(id){
+  var g = (S.log || {})[id] || {}, t = g.tr;
+  if (!t) return null;
+  var mine = Math.max(0, (t.len || 0) - (t.slen || 0));
+  var m = [];
+  if ((t.pasted || 0) >= AUTHOR_PASTE_MIN)
+    m.push({ k:"ready", em:"📋", txt:"часть работы пришла готовой: " + t.pasted +
+             " " + plural(t.pasted, "знак", "знака", "знаков") + " вставлено, и в уроке такого текста нет" });
+  else if ((t.edits || 0) <= AUTHOR_FEW_EDITS && mine >= AUTHOR_BIG_ADD && !t.shown)
+    m.push({ k:"ready", em:"📋", txt:"программа появилась целиком, без истории правок" });
+  if ((t.ahead || []).length){
+    var names = t.ahead.map(function(x){ var it = sheetById(x); return it ? it.sig : x; });
+    m.push({ k:"ahead", em:"⏭", txt:"в решении есть то, что в курсе ещё не проходили: " +
+             names.slice(0, 3).join(", ") });
+  }
+  if (t.shown) m.push({ k:"shown", em:"👁", txt:"решение было показано — за это уже снята звезда" });
+  if (t.hints) m.push({ k:"hints", em:"💡", txt:"подсказок взято: " + t.hints });
+  if (!m.length) m.push({ k:"hand", em:"✍️", txt:"написано руками, от начала до конца" });
+  return { at: t.at || g.solvedAt || 0, typed: t.typed || 0, pasted: t.pasted || 0,
+           own: t.own || 0, edits: t.edits || 0, marks: m,
+           clean: m.length === 1 && m[0].k === "hand" };
+}
+
+/* Все уроки с записью, свежие сверху. */
+function authorList(){
+  var out = [];
+  Object.keys(S.log || {}).forEach(function(id){
+    var l = CURRICULUM.byId(id);
+    if (!l) return;
+    var a = authorMarks(id);
+    if (a) out.push({ id:id, num:l.num, title:l.title, rec:a });
+  });
+  out.sort(function(a, b){ return (b.rec.at || 0) - (a.rec.at || 0); });
+  return out;
+}
+
+/* Проверка понимания за все закрытые занятия. Это та самая последняя строка
+   таблицы из § 5: предсказать вывод программы, не запуская её, нельзя, не
+   поняв её. Подделать нечем — и потому это же метрика «понял» для родителя
+   и приложение к аттестации на семейном обучении. */
+function authorPredict(){
+  var ok = 0, all = 0, d = zanAll();
+  Object.keys(d).forEach(function(k){
+    var r = d[k];
+    if (!r || !r.end || !r.predAll) return;
+    ok += r.predOk || 0; all += r.predAll;
+  });
+  return { ok: ok, all: all };
+}
+
+function authorSummary(){
+  var list = authorList(), hand = 0, ready = 0, ahead = 0;
+  list.forEach(function(x){
+    if (x.rec.clean) hand++;
+    x.rec.marks.forEach(function(m){
+      if (m.k === "ready") ready++;
+      if (m.k === "ahead") ahead++;
+    });
+  });
+  return { n: list.length, hand: hand, ready: ready, ahead: ahead, pred: authorPredict() };
+}
+
+function screenTrace(){
+  curPlace = "trace";
+  stopTimer(); vizStopPlay();
+  if (!adminUnlocked()) return adminGate();
+  var list = authorList(), sum = authorSummary();
+
+  var h = '<div class="lvlhead"><div><div class="idx">для взрослого</div>' +
+    '<h1>🖐 Как шла работа</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
+    '<p class="lede">Запись того, как ребёнок писал код: набирал сам или часть пришла готовой, ' +
+    'брал ли подсказки, смотрел ли решение. Она ведётся с того урока, где вы это включили, ' +
+    'и ребёнку не показывается.</p>';
+
+  /* ⚠️ Рамка честности стоит ПЕРВОЙ, а не сноской внизу. Взрослый обязан
+     прочитать её до цифр, иначе первая же строка «часть работы пришла
+     готовой» прочтётся как обвинение — и это ровно тот путь, на котором
+     запись авторства превращается в надзор. */
+  h += '<div class="card"><h3>⚖️ Что здесь можно и чего нельзя</h3>' +
+    '<ul class="trrules">' +
+    '<li><b>Мы не выносим приговоров.</b> Мы называем только то, что видели у себя на странице: ' +
+    '«часть работы пришла готовой», «в решении есть то, что ещё не проходили». ' +
+    'Вставить можно и своё, а показанное решение — законный ход, за который уже снята звезда.</li>' +
+    '<li><b>Мы не следим за ребёнком.</b> Видно только нашу страницу: ни других вкладок, ' +
+    'ни камеры, ни микрофона, ни того, чем он занят вне тренажёра.</li>' +
+    '<li><b>Это повод спросить, а не наказать.</b> Самая сильная проверка — попросить объяснить ' +
+    'свою же программу: непонимание собственного кода не подделывается ничем.</li>' +
+    '</ul></div>';
+
+  if (!list.length){
+    h += '<div class="card"><h3>Пока записывать нечего</h3>' +
+      '<p class="dim">Запись появляется вместе с пройденными уроками. Уроки, сданные раньше, ' +
+      'здесь не показываются: выдумывать про них мы не будем.</p></div>';
+  } else {
+    var pr = sum.pred;
+    h += '<div class="card"><h3>📊 Коротко</h3><ul class="trsum">' +
+      '<li>Уроков с записью: <b>' + sum.n + '</b>.</li>' +
+      '<li>Написано руками от начала до конца: <b>' + sum.hand + '</b> из ' + sum.n + '.</li>' +
+      (sum.ready ? '<li>Уроков, где часть работы пришла готовой: <b>' + sum.ready + '</b>.</li>' : '') +
+      (sum.ahead ? '<li>Уроков, где в решении есть непройденное: <b>' + sum.ahead + '</b>.</li>' : '') +
+      '<li>Проверка понимания: ' + (pr.all
+        ? 'предсказал вывод верно <b>' + pr.ok + '</b> из ' + pr.all + '.'
+        : 'ещё не было — она идёт в конце занятия.') + '</li>' +
+      '</ul>' +
+      (sum.ready || sum.ahead
+        ? '<p class="dim">⚠️ Это не приговор. Откройте такой урок вместе и попросите объяснить ' +
+          'программу строчку за строчкой — этого хватает, чтобы понять всё, что нужно.</p>'
+        : '<p class="dim">Пока всё написано руками. Это ровно то, ради чего запись и ведётся.</p>') +
+      '</div>';
+
+    h += '<div class="card"><h3>📝 По урокам</h3><div class="trlist">';
+    list.slice(0, 40).forEach(function(x){
+      h += '<div class="trrow' + (x.rec.clean ? " ok" : "") + '">' +
+        '<div class="trhead"><b>Урок ' + x.num + '. ' + esc(x.title) + '</b>' +
+        '<span class="dim">' + (x.rec.at ? fmtWhen(x.rec.at) : "") + '</span></div>' +
+        '<ul class="trmarks">' +
+        x.rec.marks.map(function(m){
+          return '<li class="' + m.k + '">' + m.em + ' ' + esc(m.txt) + '</li>';
+        }).join("") +
+        '</ul>' +
+        '<div class="trnum">набрано ' + x.rec.typed + ' ' +
+        plural(x.rec.typed, "знак", "знака", "знаков") + ', правок ' + x.rec.edits +
+        (x.rec.own ? ', скопировано из урока ' + x.rec.own : "") + '</div></div>';
+    });
+    h += '</div>' + (list.length > 40
+      ? '<p class="dim">Показаны сорок последних уроков.</p>' : '') + '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" data-back="1">← В кабинет</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-home="1">На главную</button></div>';
+
+  app.innerHTML = h;
+  app.querySelectorAll("[data-back]").forEach(function(b){ b.onclick = screenAdult; });
+  app.querySelectorAll("[data-home]").forEach(function(b){ b.onclick = screenWorlds; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ================= кабинет взрослого =================
    Пока сайта и сервера нет, кабинет живёт на том же устройстве и открывается
    тем же кодом, что и панель наставника. Это честная заглушка, а не
@@ -7640,6 +8051,20 @@ function screenAdult(){
     '<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
     'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
     'выключенная означает «ничего не присылать».</p></div>';
+
+  /* ---------- как шла работа (запись авторства) ---------- */
+  var asum = authorSummary();
+  h += '<div class="card"><h3>🖐 Как шла работа</h3>' +
+    (asum.n
+      ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
+        'написано руками <b>' + asum.hand + '</b>' +
+        (asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
+        (asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
+      : '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
+        'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
+    '<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
+    'и не следим за ребёнком.</p>' +
+    '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div></div>';
 
   /* ---------- задание ребёнку ---------- */
   h += adultTaskHTML();
@@ -7830,6 +8255,7 @@ function wireAdult(){
     b.onclick = function(){
       if (act === "tomap") return screenWorlds();
       if (act === "toadmin"){ location.hash = "#admin"; return screenAdmin(); }
+      if (act === "totrace") return screenTrace();
       if (act === "freport"){ frameSet({ report: !frame().report }); return screenAdult(); }
       if (act === "peron"){
         var st = zanStats();
@@ -10906,6 +11332,10 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  screenTrace: screenTrace, authorMarks: authorMarks, authorList: authorList,
+  authorSummary: authorSummary, authorPredict: authorPredict,
+  aheadIn: aheadIn, codeSkeleton: codeSkeleton, AHEAD_PROBES: AHEAD_PROBES,
+  sheetById: sheetById, AUTHOR_PASTE_MIN: AUTHOR_PASTE_MIN,
   screenAssign: screenAssign, heatHTML: heatHTML, heatLevel: heatLevel,
   hoursAdd: hoursAdd, hoursRow: hoursRow, pruneHours: pruneHours,
   tickOnce: tickOnce, pageActive: pageActive, actMark: actMark,

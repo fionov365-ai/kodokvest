@@ -1472,6 +1472,24 @@ function checkEncoding(){
       if (grid.classList.contains("one"))
         bad("[раскладка] обычный урок помечен как одноколоночный");
     }
+    /* Дорога назад НАВЕРХУ. Единственная кнопка «← К списку уроков» жила в
+       самом низу страницы — то есть за экраном ровно тогда, когда ребёнок
+       сидит в редакторе. Хлебные крошки её не заменяют: они выглядят
+       подписью, а не кнопкой. */
+    {
+      const back = doc.querySelector(".crumbs .backbtn");
+      if (!back) bad("[назад] наверху урока нет кнопки «Назад»");
+      else {
+        if (!/назад|к списку|к занятию/i.test(back.textContent))
+          bad("[назад] кнопка наверху не говорит, куда ведёт: " + JSON.stringify(back.textContent));
+        back.click();
+        await tick();
+        if (doc.querySelector(".lessongrid"))
+          bad("[назад] кнопка наверху не увела с урока");
+      }
+      g.openLesson("vars"); await tick();
+    }
+
     /* Верстак обязан говорить, ЧТО делать: задание стоит в конце объяснения,
        а редактор наверху справа, и без этой шапки правая колонка — код и
        кнопки без единого слова о задаче. */
@@ -1488,13 +1506,27 @@ function checkEncoding(){
       const line = (doc.querySelector(".wttxt") || {}).textContent || "";
       if (!line.trim()) bad("[верстак] в шапке нет текста задачи");
       if (/[<>]/.test(line)) bad("[верстак] в строку задачи попала разметка: " + line.slice(0, 60));
-      if (!doc.getElementById("wt-full").hidden)
-        bad("[верстак] полный текст задачи развёрнут сразу");
-      doc.getElementById("wt-open").click();
+      /* ⚠️ Задание видно СРАЗУ. Свёрнутый блок экономил три строки и стоил
+         непрочитанных требований: за словами «показать целиком» лежало
+         единственное место, где написано, что засчитается. */
       if (doc.getElementById("wt-full").hidden)
-        bad("[верстак] задача не разворачивается целиком");
+        bad("[верстак] требования спрятаны — ребёнок может уйти, не прочитав их");
       if (doc.getElementById("wt-full").querySelectorAll("li").length !== vbody.task.list.length)
         bad("[верстак] в развёрнутой задаче не все пункты");
+      /* Задвоения быть не должно: однострочник и раскрытый текст — это одна
+         и та же цель задания, и вместе они печатают её дважды подряд. */
+      if (!doc.querySelector(".wttxt").hidden)
+        bad("[верстак] цель задания показана дважды: и строкой, и раскрытым текстом");
+      /* Свернуть по-прежнему можно, и подпись говорит, что будет по нажатию,
+         а не в каком мы состоянии. */
+      doc.getElementById("wt-open").click();
+      if (!doc.getElementById("wt-full").hidden)
+        bad("[верстак] задача не сворачивается обратно");
+      if (doc.querySelector(".wttxt").hidden)
+        bad("[верстак] свёрнутый блок не показывает задачу одной строкой");
+      if (!/показать/i.test(doc.querySelector(".wtchev").textContent))
+        bad("[верстак] у свёрнутого блока подпись не зовёт раскрыть: " +
+            JSON.stringify(doc.querySelector(".wtchev").textContent));
     }
 
     /* «→ В редактор» затирал код задания молча. Теперь он обязан сказать об
@@ -3814,6 +3846,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
+  let authorChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -3905,6 +3938,25 @@ function checkEncoding(){
     const openNow = g.zanOpen();
     if (openNow && openNow.done.length !== 1)
       bad("[занятие] шаг плана не закрылся: " + JSON.stringify(openNow && openNow.done));
+
+    /* ⚠️ Кнопка «Назад» наверху урока во время занятия обязана вести В
+       ЗАНЯТИЕ, а не в список уроков: иначе она уносит мимо плана ровно так
+       же, как это делало «Дальше →» в победной карточке. */
+    {
+      g.openLesson("vars");
+      await tick();
+      const back = doc.querySelector(".crumbs .backbtn");
+      if (!back) bad("[назад] во время занятия на уроке нет кнопки «Назад»");
+      else if (!/занятию/i.test(back.textContent))
+        bad("[назад] во время занятия кнопка ведёт мимо плана: " + JSON.stringify(back.textContent));
+      else {
+        back.click();
+        await tick();
+        if (doc.querySelector(".lessongrid")) bad("[назад] кнопка не увела с урока");
+        if (!/Занятие|занятие/.test(doc.getElementById("app").textContent))
+          bad("[назад] кнопка во время занятия увела не в занятие");
+      }
+    }
 
     /* закрыть можно в любой момент, даже когда сделано не всё */
     const fin = g.zanFinish("hand");
@@ -4223,6 +4275,183 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 5. запись авторства («Как шла работа») --- */
+  if (typeof g.authorMarks === "function"){
+    const p0 = problems.length;
+
+    /* 5.1. Каждый шаблон обязан ловить пример СВОЕЙ ЖЕ записи в шпаргалке.
+       Это дешёвая и жёсткая проверка: шаблон, который не узнаёт собственный
+       пример, не узнает и код ребёнка, а молчащий сигнал хуже отсутствующего —
+       он выглядит доказательством того, что всё чисто. */
+    {
+      const ids = Object.keys(g.AHEAD_PROBES);
+      if (ids.length < 50) bad("[авторство] шаблонов подозрительно мало: " + ids.length);
+      ids.forEach(id => {
+        const it = g.sheetById(id);
+        if (!it) return bad("[авторство] шаблон ссылается на запись шпаргалки «" + id + "», а её нет");
+        if (!w.CURRICULUM.byId(it.lesson))
+          bad("[авторство] запись «" + id + "» ссылается на несуществующий урок " + it.lesson);
+        if (!g.AHEAD_PROBES[id].test(g.codeSkeleton(it.code)))
+          bad("[авторство] шаблон «" + id + "» не ловит собственный пример из шпаргалки");
+      });
+    }
+
+    /* 5.2. Строки и комментарии из кода вычищаются: искать конструкцию внутри
+       текстовой строки значит ловить «for» в слове «форма». */
+    {
+      const sk = g.codeSkeleton('x = "for i in range(3)"  # for\nprint(x)');
+      if (/range/.test(sk)) bad("[авторство] содержимое строки попало в разбор кода: " + sk);
+      if (!/print/.test(sk)) bad("[авторство] разбор кода съел настоящий код: " + sk);
+    }
+
+    /* 5.3. «Вперёд программы» считается от того, что нужно САМОМУ заданию.
+       Без этого сигнал срабатывал бы на курсе: урок 58 законно пишет
+       @dataclass, а декораторы объясняют в 72-м. */
+    {
+      const before = JSON.parse(JSON.stringify(g.state.stars));
+      g.state.stars = {};                       /* ничего не пройдено */
+      const mine = 'print([x * 2 for x in [1, 2, 3]])';
+      if (!g.aheadIn(mine, "").length)
+        bad("[авторство] непройденная конструкция в решении не замечена");
+      if (g.aheadIn(mine, mine).length)
+        bad("[авторство] то, что нужно самому заданию, засчитано как забег вперёд");
+      g.state.stars = before;
+    }
+
+    /* 5.4. Счётчики редактора: набор, вставка извне и вставка из урока —
+       три разные вещи, и путать их нельзя. Программная подстановка кода
+       (setCode) не набор и не вставка: там пишет не ребёнок. */
+    {
+      g.openLesson("vars");
+      await tick();
+      const st = studioOf();
+      const ed = st && st.editor;
+      const ta = st && st.querySelector("textarea");
+      if (!ed || !ta) bad("[авторство] редактор урока не нашёлся");
+      else {
+        const t0 = JSON.parse(JSON.stringify(ed.trace));
+        ed.setCode("a = 1\n");
+        if (ed.trace.typed !== t0.typed || ed.trace.pasted !== t0.pasted)
+          bad("[авторство] подстановка кода засчитана как работа ребёнка");
+
+        /* набор: input без предшествующего paste */
+        ta.value = "a = 1\nb = 2\n";
+        ta.dispatchEvent(new w.Event("input", { bubbles:true }));
+        if (ed.trace.typed <= 0) bad("[авторство] набор с клавиатуры не посчитан");
+
+        /* вставка ИЗВНЕ */
+        const typedWas = ed.trace.typed;
+        ed.knownText = "print(\"это из урока\")";
+        const chunk = "for i in range(10):\n    print(i * i)\n";
+        const pev = new w.Event("paste", { bubbles:true });
+        pev.clipboardData = { getData: () => chunk };
+        ta.dispatchEvent(pev);
+        ta.value += chunk;
+        ta.dispatchEvent(new w.Event("input", { bubbles:true }));
+        if (ed.trace.pasted < chunk.length)
+          bad("[авторство] вставка извне не посчитана: " + ed.trace.pasted);
+        if (ed.trace.typed !== typedWas)
+          bad("[авторство] вставка засчитана как набор");
+
+        /* вставка ИЗ МАТЕРИАЛА УРОКА — обычная работа, а не сигнал */
+        const pastedWas = ed.trace.pasted;
+        const own = 'print("это из урока")';
+        const pev2 = new w.Event("paste", { bubbles:true });
+        pev2.clipboardData = { getData: () => own };
+        ta.dispatchEvent(pev2);
+        ta.value += own;
+        ta.dispatchEvent(new w.Event("input", { bubbles:true }));
+        if (ed.trace.pasted !== pastedWas)
+          bad("[авторство] копия примера из этого же урока названа чужой работой");
+        if (ed.trace.own < own.length)
+          bad("[авторство] копия примера урока не посчитана отдельно");
+      }
+      viewReset(g);
+    }
+
+    /* 5.5. Запись пишется при сдаче урока и НЕ переписывается при повторной:
+       она свидетельствует о первой сдаче. Иначе «часть пришла готовой»
+       стиралась бы вторым проходом, и грош ей цена. */
+    {
+      const id = "vars";
+      delete g.state.log[id];
+      g.setStars(id, 0);
+      const body = CONTENT.world1[id];
+      const r = await attempt(id, body.task.solution);
+      if (!r.ok) bad("[авторство] урок не сдался: " + r.why);
+      const tr1 = (g.state.log[id] || {}).tr;
+      if (!tr1) bad("[авторство] запись не появилась после сдачи урока");
+      else {
+        if (!tr1.at) bad("[авторство] у записи нет времени");
+        if (tr1.len !== body.task.solution.length)
+          bad("[авторство] длина сданной программы записана неверно");
+        const was = tr1.at;
+        await new Promise(r2 => setTimeout(r2, 5));
+        await attempt(id, body.task.solution);
+        if ((g.state.log[id].tr || {}).at !== was)
+          bad("[авторство] повторная сдача переписала запись о первой");
+      }
+      const marks = g.authorMarks(id);
+      if (!marks || !marks.marks.length) bad("[авторство] у записи нет ни одной пометки");
+      if (g.authorMarks("такого-урока-нет"))
+        bad("[авторство] выдумана запись про урок, которого не проходили");
+      viewReset(g);
+    }
+
+    /* 5.6. Слияние двух устройств. Журнал при слиянии собирается заново,
+       поле за полем, — значит новое поле обязано быть названо явно, иначе
+       оно молча теряется на каждой синхронизации. Побеждает РАННЯЯ запись:
+       свидетельство о первой сдаче. */
+    {
+      const m = g.mergeProgress(
+        { savedAt:1, log:{ vars:{ tr:{ at:100, typed:5, pasted:0, ahead:[] } } } },
+        { savedAt:2, log:{ vars:{ tr:{ at:200, typed:0, pasted:99, ahead:[] } } } });
+      if (!m.log.vars.tr) bad("[авторство] слияние потеряло запись");
+      else if (m.log.vars.tr.at !== 100)
+        bad("[авторство] слияние оставило позднюю запись вместо первой сдачи");
+      const m2 = g.mergeProgress({ savedAt:1, log:{ vars:{ attempts:1 } } },
+                                 { savedAt:2, log:{ vars:{ tr:{ at:7, ahead:[] } } } });
+      if (!m2.log.vars.tr) bad("[авторство] слияние потеряло запись, которой нет на втором устройстве");
+    }
+
+    /* 5.7. Экран. Проверяем не только что он рисуется, но и ГРАНИЦУ
+       ЧЕСТНОСТИ: слова «списал» тут быть не должно ни в каком виде, а
+       рамка «мы не следим» обязана стоять до цифр. */
+    {
+      g.adminUnlock();
+      g.screenTrace();
+      await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/Как шла работа/.test(t)) bad("[авторство] экран записи не открылся");
+      if (/спис(ал|ыва)/i.test(t))
+        bad("[авторство] на экране появилось слово «списал» — этого продукт себе не позволяет");
+      if (!/не следим|не следит/i.test(t))
+        bad("[авторство] на экране не сказано, что мы не следим за ребёнком");
+      if (!/других вкладок|камеры/i.test(t))
+        bad("[авторство] не названо, чего мы НЕ видим");
+      const rules = doc.querySelector(".trrules"), sum = doc.querySelector(".trsum");
+      if (!rules) bad("[авторство] нет рамки честности");
+      if (rules && sum && !(rules.compareDocumentPosition(sum) & 4))
+        bad("[авторство] цифры стоят раньше рамки честности");
+      if (!doc.querySelector(".trrow")) bad("[авторство] на экране нет ни одного урока с записью");
+
+      /* вход в запись есть в кабинете, и он ведёт куда обещал */
+      g.screenAdult();
+      await tick();
+      const btn = doc.querySelector('[data-act="totrace"]');
+      if (!btn) bad("[авторство] в кабинете нет входа в запись");
+      else {
+        btn.click();
+        await tick();
+        if (!/Как шла работа/.test(doc.getElementById("app").textContent))
+          bad("[авторство] кнопка кабинета не открыла запись");
+      }
+      viewReset(g);
+    }
+
+    if (problems.length === p0) authorChecked++;
+  }
+
   console.log(`уроков прогнано: ${checked} (из них «починить»: ${fixChecked})`);
   console.log(`игр прогнано: ${gamesChecked} из ${GAMES.length}`);
   console.log(`разминок прогнано: ${warmupsChecked} из ${WARMUPS.length}`);
@@ -4269,6 +4498,7 @@ function checkEncoding(){
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
+  console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);
