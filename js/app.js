@@ -484,7 +484,14 @@ function studyDaysUntil(goal, days){
 function paceCheck(goal, days, len){
   var left = lessonsLeft();
   var sessions = studyDaysUntil(goal, days || frame().days);
-  if (!goal || !sessions) return { ok:true, sessions:sessions, left:left, need:0 };
+  /* ⚠️ Ноль занятий до даты — это НЕ «всё в порядке», а «посчитать не из чего»:
+     либо не отмечен ни один день недели, либо дата уже прошла. Раньше отсюда
+     возвращался объект без mins, и кабинет печатал родителю «примерно
+     undefined минут на занятие». Помечаем случай отдельно, чтобы экран сказал
+     словами, чего не хватает, вместо выдуманного числа. */
+  if (!goal || !sessions)
+    return { ok:true, none:true, sessions:sessions, left:left, need:0,
+             past: !!(goal && goal <= dayKey()), nodays: !(days || frame().days).length };
   var perSession = Math.ceil(left / sessions);
   /* если замер принят, считаем по НЁМУ: обещать родителю дату, исходя из
      среднего темпа, когда известен темп его ребёнка, — это врать вежливо */
@@ -1044,10 +1051,28 @@ function doLogin(code, onErr){
   var v = (typeof Cloud !== "undefined") ? Cloud.validCode(code) : null;
   if (!v){ if (onErr) onErr("Код: 3–32 знака, маленькие латинские буквы, цифры, дефис, подчёркивание."); return; }
   if (!serverOn()){ if (onErr) onErr("Сервер не подключён — вход по коду недоступен."); return; }
-  Cloud.setCode(v);
-  resetProgressLocal();               /* чистим, чтобы забрать чужой аккаунт начисто */
-  cloudPull().then(function(){ refreshTop(); screenWorlds(); },
-                   function(err){ if (onErr) onErr(err.message || "Не удалось войти."); });
+  /* ⚠️ Порядок здесь важнее, чем кажется. Раньше код записывался и локальный
+     прогресс стирался ДО запроса: опечатка в коде, отвалившаяся сеть или
+     ошибка сервера — и прогресс уже уничтожен, а прежний код устройства затёрт,
+     то есть вернуться не по чему. Хуже всего была именно опечатка: сервер
+     отвечал «такого нет», ошибки не было вовсе, и ребёнок оказывался на карте
+     миров с нулём и без единого слова объяснения.
+     Теперь сначала СПРАШИВАЕМ, и стираем только когда есть что положить взамен. */
+  var prev = Cloud.myCode();
+  Cloud.load(v).then(function(res){
+    if (!res.found || !res.data){
+      if (onErr) onErr("На сервере нет ученика с кодом «" + v + "». Проверьте код — " +
+                       "прогресс на этом устройстве не тронут.");
+      return;
+    }
+    Cloud.setCode(v);
+    resetProgressLocal();             /* чистим, чтобы забрать чужой аккаунт начисто */
+    applyProgress(res.data);
+    refreshTop(); screenWorlds();
+  }, function(err){
+    if (prev) Cloud.setCode(prev);     /* не вышло — оставляем устройство как было */
+    if (onErr) onErr(err.message || "Не удалось войти.");
+  });
 }
 /* выйти: забыть код на этом устройстве и очистить локальный прогресс */
 function doLogout(){
@@ -1760,6 +1785,19 @@ function applyProgress(data){
 function cloudEnabled(){
   return typeof Cloud !== "undefined" && Cloud.configured();
 }
+/* Почему обмен не работает — словами и с указанием, что именно чинить.
+   Нужна там, где раньше молча отвечали «готово»: обмену нужны ДВЕ вещи —
+   адрес сервера в js/cloud-config.js и код ученика на этом устройстве, —
+   и родителю важно знать, какой из двух не хватает. */
+function cloudOffWhy(what){
+  if (typeof Cloud === "undefined")
+    return "<b>Обмен недоступен</b>Не загрузился js/cloud.js — " + what + " прогресс не получится.";
+  if (!Cloud.hasUrl())
+    return "<b>Сервер не подключён</b>В файле js/cloud-config.js не указан адрес сервера, " +
+           "поэтому " + what + " прогресс некуда. Пока прогресс хранится только в этом браузере.";
+  return "<b>Код ученика не задан</b>Без кода серверу непонятно, чей это прогресс, и " + what +
+         " его нельзя. Впишите код в поле выше и нажмите «Записать код».";
+}
 
 /* забрать с сервера и слить с тем, что уже есть здесь */
 function cloudPull(){
@@ -2181,6 +2219,52 @@ function makeEditor(initial, label, files){
     var w = pre.clientWidth - 30;          /* отступы слева и справа */
     return w > 0 ? Math.floor(w / box._charW) : 0;
   }
+  /* ⚠️ Длинная строка кода ПЕРЕНОСИТСЯ (white-space:pre-wrap), а номер строки
+     в колонке слева — ровно один и высотой в одну строку. Поэтому без выравнивания
+     всё, что ниже первого переноса, съезжает вверх, и красная метка ошибки
+     показывает НЕ НА ТУ строку — ребёнок ищет ошибку не там, где она есть.
+     На 375px перенос начинается примерно с 33 знаков, то есть постоянно.
+     Считать точку переноса самим нельзя: браузер рвёт строку по своим правилам
+     (сначала по пробелам, потом где придётся). Поэтому мы не вычисляем, а
+     ЗАМЕРЯЕМ — по подсветке, которая лежит поверх поля тем же шрифтом:
+     расстояние между началами соседних строк и есть настоящая высота строки. */
+  function lineTops(){
+    var walk = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT, null, false);
+    var nodes = [], starts = [], total = 0, node;
+    while ((node = walk.nextNode())){ nodes.push({ n: node, at: total }); total += node.nodeValue.length; }
+    if (!nodes.length) return null;
+    var text = nodes.map(function(x){ return x.n.nodeValue; }).join("");
+    var offs = [0];
+    for (var i = 0; i < text.length; i++) if (text[i] === "\n") offs.push(i + 1);
+    var rng = document.createRange();
+    /* Замер держится на Range.getBoundingClientRect. Его нет ни в jsdom, ни в
+       старых движках — там просто уходим ни с чем, и колонка номеров остаётся
+       такой, какой была. */
+    if (!rng || typeof rng.getBoundingClientRect !== "function") return null;
+    var tops = [], ok = false;
+    for (var j = 0; j < offs.length; j++){
+      var want = offs[j], hit = nodes[0];
+      for (var k = 0; k < nodes.length; k++) if (nodes[k].at <= want) hit = nodes[k]; else break;
+      var local = Math.min(want - hit.at, hit.n.nodeValue.length);
+      try { rng.setStart(hit.n, local); rng.collapse(true); } catch(e){ return null; }
+      var r = rng.getBoundingClientRect();
+      if (r.top || r.bottom) ok = true;
+      tops.push(r.top);
+    }
+    return ok ? tops : null;             /* нули — значит замерить нечем (jsdom) */
+  }
+  /* Подогнать высоту каждого номера под настоящую высоту его строки.
+     Если замер не удался, ничего не трогаем — будет как раньше. */
+  function syncGutter(){
+    var tops = lineTops();
+    if (!tops || tops.length < 2) return;
+    var items = gut.children;
+    for (var i = 0; i < items.length; i++){
+      var h = (i + 1 < tops.length) ? Math.round(tops[i + 1] - tops[i]) : 0;
+      items[i].style.height = h > 0 ? h + "px" : "";
+    }
+  }
+  box._syncGutter = syncGutter;
   function sync(){
     pre.innerHTML = hlWatched(ta.value, box._watch, box._watch ? colsFit() : 0) + "\n";
     ta.style.height = "auto";
@@ -2189,6 +2273,7 @@ function makeEditor(initial, label, files){
     for (var i = 1; i <= n; i++)
       g += '<i class="' + (i === box._errLine ? "err" : (i === box._curLine ? "cur" : "")) + '">' + i + '</i>';
     gut.innerHTML = g;
+    syncGutter();
   }
   /* Вставка символа с панели. Пишем прямо в текстовое поле и сами двигаем
      курсор: setCode отправил бы его в конец программы, а человек в этот
@@ -9663,7 +9748,14 @@ function screenAdult(){
       (f.goal ? '<button class="rbtn sec" data-act="fgoaloff">Убрать</button>' : '') + '</div>';
 
   if (f.goal){
-    h += pace.ok
+    h += pace.none
+      ? '<p class="warnline">⚠️ До ' + f.goal.split("-").reverse().join(".") + ' не набирается ни одного занятия, ' +
+        'поэтому темп посчитать не из чего. ' +
+        (pace.past ? 'Эта дата уже прошла — поставьте будущую.'
+                   : pace.nodays ? 'Не отмечен ни один день недели: отметьте, по каким дням идут занятия.'
+                                 : 'Между сегодня и этой датой нет ни одного учебного дня — проверьте дни недели и каникулы.') +
+        '</p>'
+      : pace.ok
       ? '<p class="dim">До ' + f.goal.split("-").reverse().join(".") + ' остаётся <b>' + pace.sessions +
         '</b> ' + plural(pace.sessions, "занятие", "занятия", "занятий") + ' и <b>' + pace.left + '</b> ' +
         plural(pace.left, "урок", "урока", "уроков") + '. Это примерно <b>' + pace.mins +
@@ -12072,6 +12164,15 @@ function screenAdmin(){
     else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }
     else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
+      /* ⚠️ Спрашиваем, потому что отменить нечем: настоящие звёзды затираются
+         тройками, XP раздувается, а solvedAt проставляется задним числом — то
+         есть недельный отчёт и «что далось тяжело» превращаются в выдумку.
+         Кнопка вдобавок стоит вплотную к «Сбросить весь прогресс», у которой
+         подтверждение было, а у этой не было. */
+      if (!confirm("Зачесть ВСЕ готовые уроки на три звезды?\n\n" +
+                   "Настоящие результаты будут затёрты: звёзды, опыт и журнал " +
+                   "(попытки, подсказки, время) станут выдуманными. Вернуть их будет нечем."))
+        return;
       CURRICULUM.forEach(function(w){
         worldReadyLessons(w).forEach(function(l){ setStars(l.id, 3); });
       });
@@ -12086,7 +12187,19 @@ function screenAdmin(){
     }
     else if (act === "go"){ openLesson(id); }
     else if (act === "pass"){ setStars(id, 3); refreshTop(); screenAdmin(); }
-    else if (act === "clear"){ setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin(); }
+    /* Третья кнопка подряд в плотной таблице на сто строк: промах пальцем стирал
+       звёзды и весь журнал урока — время, попытки, подсказки, — а взять их
+       больше неоткуда. Одного вопроса достаточно, чтобы промах не был приговором. */
+    else if (act === "clear"){
+      var cl = null;
+      CURRICULUM.forEach(function(w){
+        w.lessons.forEach(function(l){ if (l.id === id) cl = l; });
+      });
+      if (!confirm("Сбросить урок " + (cl ? cl.n + " · " + cl.title : id) + "?\n\n" +
+                   "Пропадут звёзды и журнал урока: время, попытки, подсказки."))
+        return;
+      setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin();
+    }
     else if (act === "badge"){
       var i = S.badges.indexOf(id);
       if (i >= 0) S.badges.splice(i, 1); else S.badges.push(id);
@@ -12111,11 +12224,24 @@ function screenAdmin(){
       srv("ok", "<b>Код записан</b>Теперь можно отправить прогресс на сервер.");
     }
     else if (act === "push"){
+      /* ⚠️ cloudPush при ненастроенном обмене РЕЗОЛВИТСЯ (false), а не падает.
+         Раньше это давало родителю «Отправлено. Прогресс лежит на сервере»,
+         когда не ушло ничего, — он уходил в уверенности, что копия есть.
+         Спрашиваем до отправки: сказать «не настроено» честнее, чем отчитаться
+         об успехе несделанного. */
+      if (!cloudEnabled()){ srv("bad", cloudOffWhy("отправить")); return; }
       srv("warn", "<b>Отправляю…</b>");
-      cloudPush().then(function(){ screenAdmin(); srv("ok", "<b>Отправлено</b>Прогресс лежит на сервере."); },
-                       function(err){ srv("bad", "<b>Не отправилось</b>" + esc(err.message || err)); });
+      cloudPush().then(function(ok){
+        screenAdmin();
+        if (ok) srv("ok", "<b>Отправлено</b>Прогресс лежит на сервере.");
+        else srv("bad", cloudOffWhy("отправить"));
+      }, function(err){ srv("bad", "<b>Не отправилось</b>" + esc(err.message || err)); });
     }
     else if (act === "pull"){
+      /* та же ловушка, что и у «Отправить»: без настройки cloudPull резолвится
+         false, и «Уже одинаково» прозвучало бы как отчёт о состоянии сервера,
+         хотя запроса не было вовсе */
+      if (!cloudEnabled()){ srv("bad", cloudOffWhy("забрать")); return; }
       srv("warn", "<b>Забираю…</b>");
       cloudPull().then(function(changed){
         refreshTop(); screenAdmin();
@@ -13229,6 +13355,9 @@ window.addEventListener("resize", function(){
      съедет относительно текстового поля */
   document.querySelectorAll(".editorbox").forEach(function(b){
     if (b._watch && b.setWatch){ b._charW = 0; b.setWatch(b._watch); }
+    /* Ширина изменилась — значит строки переносятся в других местах, и номера
+       строк надо выровнять заново, иначе метка ошибки уедет не на ту строку. */
+    if (b._syncGutter) b._syncGutter();
   });
 });
 

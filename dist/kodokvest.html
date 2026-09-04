@@ -68,7 +68,7 @@
 :root{
   /* --- светлая (по умолчанию) --- */
   --bg:#f1f4fc; --bg2:#ffffff; --panel:#ffffff; --panel2:#f5f7fe; --sunken:#eef1fa;
-  --line:#dde3f1; --line2:#c3cbe4; --ink:#1a1f3d; --soft:#4a5372; --faint:#6f7791;
+  --line:#dde3f1; --line2:#c3cbe4; --ink:#1a1f3d; --soft:#4a5372; --faint:#666e88;
   --acc:#5a41e0; --acc-lt:#7c5cff; --acc2:#00806c; --acc2-lt:#00a68c;
   --gold:#a06f00; --ok:#16814a; --bad:#cf3838; --warn:#a86a08;
   --code:#ffffff;
@@ -82,6 +82,15 @@
   --scrim:rgba(24,28,54,.42); --modal:linear-gradient(160deg,#ffffff,#f1f4ff);
   --sunk2:rgba(26,31,61,.06); --onacc:#ffffff; --onacc2:#ffffff;
   --codeink:#4b3ea8; --dot:#ccd3e7; --goldline:#e5d09a; --acc2line:#9ad9cd;
+  /* ⚠️ Цвет НЕсобранной звезды — отдельно от --dot (тот для точек-разделителей).
+     На --dot пустые звёзды давали контраст 1.4:1, то есть попросту не читались:
+     «★☆☆» и «★★★» выглядели как одна звезда против трёх на разном расстоянии, и
+     ребёнок не видел, сколько ему осталось. А вся мотивация тут на звёздах. */
+  --staroff:#8792b8;
+  /* Акцент, когда им набран ТЕКСТ на панели. На светлой теме совпадает с --acc,
+     а на тёмной --acc даёт всего 3.7:1 — для мелких надписей мало, поэтому там
+     берётся светлый вариант. Рамок и фонов это не касается. */
+  --accink:#5a41e0;
   --okbg:rgba(22,129,74,.10); --okline:#a8dcbe; --okink:#0f5f36;
   --badbg:rgba(207,56,56,.08); --badline:#f0b9b9; --badink:#a52626;
   --warnbg:rgba(181,115,10,.10); --warnline:#e8cf9c; --warnink:#8a5806;
@@ -106,7 +115,7 @@
 }
 :root[data-theme="dark"]{
   --bg:#0d1020; --bg2:#141a33; --panel:#181f3d; --panel2:#1f2749; --sunken:#0a0d1c;
-  --line:#2a3360; --line2:#3b4680; --ink:#eef1ff; --soft:#a6b0dd; --faint:#6f7ab0;
+  --line:#2a3360; --line2:#3b4680; --ink:#eef1ff; --soft:#a6b0dd; --faint:#7c87bd;
   --acc:#7c5cff; --acc-lt:#9d7bff; --acc2:#00e0b8; --acc2-lt:#00c9a7;
   --gold:#ffc53d; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffab3d;
   --code:#0a0d1c;
@@ -120,6 +129,8 @@
   --scrim:rgba(6,8,18,.82); --modal:linear-gradient(160deg,#1d2350,#16304a);
   --sunk2:rgba(0,0,0,.3); --onacc:#ffffff; --onacc2:#04231e;
   --codeink:#b9c6ff; --dot:#39406e; --goldline:#6b551f; --acc2line:#1c5a52;
+  --staroff:#6a74a8;
+  --accink:#9d7bff;
   --okbg:rgba(61,220,132,.12); --okline:#1e5c3c; --okink:#8ff0bb;
   --badbg:rgba(255,107,107,.1); --badline:#6b2a2a; --badink:#ffb3b3;
   --warnbg:rgba(255,171,61,.1); --warnline:#6b4d1f; --warnink:#ffd79a;
@@ -312,7 +323,7 @@ button{font-family:inherit}
 .lbody b{display:block;font-size:15px;font-weight:600;line-height:1.3}
 .lbody span{font-size:12.5px;color:var(--faint)}
 .lright{flex:none}
-.stars{font-size:13px;letter-spacing:1.5px;color:var(--dot)}
+.stars{font-size:13px;letter-spacing:1.5px;color:var(--staroff)}
 .stars b{color:var(--gold);font-weight:400}
 .soontag{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
 .bosstag{display:inline-block;font-size:10px;font-family:'Inter',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;
@@ -347,7 +358,9 @@ button{font-family:inherit}
 @media (max-width:720px){ .navback .lbl{display:none} }
 .lvlhead{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
 .lvlhead .idx{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--acc2);font-weight:700}
-.lvlhead h1{margin:3px 0 0;font-size:29px;line-height:1.15}
+/* Имя ребёнок вводит какое угодно, и длинное слитное имя срезалось правым
+   краем — переносим, как уже сделано на сертификате. */
+.lvlhead h1{margin:3px 0 0;font-size:29px;line-height:1.15;overflow-wrap:anywhere}
 .lvlhead .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .lede{color:var(--soft);margin:8px 0 22px;font-size:16px;max-width:66ch}
 
@@ -361,7 +374,7 @@ button{font-family:inherit}
    (урок 40) или «лишние пробелы снаружи и внутри» (урок 7). HTML схлопывает
    их в один, и урок показывал ребёнку не то, что печатает программа.
    Переносить строки при этом всё равно можно — за это отвечает «-wrap». */
-.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink);white-space:pre-wrap}
+.card code,.lede code,.goal code,.note code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em;color:var(--codeink);white-space:pre-wrap;overflow-wrap:anywhere}
 .demo pre code,.editorbox code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
 
 .note{border-left:3px solid var(--acc2);background:rgba(0,224,184,.07);padding:13px 16px;border-radius:0 12px 12px 0;margin:0 0 18px;font-size:14.5px;color:var(--soft)}
@@ -445,7 +458,7 @@ button{font-family:inherit}
 .projcard.done{border-color:var(--ok)}
 .pjemoji{font-size:38px;line-height:1;flex:none}
 .pjbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.pjkicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);font-weight:700}
+.pjkicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accink);font-weight:700}
 .pjbody b{font-size:19px;font-family:'Fredoka','Inter',sans-serif}
 .pjbody>span:nth-child(3){color:var(--soft);font-size:14px}
 .pjnote{color:var(--faint);font-size:12.5px;margin-top:3px}
@@ -639,7 +652,7 @@ button{font-family:inherit}
 .vizscope.call{border-style:solid;background:rgba(124,92,255,.07)}
 .vizscope .vsname{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
   font-weight:700;font-family:'JetBrains Mono',monospace}
-.vizscope.call .vsname{color:var(--acc)}
+.vizscope.call .vsname{color:var(--accink)}
 .vizscope .vsfn{text-transform:none;letter-spacing:.02em;font-size:12px}
 .vizvars>.vizscope+.vizscope{margin-top:2px}
 @media (prefers-reduced-motion:no-preference){
@@ -712,15 +725,23 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .ref span:hover{border-color:var(--acc2);color:var(--acc2)}
 
 /* ---------- победа ---------- */
-.win{position:fixed;inset:0;z-index:100;background:var(--scrim);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px}
+/* ⚠️ Окно победы ОБЯЗАНО прокручиваться. Внутрь его карточки складываются
+   заметки — про занятие, про щит, про ревью кода, — и на невысоком экране
+   (телефон в альбомной ориентации, да и обычный iPhone SE) карточка
+   перерастает экран. Без прокрутки grid-центрирование выносит низ карточки
+   за пределы окна БЕЗ полосы прокрутки: ребёнок прошёл урок и физически не
+   может нажать «Дальше →». Поэтому overflow здесь, а не «на всякий случай»:
+   align-items:start не даёт верху уехать под срез, когда карточка выше окна. */
+.win{position:fixed;inset:0;z-index:100;background:var(--scrim);backdrop-filter:blur(6px);display:none;
+  justify-items:center;align-items:start;padding:20px;overflow-y:auto;overscroll-behavior:contain}
 .win.show{display:grid}
 .wincard{background:var(--modal);border:1px solid var(--line2);border-radius:24px;
   padding:32px 34px;max-width:440px;width:100%;text-align:center;box-shadow:var(--shbig);
-  animation:pop .4s cubic-bezier(.2,1.3,.4,1)}
+  margin:auto;animation:pop .4s cubic-bezier(.2,1.3,.4,1)}
 .wincard .big{font-size:52px;line-height:1;margin-bottom:6px}
 .wincard h2{margin:0 0 6px;font-size:26px}
 .wincard p{margin:0 0 16px;color:var(--soft)}
-.winstars{font-size:38px;letter-spacing:6px;color:var(--dot);margin-bottom:10px}
+.winstars{font-size:38px;letter-spacing:6px;color:var(--staroff);margin-bottom:10px}
 .winstars b{color:var(--gold);font-weight:400;display:inline-block;animation:star .5s cubic-bezier(.2,1.4,.4,1) backwards}
 .winstars b:nth-child(1){animation-delay:.05s}.winstars b:nth-child(2){animation-delay:.2s}.winstars b:nth-child(3){animation-delay:.35s}
 @keyframes star{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
@@ -728,7 +749,10 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .winrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99;display:none}
 
-.toast{position:fixed;right:16px;bottom:16px;z-index:120;background:var(--modal);
+/* Всплывашка стоит ВЫШЕ кнопки «наверх»: раньше у обеих было bottom:16px,
+   и сообщение о новом бейдже накрывало кнопку целиком — как раз на длинной
+   странице урока, где она и нужна. */
+.toast{position:fixed;right:16px;bottom:70px;z-index:120;background:var(--modal);
   border:1px solid var(--gold);border-radius:14px;padding:12px 16px;box-shadow:var(--shbig);
   display:flex;gap:10px;align-items:center;font-size:14px;animation:pop .35s cubic-bezier(.2,1.3,.4,1);transition:.4s}
 .toast.out{opacity:0;transform:translateY(10px)}
@@ -761,6 +785,19 @@ body.focus .lede{display:none}
   .logo b{font-size:17px}
   .xpbar{width:70px}
   .worlds{grid-template-columns:1fr}
+  /* ⚠️ Шестнадцать пикселей здесь — не про красоту, а про то, чтобы страница
+     не прыгала. Safari на iPhone САМ увеличивает масштаб, когда палец попадает
+     в поле со шрифтом мельче 16px, и обратно уже не возвращает: после первого
+     же тапа в редактор шапка и кнопки «Запустить/Проверить» уезжают за правый
+     край, и ребёнок ищет их, возя пальцем по горизонтали. Ровно 16px — порог,
+     при котором зума не происходит. Заодно на телефоне попросту крупнее.
+     Имя ученика при регистрации уже было 16px по этой же причине. */
+  .edit-scroll pre.hl,.edit-scroll textarea,
+  .lsearch input,.sheethead input[type=search],.playbar .playin,
+  .memin,.stdinbox,.specin,.admgate input,.admlbl input,.admjson,.lblin{font-size:16px}
+  /* Номера строк обязаны совпасть с кодом по кеглю и межстрочью, иначе
+     разъедутся (высоту строк редактора выравнивает syncGutter в app.js). */
+  .gutter{font-size:16px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
@@ -810,7 +847,7 @@ body.focus .lede{display:none}
 .admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}
 .admgate input:focus{outline:none;border-color:var(--acc)}
-.admstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:10px;margin-bottom:18px}
+.admstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-bottom:18px}
 .admstat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
 .admstat span{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
 .admstat b{font-size:19px;font-family:'Fredoka','Inter',sans-serif;font-weight:600}
@@ -832,7 +869,7 @@ body.focus .lede{display:none}
 .admrowl .n{color:var(--faint);font-weight:700}
 .admrowl .t{color:var(--ink);font-weight:600}
 .admrowl .t em{font-style:normal;font-size:10px;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:1px 5px;margin-left:5px;vertical-align:1px}
-.admrowl .stars{color:var(--line2);letter-spacing:1px}
+.admrowl .stars{color:var(--staroff);letter-spacing:1px}
 .admrowl .stars b{color:var(--gold)}
 .admrowl .acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 .admrowl .acts .minibtn{padding:3px 9px;font-size:11.5px}
@@ -1192,9 +1229,15 @@ body.focus .lede{display:none}
 
 /* «?» рядом с заголовком раздела: тот же ответ, но не надо искать глазами
    кнопку в шапке. Ставится в правый верхний угол блока. */
-.qm{flex:none;width:22px;height:22px;padding:0;border-radius:50%;
+.qm{flex:none;position:relative;width:26px;height:26px;padding:0;border-radius:50%;
   border:1px solid var(--line2);background:var(--panel2);color:var(--soft);
-  font:700 12px/1 'Inter',sans-serif;cursor:pointer;transition:.15s}
+  font:700 13px/1 'Inter',sans-serif;cursor:pointer;transition:.15s}
+/* ⚠️ Кружок 26px нарисован, а нажимается 44px. Это ровно та кнопка, за которую
+   хватается растерявшийся ребёнок («что это за экран?»), и промахнуться по ней
+   пальцем было легче всего на сайте. Невидимая площадка вокруг увеличивает
+   цель до пальца, не раздувая саму точку в вёрстке заголовка. */
+.qm::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;
+  transform:translate(-50%,-50%)}
 .qm:hover{background:var(--acc);color:var(--onacc);border-color:transparent}
 
 /* ============================================================
@@ -14693,7 +14736,14 @@ function studyDaysUntil(goal, days){
 function paceCheck(goal, days, len){
   var left = lessonsLeft();
   var sessions = studyDaysUntil(goal, days || frame().days);
-  if (!goal || !sessions) return { ok:true, sessions:sessions, left:left, need:0 };
+  /* ⚠️ Ноль занятий до даты — это НЕ «всё в порядке», а «посчитать не из чего»:
+     либо не отмечен ни один день недели, либо дата уже прошла. Раньше отсюда
+     возвращался объект без mins, и кабинет печатал родителю «примерно
+     undefined минут на занятие». Помечаем случай отдельно, чтобы экран сказал
+     словами, чего не хватает, вместо выдуманного числа. */
+  if (!goal || !sessions)
+    return { ok:true, none:true, sessions:sessions, left:left, need:0,
+             past: !!(goal && goal <= dayKey()), nodays: !(days || frame().days).length };
   var perSession = Math.ceil(left / sessions);
   /* если замер принят, считаем по НЁМУ: обещать родителю дату, исходя из
      среднего темпа, когда известен темп его ребёнка, — это врать вежливо */
@@ -15253,10 +15303,28 @@ function doLogin(code, onErr){
   var v = (typeof Cloud !== "undefined") ? Cloud.validCode(code) : null;
   if (!v){ if (onErr) onErr("Код: 3–32 знака, маленькие латинские буквы, цифры, дефис, подчёркивание."); return; }
   if (!serverOn()){ if (onErr) onErr("Сервер не подключён — вход по коду недоступен."); return; }
-  Cloud.setCode(v);
-  resetProgressLocal();               /* чистим, чтобы забрать чужой аккаунт начисто */
-  cloudPull().then(function(){ refreshTop(); screenWorlds(); },
-                   function(err){ if (onErr) onErr(err.message || "Не удалось войти."); });
+  /* ⚠️ Порядок здесь важнее, чем кажется. Раньше код записывался и локальный
+     прогресс стирался ДО запроса: опечатка в коде, отвалившаяся сеть или
+     ошибка сервера — и прогресс уже уничтожен, а прежний код устройства затёрт,
+     то есть вернуться не по чему. Хуже всего была именно опечатка: сервер
+     отвечал «такого нет», ошибки не было вовсе, и ребёнок оказывался на карте
+     миров с нулём и без единого слова объяснения.
+     Теперь сначала СПРАШИВАЕМ, и стираем только когда есть что положить взамен. */
+  var prev = Cloud.myCode();
+  Cloud.load(v).then(function(res){
+    if (!res.found || !res.data){
+      if (onErr) onErr("На сервере нет ученика с кодом «" + v + "». Проверьте код — " +
+                       "прогресс на этом устройстве не тронут.");
+      return;
+    }
+    Cloud.setCode(v);
+    resetProgressLocal();             /* чистим, чтобы забрать чужой аккаунт начисто */
+    applyProgress(res.data);
+    refreshTop(); screenWorlds();
+  }, function(err){
+    if (prev) Cloud.setCode(prev);     /* не вышло — оставляем устройство как было */
+    if (onErr) onErr(err.message || "Не удалось войти.");
+  });
 }
 /* выйти: забыть код на этом устройстве и очистить локальный прогресс */
 function doLogout(){
@@ -15969,6 +16037,19 @@ function applyProgress(data){
 function cloudEnabled(){
   return typeof Cloud !== "undefined" && Cloud.configured();
 }
+/* Почему обмен не работает — словами и с указанием, что именно чинить.
+   Нужна там, где раньше молча отвечали «готово»: обмену нужны ДВЕ вещи —
+   адрес сервера в js/cloud-config.js и код ученика на этом устройстве, —
+   и родителю важно знать, какой из двух не хватает. */
+function cloudOffWhy(what){
+  if (typeof Cloud === "undefined")
+    return "<b>Обмен недоступен</b>Не загрузился js/cloud.js — " + what + " прогресс не получится.";
+  if (!Cloud.hasUrl())
+    return "<b>Сервер не подключён</b>В файле js/cloud-config.js не указан адрес сервера, " +
+           "поэтому " + what + " прогресс некуда. Пока прогресс хранится только в этом браузере.";
+  return "<b>Код ученика не задан</b>Без кода серверу непонятно, чей это прогресс, и " + what +
+         " его нельзя. Впишите код в поле выше и нажмите «Записать код».";
+}
 
 /* забрать с сервера и слить с тем, что уже есть здесь */
 function cloudPull(){
@@ -16390,6 +16471,52 @@ function makeEditor(initial, label, files){
     var w = pre.clientWidth - 30;          /* отступы слева и справа */
     return w > 0 ? Math.floor(w / box._charW) : 0;
   }
+  /* ⚠️ Длинная строка кода ПЕРЕНОСИТСЯ (white-space:pre-wrap), а номер строки
+     в колонке слева — ровно один и высотой в одну строку. Поэтому без выравнивания
+     всё, что ниже первого переноса, съезжает вверх, и красная метка ошибки
+     показывает НЕ НА ТУ строку — ребёнок ищет ошибку не там, где она есть.
+     На 375px перенос начинается примерно с 33 знаков, то есть постоянно.
+     Считать точку переноса самим нельзя: браузер рвёт строку по своим правилам
+     (сначала по пробелам, потом где придётся). Поэтому мы не вычисляем, а
+     ЗАМЕРЯЕМ — по подсветке, которая лежит поверх поля тем же шрифтом:
+     расстояние между началами соседних строк и есть настоящая высота строки. */
+  function lineTops(){
+    var walk = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT, null, false);
+    var nodes = [], starts = [], total = 0, node;
+    while ((node = walk.nextNode())){ nodes.push({ n: node, at: total }); total += node.nodeValue.length; }
+    if (!nodes.length) return null;
+    var text = nodes.map(function(x){ return x.n.nodeValue; }).join("");
+    var offs = [0];
+    for (var i = 0; i < text.length; i++) if (text[i] === "\n") offs.push(i + 1);
+    var rng = document.createRange();
+    /* Замер держится на Range.getBoundingClientRect. Его нет ни в jsdom, ни в
+       старых движках — там просто уходим ни с чем, и колонка номеров остаётся
+       такой, какой была. */
+    if (!rng || typeof rng.getBoundingClientRect !== "function") return null;
+    var tops = [], ok = false;
+    for (var j = 0; j < offs.length; j++){
+      var want = offs[j], hit = nodes[0];
+      for (var k = 0; k < nodes.length; k++) if (nodes[k].at <= want) hit = nodes[k]; else break;
+      var local = Math.min(want - hit.at, hit.n.nodeValue.length);
+      try { rng.setStart(hit.n, local); rng.collapse(true); } catch(e){ return null; }
+      var r = rng.getBoundingClientRect();
+      if (r.top || r.bottom) ok = true;
+      tops.push(r.top);
+    }
+    return ok ? tops : null;             /* нули — значит замерить нечем (jsdom) */
+  }
+  /* Подогнать высоту каждого номера под настоящую высоту его строки.
+     Если замер не удался, ничего не трогаем — будет как раньше. */
+  function syncGutter(){
+    var tops = lineTops();
+    if (!tops || tops.length < 2) return;
+    var items = gut.children;
+    for (var i = 0; i < items.length; i++){
+      var h = (i + 1 < tops.length) ? Math.round(tops[i + 1] - tops[i]) : 0;
+      items[i].style.height = h > 0 ? h + "px" : "";
+    }
+  }
+  box._syncGutter = syncGutter;
   function sync(){
     pre.innerHTML = hlWatched(ta.value, box._watch, box._watch ? colsFit() : 0) + "\n";
     ta.style.height = "auto";
@@ -16398,6 +16525,7 @@ function makeEditor(initial, label, files){
     for (var i = 1; i <= n; i++)
       g += '<i class="' + (i === box._errLine ? "err" : (i === box._curLine ? "cur" : "")) + '">' + i + '</i>';
     gut.innerHTML = g;
+    syncGutter();
   }
   /* Вставка символа с панели. Пишем прямо в текстовое поле и сами двигаем
      курсор: setCode отправил бы его в конец программы, а человек в этот
@@ -23872,7 +24000,14 @@ function screenAdult(){
       (f.goal ? '<button class="rbtn sec" data-act="fgoaloff">Убрать</button>' : '') + '</div>';
 
   if (f.goal){
-    h += pace.ok
+    h += pace.none
+      ? '<p class="warnline">⚠️ До ' + f.goal.split("-").reverse().join(".") + ' не набирается ни одного занятия, ' +
+        'поэтому темп посчитать не из чего. ' +
+        (pace.past ? 'Эта дата уже прошла — поставьте будущую.'
+                   : pace.nodays ? 'Не отмечен ни один день недели: отметьте, по каким дням идут занятия.'
+                                 : 'Между сегодня и этой датой нет ни одного учебного дня — проверьте дни недели и каникулы.') +
+        '</p>'
+      : pace.ok
       ? '<p class="dim">До ' + f.goal.split("-").reverse().join(".") + ' остаётся <b>' + pace.sessions +
         '</b> ' + plural(pace.sessions, "занятие", "занятия", "занятий") + ' и <b>' + pace.left + '</b> ' +
         plural(pace.left, "урок", "урока", "уроков") + '. Это примерно <b>' + pace.mins +
@@ -26281,6 +26416,15 @@ function screenAdmin(){
     else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }
     else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
+      /* ⚠️ Спрашиваем, потому что отменить нечем: настоящие звёзды затираются
+         тройками, XP раздувается, а solvedAt проставляется задним числом — то
+         есть недельный отчёт и «что далось тяжело» превращаются в выдумку.
+         Кнопка вдобавок стоит вплотную к «Сбросить весь прогресс», у которой
+         подтверждение было, а у этой не было. */
+      if (!confirm("Зачесть ВСЕ готовые уроки на три звезды?\n\n" +
+                   "Настоящие результаты будут затёрты: звёзды, опыт и журнал " +
+                   "(попытки, подсказки, время) станут выдуманными. Вернуть их будет нечем."))
+        return;
       CURRICULUM.forEach(function(w){
         worldReadyLessons(w).forEach(function(l){ setStars(l.id, 3); });
       });
@@ -26295,7 +26439,19 @@ function screenAdmin(){
     }
     else if (act === "go"){ openLesson(id); }
     else if (act === "pass"){ setStars(id, 3); refreshTop(); screenAdmin(); }
-    else if (act === "clear"){ setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin(); }
+    /* Третья кнопка подряд в плотной таблице на сто строк: промах пальцем стирал
+       звёзды и весь журнал урока — время, попытки, подсказки, — а взять их
+       больше неоткуда. Одного вопроса достаточно, чтобы промах не был приговором. */
+    else if (act === "clear"){
+      var cl = null;
+      CURRICULUM.forEach(function(w){
+        w.lessons.forEach(function(l){ if (l.id === id) cl = l; });
+      });
+      if (!confirm("Сбросить урок " + (cl ? cl.n + " · " + cl.title : id) + "?\n\n" +
+                   "Пропадут звёзды и журнал урока: время, попытки, подсказки."))
+        return;
+      setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin();
+    }
     else if (act === "badge"){
       var i = S.badges.indexOf(id);
       if (i >= 0) S.badges.splice(i, 1); else S.badges.push(id);
@@ -26320,11 +26476,24 @@ function screenAdmin(){
       srv("ok", "<b>Код записан</b>Теперь можно отправить прогресс на сервер.");
     }
     else if (act === "push"){
+      /* ⚠️ cloudPush при ненастроенном обмене РЕЗОЛВИТСЯ (false), а не падает.
+         Раньше это давало родителю «Отправлено. Прогресс лежит на сервере»,
+         когда не ушло ничего, — он уходил в уверенности, что копия есть.
+         Спрашиваем до отправки: сказать «не настроено» честнее, чем отчитаться
+         об успехе несделанного. */
+      if (!cloudEnabled()){ srv("bad", cloudOffWhy("отправить")); return; }
       srv("warn", "<b>Отправляю…</b>");
-      cloudPush().then(function(){ screenAdmin(); srv("ok", "<b>Отправлено</b>Прогресс лежит на сервере."); },
-                       function(err){ srv("bad", "<b>Не отправилось</b>" + esc(err.message || err)); });
+      cloudPush().then(function(ok){
+        screenAdmin();
+        if (ok) srv("ok", "<b>Отправлено</b>Прогресс лежит на сервере.");
+        else srv("bad", cloudOffWhy("отправить"));
+      }, function(err){ srv("bad", "<b>Не отправилось</b>" + esc(err.message || err)); });
     }
     else if (act === "pull"){
+      /* та же ловушка, что и у «Отправить»: без настройки cloudPull резолвится
+         false, и «Уже одинаково» прозвучало бы как отчёт о состоянии сервера,
+         хотя запроса не было вовсе */
+      if (!cloudEnabled()){ srv("bad", cloudOffWhy("забрать")); return; }
       srv("warn", "<b>Забираю…</b>");
       cloudPull().then(function(changed){
         refreshTop(); screenAdmin();
@@ -27438,6 +27607,9 @@ window.addEventListener("resize", function(){
      съедет относительно текстового поля */
   document.querySelectorAll(".editorbox").forEach(function(b){
     if (b._watch && b.setWatch){ b._charW = 0; b.setWatch(b._watch); }
+    /* Ширина изменилась — значит строки переносятся в других местах, и номера
+       строк надо выровнять заново, иначе метка ошибки уедет не на ту строку. */
+    if (b._syncGutter) b._syncGutter();
   });
 });
 
