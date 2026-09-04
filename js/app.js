@@ -1050,8 +1050,17 @@ function doRegister(name, onErr){
   if (serverOn()){
     Cloud.setCode(slugFromName(name));
     save();
-    cloudPush().then(function(){ refreshTop(); screenWorlds(); },
-                     function(){ refreshTop(); screenWorlds(); });
+    /* ⚠️ Карту миров показываем СРАЗУ, не дожидаясь сети. Раньше отрисовка
+       висела в then у cloudPush, и получалось две беды: ребёнок пару секунд
+       смотрел на экран регистрации, пока идёт запрос, а взрослый, успевший за
+       это время уйти в кабинет, оказывался выброшен обратно на главный экран —
+       запоздавший ответ сервера перерисовывал экран поверх открытого.
+       Ответ сервера теперь трогает только верхнюю панель, и только если с неё
+       никуда не ушли. */
+    refreshTop(); screenWorlds();
+    var seq = screenSeq;
+    var done = function(){ if (screenSeq === seq) refreshTop(); };
+    cloudPush().then(done, done);
   } else {
     save(); refreshTop(); screenWorlds();
   }
@@ -9669,6 +9678,7 @@ function winMyPredict(pick, blockId){
 function screenTrace(){
   curPlace = "trace";
   stopTimer(); vizStopPlay();
+  voiceStop(); claimScreen();
   if (!adminUnlocked()) return adminGate();
   var list = authorList(), sum = authorSummary();
 
@@ -9755,6 +9765,13 @@ function screenTrace(){
 function screenAdult(){
   curPlace = "adult";
   stopTimer(); vizStopPlay();
+  /* ⚠️ claimScreen обязателен и здесь. Экраны взрослого шли мимо enterScreen
+     (ему нельзя чистить #admin из адреса), а вместе с ним мимо claimScreen —
+     то есть НЕ увеличивали screenSeq. Урок и мир дорисовываются асинхронно,
+     и запоздавшая отрисовка затирала уже показанный кабинет: завёл ребёнка,
+     сразу пошёл в кабинет — и оказался на главном экране. Заодно здесь
+     сохраняется черновик урока и замолкает чтение вслух. */
+  voiceStop(); claimScreen();
   if (!adminUnlocked()) return adminGate();
   var f = frame();
   var last = zanLast();
@@ -12072,6 +12089,7 @@ function groupLoad(key){
 function screenGroup(){
   curPlace = "group";
   stopTimer(); vizStopPlay();
+  voiceStop(); claimScreen();
   if (!adminUnlocked()) return adminGate();
   var rows = groupState.rows;
 
@@ -12195,6 +12213,7 @@ function screenAdmin(){
   /* без clearAdminHash: этот экран как раз открывается по #admin */
   curPlace = "admin";
   stopTimer(); vizStopPlay();
+  voiceStop(); claimScreen();
   if (!adminUnlocked()) return adminGate();
 
   var h = "";
