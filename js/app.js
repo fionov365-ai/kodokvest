@@ -1387,6 +1387,10 @@ function backTarget(){
   var open = (typeof zanOpen === "function") ? zanOpen() : null;
   switch (curPlace){
     case "home": case "register": return null;
+    /* Кабинет взрослого. «Мои ученики» — вершина, назад некуда. Карточка ученика
+       и вход/настройка ведут в список, а не на детскую «главную». */
+    case "kids": case "adminsetup": case "adminlogin": return null;
+    case "kid": return { label:"К ученикам", go: screenKids };
 
     case "lesson": {
       if (open) return { label:"К занятию", go: screenZan };
@@ -3817,6 +3821,12 @@ function wireLessonSearch(){
 }
 
 function screenWorlds(){
+  /* ⚠️ Устройство взрослого не показывает детскую карту миров ВООБЩЕ. Иначе
+     «← На главную» из кабинета приводило на неё, а там всплывал остаточный
+     детский профиль этого устройства (имя, что стояло до превращения в кабинет).
+     Для взрослого «главная» — это кабинет, а не уроки. Одна страховка закрывает
+     все пути: и кнопку назад, и загрузку. */
+  if (isAdminDevice()) return screenAdminHome();
   enterScreen("home", "home");
   session = { id:null, attempts:0, hints:0, shown:false };
   /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
