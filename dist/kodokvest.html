@@ -1551,6 +1551,15 @@ body.focus .toTop{display:none}
   border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
 .brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
 .brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+/* выбор роли на общем компьютере */
+.rolegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
+.rolecard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
+  border:1px solid var(--line2);background:var(--panel);border-radius:16px;padding:20px 18px;cursor:pointer;
+  transition:.15s;font:inherit;color:inherit}
+.rolecard:hover{border-color:var(--acc);transform:translateY(-2px);background:var(--panel2)}
+.rolecard .roleico{font-size:34px;line-height:1}
+.rolecard b{font-size:18px;margin-top:4px}
+.rolecard .dim{font-size:13px}
 /* список учеников в кабинете взрослого */
 .kidlist{display:grid;gap:10px;margin:14px 0}
 .kidcard{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
@@ -14384,6 +14393,9 @@ function ensureShape(o){
      стирается ни сбросом прогресса, ни сменой ученика. */
   if (typeof o.admin.isAdmin !== "boolean") o.admin.isAdmin = false;
   if (typeof o.admin.pass !== "string") o.admin.pass = "";
+  /* код ребёнка, за которым следит родитель на этом устройстве (пусто — не родитель) */
+  if (typeof o.admin.parentOf !== "string") o.admin.parentOf = "";
+  if (typeof o.admin.parentLabel !== "string") o.admin.parentLabel = "";
   /* Ученики этого взрослого: код на сервере + имя, которое знает только он.
      Имя ребёнка на сервер не уходит принципиально, поэтому список имён —
      собственность устройства взрослого. */
@@ -15656,6 +15668,10 @@ function backTarget(){
        и вход/настройка ведут в список, а не на детскую «главную». */
     case "kids": case "adminsetup": case "adminlogin": return null;
     case "kid": return { label:"К ученикам", go: screenKids };
+    /* Выбор роли на общем компьютере и кабинет родителя. Экран выбора и сам
+       кабинет — вершины (назад некуда), а формы входа возвращают к выбору. */
+    case "roles": case "parent": return null;
+    case "kidlogin": case "parentlogin": return { label:"К выбору", go: screenRoles };
 
     case "lesson": {
       if (open) return { label:"К занятию", go: screenZan };
@@ -15718,9 +15734,11 @@ function refreshTop(){
   /* Детская навигация прячется и на самих экранах кабинета, включая вход и
      первичную настройку, — иначе «Сделать устройство кабинетом» соседствует со
      звёздами и «Новичком», что противоречит смыслу экрана. */
-  var adminScreen = isAdminDevice() ||
+  var adminScreen = isAdminDevice() || isParentDevice() ||
     curPlace === "adminsetup" || curPlace === "adminlogin" ||
-    curPlace === "kids" || curPlace === "kid";
+    curPlace === "kids" || curPlace === "kid" ||
+    curPlace === "roles" || curPlace === "kidlogin" ||
+    curPlace === "parentlogin" || curPlace === "parent";
   document.body.classList.toggle("adminui", adminScreen);
   if (adminScreen) return;                    /* детские счётчики не трогаем */
   document.querySelectorAll(".tabs .tab").forEach(function(b){
@@ -25938,12 +25956,37 @@ function adminPassSet(pass, makeAdmin){
 }
 function adminPassOk(pass){ return adminHasPass() && S.admin.pass === adminHash(pass); }
 function isAdminDevice(){ return !!(S.admin && S.admin.isAdmin); }
+/* ===== устройство родителя =====
+   Родитель следит за ОДНИМ ребёнком: расписание и отчёт, без списка и без
+   группы. Опознаётся по коду ребёнка, привязанному к устройству (parentOf).
+   Как и admin, живёт в S.admin (на сервер не уходит, сбросом не стирается).
+   Своего детского прогресса у родительского устройства нет — данные ребёнка
+   оно читает с сервера по коду, ровно как админ в карточке ученика. */
+function parentOf(){ return (S.admin && S.admin.parentOf) || ""; }
+function isParentDevice(){ return !!parentOf(); }
+function parentSet(code){
+  S.admin.parentOf = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
+  saveLocal();
+}
+function parentDeviceOff(){
+  S.admin.parentOf = "";
+  saveLocal();
+}
 /* Превратить это устройство обратно в обычное. Нужна отдельная кнопка: иначе
    взрослый, поставивший админку по ошибке, окажется заперт без уроков. */
 function adminDeviceOff(){
   S.admin.isAdmin = false; S.admin.pass = "";
   adminLock();
   saveLocal();
+}
+/* Ссылка родителю: открыв её, устройство родителя привязывается к коду ребёнка
+   и дальше всегда открывается в кабинет родителя. Отдельная от детской (?kid=),
+   потому что ведёт в другой кабинет. */
+function parentLink(code, name){
+  var tail = "?parent=" + encodeURIComponent(code) +
+    (name ? "&n=" + encodeURIComponent(String(name).slice(0, 40)) : "");
+  try { return location.origin + location.pathname + tail; }
+  catch(e){ return tail; }
 }
 
 /* ---------- ученики этого взрослого ---------- */
@@ -26113,6 +26156,102 @@ function screenAdminHome(){
   if (!adminUnlocked()) return screenAdminLogin();
   return screenKids();
 }
+/* ===== выбор роли на ОБЩЕМ компьютере =====
+   На личных устройствах этот экран не нужен: планшет ребёнка открывается по
+   своей ссылке в тренажёр, мак взрослого — в кабинет, телефон родителя — в свой.
+   Но за одним компьютером могут по очереди сесть трое, и тогда нужен вход:
+   три двери, у каждой — свой ключ. Честно про ключи: настоящий пароль только у
+   администратора (это его устройство). Ученик и родитель входят по КОДУ ребёнка —
+   на статическом сайте другого «пароля» для них нет, и код здесь и есть доступ. */
+function screenRoles(){
+  enterScreen("home", "roles");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">общий компьютер</div>' +
+    '<h1>🐍 Кодоквест — кто занимается?</h1></div></div>' +
+    '<p class="lede">Выберите, чей это заход. На своём личном устройстве этот экран ' +
+    'не появляется — там сразу открывается нужное.</p>' +
+    '<div class="rolegrid">' +
+      '<button class="rolecard" data-role="kid"><span class="roleico">🎒</span>' +
+        '<b>Я ученик</b><span class="dim">Заниматься. Нужен код или ссылка от учителя.</span></button>' +
+      '<button class="rolecard" data-role="parent"><span class="roleico">👨‍👩‍👦</span>' +
+        '<b>Я родитель</b><span class="dim">Смотреть занятия своего ребёнка и ставить расписание.</span></button>' +
+      '<button class="rolecard" data-role="admin"><span class="roleico">🛠</span>' +
+        '<b>Я администратор</b><span class="dim">Ученики, ссылки, отчёты. Вход по паролю.</span></button>' +
+    '</div>';
+  app.querySelectorAll("[data-role]").forEach(function(b){
+    b.onclick = function(){
+      var r = b.getAttribute("data-role");
+      if (r === "admin") return screenAdminHome();
+      if (r === "kid") return screenKidLogin();
+      if (r === "parent") return screenParentLogin();
+    };
+  });
+  refreshTop();
+}
+/* Вход ученика на общем компьютере: по коду, либо «я новенький» — регистрация. */
+function screenKidLogin(){
+  enterScreen("home", "kidlogin");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">вход ученика</div><h1>🎒 Я ученик</h1></div></div>' +
+    '<div class="card"><h3>У меня есть код</h3>' +
+      '<p class="dim">Код или ссылку дал учитель. Впиши код — откроется твой тренажёр с твоим прогрессом.</p>' +
+      '<div class="admgate"><input type="text" id="klcode" placeholder="например, roman-3f7a" ' +
+        'autocomplete="off" spellcheck="false"><button class="rbtn check" id="klgo">Войти</button></div>' +
+      '<div class="msg" id="klmsg"></div></div>' +
+    '<div class="card"><h3>Я тут впервые</h3>' +
+      '<p class="dim">Кода ещё нет — заведём новый профиль по имени.</p>' +
+      '<div class="admrow"><button class="rbtn sec" id="klnew">Завести профиль</button></div></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="klback">← Назад</button></div>';
+  var msg = document.getElementById("klmsg"), inp = document.getElementById("klcode");
+  function go(){
+    doLogin(inp.value, function(err){
+      msg.className = "msg show bad";
+      msg.innerHTML = "<b>Не вышло</b>" + esc(err);
+    });
+  }
+  document.getElementById("klgo").onclick = go;
+  inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
+  document.getElementById("klnew").onclick = function(){ screenRegister(); };
+  document.getElementById("klback").onclick = screenRoles;
+  inp.focus();
+  refreshTop();
+}
+/* Вход родителя на общем компьютере: по коду ребёнка. */
+function screenParentLogin(){
+  enterScreen("home", "parentlogin");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">вход родителя</div><h1>👨‍👩‍👦 Я родитель</h1></div></div>' +
+    '<div class="card"><h3>Код ребёнка</h3>' +
+      '<p class="dim">Учитель дал ссылку или код ребёнка. Впишите код — откроется кабинет с расписанием ' +
+      'и отчётом по нему. Чужого прогресса вы не увидите.</p>' +
+      '<div class="admgate"><input type="text" id="plcode" placeholder="например, roman-3f7a" ' +
+        'autocomplete="off" spellcheck="false"><button class="rbtn check" id="plgo">Войти</button></div>' +
+      '<div class="msg" id="plmsg"></div>' +
+      '<p class="dim" style="margin-top:12px">⚠️ Кто знает код — видит занятия ребёнка. Это тот же код, ' +
+      'по которому он входит в тренажёр; никому лишнему его не показывайте.</p></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="plback">← Назад</button></div>';
+  var msg = document.getElementById("plmsg"), inp = document.getElementById("plcode");
+  function go(){
+    var v = (typeof Cloud !== "undefined") ? Cloud.validCode(inp.value) : null;
+    if (!v){
+      msg.className = "msg show bad";
+      msg.innerHTML = "<b>Код не подходит</b>3–32 знака: маленькие латинские буквы, цифры, дефис.";
+      return;
+    }
+    if (!serverOn()){
+      msg.className = "msg show bad";
+      msg.innerHTML = "<b>Сервер не подключён</b>Без него занятия ребёнка посмотреть неоткуда.";
+      return;
+    }
+    parentSet(v);
+    screenParent(v);
+  }
+  document.getElementById("plgo").onclick = go;
+  inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
+  document.getElementById("plback").onclick = screenRoles;
+  inp.focus();
+  refreshTop();
+}
 function screenAdminSetup(){
   enterScreen("home", "adminsetup");
   app.innerHTML =
@@ -26270,6 +26409,11 @@ function screenKid(code, note){
       'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
       '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
       '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
+      '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
+      '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+      'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
+      '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
+      '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
       '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-kd="back">← К списку учеников</button></div>';
@@ -26277,6 +26421,7 @@ function screenKid(code, note){
     b.onclick = function(){
       var a = b.getAttribute("data-kd");
       if (a === "copy") return copyText(kidLink(code), b);
+      if (a === "pcopy") return copyText(parentLink(code, (kidGet(code) || {}).name), b);
       if (a === "back"){ kidTarget = null; return screenKids(); }
     };
   });
@@ -26353,6 +26498,39 @@ function kidSave(){
   }).catch(function(err){
     say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
   });
+}
+/* ================= КАБИНЕТ РОДИТЕЛЯ =================
+   Родитель следит за ОДНИМ ребёнком. Отличие от кабинета админа: нет списка
+   учеников, нет группы, нет раздачи ссылок — только расписание и отчёт по
+   своему ребёнку. Данные читаются с сервера по коду (kidTarget + kidLoad),
+   так же как админ смотрит карточку ученика, поэтому тело экрана переиспользует
+   kidRender без единой правки. */
+function parentLabel(){ return (S.admin && S.admin.parentLabel) || ""; }
+function screenParent(code){
+  code = code || parentOf();
+  if (!code) return screenRoles();
+  enterScreen("home", "parent");
+  kidTarget = { code: code, name: parentLabel(), data: null, dirty: false };
+  var who = parentLabel() || ("ученик " + code);
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">кабинет родителя</div><h1>' + esc(who) + '</h1></div></div>' +
+    '<p class="lede">Здесь видно, как идут занятия, и можно поставить расписание. ' +
+    'Ребёнок занимается на своём устройстве — его тренажёр отдельно от этого экрана.</p>' +
+    '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-pd="off">Выйти</button></div>';
+  app.querySelectorAll("[data-pd]").forEach(function(b){
+    b.onclick = function(){
+      if (b.getAttribute("data-pd") !== "off") return;
+      if (!confirm("Выйти из кабинета родителя на этом устройстве?\n\n" +
+                   "Ссылку от учителя можно открыть снова, чтобы вернуться."))
+        return;
+      kidTarget = null;
+      parentDeviceOff();
+      screenRoles();
+    };
+  });
+  refreshTop();
+  kidLoad(code);
 }
 /* ⚠️ Общий замок ВСЕХ взрослых экранов (полная панель, занятийная рамка на
    устройстве ребёнка, группа, просмотр по коду). Раньше он открывался единым
@@ -28254,13 +28432,37 @@ window.addEventListener("resize", function(){
      Если устройство раньше было кабинетом взрослого, снимаем с него этот статус:
      иначе ребёнок попадёт не в тренажёр, а в кабинет. (В норме ребёнок открывает
      ссылку на своём устройстве, но защищаемся и от «открыл на мамином ноутбуке».) */
-  if (set && typeof S !== "undefined" && S.admin && S.admin.isAdmin){
-    S.admin.isAdmin = false; S.admin.pass = "";
+  if (set && typeof S !== "undefined" && S.admin){
+    if (S.admin.isAdmin){ S.admin.isAdmin = false; S.admin.pass = ""; try { adminLock(); } catch(e){} }
+    S.admin.parentOf = "";               /* это устройство теперь детское, а не родительское */
     try { saveLocal(); } catch(e){}
-    try { adminLock(); } catch(e){}
   }
   try {
     if (set && history.replaceState)
+      history.replaceState(null, "", location.pathname + location.hash);
+  } catch(e){}
+})();
+
+/* Ссылка вида .../kodokvest/?parent=roman-3f7a закрепляет устройство за
+   РОДИТЕЛЕМ этого ребёнка: дальше оно всегда открывается в кабинет родителя.
+   Имя ребёнка может ехать в &n=… — сервер имён не хранит, а родителю приятнее
+   видеть имя, чем код. */
+(function(){
+  if (typeof Cloud === "undefined" || typeof S === "undefined") return;
+  var m = /[?&]parent=([^&]+)/.exec(location.search || "");
+  if (!m) return;
+  var code = Cloud.validCode(decodeURIComponent(m[1]));
+  if (!code) return;
+  var nm = /[?&]n=([^&]+)/.exec(location.search || "");
+  S.admin.parentOf = code;
+  S.admin.parentLabel = nm ? decodeURIComponent(nm[1]).slice(0, 40) : "";
+  /* родитель — не ученик и не админ на этом устройстве */
+  S.admin.isAdmin = false; S.admin.pass = "";
+  try { Cloud.forgetCode(); } catch(e){}
+  try { adminLock(); } catch(e){}
+  try { saveLocal(); } catch(e){}
+  try {
+    if (history.replaceState)
       history.replaceState(null, "", location.pathname + location.hash);
   } catch(e){}
 })();
@@ -28286,11 +28488,15 @@ function bootRender(){
   actStart();
   try {
     if (!routeHash()){
-      /* Устройство взрослого открывается сразу в кабинет, а не в уроки: на нём
-         занимаются не здесь, а дети — каждый на своём. */
+      /* Каждое устройство открывается в СВОЮ роль. Порядок важен: сначала
+         закреплённые роли (админ, родитель), потом ученик, и лишь незакреплённое
+         устройство видит экран выбора — это и есть «общий компьютер».
+         Ученик считается закреплённым, если у него есть код (онлайн) или он
+         зарегистрировался по имени (офлайн, S.name). */
       if (isAdminDevice()) screenAdminHome();
-      else if (needsRegister()) screenRegister();   /* сервер настроен, ученик ещё не выбран */
-      else screenWorlds();
+      else if (isParentDevice()) screenParent();
+      else if (myCode() || S.name) screenWorlds();
+      else screenRoles();
     }
   } catch(e){
     bootFallback(e);
@@ -28476,6 +28682,10 @@ window.__game = {
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
+  isParentDevice: isParentDevice, parentOf: parentOf, parentSet: parentSet,
+  parentDeviceOff: parentDeviceOff, parentLink: parentLink,
+  screenRoles: screenRoles, screenParent: screenParent,
+  screenKidLogin: screenKidLogin, screenParentLogin: screenParentLogin,
   adultFieldProblem: adultFieldProblem, adultTplById: adultTplById,
   lessonStarted: lessonStarted, screenCapReached: screenCapReached, errText: errText,
   backTarget: backTarget, syncBack: syncBack,
