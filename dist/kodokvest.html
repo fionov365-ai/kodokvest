@@ -19943,6 +19943,13 @@ function screenAccount(){
     '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
     'Прогресс на сервере при этом не удаляется.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
+    /* Дверь к другим кабинетам — здесь, в профиле, а не на главном экране:
+       ребёнку она в глаза не бросается, а взрослый, взявший его устройство,
+       находит её там, где ищут настройки. Сами кабинеты всё равно под замком. */
+    '<div class="card"><h3>Это не мой кабинет</h3>' +
+    '<p class="dim">Если за устройство сел родитель или наставник — можно перейти в свой кабинет ' +
+    'без набора адресов.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="gorole">⇄ Сменить роль</button></div></div>' +
     '<div class="card"><h3>Портфолио</h3>' +
     '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
@@ -20031,6 +20038,7 @@ function screenAccount(){
     };
   });
   paintSound();
+  (function(){ var r = document.getElementById("gorole"); if (r) r.onclick = screenRoles; })();
   document.getElementById("logout").onclick = function(){
     var yes = true;
     /* ⚠️ Обещать «на сервере останется» можно только когда сервер и правда есть.
@@ -25964,16 +25972,49 @@ function isAdminDevice(){ return !!(S.admin && S.admin.isAdmin); }
    оно читает с сервера по коду, ровно как админ в карточке ученика. */
 function parentOf(){ return (S.admin && S.admin.parentOf) || ""; }
 function isParentDevice(){ return !!parentOf(); }
-function parentSet(code){
-  S.admin.parentOf = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
-  saveLocal();
-}
 function parentDeviceOff(){
-  S.admin.parentOf = "";
+  S.admin.parentOf = ""; S.admin.parentLabel = "";
   saveLocal();
 }
-/* Превратить это устройство обратно в обычное. Нужна отдельная кнопка: иначе
-   взрослый, поставивший админку по ошибке, окажется заперт без уроков. */
+/* ===== смена роли устройства =====
+   ⚠️ Роль (кто это устройство по умолчанию: админ / родитель / ученик) и ПАРОЛЬ
+   администратора — разные вещи. Переключение роли меняет только «в какую дверь
+   открываться», но НИКОГДА не стирает пароль: иначе, сходив с админского мака в
+   роль родителя, взрослый терял бы пароль и заводил кабинет заново. Пароль
+   забывает только «Это устройство больше не кабинет».
+   Три перехода взаимно исключающи: активна ровно одна роль, остальные сняты. */
+function becomeAdmin(){
+  S.admin.isAdmin = true;
+  S.admin.parentOf = ""; S.admin.parentLabel = "";
+  try { if (typeof Cloud !== "undefined") Cloud.forgetCode(); } catch(e){}
+  saveLocal();
+}
+function becomeParent(code, label){
+  var v = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
+  if (!v) return false;
+  S.admin.parentOf = v;
+  S.admin.parentLabel = String(label || "").slice(0, 40);
+  S.admin.isAdmin = false;                 /* пароль НЕ трогаем */
+  /* ⚠️ Уходя из роли админа, ЗАКРЫВАЕМ замок. Иначе на общем компьютере взрослый
+     вошёл админом, переключился в другую роль, отдал ноутбук ребёнку — а тот
+     кнопкой «Сменить роль» возвращается в кабинет без пароля, потому что замок
+     остался открыт на всю сессию. */
+  adminLock();
+  try { if (typeof Cloud !== "undefined") Cloud.forgetCode(); } catch(e){}
+  saveLocal();
+  return true;
+}
+/* Ученик: код ставит сам вызывающий (doLogin/doRegister/ссылка), здесь только
+   снимаем взрослые роли, оставляя пароль на месте. */
+function becomeKid(){
+  S.admin.isAdmin = false;
+  S.admin.parentOf = ""; S.admin.parentLabel = "";
+  adminLock();                             /* см. becomeParent: замок закрывается */
+  saveLocal();
+}
+/* Превратить это устройство обратно в обычное — забыть и роль, и пароль. Нужна
+   отдельная кнопка: иначе взрослый, поставивший админку по ошибке, окажется
+   заперт без уроков. */
 function adminDeviceOff(){
   S.admin.isAdmin = false; S.admin.pass = "";
   adminLock();
@@ -26152,8 +26193,11 @@ function frameEditorHTML(f, pace){
    — кабинет, но замок закрыт → спросить пароль;
    — кабинет и замок открыт → список учеников. */
 function screenAdminHome(){
-  if (!isAdminDevice()) return screenAdminSetup();
+  /* Дверь решается по ПАРОЛЮ, а не по флагу роли: на устройство, где мы сейчас
+     в роли родителя/ученика, можно вернуться админом — пароль-то остался. */
+  if (!adminHasPass()) return screenAdminSetup();
   if (!adminUnlocked()) return screenAdminLogin();
+  becomeAdmin();                 /* войти админом = сделать админа активной ролью */
   return screenKids();
 }
 /* ===== выбор роли на ОБЩЕМ компьютере =====
@@ -26177,10 +26221,20 @@ function screenRoles(){
         '<b>Я родитель</b><span class="dim">Смотреть занятия своего ребёнка и ставить расписание.</span></button>' +
       '<button class="rolecard" data-role="admin"><span class="roleico">🛠</span>' +
         '<b>Я администратор</b><span class="dim">Ученики, ссылки, отчёты. Вход по паролю.</span></button>' +
-    '</div>';
+    '</div>' +
+    /* Если роль у устройства уже есть, а сюда зашли кнопкой «Сменить роль» —
+       нужна дорога обратно, иначе передумавший окажется заперт на этом экране. */
+    ((isAdminDevice() || isParentDevice() || myCode() || S.name)
+      ? '<div class="pager"><button class="bigbtn ghost" data-role="stay">← Остаться как есть</button></div>'
+      : '');
   app.querySelectorAll("[data-role]").forEach(function(b){
     b.onclick = function(){
       var r = b.getAttribute("data-role");
+      if (r === "stay"){                 /* вернуться в свою нынешнюю роль */
+        if (isAdminDevice()) return screenAdminHome();
+        if (isParentDevice()) return screenParent();
+        return screenWorlds();
+      }
       if (r === "admin") return screenAdminHome();
       if (r === "kid") return screenKidLogin();
       if (r === "parent") return screenParentLogin();
@@ -26204,6 +26258,7 @@ function screenKidLogin(){
     '<div class="pager"><button class="bigbtn ghost" id="klback">← Назад</button></div>';
   var msg = document.getElementById("klmsg"), inp = document.getElementById("klcode");
   function go(){
+    becomeKid();                 /* вход учеником снимает роли взрослого (пароль цел) */
     doLogin(inp.value, function(err){
       msg.className = "msg show bad";
       msg.innerHTML = "<b>Не вышло</b>" + esc(err);
@@ -26211,7 +26266,7 @@ function screenKidLogin(){
   }
   document.getElementById("klgo").onclick = go;
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
-  document.getElementById("klnew").onclick = function(){ screenRegister(); };
+  document.getElementById("klnew").onclick = function(){ becomeKid(); screenRegister(); };
   document.getElementById("klback").onclick = screenRoles;
   inp.focus();
   refreshTop();
@@ -26243,7 +26298,7 @@ function screenParentLogin(){
       msg.innerHTML = "<b>Сервер не подключён</b>Без него занятия ребёнка посмотреть неоткуда.";
       return;
     }
-    parentSet(v);
+    becomeParent(v, "");
     screenParent(v);
   }
   document.getElementById("plgo").onclick = go;
@@ -26287,6 +26342,7 @@ function screenAdminSetup(){
     }
     adminPassSet(a, true);
     adminUnlock();
+    becomeAdmin();
     screenKids();
   };
   document.getElementById("anotnow").onclick = screenWorlds;
@@ -26305,7 +26361,7 @@ function screenAdminLogin(){
     '</div><div class="msg" id="apmsg"></div></div>';
   var msg = document.getElementById("apmsg"), inp = document.getElementById("apass");
   function go(){
-    if (adminPassOk(inp.value)){ adminUnlock(); return screenKids(); }
+    if (adminPassOk(inp.value)){ adminUnlock(); becomeAdmin(); return screenKids(); }
     msg.className = "msg show bad";
     msg.innerHTML = "<b>Пароль не подошёл</b>Проверьте раскладку и большие буквы.";
     inp.value = ""; inp.focus();
@@ -26354,7 +26410,8 @@ function screenKids(){
   /* Полная панель наставника — «под капотом»: группа, просмотр любого ученика
      по коду, список всех с сервера. Обычному родителю с парой детей она не
      нужна, репетитору с классом — да, поэтому лежит отдельной ссылкой. */
-  h += '<div class="pager"><button class="bigbtn ghost" data-kact="panel">Полная панель наставника →</button>' +
+  h += '<div class="pager"><button class="bigbtn ghost" data-kact="role">⇄ Сменить роль</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-kact="panel">Полная панель наставника →</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-kact="off">Это устройство больше не кабинет</button></div>';
   app.innerHTML = h;
 
@@ -26373,6 +26430,7 @@ function screenKids(){
         return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она ниже.");
       }
       if (act === "open") return screenKid(code);
+      if (act === "role") return screenRoles();
       if (act === "panel"){ location.hash = "#panel"; return screenAdmin(); }
       if (act === "link") return copyText(kidLink(code), b);
       if (act === "drop"){
@@ -26517,9 +26575,11 @@ function screenParent(code){
     '<p class="lede">Здесь видно, как идут занятия, и можно поставить расписание. ' +
     'Ребёнок занимается на своём устройстве — его тренажёр отдельно от этого экрана.</p>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-pd="off">Выйти</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Выйти</button></div>';
   app.querySelectorAll("[data-pd]").forEach(function(b){
     b.onclick = function(){
+      if (b.getAttribute("data-pd") === "role"){ kidTarget = null; return screenRoles(); }
       if (b.getAttribute("data-pd") !== "off") return;
       if (!confirm("Выйти из кабинета родителя на этом устройстве?\n\n" +
                    "Ссылку от учителя можно открыть снова, чтобы вернуться."))
@@ -28432,9 +28492,13 @@ window.addEventListener("resize", function(){
      Если устройство раньше было кабинетом взрослого, снимаем с него этот статус:
      иначе ребёнок попадёт не в тренажёр, а в кабинет. (В норме ребёнок открывает
      ссылку на своём устройстве, но защищаемся и от «открыл на мамином ноутбуке».) */
+  /* Детская ссылка делает устройство детским: снимаем роли взрослого, но пароль
+     администратора НЕ трогаем — чтобы с этого же устройства можно было вернуться
+     в кабинет по паролю (типичный «семейный ноутбук»). */
   if (set && typeof S !== "undefined" && S.admin){
-    if (S.admin.isAdmin){ S.admin.isAdmin = false; S.admin.pass = ""; try { adminLock(); } catch(e){} }
-    S.admin.parentOf = "";               /* это устройство теперь детское, а не родительское */
+    S.admin.isAdmin = false;
+    S.admin.parentOf = ""; S.admin.parentLabel = "";
+    try { adminLock(); } catch(e){}
     try { saveLocal(); } catch(e){}
   }
   try {
@@ -28456,8 +28520,8 @@ window.addEventListener("resize", function(){
   var nm = /[?&]n=([^&]+)/.exec(location.search || "");
   S.admin.parentOf = code;
   S.admin.parentLabel = nm ? decodeURIComponent(nm[1]).slice(0, 40) : "";
-  /* родитель — не ученик и не админ на этом устройстве */
-  S.admin.isAdmin = false; S.admin.pass = "";
+  /* родитель — не ученик и не админ; пароль администратора не трогаем */
+  S.admin.isAdmin = false;
   try { Cloud.forgetCode(); } catch(e){}
   try { adminLock(); } catch(e){}
   try { saveLocal(); } catch(e){}
@@ -28682,8 +28746,9 @@ window.__game = {
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
-  isParentDevice: isParentDevice, parentOf: parentOf, parentSet: parentSet,
-  parentDeviceOff: parentDeviceOff, parentLink: parentLink,
+  isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
+  parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,
+  becomeKid: becomeKid,
   screenRoles: screenRoles, screenParent: screenParent,
   screenKidLogin: screenKidLogin, screenParentLogin: screenParentLogin,
   adultFieldProblem: adultFieldProblem, adultTplById: adultTplById,
