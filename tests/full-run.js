@@ -5193,8 +5193,9 @@ function checkEncoding(){
       await tick();
       if (!/Петя, 5 класс/.test(doc.getElementById("app").textContent))
         bad("[группа] подпись наставника не показалась");
-      /* вход из панели наставника */
-      w.location.hash = "#admin";
+      /* вход из полной панели наставника (теперь под #panel; #admin — новый
+         кабинет со списком учеников) */
+      w.location.hash = "#panel";
       g.screenAdmin();
       await tick();
       if (!doc.querySelector('[data-act="togroup"]'))

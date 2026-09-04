@@ -139,6 +139,12 @@ button{font-family:inherit}
 /* ---------- шапка ---------- */
 .top{position:sticky;top:0;z-index:60;background:var(--topbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .top-in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Устройство взрослого: прячем всю детскую навигацию в шапке — вкладки уроков,
+   звёзды, опыт, «Сегодня», «Повторить», шпаргалку, профиль. Остаётся логотип,
+   «?» и (если есть) кнопка «назад». Кабинет не должен выглядеть детским. */
+.adminui .tabs,.adminui .xpbox,.adminui .starcount,.adminui #btn-today,
+.adminui #btn-again,.adminui #btn-sheet,.adminui #btn-who,.adminui #btn-focus{display:none !important}
+.adminui .logo{margin-right:auto}
 /* Панель ограничена 1080px и на широком экране НЕ становится шире, поэтому
    влезать в одну строку она обязана всегда — иначе вторая строка съедает
    у урока целый сантиметр экрана. Число опыта из панели убрано: ранг и
@@ -1527,6 +1533,13 @@ body.focus .toTop{display:none}
   border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
 .brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
 .brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+/* список учеников в кабинете взрослого */
+.kidlist{display:grid;gap:10px;margin:14px 0}
+.kidcard{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.kidmain{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.kidmain b{font-size:18px}
+.kidcode{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;color:var(--faint)}
+.kidacts{display:flex;gap:8px;flex-wrap:wrap}
 .prow{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
 .madelink{border:1px solid var(--okline);background:var(--okbg);border-radius:12px;
   padding:10px 12px;margin:10px 0;font-size:14px;line-height:1.5}
