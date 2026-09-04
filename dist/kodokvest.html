@@ -14380,7 +14380,17 @@ function clearAll(o){
   clearResults(o);
   KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
   o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
-  o.frame = blankFrame();
+  /* ⚠️ Рамку взрослого целиком здесь стирать НЕЛЬЗЯ. Раньше стирали — и потолок
+     дня, жёсткий режим, дни занятий и каникулы исчезали от двух тапов в детском
+     профиле («Выйти» → «Да»). Родительское ограничение, которое снимает сам
+     ограничиваемый, ограничением не является.
+     Поэтому делим рамку надвое: правила взрослого (дни, длина, потолок, каникулы)
+     принадлежат УСТРОЙСТВУ и остаются, а привязанное к конкретному ребёнку —
+     дата-цель и замеренный лично его темп — уходит вместе с ним. */
+  var keep = frameShape(o.frame);
+  keep.goal = null;                 /* дата ставилась под того ребёнка */
+  keep.perLesson = null;            /* темп замерен по тому ребёнку */
+  o.frame = keep;
   return ensureShape(o);
 }
 
@@ -16272,6 +16282,12 @@ var KIND_RU = {
 };
 function errHTML(e){
   return '<b>' + (KIND_RU[e.kind] || e.kind) + (e.line ? ' — строка ' + e.line : '') + '</b>' + esc(e.msg);
+}
+/* То же объяснение, но строкой — для мест, где сообщение вклеивается в чужой
+   текст (например в кабинете взрослого), а не рисуется отдельной плашкой. */
+function errText(e){
+  if (!e) return "";
+  return (KIND_RU[e.kind] || e.kind || "Ошибка") + ": " + (e.msg || "");
 }
 
 /* ================= бестиарий ошибок =================
@@ -18556,9 +18572,35 @@ function taskPinShow(goalEl){
 })();
 
 
+/* Урок считается НАЧАТЫМ, если его уже открывали и не дорешали. Такой урок
+   жёсткий потолок дня не запирает: обрывать на середине продукт не будет. */
+function lessonStarted(id){
+  return !solved(id) && !!(S.log || {})[id];
+}
+/* «На сегодня всё» — когда предел дня достигнут и взрослый выбрал жёсткий режим.
+   Экран НИЧЕГО больше не предлагает: любая кнопка «а может ещё чуть-чуть»
+   превратила бы договорённость в торг. */
+function screenCapReached(){
+  enterScreen("home", "capreached");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var m = todayMinutes();
+  app.innerHTML = '<div class="lvlhead"><div><div class="idx">предел дня</div>' +
+    '<h1>🌙 На сегодня всё</h1></div></div>' +
+    '<div class="note"><b>Сегодня за тренажёром уже ' + m + ' ' +
+    plural(m, "минута", "минуты", "минут") + '</b>Столько вы договорились со взрослым. ' +
+    'Новый урок откроется завтра — а тот, что начат, доделать можно.</div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+}
 function openLesson(id){
   var l = CURRICULUM.byId(id);
   if (!l) return screenWorlds();
+  /* ⚠️ Жёсткий потолок обещает взрослому «после предела не пускать дальше», но
+     проверялся только вокруг занятия: ребёнок уходил на карту миров и открывал
+     уроки напрямую, то есть обещание не выполнялось вовсе. Запираем НОВЫЕ уроки
+     и только их — начатое доделывается, как и сказано на баннере. */
+  if (capHard() && !lessonStarted(id)) return screenCapReached();
   curTab = "home";              /* урок — это «Главное», а не отдельный раздел */
   curPlace = "lesson";          /* а помощь «?» — про урок */
   var seq = claimScreen();
@@ -19379,6 +19421,9 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
+  /* Жёсткий потолок дня меряет ВСЁ время в тренажёре, а не только уроки, —
+     значит и сюда новая работа после предела не пускает. */
+  if (capHard()) return screenCapReached();
   enterScreen("train", "game");
   session = { id:null, attempts:0, hints:0, shown:false };
   var head = '<div class="crumbs"><span data-go="games">Игры</span> › ' + g.emoji + ' ' + esc(g.title) + '</div>' +
@@ -19896,7 +19941,13 @@ function screenAccount(){
   paintSound();
   document.getElementById("logout").onclick = function(){
     var yes = true;
-    try { yes = confirm("Выйти и очистить прогресс на этом устройстве? На сервере он останется, его можно вернуть по коду."); } catch(e){}
+    /* ⚠️ Обещать «на сервере останется» можно только когда сервер и правда есть.
+       Раньше эта фраза говорилась всегда, в том числе при пустом коде ученика, —
+       то есть ребёнку обещали возврат прогресса, которого нигде нет. */
+    var back = (typeof Cloud !== "undefined" && Cloud.configured())
+      ? "На сервере он останется — его можно вернуть по коду " + Cloud.myCode() + "."
+      : "ВЕРНУТЬ ЕГО БУДЕТ НЕЧЕМ: копии на сервере нет, прогресс есть только здесь.";
+    try { yes = confirm("Выйти и очистить прогресс на этом устройстве?\n\n" + back); } catch(e){}
     if (yes) doLogout();
   };
   document.getElementById("tomap").onclick = screenWorlds;
@@ -20157,6 +20208,9 @@ function openWarmup(id, opts){
   var ws = warmupsList();
   var w = ws.filter(function(x){ return x.id === id; })[0];
   if (!w) return screenWarmups();
+  /* Жёсткий потолок дня меряет ВСЁ время в тренажёре, а не только уроки, —
+     значит и сюда новая работа после предела не пускает. */
+  if (capHard()) return screenCapReached();
   enterScreen("train", "warmup");
   var isDaily = !!(opts && opts.daily);
   session = { id:id, attempts:0, hints:0, shown:false, daily:isDaily };
@@ -20686,6 +20740,9 @@ function screenAlgo(){
 function openAlgo(id){
   var x = algoById(id);
   if (!x) return screenAlgo();
+  /* Жёсткий потолок дня меряет ВСЁ время в тренажёре, а не только уроки, —
+     значит и сюда новая работа после предела не пускает. */
+  if (capHard()) return screenCapReached();
   enterScreen("train", "algoone");
   session = { id:id, attempts:0, hints:0, shown:false, algo:true };
 
@@ -20964,6 +21021,9 @@ function openAILesson(id){
   var xs = ailabList();
   var x = xs.filter(function(e){ return e.id === id; })[0];
   if (!x) return screenAILab();
+  /* Жёсткий потолок дня меряет ВСЁ время в тренажёре, а не только уроки, —
+     значит и сюда новая работа после предела не пускает. */
+  if (capHard()) return screenCapReached();
   enterScreen("train", "ailesson");
   session = { id:id, attempts:0, hints:0, shown:false };
   var pos = xs.indexOf(x);
@@ -24029,6 +24089,9 @@ function screenAdult(){
       : '<p class="dim">Пока не заданы.</p>') +
     '<div class="admrow"><input type="date" id="brfrom"><input type="date" id="brto">' +
       '<button class="rbtn sec" data-act="bradd">Добавить</button></div>' +
+    /* Раньше при неверном вводе кнопка просто не делала НИЧЕГО — ни слова, ни
+       подсветки, — и взрослый жал её повторно, считая, что сломался сайт. */
+    (adultPick.breaksProblem ? '<p class="warnline">⚠️ ' + esc(adultPick.breaksProblem) + '</p>' : '') +
     '<p class="dim">В эти дни пропуск запланирован, и отчёт не назовёт его прогулом.</p>';
 
   /* потолок дня */
@@ -24170,11 +24233,42 @@ function paceStatHTML(){
 
 /* ---------- «задать задание» ---------- */
 var adultPick = { t:"task", tpl:(window.PARENT_TASKS && PARENT_TASKS[0] ? PARENT_TASKS[0].id : ""),
-                  made:null, problem:null };
+                  made:null, problem:null, breaksProblem:null };
 function adultTplById(id){
   var list = window.PARENT_TASKS || [];
   for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
   return list[0] || null;
+}
+/* Проверка чисел, которые взрослый вписал в шаблон.
+   ⚠️ Границы min/max у параметров были описаны в parent.js с самого начала, но
+   НИ РАЗУ не применялись: значения уезжали в код строками как есть. Отсюда весь
+   букет — пустое поле давало SyntaxError, «0» в поле «даём в неделю» вешал
+   страницу вечным циклом, «-5 тетрадей по -3 ₽» собиралось в рабочее задание
+   без единого возражения. Возвращаем текст проблемы или null, если всё хорошо. */
+function adultFieldProblem(tpl, v){
+  var ps = (tpl && tpl.params) || [];
+  for (var i = 0; i < ps.length; i++){
+    var p = ps[i], raw = String(v[p.k] === undefined ? "" : v[p.k]).trim();
+    if (!raw) return "Не заполнено поле «" + p.label + "».";
+    if (p.text){
+      /* список чисел: он вклеивается в код как marks = [...] */
+      var parts = raw.split(",").map(function(x){ return x.trim(); }).filter(function(x){ return x !== ""; });
+      if (!parts.length) return "В поле «" + p.label + "» нет ни одного числа.";
+      for (var j = 0; j < parts.length; j++)
+        if (!isFinite(Number(parts[j])))
+          return "В поле «" + p.label + "» вместо числа записано «" + parts[j] +
+                 "». Нужны числа через запятую, например: 4, 5, 3, 5.";
+      continue;
+    }
+    var n = Number(raw.replace(",", "."));
+    if (!isFinite(n)) return "В поле «" + p.label + "» нужно число, а записано «" + raw + "».";
+    if (Math.floor(n) !== n) return "В поле «" + p.label + "» нужно целое число, а записано «" + raw + "».";
+    if (p.min !== undefined && n < p.min)
+      return "В поле «" + p.label + "» должно быть не меньше " + p.min + " — сейчас " + n + ".";
+    if (p.max !== undefined && n > p.max)
+      return "В поле «" + p.label + "» должно быть не больше " + p.max + " — сейчас " + n + ".";
+  }
+  return null;
 }
 function adultTaskHTML(){
   var week = ptaskWeekCount();
@@ -24194,8 +24288,15 @@ function adultTaskHTML(){
       'Правильный ответ вычисляет движок, вам его знать не нужно.</p>' +
       '<div class="admrow"><select id="ptpl">' + opts + '</select></div>' +
       (tpl ? '<div class="prow">' + tpl.params.map(function(p){
+        /* min/max/step проставляем в саму разметку: браузер тогда показывает
+           стрелки в разумных пределах и не даёт ввести дробь. Настоящая
+           проверка всё равно в adultFieldProblem — атрибуты легко обойти. */
+        var lim = p.text ? "" :
+          (p.min !== undefined ? ' min="' + p.min + '"' : "") +
+          (p.max !== undefined ? ' max="' + p.max + '"' : "") + ' step="1"';
         return '<label class="admlbl">' + esc(p.label) +
-          ' <input type="' + (p.text ? "text" : "number") + '" data-pp="' + p.k + '" value="' + esc(String(p.def)) + '"></label>';
+          ' <input type="' + (p.text ? "text" : "number") + '"' + lim +
+          ' data-pp="' + p.k + '" value="' + esc(String(p.def)) + '"></label>';
       }).join("") + '</div>' : '') +
       '<div class="admrow"><button class="rbtn check" data-act="pmake">Собрать задание</button></div>';
   } else if (adultPick.t === "lesson"){
@@ -24264,10 +24365,13 @@ function wireAdult(){
     };
   });
   app.querySelectorAll("[data-ptab]").forEach(function(b){
-    b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab"); adultPick.made = null; screenAdult(); };
+    b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab");
+      /* Ошибку сборки гасим вместе со сменой вкладки: «программа шаблона
+         не запустилась» на вкладке «Назначить урок» бессмысленна. */
+      adultPick.made = null; adultPick.problem = null; screenAdult(); };
   });
   var sel = document.getElementById("ptpl");
-  if (sel) sel.onchange = function(){ adultPick.tpl = sel.value; adultPick.made = null; screenAdult(); };
+  if (sel) sel.onchange = function(){ adultPick.tpl = sel.value; adultPick.made = null; adultPick.problem = null; screenAdult(); };
   app.querySelectorAll("[data-plesson]").forEach(function(b){
     b.onclick = function(){
       var id = b.getAttribute("data-plesson"), l = CURRICULUM.byId(id);
@@ -24312,8 +24416,17 @@ function wireAdult(){
       if (act === "bradd"){
         var a = (document.getElementById("brfrom") || {}).value || "";
         var z = (document.getElementById("brto") || {}).value || "";
-        if (!a || !z || z < a) return;
         var br = frame().breaks.slice();
+        adultPick.breaksProblem =
+          (!a && !z) ? "Укажите обе даты — начало и конец паузы." :
+          !a ? "Не указана дата начала паузы." :
+          !z ? "Не указана дата конца паузы." :
+          (z < a) ? "Конец паузы раньше её начала — проверьте даты." :
+          /* frameShape режет список до 12, и тринадцатая пауза раньше молча
+             исчезала: добавилась и пропала, будто кнопка не сработала */
+          (br.length >= 12) ? "Больше двенадцати пауз не помещается — уберите лишнюю, чтобы добавить новую." :
+          null;
+        if (adultPick.breaksProblem) return screenAdult();
         br.push([a, z]);
         frameSet({ breaks: br });
         return screenAdult();
@@ -24323,13 +24436,30 @@ function wireAdult(){
         if (!tpl) return;
         var v = {};
         app.querySelectorAll("[data-pp]").forEach(function(inp){ v[inp.getAttribute("data-pp")] = inp.value; });
+        /* Пустое поле раньше уезжало в код как пустота и давало SyntaxError, а
+           «0» в поле «даём в неделю» — вечный цикл на 300 000 шагов с подвисшей
+           страницей. Взрослый в обоих случаях читал «проверьте числа». Проверяем
+           поля ДО запуска: сказать, какое поле и что с ним не так, — дешевле,
+           чем объяснять падение движка человеку, который не программист. */
+        var whatsWrong = adultFieldProblem(tpl, v);
+        if (whatsWrong){
+          adultPick.made = null;
+          adultPick.problem = whatsWrong;
+          return screenAdult();
+        }
         var built = taskBuild(tpl.title, tpl.goal(v), tpl.code(v));
         if (built.problem || built.error){
           /* сообщение рисуем в карточке, а не alert'ом: модальное окно
              останавливает страницу целиком, и на телефоне это выглядит как
              поломка. Плюс alert невозможно проверить тестом. */
           adultPick.made = null;
-          adultPick.problem = built.problem || "Программа шаблона не запустилась — проверьте числа.";
+          /* ⚠️ Движок объясняет ошибку по-человечески («Делить на ноль нельзя»,
+             «цикл никогда не заканчивается»), а это сообщение раньше молча
+             выбрасывалось и заменялось на «проверьте числа» — то есть родителю,
+             который по замыслу не программист, не говорили КАКИЕ числа. */
+          adultPick.problem = built.problem ||
+            (built.error ? "Программа шаблона не запустилась. " + errText(built.error)
+                         : "Программа шаблона не запустилась — проверьте числа.");
           return screenAdult();
         }
         adultPick.problem = null;
@@ -27829,6 +27959,8 @@ window.__game = {
   zanRemaining: zanRemaining, zanClosedCount: zanClosedCount, zanSqueeze: zanSqueeze,
   zanCutToCheck: zanCutToCheck, zanCutLast: zanCutLast, zanTimeUp: zanTimeUp,
   screenZan: screenZan, screenZanDone: screenZanDone, screenAdult: screenAdult,
+  adultFieldProblem: adultFieldProblem, adultTplById: adultTplById,
+  lessonStarted: lessonStarted, screenCapReached: screenCapReached, errText: errText,
   backTarget: backTarget, syncBack: syncBack,
   screenSpecs: screenSpecs, openSpec: openSpec, specParse: specParse,
   specToPython: specToPython, specRunAll: specRunAll, specVerdict: specVerdict,
