@@ -258,17 +258,28 @@ function checkEncoding(){
   viewReset(g);
   await tick();
 
-  /* ---------- панель наставника ---------- */
+  /* ---------- полная панель наставника (замок — пароль взрослого) ---------- */
   g.screenAdmin();
   await tick();
   const codeInput = doc.getElementById("admcode");
-  if (!codeInput) bad("[панель] экран ввода кода не появился");
+  if (!codeInput) bad("[панель] экран ввода пароля не появился");
   else {
-    codeInput.value = "неверный код";
+    /* пароль ещё не задан → gate предлагает придумать его */
+    doc.getElementById("admcode").value = "mojparol";
+    if (doc.getElementById("admcode2")) doc.getElementById("admcode2").value = "mojparol";
     doc.getElementById("admgo").click();
     await tick();
-    if (doc.getElementById("admcode") === null) bad("[панель] пустила внутрь с неверным кодом");
-    doc.getElementById("admcode").value = g.ADMIN_CODE;
+    if (doc.getElementById("admcode")) bad("[панель] не пустила внутрь после задания пароля");
+    /* выходим и заходим снова: теперь пароль требуется */
+    g.adminLock();
+    g.screenAdmin();
+    await tick();
+    if (!doc.getElementById("admcode")) bad("[панель] повторный вход не спросил пароль");
+    doc.getElementById("admcode").value = "неверный";
+    doc.getElementById("admgo").click();
+    await tick();
+    if (doc.getElementById("admcode") === null) bad("[панель] пустила внутрь с неверным паролем");
+    doc.getElementById("admcode").value = "mojparol";
     doc.getElementById("admgo").click();
     await tick();
   }

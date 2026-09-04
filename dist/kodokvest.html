@@ -14315,13 +14315,9 @@ var ZAN_MIX = ["new", "balanced", "repeat"];
 /* потолок дня: сколько минут в тренажёре взрослый считает достаточным */
 var CAP_CHOICES = [0, 30, 45, 60, 90];
 
-/* ===== код входа в панель наставника =====
-   Панель открывается адресом сайта с #admin на конце, например
-     https://fionov365-ai.github.io/kodokvest/#admin
-   Чтобы сменить код — поменяй строку ниже и перезалей сайт.
-   Честно: сайт публичный, и этот код видно в исходнике страницы.
-   Это защита от случайного нажатия, а не настоящий пароль. */
-var ADMIN_CODE = "kodokvest-2026";
+/* Взрослые экраны (кабинет по #admin и полная панель по #panel) закрыты
+   ПАРОЛЕМ, который взрослый задаёт сам на своём устройстве (adminHash/adminGate).
+   Зашитого в исходник кода больше нет: он был виден любому, кто открыл страницу. */
 
 /* ================= сохранение =================
    Форма прогресса описана ОДИН раз — тремя списками ниже. Раньше её
@@ -23990,7 +23986,7 @@ function screenTrace(){
   curPlace = "trace";
   stopTimer(); vizStopPlay();
   voiceStop(); claimScreen();
-  if (!adminUnlocked()) return adminGate();
+  if (!adminUnlocked()) return adminGate(screenTrace);
   var list = authorList(), sum = authorSummary();
 
   var h = '<div class="lvlhead"><div><div class="idx">для взрослого</div>' +
@@ -24083,7 +24079,7 @@ function screenAdult(){
      сразу пошёл в кабинет — и оказался на главном экране. Заодно здесь
      сохраняется черновик урока и замолкает чтение вслух. */
   voiceStop(); claimScreen();
-  if (!adminUnlocked()) return adminGate();
+  if (!adminUnlocked()) return adminGate(screenAdult);
   var f = frame();
   var last = zanLast();
   var pace = paceCheck(f.goal, f.days, f.len);
@@ -25728,11 +25724,11 @@ function vizPlayer(player, ed, rec){
   if (player.scrollIntoView) player.scrollIntoView({ behavior:"smooth", block:"nearest" });
 }
 
-/* ================= экран: панель наставника =================
-   Закрыт кодом (см. ADMIN_CODE наверху файла). Открывается адресом
-   с #admin на конце. Показывает прогресс, позволяет открывать и
-   зачитывать уроки, обмениваться данными с сервером и смотреть
-   прогресс другого ученика по его коду.
+/* ================= экран: полная панель наставника =================
+   Закрыта паролем взрослого (adminGate). Открывается адресом с #panel на
+   конце — или ссылкой «Полная панель наставника →» из кабинета. Показывает
+   прогресс, позволяет открывать и зачитывать уроки, обмениваться данными с
+   сервером и смотреть прогресс другого ученика по его коду.
    ============================================================ */
 /* Вход на новый экран: гасим всё, что тикает в фоне. Раньше эти две команды
    были выписаны в пятнадцати местах, и когда у визуализатора появился свой
@@ -25921,9 +25917,13 @@ function adminHash(pass){
   return (h1 >>> 0).toString(16) + (h2 >>> 0).toString(16);
 }
 function adminHasPass(){ return !!(S.admin && S.admin.pass); }
-function adminPassSet(pass){
+/* Пароль защищает ВСЕ взрослые экраны — и кабинет, и старую полную панель.
+   makeAdmin отдельным флагом: «сделать это устройство кабинетом» ставит и пароль,
+   и режим, а защита панели на общем устройстве — только пароль, режим не трогает
+   (иначе один взгляд в панель на семейном планшете спрятал бы ребёнку уроки). */
+function adminPassSet(pass, makeAdmin){
   S.admin.pass = adminHash(pass);
-  S.admin.isAdmin = true;
+  if (makeAdmin) S.admin.isAdmin = true;
   saveLocal();
 }
 function adminPassOk(pass){ return adminHasPass() && S.admin.pass === adminHash(pass); }
@@ -26136,7 +26136,7 @@ function screenAdminSetup(){
       msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
       return;
     }
-    adminPassSet(a);
+    adminPassSet(a, true);
     adminUnlock();
     screenKids();
   };
@@ -26344,21 +26344,58 @@ function kidSave(){
     say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
   });
 }
-function adminGate(){
+/* ⚠️ Общий замок ВСЕХ взрослых экранов (полная панель, занятийная рамка на
+   устройстве ребёнка, группа, просмотр по коду). Раньше он открывался единым
+   кодом, зашитым в исходник открытым текстом: подросток, которого мы учим
+   программировать, находил его за вечер, а внутри — «зачесть всё на 3★» и снятие
+   потолка. Того кода больше нет в продукте. Замок теперь — тот же
+   пароль, что и у кабинета взрослого:
+     — пароль уже задан → просим его;
+     — не задан (панель на общем устройстве открывают впервые) → предлагаем
+       ПРИДУМАТЬ его прямо здесь. Это не делает устройство кабинетом (isAdmin),
+       только ставит защиту.
+   after — экран, на который вернуться после снятия замка. */
+function adminGate(after){
+  after = after || screenAdmin;
+  var setting = !adminHasPass();
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">служебный экран</div><h1>🔐 Панель наставника</h1></div></div>' +
-    '<p class="lede">Здесь видно, как идут занятия, и можно открывать уроки. Введи код доступа.</p>' +
+    '<p class="lede">' + (setting
+      ? 'Эти экраны — для взрослого. Придумайте пароль, чтобы ребёнок не открыл их из любопытства.'
+      : 'Введите пароль взрослого.') + '</p>' +
     '<div class="card"><div class="admgate">' +
-      '<input type="password" id="admcode" placeholder="код доступа" autocomplete="off" spellcheck="false">' +
-      '<button class="rbtn check" id="admgo">Войти</button>' +
-    '</div><div class="msg" id="admgatemsg"></div></div>' +
+      '<input type="password" id="admcode" placeholder="' + (setting ? "придумайте пароль" : "пароль") +
+        '" autocomplete="' + (setting ? "new-password" : "current-password") + '" spellcheck="false">' +
+      (setting ? '<input type="password" id="admcode2" placeholder="ещё раз" autocomplete="new-password" spellcheck="false">' : '') +
+      '<button class="rbtn check" id="admgo">' + (setting ? "Готово" : "Войти") + '</button>' +
+    '</div><div class="msg" id="admgatemsg"></div>' +
+    (setting ? '<p class="dim" style="margin-top:12px">⚠️ Это защита от любопытства, а не настоящая ' +
+      'авторизация: сайт работает в браузере, проверять пароль на сервере некому. Пароль хранится ' +
+      'только здесь. Забыли — очистите данные сайта в браузере и задайте заново.</p>' : '') +
+    '</div>' +
     '<div class="pager"><button class="bigbtn ghost" id="admback">← На главную</button></div>';
   var inp = document.getElementById("admcode");
   var msg = document.getElementById("admgatemsg");
   function tryIn(){
-    if (inp.value === ADMIN_CODE){ adminUnlock(); screenAdmin(); return; }
+    if (setting){
+      var b = (document.getElementById("admcode2") || {}).value;
+      if (String(inp.value).length < 4){
+        msg.className = "msg show bad";
+        msg.innerHTML = "<b>Слишком короткий</b>Хотя бы четыре знака.";
+        return;
+      }
+      if (inp.value !== b){
+        msg.className = "msg show bad";
+        msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
+        return;
+      }
+      adminPassSet(inp.value, false);       /* защита есть, но кабинетом не делаем */
+      adminUnlock();
+      return after();
+    }
+    if (adminPassOk(inp.value)){ adminUnlock(); return after(); }
     msg.className = "msg show bad";
-    msg.innerHTML = "<b>Код не подошёл</b>Проверь раскладку клавиатуры и большие буквы.";
+    msg.innerHTML = "<b>Пароль не подошёл</b>Проверьте раскладку и большие буквы.";
     inp.value = ""; inp.focus();
   }
   document.getElementById("admgo").onclick = tryIn;
@@ -26775,7 +26812,7 @@ function screenGroup(){
   curPlace = "group";
   stopTimer(); vizStopPlay();
   voiceStop(); claimScreen();
-  if (!adminUnlocked()) return adminGate();
+  if (!adminUnlocked()) return adminGate(screenGroup);
   var rows = groupState.rows;
 
   var h = '<div class="lvlhead"><div><div class="idx">рабочее место наставника</div>' +
@@ -26899,7 +26936,7 @@ function screenAdmin(){
   curPlace = "admin";
   stopTimer(); vizStopPlay();
   voiceStop(); claimScreen();
-  if (!adminUnlocked()) return adminGate();
+  if (!adminUnlocked()) return adminGate(screenAdmin);
 
   var h = "";
 
@@ -28352,7 +28389,7 @@ window.__game = {
   whyDiffer: whyDiffer, diffBlock: diffBlock, predictDiff: predictDiff,
   BADGES: BADGES, STREAK_BADGES: STREAK_BADGES, awardStreak: awardStreak,
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
-  stopTimer: stopTimer, adminUnlock: adminUnlock, ADMIN_CODE: ADMIN_CODE,
+  stopTimer: stopTimer, adminUnlock: adminUnlock, adminLock: adminLock, adminGate: adminGate,
   getSession: function(){ return session; },
   mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
   localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelSet,
