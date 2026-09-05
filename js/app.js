@@ -73,7 +73,7 @@ var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
-                     "hours","zan","ptasks","specs","parts","builds","solved","algo"];
+                     "hours","zan","ptasks","hw","specs","parts","builds","solved","algo"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -1655,6 +1655,27 @@ function mergeProgress(a, b){
     out.ptasks[k] = { t: base.t || x.t || y.t, ref: base.ref || x.ref || y.ref,
                       text: base.text || x.text || y.text, at: maxN(x.at, y.at),
                       done: maxN(x.done, y.done) };
+  });
+
+  /* ===== домашка от наставника =====
+     Задание приходит С УСТРОЙСТВА ВЗРОСЛОГО, а делается на устройстве ребёнка,
+     то есть две стороны правят одну запись с разных концов. Поэтому слияние
+     здесь несимметричное по полям: условие (задача, семя, срок) принадлежит
+     тому, кто задал, а «сделано» и число попыток — тому, кто делал.
+     ⚠️ Семя берём из БОЛЕЕ СВЕЖЕЙ выдачи, а не большее: числа задачи обязаны
+     совпасть у ребёнка и у наставника, иначе они будут смотреть на разные
+     условия и спорить, кто прав. */
+  out.hw = {};
+  Object.keys(mergeSet(a.hw, b.hw)).forEach(function(k){
+    var x = (a.hw || {})[k] || {}, y = (b.hw || {})[k] || {};
+    var base = (y.at || 0) > (x.at || 0) ? y : x;
+    out.hw[k] = { id: base.id || x.id || y.id,
+                  seed: base.seed !== undefined ? base.seed : (x.seed !== undefined ? x.seed : y.seed),
+                  due: base.due || x.due || y.due || "",
+                  by: base.by || x.by || y.by || "",
+                  at: maxN(x.at, y.at),
+                  done: maxN(x.done, y.done),
+                  tries: maxN(x.tries, y.tries) };
   });
 
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
@@ -3852,6 +3873,10 @@ function screenWorlds(){
   var streak = streakCurrent();
   var dues = reviewDue().length;
   var dailyOk = dailyDone(dayKey());
+  /* Домашка стоит рядом с «Продолжить», а не в отдельной вкладке: её задал
+     человек, и ждёт ответа тоже человек. Спрятанное обязательство перед
+     человеком перестаёт быть обязательством. */
+  var hwLeft = hwPending().length;
 
   /* ===== блок «Сейчас»: одна главная кнопка и три подсказки рядом ===== */
   var h = '<div class="hero now">' +
@@ -3877,8 +3902,11 @@ function screenWorlds(){
       '<button class="bigbtn ghost" id="go-today">🔥 ' +
         (streak > 0 ? streak + " " + plural(streak, "день", "дня", "дней") + " подряд" : "Сегодня") + '</button>' +
       (dues ? '<button class="bigbtn ghost" id="go-again">🔁 Повторить · ' + dues + '</button>' : '') +
+      (hwLeft ? '<button class="bigbtn ghost" id="go-hw">📮 Домашка · ' + hwLeft + '</button>' : '') +
     '</div>' +
     '<div class="nowhints">' +
+      (hwLeft ? '<span>· домашка от наставника: ' + hwLeft + ' ' +
+                plural(hwLeft, "задача", "задачи", "задач") + '</span>' : '') +
       '<span>' + (dailyOk ? "✓ задача дня сделана" : "· задача дня ещё ждёт") + '</span>' +
       '<span>' + (dues ? "· " + dues + " " + plural(dues, "урок ждёт", "урока ждут", "уроков ждут") + " повтора"
                        : "· долгов по повторению нет") + '</span>' +
@@ -4050,6 +4078,8 @@ function screenWorlds(){
   document.getElementById("go-today").onclick = screenToday;
   var ga = document.getElementById("go-again");
   if (ga) ga.onclick = screenReview;
+  var gh = document.getElementById("go-hw");
+  if (gh) gh.onclick = screenHW;
   document.getElementById("go-train").onclick = screenTrain;
   var gg = document.getElementById("go-guide");
   if (gg) gg.onclick = screenGuide;
@@ -6689,6 +6719,292 @@ function winAlgo(x, res){
   document.getElementById("win").classList.add("show");
   confetti(first ? 2 : 1);
   document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("wstay").onclick = closeWin;
+}
+
+/* ================= ДОМАШКА ОТ НАСТАВНИКА =================
+   Первая механика, которую репетитор покупает сам по себе: между занятиями
+   ребёнок делает работу, а движок её проверяет. Конкуренты (`cloudtext.ru`,
+   `sokratai.ru`, `finch.study`) делают так, чтобы наставнику было УДОБНЕЕ
+   проверять руками; наше обещание другое — проверять не надо.
+
+   Почему домашкой нельзя назначить пройденный урок: решение у ребёнка уже
+   написано, и «сделать» его — значит открыть свой же ответ. Поэтому материал
+   домашки — задачи-близнецы (js/homework.js): то же умение, другое условие,
+   другие числа, а правильный ответ считает движок из эталонной программы.
+
+   Как это едет. Наставник выдаёт домашку со своего устройства (kidSaveHW),
+   она ложится в запись ребёнка на сервере в поле `hw` и догоняет его при
+   следующем обмене — тем же путём, что расписание. Нового на сервере не
+   потребовалось.
+
+   ⚠️ Пять правил, и каждое из устройства продукта:
+     1. звёзд и опыта домашка не даёт — иначе взрослый начнёт двигать прогресс
+        ребёнка из лучших побуждений (то же правило, что у задания взрослого);
+     2. задача не открывается раньше своего урока: дать непройденное значит
+        отправить ребёнка к тому, чего ему не объясняли, — и это наша вина;
+     3. просрочка ничем не наказывается и ничего не сжигает. Сделанное поздно
+        лучше несделанного, а «сгорело» — это ровно тот страх потери, которого
+        в продукте быть не должно;
+     4. семя задачи считается из кода ученика и даты, а не из random: у ребёнка
+        на планшете и у наставника в кабинете обязано выйти одно условие;
+     5. больше HW_MAX задач за раз не выдаётся. Домашка на десять задач — это
+        не усердие, а способ бросить всё в среду.
+   ============================================================ */
+var HW_MAX = 3;              /* сколько задач в одной выдаче */
+
+function hwBank(){ return window.HOMEWORK || []; }
+function hwById(id){ return (window.HW && HW.byId(id)) || null; }
+function hwAll(){ S.hw = S.hw || {}; return S.hw; }
+function hwKey(id, seed){ return id + "#" + seed; }
+function hwRunner(code){ return Runtime.get("mini").run(code, { stdin: [] }); }
+
+/* Семя задачи: разное у разных детей и разных выдач, одинаковое у ребёнка и
+   у наставника. Считается из кода ученика, id задачи и дня выдачи. */
+function hwSeed(code, id, dayk){
+  return HW.hash(String(code || "kid") + "|" + id + "|" + String(dayk || dayKey())) % 100000;
+}
+
+/* Записи домашки из ЛЮБОГО снимка прогресса — это нужно и панели наставника,
+   и карточке ученика, где смотрят чужие данные. */
+function hwRecords(st){
+  var d = (st && st.hw) || {};
+  return Object.keys(d).map(function(k){
+    var r = d[k] || {};
+    return { key:k, id:r.id, seed:r.seed, due:r.due || "", by:r.by || "",
+             at:r.at || 0, done:r.done || 0, tries:r.tries || 0 };
+  }).filter(function(r){ return r.id && hwById(r.id); })
+    .sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+function hwMine(){ return hwRecords(S); }
+function hwPending(){ return hwMine().filter(function(r){ return !r.done; }); }
+function hwDoneRecs(){ return hwMine().filter(function(r){ return !!r.done; }); }
+
+/* Дней до срока: 0 — сегодня, отрицательное — срок прошёл. */
+function hwDaysLeft(r){
+  if (!r || !r.due) return null;
+  return Math.round((new Date(r.due + "T12:00:00") - new Date(dayKey() + "T12:00:00")) / 864e5);
+}
+/* Срок словами. ⚠️ Про просрочку говорим фактом и без укора: «срок был вчера»,
+   а не «ты не сделал вовремя». Домашка от этого не сгорает. */
+function hwDueText(r){
+  var n = hwDaysLeft(r);
+  if (n === null) return "без срока";
+  if (n === 0) return "на сегодня";
+  if (n === 1) return "на завтра";
+  if (n > 1) return "осталось " + n + " " + plural(n, "день", "дня", "дней");
+  var back = -n;
+  return "срок был " + (back === 1 ? "вчера" : back + " " + plural(back, "день", "дня", "дней") + " назад");
+}
+/* Собрать задание целиком: условие с числами и ответ, посчитанный движком. */
+function hwBuild(r){
+  var item = hwById(r.id);
+  if (!item) return null;
+  var built = HW.build(item, r.seed, hwRunner);
+  if (!built || built.error) return null;
+  built.key = r.key; built.due = r.due; built.by = r.by;
+  built.done = r.done; built.tries = r.tries;
+  return built;
+}
+function hwMark(key, tries){
+  var d = hwAll();
+  if (!d[key]) return;
+  if (!d[key].done) d[key].done = Date.now();
+  d[key].tries = Math.max(d[key].tries || 0, tries || 0);
+  save();
+}
+/* Какие задачи вообще можно дать этому ученику: только те, чей урок он прошёл. */
+function hwAvailableFor(st){
+  var stars = (st && st.stars) || {};
+  return HW.available(Object.keys(stars));
+}
+
+/* ===== экран ребёнка: список домашки ===== */
+function screenHW(){
+  enterScreen("home", "hw");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var pend = hwPending(), done = hwDoneRecs();
+
+  var h = '<div class="lvlhead"><div><div class="idx">задал наставник</div>' +
+    '<h1>📮 Домашка</h1></div>' +
+    '<div class="right"><span class="tag">' +
+      (pend.length ? pend.length + " " + plural(pend.length, "задача", "задачи", "задач") : "всё сдано") +
+    '</span></div></div>';
+
+  if (!pend.length && !done.length){
+    h += '<p class="lede">Здесь появляются задачи, которые задаёт взрослый — наставник или родитель — ' +
+      'между занятиями. Пока не задано ничего, и это не значит, что ты что-то пропустил.</p>' +
+      '<div class="card"><h3>Как это устроено</h3>' +
+      '<p>Домашка — это не пройденный урок заново. Это задача на то же умение, но с другими ' +
+      'числами: решение из урока к ней не подойдёт.</p>' +
+      '<p class="dim">Звёзд домашка не даёт и на прогресс по курсу не влияет. ' +
+      'Проверяет её тренажёр: сверяется то, что напечатала твоя программа.</p></div>';
+  } else {
+    h += '<p class="lede">Задачи на то же умение, что и уроки, но с другими числами — ' +
+      'своё решение из урока сюда не подойдёт. Проверяет тренажёр: сверяется напечатанное. ' +
+      'Звёзд домашка не даёт.</p>';
+  }
+
+  if (pend.length){
+    h += '<div class="sect"><h2>Сделать</h2><div class="line"></div></div><div class="gamegrid">';
+    pend.forEach(function(r){
+      var b = hwBuild(r);
+      if (!b) return;
+      var late = hwDaysLeft(r);
+      h += '<button class="gamecard" data-hw="' + esc(r.key) + '">' +
+        '<span class="gemoji">' + b.emoji + '</span>' +
+        '<b>' + esc(b.title) + '</b>' +
+        '<span>' + esc(b.goal.slice(0, 110)) + (b.goal.length > 110 ? "…" : "") + '</span>' +
+        '<span class="wtag">' + esc(b.tag) + ' · ' + esc(hwDueText(r)) +
+        (late !== null && late < 0 ? " · сделать всё равно стоит" : "") + '</span></button>';
+    });
+    h += '</div>';
+  }
+  if (done.length){
+    h += '<div class="sect"><h2>Сдано</h2><div class="line"></div>' +
+      '<span class="cnt">' + done.length + '</span></div><div class="gamegrid">';
+    done.forEach(function(r){
+      var b = hwBuild(r);
+      if (!b) return;
+      h += '<button class="gamecard" data-hw="' + esc(r.key) + '">' +
+        '<span class="gemoji">' + b.emoji + '</span>' +
+        '<b>' + esc(b.title) + ' <span class="edittag done">сдано ✓</span></b>' +
+        '<span>' + esc(b.tag) + '</span>' +
+        '<span class="wtag">попыток: ' + (r.tries || 1) + '</span></button>';
+    });
+    h += '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  app.innerHTML = h;
+  app.querySelectorAll("[data-hw]").forEach(function(b){
+    b.onclick = function(){ openHW(b.getAttribute("data-hw")); };
+  });
+  document.getElementById("tomap").onclick = screenWorlds;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ===== экран ребёнка: решаем одну задачу домашки ===== */
+function openHW(key){
+  var rec = hwMine().filter(function(x){ return x.key === key; })[0];
+  if (!rec) return screenHW();
+  var t = hwBuild(rec);
+  if (!t){
+    /* Задача из ссылки есть, а в банке её больше нет — такое бывает только
+       после обновления сайта. Молчать нельзя: ребёнок будет думать, что
+       домашку он потерял. */
+    enterScreen("home", "hw");
+    app.innerHTML = '<div class="lvlhead"><div><h1>📮 Домашка</h1></div></div>' +
+      '<div class="note"><b>Эту задачу открыть не получилось</b>' +
+      'Похоже, она из старой версии тренажёра. Скажи наставнику — он задаст её заново. ' +
+      'Твой прогресс от этого не пострадал.</div>' +
+      '<div class="pager"><button class="bigbtn ghost" id="tohw">← Ко всей домашке</button></div>';
+    document.getElementById("tohw").onclick = screenHW;
+    refreshTop();
+    return;
+  }
+  if (capHard()) return screenCapReached();
+  enterScreen("home", "hwone");
+  session = { id:null, attempts:0, hints:0, shown:false };
+
+  var already = !!rec.done;
+  var h = '<div class="crumbs"><span data-go="back">Домашка</span> › ' + t.emoji + ' ' + esc(t.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + esc(t.tag) +
+      (t.by ? " · задал " + esc(t.by) : "") + '</div>' +
+    '<h1>' + t.emoji + ' ' + esc(t.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + esc(hwDueText(rec)) + '</span></div></div>' +
+    '<p class="lede">' + (already
+      ? 'Эта задача уже сдана. Можно решить её ещё раз — на «сдано» это не повлияет.'
+      : 'Задача на то же умение, что и в уроке, но числа другие: решение из урока не подойдёт. ' +
+        'Сверяется то, что напечатает твоя программа.') + '</p>';
+
+  h += '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(t.goal) + '</p><ul>' +
+    (t.list || []).map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") +
+    '</ul></div>';
+
+  h += '<div id="studio"></div>' +
+    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    '<span class="tip">подсказки тут ничего не стоят — звёзд в домашке нет</span></div>' +
+    '<div class="hintout" id="hintout"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всей домашке</button></div>';
+  app.innerHTML = h;
+
+  var studio = makeStudio({
+    engine: "mini", code: t.starter, lint: true, label: "твоя программа",
+    viz: function(o){
+      screenViz({ code: o.code, env: o.env,
+        backTo: { label: "← Вернуться к задаче", go: function(){ openHW(key); } } });
+    },
+    check: function(ed, showMsg){ hwCheck(t, rec, ed, showMsg); }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  session.lesson = "hw-" + key;
+  session.starter = [{ name:"main.py", code: t.starter }];
+  var d = draftGet(session.lesson);
+  if (d) draftApply(studio.editor, d.files);
+  studio.editor.onEdit = draftSchedule;
+
+  wireHint(t.hints);
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenHW; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function hwCheck(t, rec, ed, showMsg){
+  session.attempts++;
+  var code = ed.getCode();
+
+  /* Требования конструкции — до запуска: «напиши функцию» нельзя закрыть
+     тремя print с готовыми числами, и сказать об этом надо раньше, чем
+     ребёнок обрадуется совпавшему выводу. */
+  for (var i = 0; i < (t.need || []).length; i++){
+    if (!codeHas(code, t.need[i])){
+      showMsg("warn", "<b>Почти</b>" + esc(t.needMsg || "Не хватает нужной конструкции."));
+      return;
+    }
+  }
+  for (var j = 0; j < (t.ban || []).length; j++){
+    if (codeHas(code, t.ban[j])){
+      showMsg("warn", "<b>Так нельзя</b>" + esc(t.banMsg || "Эта конструкция в задаче запрещена."));
+      return;
+    }
+  }
+
+  var res = hwRunner(code);
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+  var got = res.lines, exp = t.lines;
+  if (!(exp.length === got.length && exp.every(function(x, k){ return x === got[k]; }))){
+    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
+    return;
+  }
+  winHW(t, rec);
+}
+
+function winHW(t, rec){
+  var first = !rec.done;
+  hwMark(rec.key, session.attempts);
+  markActiveToday();
+  save(); refreshTop();
+  var left = hwPending().length;
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
+    '<h2>' + (first ? "Домашка сдана" : "Решено ещё раз") + '</h2>' +
+    '<p>Вывод сошёлся: программа делает ровно то, что просили. ' +
+    'Наставник увидит, что задача сдана, при следующем открытии тренажёра.</p>' +
+    (session.attempts === 1
+      ? '<div class="stepnote">С первой попытки — значит умение из урока держится и на других числах.</div>'
+      : '') +
+    '<div class="stepnote">' + (left
+      ? "Осталось задач: <b>" + left + "</b>."
+      : "Это была последняя задача из заданных. Домашка закрыта.") + '</div>' +
+    '<div class="winrow"><button class="bigbtn" id="whw">' +
+      (left ? "К остальным задачам" : "Ко всей домашке") + '</button>' +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(first ? 2 : 1);
+  document.getElementById("whw").onclick = function(){ closeWin(); screenHW(); };
   document.getElementById("wstay").onclick = closeWin;
 }
 
@@ -11573,6 +11889,7 @@ var HASH_SCREENS = {
   "#viz":     function(){ screenViz(); },
   "#ai":      function(){ screenAILab(); },
   "#again":   function(){ screenReview(); },
+  "#hw":      function(){ screenHW(); },
   "#folio":   function(){ screenFolio(); },
   "#mine":    function(){ screenMyTasks(); },
   "#train":   function(){ screenTrain(); },
@@ -12249,16 +12566,152 @@ function kidRender(savedNote){
        /* Подтверждение сохранения должно пережить перерисовку рамки, которая
           идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
        (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
+  h += hwGiveHTML(st);
   if (!kidTarget.fresh){
     h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
   }
   box.innerHTML = h;
   bindFrameEditor(function(){ kidRender(); });
+  bindHwGive();
   var sv = box.querySelector('[data-kf="save"]');
   if (sv) sv.onclick = kidSave;
   var mark = document.getElementById("kidsaved");
   if (mark) mark.textContent = kidTarget.dirty ? "есть несохранённые изменения" : "";
 }
+/* ===== выдача домашки со стороны взрослого =====
+   Порядок разговора здесь такой же, как в расписании: сначала что уже задано,
+   потом что можно задать. ⚠️ Список задач строится ИЗ ПРОГРЕССА РЕБЁНКА, а не
+   из всего банка: наставник физически не может задать то, чего ребёнку ещё не
+   объясняли. Это не удобство, а защита от самой частой ошибки взрослого —
+   «пусть подтянется вперёд». */
+function hwWho(){ return parentOf() ? "родитель" : "наставник"; }
+/* Срок по умолчанию — ближайший день занятий из рамки, иначе через неделю. */
+function hwDefaultDue(){
+  for (var i = 1; i <= 14; i++){
+    var k = shiftDay(dayKey(), i);
+    if (frameStudyDay(k)) return k;
+  }
+  return shiftDay(dayKey(), 7);
+}
+function hwGiveHTML(st){
+  var given = hwRecords(st);
+  var open = given.filter(function(r){ return !r.done; });
+  var can = hwAvailableFor(st);
+  /* уже заданные задачи второй раз не предлагаем: у них то же условие */
+  var busy = {};
+  open.forEach(function(r){ busy[r.id] = 1; });
+
+  var h = '<h3 class="sect">📮 Домашка</h3>' +
+    '<p class="dim">Задача на то же умение, что и урок, но с другими числами: ' +
+    'решение из урока к ней не подойдёт. Проверяет движок — сверять руками ничего не нужно. ' +
+    'Звёзд домашка не даёт и порядок курса не двигает.</p>';
+
+  if (given.length){
+    h += '<div class="card"><h3>Что уже задано</h3><ul class="trrules">';
+    given.slice(0, 12).forEach(function(r){
+      var b = hwBuild(r);
+      if (!b) return;
+      h += '<li>' + b.emoji + ' <b>' + esc(b.title) + '</b> — ' +
+        (r.done
+          ? 'сдано' + (r.tries ? ", попыток: " + r.tries : "")
+          : 'не сдано, ' + esc(hwDueText(r))) + '</li>';
+    });
+    h += '</ul></div>';
+  }
+
+  if (!can.length){
+    h += '<div class="note"><b>Задавать пока нечего</b>' +
+      'Задачи открываются по пройденным урокам: дать можно только то, что ребёнку уже объяснили. ' +
+      'После первых уроков список появится сам.</div>';
+    return h;
+  }
+
+  h += '<div class="card"><h3>Задать новую</h3>' +
+    '<p class="dim">Отметьте до ' + HW_MAX + ' ' + plural(HW_MAX, "задачи", "задач", "задач") +
+    '. Числа в условии тренажёр подставит сам, и у каждого ученика они свои.</p>' +
+    '<div class="hwpick">';
+  can.forEach(function(it){
+    var off = !!busy[it.id];
+    var l = CURRICULUM.byId(it.after);
+    h += '<label class="hwitem' + (off ? " off" : "") + '">' +
+      '<input type="checkbox" data-hwpick="' + esc(it.id) + '"' + (off ? " disabled" : "") + '> ' +
+      '<span>' + it.emoji + ' <b>' + esc(it.title) + '</b> ' +
+      '<span class="dim">' + esc(it.tag) + (l ? " · после урока «" + esc(l.title) + "»" : "") +
+      (off ? " · уже задана" : "") + '</span></span></label>';
+  });
+  h += '</div>' +
+    '<div class="admrow"><label class="admlbl">срок ' +
+      '<input type="date" id="hwdue" value="' + esc(hwDefaultDue()) + '"></label>' +
+      '<span class="sp"></span>' +
+      '<button class="rbtn check" id="hwgive">Задать домашку</button></div>' +
+    '<p class="dim">⚠️ Просроченная задача не сгорает и ничем не наказывается: ' +
+    'сделанное позже лучше несделанного.</p>' +
+    '<div class="msg" id="hwsavemsg"></div></div>';
+  return h;
+}
+function bindHwGive(){
+  var btn = document.getElementById("hwgive");
+  if (!btn) return;
+  /* Больше HW_MAX отметить нельзя — и запрет виден сразу, а не после нажатия.
+     ⚠️ Кто заперт навсегда («уже задана»), запоминаем при привязке: после
+     переключений атрибут disabled стоит и у временно запертых, и по нему
+     своих от чужих уже не отличить. */
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("[data-hwpick]"));
+  var locked = boxes.filter(function(b){ return b.disabled; });
+  function picked(){ return boxes.filter(function(b){ return b.checked; }); }
+  boxes.forEach(function(b){
+    b.onchange = function(){
+      var n = picked().length;
+      boxes.forEach(function(x){
+        if (locked.indexOf(x) >= 0) return;
+        x.disabled = !x.checked && n >= HW_MAX;
+      });
+    };
+  });
+  btn.onclick = function(){
+    var ids = picked().map(function(b){ return b.getAttribute("data-hwpick"); });
+    var due = (document.getElementById("hwdue") || {}).value || "";
+    kidSaveHW(ids, due);
+  };
+}
+/* Записать домашку ребёнку. Как и с расписанием, запись читается заново прямо
+   перед сохранением: ребёнок мог позаниматься, пока взрослый выбирал задачи, —
+   и отправить старый снимок значило бы откатить ему прогресс. */
+function kidSaveHW(ids, due){
+  if (!kidTarget || !kidTarget.data) return;
+  var code = kidTarget.code;
+  var msg = document.getElementById("hwsavemsg");
+  function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+  if (!ids || !ids.length) return say("warn", "<b>Ничего не отмечено</b>Выберите хотя бы одну задачу.");
+  if (!serverOn()) return say("bad", "<b>Не сохранилось</b>Сервер не подключён — передать домашку некуда.");
+  say("warn", "<b>Сохраняю…</b>");
+  var dayk = dayKey(), who = hwWho();
+  Cloud.load(code).then(function(r){
+    var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+    var added = 0;
+    ids.slice(0, HW_MAX).forEach(function(id){
+      if (!hwById(id)) return;
+      var seed = hwSeed(code, id, dayk), key = hwKey(id, seed);
+      /* та же задача, заданная в тот же день, — это одна задача, а не две */
+      if (base.hw[key]) return;
+      base.hw[key] = { id:id, seed:seed, due:due || "", by:who,
+                       at: Date.now(), done:0, tries:0 };
+      added++;
+    });
+    return Cloud.save(base, code).then(function(){
+      kidTarget.data = base;
+      kidTarget.fresh = false;
+      kidRender("<b>Домашка задана</b>" + added + " " +
+        plural(added, "задача уедет", "задачи уедут", "задач уедут") +
+        " к ребёнку при следующем открытии тренажёра.");
+    });
+  }, function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
+  }).catch(function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+  });
+}
+
 /* Записать рамку ребёнку. Читаем запись заново прямо перед записью: ребёнок мог
    позаниматься, пока взрослый выбирал дни, и отправить старый снимок значило бы
    откатить ему прогресс. Меняем ТОЛЬКО рамку. */
@@ -12734,6 +13187,14 @@ function groupRow(code, st){
   }
   if (pred.all && pred.ok < pred.all)
     marks.push({ k:"pred", txt:"вывод предсказал " + pred.ok + " из " + pred.all });
+  /* Домашка. ⚠️ Это тоже приглашение поговорить, а не табель: «не сдана» —
+     факт со сроком, и рядом всегда стоит, сколько сдано, иначе строка читается
+     как обвинение. */
+  var hwAllRecs = hwRecords(st);
+  var hwDone = hwAllRecs.filter(function(r){ return !!r.done; }).length;
+  var hwOpen = hwAllRecs.length - hwDone;
+  if (hwAllRecs.length && hwOpen)
+    marks.push({ k:"hw", txt:"домашка: сдано " + hwDone + " из " + hwAllRecs.length });
   if (ready) marks.push({ k:"ready", txt:"часть работы пришла готовой: " + ready +
     " " + plural(ready, "урок", "урока", "уроков") });
   if (ahead) marks.push({ k:"ahead", txt:"в решении непройденное: " + ahead +
@@ -12741,7 +13202,7 @@ function groupRow(code, st){
 
   return { code: code, label: adminLabel(code) || "", week: week, tries: tries,
            solved: Object.keys(sm).length, lastAt: lastAt, quiet: quiet,
-           pred: pred, marks: marks,
+           pred: pred, marks: marks, hwDone: hwDone, hwAll: hwAllRecs.length,
            /* Чем выше, тем раньше показать. Молчание весит больше всего:
               «не сел вовсе» — самая частая и самая дорогая из трёх подмен. */
            rank: (quiet >= GROUP_QUIET_DAYS ? 100 : 0) + marks.length * 10 - week };
@@ -14506,6 +14967,10 @@ window.__game = {
   assignPack: assignPack, assignUnpack: assignUnpack, assignLink: assignLink,
   ptaskAdd: ptaskAdd, ptaskList: ptaskList, ptaskPending: ptaskPending,
   ptaskMarkDone: ptaskMarkDone, ptaskWeekCount: ptaskWeekCount,
+  HW_MAX: HW_MAX, hwSeed: hwSeed, hwKey: hwKey, hwRecords: hwRecords, shiftDay: shiftDay,
+  hwMine: hwMine, hwPending: hwPending, hwBuild: hwBuild, hwMark: hwMark,
+  hwDaysLeft: hwDaysLeft, hwDueText: hwDueText, hwAvailableFor: hwAvailableFor,
+  hwDefaultDue: hwDefaultDue, screenHW: screenHW, openHW: openHW,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
   setLessonForTest: function(id){ curLessonId = id; }

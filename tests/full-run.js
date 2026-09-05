@@ -3952,6 +3952,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
+  let hwChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
@@ -4379,6 +4380,153 @@ function checkEncoding(){
     });
     g.state.ptasks = {};
     if (problems.length === p0) ptaskChecked++;
+    viewReset(g);
+  }
+
+  /* --- 4а. домашка от наставника ---
+     Проверяем ровно то, ради чего механика построена: задача приходит от
+     взрослого, судит её движок, требования конструкции обойти нельзя,
+     на прогресс по курсу она не влияет, а просрочка ничего не сжигает. */
+  if (typeof g.hwPending === "function"){
+    const p0 = problems.length;
+    const bank = w.HOMEWORK || [];
+    if (!bank.length) bad("[домашка] банк задач-близнецов не загрузился");
+
+    g.state.hw = {};
+    const starsBefore = Object.keys(g.state.stars).length, xpBefore = g.state.xp;
+
+    /* 4а.1. Доступность по прогрессу: пока урок не пройден, задачи нет.
+       Это защита от самой частой ошибки взрослого — «пусть подтянется вперёд». */
+    if (g.hwAvailableFor({ stars:{} }).length)
+      bad("[домашка] при нулевом прогрессе взрослому предлагают задачи — ребёнку дадут необъяснённое");
+    const item = bank[0];
+    const okList = g.hwAvailableFor({ stars: { [item.after]: 3 } });
+    if (!okList.some(x => x.id === item.id))
+      bad("[домашка] урок пройден, а задача-близнец всё равно закрыта");
+
+    /* 4а.2. Семя: одинаковое у ребёнка и у наставника, разное у разных детей. */
+    const day = g.dayKey();
+    if (g.hwSeed("kid-a", item.id, day) !== g.hwSeed("kid-a", item.id, day))
+      bad("[домашка] семя задачи не воспроизводится — условия у ребёнка и наставника разойдутся");
+    if (g.hwSeed("kid-a", item.id, day) === g.hwSeed("kid-b", item.id, day))
+      bad("[домашка] у разных учеников совпало семя — условие будет одно на всех");
+
+    /* 4а.3. Выдача так, как её пишет кабинет взрослого. */
+    const seed = g.hwSeed("kid-a", item.id, day);
+    const key = g.hwKey(item.id, seed);
+    g.state.hw[key] = { id:item.id, seed:seed, due:g.hwDefaultDue(),
+                        by:"наставник", at:Date.now(), done:0, tries:0 };
+    if (g.hwPending().length !== 1) bad("[домашка] заданная задача не попала в список несделанных");
+    const built = g.hwBuild(g.hwPending()[0]);
+    if (!built) bad("[домашка] задача не собралась в игре");
+    else {
+      if (!built.lines.length) bad("[домашка] у задачи пустой правильный ответ");
+      if (!built.goal || built.goal.length < 40) bad("[домашка] условие пустое или слишком короткое");
+    }
+
+    /* 4а.4. Экран открывается, задача открывается, решение засчитывается. */
+    g.screenHW();
+    await tick();
+    const card = doc.querySelector("[data-hw]");
+    if (!card) bad("[домашка] на экране домашки нет карточки заданной задачи");
+    else {
+      card.click();
+      await tick();
+      const st = studioOf();
+      if (!st) bad("[домашка] задача не открылась в редакторе");
+      else {
+        /* неверный ответ засчитываться не должен */
+        st.editor.setCode('print("наугад")\n');
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (won()){ bad("[домашка] неверный ответ засчитан"); closeWin(); }
+
+        /* эталонная программа обязана пройти */
+        st.editor.setCode(item.code(g.hwBuild(g.hwPending()[0]).vals));
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+        if (!won()) bad("[домашка] верное решение не засчитано — " + msgText());
+        else closeWin();
+      }
+    }
+    if (g.hwPending().length) bad("[домашка] сданная задача осталась в несделанных");
+    if (!(g.state.hw[key] || {}).done) bad("[домашка] «сдано» не записалось");
+
+    /* 4а.5. ⚠️ Главное правило: домашка не двигает прогресс по курсу.
+       Иначе взрослый начнёт выдавать её ради звёзд, из лучших побуждений. */
+    if (Object.keys(g.state.stars).length !== starsBefore || g.state.xp !== xpBefore)
+      bad("[домашка] домашка начислила звёзды или опыт — этого быть не должно");
+
+    /* 4а.6. Требование конструкции обойти нельзя: задачу «напиши функцию»
+       не закрыть тремя print с готовыми числами. */
+    {
+      const withNeed = bank.filter(x => (x.need || []).length)[0];
+      if (!withNeed) bad("[домашка] в банке нет ни одной задачи с требованием конструкции");
+      else {
+        const sd = g.hwSeed("kid-a", withNeed.id, day), k2 = g.hwKey(withNeed.id, sd);
+        g.state.hw[k2] = { id:withNeed.id, seed:sd, due:"", by:"наставник",
+                           at:Date.now(), done:0, tries:0 };
+        const b2 = g.hwBuild(g.hwPending().filter(r => r.key === k2)[0]);
+        g.openHW(k2);
+        await tick();
+        const st2 = studioOf();
+        if (!st2) bad("[домашка] задача с требованием не открылась");
+        else {
+          /* печатаем ПРАВИЛЬНЫЙ вывод, но без нужной конструкции */
+          st2.editor.setCode(b2.lines.map(l => "print(" + JSON.stringify(l) + ")").join("\n") + "\n");
+          st2.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()){
+            bad("[домашка] задача с требованием «" + withNeed.need.join(", ") +
+                "» засчиталась напечатанным ответом");
+            closeWin();
+          }
+          if ((g.state.hw[k2] || {}).done) bad("[домашка] обойдённая задача отметилась сданной");
+        }
+      }
+    }
+
+    /* 4а.7. Просрочка ничего не сжигает: задача остаётся и открывается. */
+    {
+      const late = Object.keys(g.state.hw).filter(x => !g.state.hw[x].done)[0];
+      if (late){
+        g.state.hw[late].due = g.shiftDay(g.dayKey(), -3);
+        const rec = g.hwPending().filter(r => r.key === late)[0];
+        if (!rec) bad("[домашка] просроченная задача исчезла из списка — она не должна сгорать");
+        else if (g.hwDaysLeft(rec) !== -3) bad("[домашка] дни до срока считаются неверно");
+        else if (!/срок был/.test(g.hwDueText(rec)))
+          bad("[домашка] про просрочку сказано не фактом: " + g.hwDueText(rec));
+      }
+    }
+
+    /* 4а.8. Слияние: условие принадлежит тому, кто задал, «сдано» — тому,
+       кто делал. Иначе обмен с сервером сотрёт одно из двух. */
+    {
+      const kk = "hw-klass#42";
+      const given = { hw: { [kk]: { id:"hw-klass", seed:42, due:"2026-09-12",
+                                    by:"наставник", at:2000, done:0, tries:0 } }, savedAt:2 };
+      const did = { hw: { [kk]: { id:"hw-klass", seed:42, due:"2026-09-12",
+                                  by:"наставник", at:1000, done:5555, tries:3 } }, savedAt:1 };
+      const m = g.mergeProgress(given, did);
+      if (!m.hw || !m.hw[kk]) bad("[домашка] запись пропала при слиянии");
+      else {
+        if (m.hw[kk].seed !== 42) bad("[домашка] при слиянии сменилось семя — условия разойдутся");
+        if (!m.hw[kk].done) bad("[домашка] при слиянии потерялось «сдано»");
+        if (m.hw[kk].tries !== 3) bad("[домашка] при слиянии потерялось число попыток");
+      }
+    }
+
+    /* 4а.9. Все задачи банка обязаны собираться через игру, а не только в
+       своём тесте: сломанную задачу увидит наставник и решит, что сломан
+       тренажёр. */
+    bank.forEach(it => {
+      const sd = g.hwSeed("kid-proverka", it.id, day);
+      const b = g.hwBuild({ key:g.hwKey(it.id, sd), id:it.id, seed:sd, due:"", by:"", at:0, done:0, tries:0 });
+      if (!b) bad("[домашка] задача «" + it.id + "» не собирается в игре");
+    });
+
+    g.state.hw = {};
+    if (problems.length === p0) hwChecked++;
     viewReset(g);
   }
 
@@ -5746,6 +5894,7 @@ function checkEncoding(){
   console.log(`занятие как единица: ${zanChecked ? "да" : "нет"}`);
   console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
+  console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);

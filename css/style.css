@@ -1559,3 +1559,13 @@ body.focus .toTop{display:none}
 .lblin:focus{outline:none;border-color:var(--acc)}
 .zanplan li.cut{border-style:dashed;opacity:.75}
 .zanask{border-color:var(--acc)}
+/* выбор задач домашки в кабинете взрослого */
+.hwpick{display:grid;gap:8px;margin:12px 0}
+.hwitem{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);
+  border-radius:11px;padding:9px 12px;background:var(--sunken);font-size:14px;
+  line-height:1.45;cursor:pointer}
+.hwitem:hover{border-color:var(--acc)}
+.hwitem input{margin-top:3px;flex:none}
+.hwitem .dim{display:block;font-size:12.5px}
+.hwitem.off{opacity:.55;cursor:default}
+.hwitem.off:hover{border-color:var(--line)}
