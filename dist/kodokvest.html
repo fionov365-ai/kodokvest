@@ -1587,6 +1587,13 @@ body.focus .toTop{display:none}
 .hwitem .dim{display:block;font-size:12.5px}
 .hwitem.off{opacity:.55;cursor:default}
 .hwitem.off:hover{border-color:var(--line)}
+/* отчёт родителю текстом и вопросы к занятию */
+.reptext{white-space:pre-wrap;background:var(--sunken);border:1px solid var(--line2);
+  border-radius:11px;padding:12px 14px;font-size:14px;line-height:1.55;
+  font-family:inherit;margin:10px 0;overflow-x:auto}
+.askqs{display:grid;gap:10px;margin:12px 0;padding-left:20px}
+.askqs li{line-height:1.5}
+.askqs li .dim{display:block;font-size:13px}
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -27633,11 +27640,13 @@ function kidRender(savedNote){
        (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
   h += hwGiveHTML(st);
   if (!kidTarget.fresh){
+    h += parentReportCardHTML() + askCardHTML(st);
     h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
   }
   box.innerHTML = h;
   bindFrameEditor(function(){ kidRender(); });
   bindHwGive();
+  bindParentReport(st);
   var sv = box.querySelector('[data-kf="save"]');
   if (sv) sv.onclick = kidSave;
   var mark = document.getElementById("kidsaved");
@@ -27993,7 +28002,12 @@ function dinnerHTML(st){
     'Вопрос меняется раз в день.</p></div>';
 }
 
-function weekReportHTML(st){
+/* ===== факты недели, без разметки =====
+   Одни и те же числа нужны трём потребителям: карточке «Что было за неделю»,
+   отчёту родителю текстом и карточке «О чём спросить на занятии». Считать
+   трижды — значит однажды разойтись, поэтому расчёт вынесен и работает на
+   ЛЮБОМ снимке прогресса, своём или чужом. */
+function weekFacts(st){
   var lg = st.log || {}, sm = st.stars || {};
   var covered = coveredDays(st.days, st.shields);
   var today = dayKey(), keys = [];
@@ -28011,17 +28025,6 @@ function weekReportHTML(st){
   });
 
   var studied = keys.filter(function(k){ return activeIn(st.days, k); }).length;
-  var names = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
-
-  var strip = keys.map(function(k){
-    var was = activeIn(st.days, k), shield = !was && !!(st.shields && st.shields[k]);
-    var n = (byDay[k] || []).length;
-    var d = new Date(k + "T12:00:00");
-    return '<div class="wrday' + (was ? " on" : (shield ? " shield" : "")) + (k === today ? " now" : "") + '">' +
-      '<span class="wrd">' + names[d.getDay()] + '</span>' +
-      '<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : "—")) + '</span>' +
-      '<span class="wrdate">' + d.getDate() + "." + (d.getMonth() + 1) + '</span></div>';
-  }).join("");
 
   /* где буксовал: за эту же неделю, по цене решения */
   var tough = [];
@@ -28037,6 +28040,56 @@ function weekReportHTML(st){
   var lastDay = "";
   Object.keys(st.days || {}).forEach(function(k){ if (k > lastDay) lastDay = k; });
 
+  /* проверка понимания: по закрытым занятиям этой недели */
+  var pred = { ok:0, all:0 };
+  Object.keys(st.zan || {}).forEach(function(k){
+    var r = (st.zan || {})[k];
+    if (!r || !r.end || !r.predAll) return;
+    if (keys.indexOf(dayKey(new Date(r.end))) < 0) return;
+    pred.ok += r.predOk || 0; pred.all += r.predAll;
+  });
+
+  /* следующий по порядку курса — только по звёздам, без замков этого
+     устройства: факты обязаны совпадать для своего и чужого снимка */
+  var next = null;
+  CURRICULUM.forEach(function(w){
+    w.lessons.forEach(function(l){
+      if (!next && sm[l.id] === undefined) next = l;
+    });
+  });
+
+  return { keys: keys, byDay: byDay, studied: studied, weekSolved: weekSolved,
+           weekMs: weekMs, tough: tough, lastDay: lastDay, pred: pred,
+           next: next, streak: streakCurrentIn(covered),
+           hw: hwRecords(st) };
+}
+
+/* причины «тяжело далось» — словами, без приговора */
+function toughWhy(log){
+  var причины = [];
+  if (log.shown) причины.push("смотрел решение");
+  if (log.hints) причины.push(log.hints + " " + plural(log.hints, "подсказка", "подсказки", "подсказок"));
+  if (log.attempts > 2) причины.push(log.attempts + " " + plural(log.attempts, "попытка", "попытки", "попыток"));
+  return причины.join(", ");
+}
+
+function weekReportHTML(st){
+  var f = weekFacts(st), sm = st.stars || {};
+  var today = dayKey();
+  var keys = f.keys, byDay = f.byDay, studied = f.studied,
+      weekSolved = f.weekSolved, weekMs = f.weekMs, tough = f.tough, lastDay = f.lastDay;
+  var names = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+  var strip = keys.map(function(k){
+    var was = activeIn(st.days, k), shield = !was && !!(st.shields && st.shields[k]);
+    var n = (byDay[k] || []).length;
+    var d = new Date(k + "T12:00:00");
+    return '<div class="wrday' + (was ? " on" : (shield ? " shield" : "")) + (k === today ? " now" : "") + '">' +
+      '<span class="wrd">' + names[d.getDay()] + '</span>' +
+      '<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : "—")) + '</span>' +
+      '<span class="wrdate">' + d.getDate() + "." + (d.getMonth() + 1) + '</span></div>';
+  }).join("");
+
   var h = '<div class="card weekrep"><h3>📅 Что было за неделю</h3>';
 
   if (!studied && !weekSolved){
@@ -28047,7 +28100,7 @@ function weekReportHTML(st){
     h += '<p class="wrline"><b>' + studied + ' ' + plural(studied, "занятие", "занятия", "занятий") + '</b>, ' +
       '<b>' + weekSolved + ' ' + plural(weekSolved, "урок", "урока", "уроков") + '</b>' +
       (weekMs ? ', <b>' + fmtMins(weekMs) + '</b> за этими уроками' : '') + '. ' +
-      'Дней подряд: <b>' + streakCurrentIn(covered) + '</b>.</p>';
+      'Дней подряд: <b>' + f.streak + '</b>.</p>';
   }
 
   h += '<div class="wrstrip">' + strip + '</div>' +
@@ -28058,11 +28111,7 @@ function weekReportHTML(st){
     h += '<div class="wrtough"><b>Тяжело далось:</b><ul>' +
       tough.slice(0, 3).map(function(t){
         var l = CURRICULUM.byId(t.id);
-        var причины = [];
-        if (t.log.shown) причины.push("смотрел решение");
-        if (t.log.hints) причины.push(t.log.hints + " " + plural(t.log.hints, "подсказка", "подсказки", "подсказок"));
-        if (t.log.attempts > 2) причины.push(t.log.attempts + " " + plural(t.log.attempts, "попытка", "попытки", "попыток"));
-        return '<li>' + (l ? esc(l.title) : esc(t.id)) + ' — ' + причины.join(", ") + '</li>';
+        return '<li>' + (l ? esc(l.title) : esc(t.id)) + ' — ' + toughWhy(t.log) + '</li>';
       }).join("") + '</ul>' +
       '<p class="dim">Эти уроки сами вернутся к ребёнку в разделе «Повторить».</p></div>';
   } else if (weekSolved){
@@ -28081,6 +28130,134 @@ function weekReportHTML(st){
 
   h += dinnerHTML(st);
   return h + '</div>';
+}
+
+/* ===== отчёт родителю: текст для мессенджера =====
+   Вторая боль репетитора после проверки: родителю в конце недели «сказать
+   нечего, кроме „занимались, всё хорошо“». Рассылать письма продукт не может —
+   адрес взрослого это ПДн, и это решение фаундера от 03.09.2026. Канал
+   доставки — сам наставник: скопировал, вставил в чат, подписал имя.
+
+   Три правила текста, и все три нарушать нельзя:
+     — имени ребёнка в тексте НЕТ. Наставник подписывает сам: наш текст обязан
+       быть одинаково безопасным в любом чате;
+     — плохие новости не вычищаются. «Занятий не было» и «смотрел решение»
+       пишутся прямо: отчёт, в котором всегда всё хорошо, перестают читать
+       через три недели (docs/zanyatie-i-vzroslyj.md § 3);
+     — без приговоров. «Тяжело дался» и «6 попыток» — факты; «ленится» и
+       «отстаёт» — выводы, и их за взрослого не выносим. */
+function parentReportText(st){
+  var f = weekFacts(st);
+  var lines = [];
+
+  if (!f.studied && !f.weekSolved){
+    lines.push("За неделю занятий не было." + (f.lastDay
+      ? " Последнее было " + f.lastDay.split("-").reverse().join(".") + "."
+      : " Занятий пока не было вовсе."));
+  } else {
+    lines.push("За неделю: " + f.studied + " " + plural(f.studied, "занятие", "занятия", "занятий") +
+      ", " + f.weekSolved + " " + plural(f.weekSolved, "урок", "урока", "уроков") +
+      (f.weekMs ? " (" + fmtMins(f.weekMs) + " чистой работы)" : "") +
+      ". Дней подряд: " + f.streak + ".");
+  }
+
+  if (f.tough.length){
+    var t = f.tough[0], l = CURRICULUM.byId(t.id);
+    lines.push("Тяжело дался урок «" + (l ? l.title : t.id) + "»: " + toughWhy(t.log) +
+      ". Тренажёр сам вернёт его на повторение.");
+  } else if (f.weekSolved){
+    lines.push("Все уроки недели прошли без подсказок и без подглядывания в решение.");
+  }
+
+  if (f.pred.all)
+    lines.push("Проверка понимания: в конце занятия читал программу и предсказывал, что она напечатает, — " +
+      "верно " + f.pred.ok + " из " + f.pred.all + ".");
+
+  var hwDone = f.hw.filter(function(r){ return !!r.done; }).length;
+  if (f.hw.length){
+    var open = f.hw.filter(function(r){ return !r.done; });
+    var near = "";
+    open.forEach(function(r){ if (r.due && (!near || r.due < near)) near = r.due; });
+    lines.push("Домашка: сдано " + hwDone + " из " + f.hw.length + "." +
+      (near ? " Ближайший срок — " + near.split("-").reverse().join(".") + "." : ""));
+  }
+
+  lines.push(f.next
+    ? "Дальше по программе: урок " + f.next.num + " «" + f.next.title + "»."
+    : "Все уроки курса пройдены.");
+
+  var pick = dinnerPickFrom(st, dayKey());
+  if (pick)
+    lines.push("Спросите за ужином: «что делает " + pick.it.sig + "?» — это из пройденного. " +
+      "Если объяснит своими словами и покажет пример — тема понята.");
+
+  return lines.join("\n");
+}
+
+function parentReportCardHTML(){
+  /* Карточку видят двое, и слова у каждого свои: наставник ШЛЁТ этот текст
+     родителю, родитель может переслать его второму взрослому или сохранить. */
+  var forParent = !!parentOf();
+  return '<div class="card"><h3>✉️ ' + (forParent ? "Неделя одним сообщением" : "Отчёт родителю") + '</h3>' +
+    '<p class="dim">' + (forParent
+      ? 'Готовый текст: можно переслать второму взрослому или сохранить себе. '
+      : 'Готовый текст для мессенджера: скопируйте и отправьте родителю. ') +
+    'Имени в нём нет нарочно — подпишите сами. Плохие новости из текста не вычищаются: ' +
+    'отчёт, в котором всегда всё хорошо, перестают читать.</p>' +
+    '<pre class="reptext" id="preptext"></pre>' +
+    '<div class="admrow"><button class="rbtn check" id="prepcopy">Скопировать текст</button></div></div>';
+}
+/* Текст кладётся через textContent, а не в разметку: esc() экранирует не всё,
+   а отчёт собирается из названий уроков и записей шпаргалки. */
+function bindParentReport(st){
+  var pre = document.getElementById("preptext");
+  var btn = document.getElementById("prepcopy");
+  if (!pre || !btn) return;
+  var text = parentReportText(st);
+  pre.textContent = text;
+  btn.onclick = function(){ copyText(text, btn); };
+}
+
+/* ===== о чём спросить на занятии =====
+   Готовит наставника к разговору за минуту: три вопроса из недели ученика.
+   Не тест и не допрос — темы для разговора, у каждой написано, откуда она
+   взялась и какой ответ считать хорошим. */
+function askCardHTML(st){
+  var f = weekFacts(st);
+  var qs = [];
+
+  if (f.tough.length){
+    var t = f.tough[0], l = CURRICULUM.byId(t.id);
+    qs.push('<li><b>«Что было самым трудным в уроке „' + esc(l ? l.title : t.id) + '“?»</b>' +
+      '<span class="dim">Там было: ' + esc(toughWhy(t.log)) +
+      '. Пусть покажет, как в итоге решил, — рассказ о победе закрепляет лучше повтора.</span></li>');
+  }
+
+  var pick = dinnerPickFrom(st, dayKey());
+  if (pick){
+    var pl = CURRICULUM.byId(pick.lesson);
+    qs.push('<li><b>«Что делает <code>' + esc(pick.it.sig) + '</code>?»</b>' +
+      '<span class="dim">Из пройденного' + (pl ? ' («' + esc(pl.title) + '»)' : '') +
+      '. Хороший ответ: ' + esc(pick.it.what) + ' — своими словами и с примером.</span></li>');
+  }
+
+  /* самая частая ошибка последней недели — повод поговорить, а не упрёк */
+  var e = st.errs || {}, top = null, weekAgo = Date.now() - 7 * 864e5;
+  ERR_BEASTS.forEach(function(b){
+    var r = e[b.kind];
+    if (!r || !r.seen || (r.at || 0) < weekAgo) return;
+    if (!top || r.seen > top.r.seen) top = { b: b, r: r };
+  });
+  if (top)
+    qs.push('<li><b>«Что значит ошибка ' + esc(top.b.kind) + '?»</b>' +
+      '<span class="dim">На неделе встречалась' +
+      (top.r.seen > 1 ? " " + top.r.seen + " " + plural(top.r.seen, "раз", "раза", "раз") : "") +
+      '. Хороший ответ: ' + esc(top.b.what) + '</span></li>');
+
+  if (!qs.length) return "";
+  return '<div class="card"><h3>💬 О чём спросить на занятии</h3>' +
+    '<p class="dim">Темы для разговора из его недели — не проверка, а повод дать рассказать.</p>' +
+    '<ul class="askqs">' + qs.join("") + '</ul></div>';
 }
 
 /* ---------- таблица уроков по любому набору данных ---------- */
@@ -28200,7 +28377,11 @@ function serverCardHTML(){
         его за него. Тот же запрет, что на карте активности.
    ============================================================ */
 var GROUP_MAX = 30;         /* столько учеников тянем за раз */
-var GROUP_QUIET_DAYS = 5;   /* столько дней тишины — повод посмотреть */
+/* Порог тишины — 3 дня, был 5. «Не сел вовсе» — самая частая и самая дорогая
+   подмена, и пять дней означали, что наставник узнаёт о ней к следующему
+   занятию, когда неделя уже потеряна. Три дня — ещё не тревога, но уже повод
+   написать одно сообщение. */
+var GROUP_QUIET_DAYS = 3;
 
 /* Сводка по одному ученику из его прогресса. Работает на ЛЮБОМ снимке — и на
    своём, и на чужом, — потому что ничего не берёт из S. */
@@ -28268,12 +28449,172 @@ function groupRow(code, st){
   return { code: code, label: adminLabel(code) || "", week: week, tries: tries,
            solved: Object.keys(sm).length, lastAt: lastAt, quiet: quiet,
            pred: pred, marks: marks, hwDone: hwDone, hwAll: hwAllRecs.length,
+           /* для выдачи домашки всей группе: что пройдено и что уже висит.
+              Держим id, а не полные записи, — строке группы больше не нужно */
+           starsIds: Object.keys(sm),
+           nextTitle: (function(){
+             var t = "";
+             CURRICULUM.forEach(function(w){ w.lessons.forEach(function(l){
+               if (!t && sm[l.id] === undefined) t = l.title;
+             }); });
+             return t;
+           })(),
+           hwOpenIds: hwAllRecs.filter(function(r){ return !r.done; }).map(function(r){ return r.id; }),
            /* Чем выше, тем раньше показать. Молчание весит больше всего:
               «не сел вовсе» — самая частая и самая дорогая из трёх подмен. */
            rank: (quiet >= GROUP_QUIET_DAYS ? 100 : 0) + marks.length * 10 - week };
 }
 
 var groupState = { rows: null, busy: false, error: "", loaded: 0, total: 0 };
+
+/* ===== напоминание молчащему =====
+   Пометка «не занимался N дней» называет факт, а действие оставалось на
+   наставнике: сочинить сообщение. Теперь текст готов — скопировал и отправил
+   ребёнку или родителю. ⚠️ Тон — приглашение, не укор: ни «ты забросил», ни
+   «пропустил», ни счёта потерянных дней. Виноватый не возвращается. */
+function quietReminderText(r){
+  return "Привет! В тренажёре давно не было занятий — а там " +
+    (r.nextTitle ? "ждёт урок «" + r.nextTitle + "», минут на двадцать" : "всё на месте и ждёт") +
+    ". Если что-то застряло или было непонятно, напиши мне — разберём вместе.";
+}
+
+/* ===== домашка всей группе одной кнопкой =====
+   То же, что выдача из карточки ученика, но по всем сразу. Два правила
+   переносятся без ослабления:
+     — каждый получает ТОЛЬКО задачи по пройденным ИМ урокам. «Всей группе»
+       не значит «всем одинаково»: кто до урока не дошёл, тому задача не
+       приедет, и это видно наставнику числом, а не выясняется у ребёнка;
+     — семя у каждого своё (код в hwSeed), поэтому у соседей по группе разные
+       числа в одном и том же условии — сверять ответы бесполезно.
+   Пишем по одному и с перечитыванием записи перед записью — по тем же двум
+   причинам, что groupLoad тянет по одному, а kidSave перечитывает. */
+var grpHwState = { busy:false, done:0, total:0, note:"" };
+
+function groupHwHTML(rows){
+  var h = '<div class="card"><h3>📮 Домашка всей группе</h3>' +
+    '<p class="dim">Каждый ученик получит только те задачи, чьи уроки он уже прошёл, — ' +
+    'число напротив задачи говорит, скольким она уедет. Числа в условии у каждого свои: ' +
+    'сверять ответы с соседом бесполезно. Проверит движок, звёзд домашка не даёт.</p>';
+  if (grpHwState.note) h += '<div class="msg show ok">' + grpHwState.note + '</div>';
+  h += '<div class="hwpick">';
+  hwBank().forEach(function(it){
+    /* скольким из группы задача может уехать: урок пройден и такая же не висит */
+    var can = rows.filter(function(r){
+      return r.starsIds.indexOf(it.after) >= 0 && r.hwOpenIds.indexOf(it.id) < 0;
+    }).length;
+    var l = CURRICULUM.byId(it.after);
+    h += '<label class="hwitem' + (can ? "" : " off") + '">' +
+      '<input type="checkbox" data-ghwpick="' + esc(it.id) + '"' + (can ? "" : " disabled") + '> ' +
+      '<span>' + it.emoji + ' <b>' + esc(it.title) + '</b> ' +
+      '<span class="dim">' + esc(it.tag) + (l ? " · после урока «" + esc(l.title) + "»" : "") +
+      ' · получат: ' + can + ' из ' + rows.length + '</span></span></label>';
+  });
+  h += '</div>' +
+    '<div class="admrow"><label class="admlbl">срок ' +
+      '<input type="date" id="ghwdue" value="' + esc(shiftDay(dayKey(), 7)) + '"></label>' +
+      '<span class="sp"></span>' +
+      '<button class="rbtn check" id="ghwgive">Задать группе</button></div>' +
+    '<p class="dim" id="ghwbar">' + (grpHwState.busy
+      ? "Записано " + grpHwState.done + " из " + grpHwState.total + "…"
+      : "Не больше " + HW_MAX + " задач за раз: домашка на десять задач — это не усердие, " +
+        "а способ бросить всё в среду.") + '</p>' +
+    '<div class="msg" id="ghwmsg"></div></div>';
+  return h;
+}
+
+function bindGroupHw(){
+  var btn = document.getElementById("ghwgive");
+  if (!btn) return;
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("[data-ghwpick]"));
+  var locked = boxes.filter(function(b){ return b.disabled; });
+  function picked(){ return boxes.filter(function(b){ return b.checked; }); }
+  boxes.forEach(function(b){
+    b.onchange = function(){
+      var n = picked().length;
+      boxes.forEach(function(x){
+        if (locked.indexOf(x) >= 0) return;
+        x.disabled = !x.checked && n >= HW_MAX;
+      });
+    };
+  });
+  btn.onclick = function(){
+    var ids = picked().map(function(b){ return b.getAttribute("data-ghwpick"); });
+    var due = (document.getElementById("ghwdue") || {}).value || "";
+    groupAssignHW(ids, due);
+  };
+}
+
+function groupAssignHW(ids, due){
+  var msg = document.getElementById("ghwmsg");
+  function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+  var rows = groupState.rows || [];
+  if (!ids || !ids.length) return say("warn", "<b>Ничего не отмечено</b>Выберите хотя бы одну задачу.");
+  if (!rows.length) return say("warn", "<b>Группа не загружена</b>Сначала загрузите группу.");
+  if (grpHwState.busy) return;
+  ids = ids.slice(0, HW_MAX);
+
+  grpHwState.busy = true; grpHwState.done = 0; grpHwState.total = rows.length; grpHwState.note = "";
+  say("warn", "<b>Записываю…</b>");
+  var dayk = dayKey();
+  var gotKids = 0, gotTasks = 0, skipped = 0, failed = 0, i = 0;
+
+  function bar(){
+    var el = document.getElementById("ghwbar");
+    if (el) el.textContent = "Записано " + grpHwState.done + " из " + grpHwState.total + "…";
+  }
+  function next(){
+    if (i >= rows.length) return finish();
+    var row = rows[i++];
+    /* что из отмеченного этому ученику вообще можно: урок пройден, такая же не висит */
+    var mine = ids.filter(function(id){
+      var it = hwById(id);
+      return it && row.starsIds.indexOf(it.after) >= 0 && row.hwOpenIds.indexOf(id) < 0;
+    });
+    skipped += ids.length - mine.length;
+    if (!mine.length){ grpHwState.done++; bar(); return next(); }
+    return Cloud.load(row.code).then(function(r){
+      var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+      var added = 0;
+      mine.forEach(function(id){
+        var seed = hwSeed(row.code, id, dayk), key = hwKey(id, seed);
+        if (base.hw[key]) return;
+        base.hw[key] = { id:id, seed:seed, due:due || "", by:"наставник",
+                         at: Date.now(), done:0, tries:0 };
+        added++;
+      });
+      if (!added){ grpHwState.done++; bar(); return next(); }
+      return Cloud.save(base, row.code).then(function(){
+        gotKids++; gotTasks += added;
+        /* строка группы пересчитывается из свежей записи — счётчик «домашка
+           A/B» обновится без перезагрузки всей группы */
+        var fresh = groupRow(row.code, base);
+        for (var k = 0; k < rows.length; k++) if (rows[k].code === row.code) rows[k] = fresh;
+        grpHwState.done++; bar();
+        return next();
+      });
+    }, function(){ failed++; grpHwState.done++; bar(); return next(); });
+  }
+  function finish(){
+    grpHwState.busy = false;
+    /* Итог обязан называть и то, что НЕ уехало: наставник, уверенный, что
+       задал всем, хуже наставника, который знает, что троим не дошло. */
+    grpHwState.note = "<b>Домашка задана</b>Получили: " + gotKids + " " +
+      plural(gotKids, "ученик", "ученика", "учеников") + ", всего " + gotTasks + " " +
+      plural(gotTasks, "задача", "задачи", "задач") + "." +
+      (skipped ? " Не уехало " + skipped + " " + plural(skipped, "задача", "задачи", "задач") +
+        ": урок ещё не пройден или такая же уже задана." : "") +
+      (failed ? " ⚠️ Не записалось " + failed + " " + plural(failed, "ученику", "ученикам", "ученикам") +
+        " — сервер не ответил, попробуйте ещё раз." : "");
+    screenGroup();
+  }
+  /* Промис наружу — чтобы тест мог дождаться конца записи.
+     ⚠️ Через Promise.resolve: если всем всё пропущено, next() доходит до
+     finish() синхронно и возвращает undefined, а не промис. */
+  return Promise.resolve(next()).catch(function(err){
+    grpHwState.busy = false;
+    say("bad", "<b>Не записалось</b>" + esc((err && err.message) || err));
+  });
+}
 
 function groupLoad(key){
   if (!cloudEnabled()) return Promise.reject(new Error("Сервер не настроен."));
@@ -28354,6 +28695,8 @@ function screenGroup(){
       'не пришлось читать глазами.</li>' +
       '</ul></div>';
 
+    h += groupHwHTML(rows);
+
     h += '<div class="card"><h3>👥 Кто как шёл</h3><div class="grouplist">';
     rows.forEach(function(r){
       /* Подпись читаем ЖИВУЮ, а не ту, что легла в строку при загрузке:
@@ -28363,7 +28706,8 @@ function screenGroup(){
       h += '<div class="grouprow' + (r.marks.length ? "" : " ok") + '">' +
         '<div class="grphead"><b>' + esc(lbl || r.code) + '</b>' +
         '<span class="dim">' + (lbl ? esc(r.code) + " · " : "") +
-        'за неделю ' + r.week + ' · всего ' + r.solved + ' · ' +
+        'за неделю ' + r.week + ' · всего ' + r.solved +
+        (r.hwAll ? ' · домашка ' + r.hwDone + '/' + r.hwAll : '') + ' · ' +
         (r.lastAt ? fmtWhen(r.lastAt) : "занятий не было") + '</span></div>' +
         (r.marks.length
           ? '<ul class="trmarks">' + r.marks.map(function(m){
@@ -28372,7 +28716,12 @@ function screenGroup(){
           : '<p class="dim">Шёл ровно: сам, без подсказок и без пауз.</p>') +
         '<div class="partbar">' +
         '<button class="rbtn check" data-gview="' + esc(r.code) + '">Открыть прогресс</button>' +
-        '<button class="rbtn sec" data-glabel="' + esc(r.code) + '">Подписать</button></div></div>';
+        '<button class="rbtn sec" data-glabel="' + esc(r.code) + '">Подписать</button>' +
+        /* напоминание — только тому, кто ЗАНИМАЛСЯ и замолчал: тому, кто не
+           начинал, нужна ссылка-приглашение, а не «возвращайся» */
+        (r.lastAt && r.quiet >= GROUP_QUIET_DAYS
+          ? '<button class="rbtn sec" data-gremind="' + esc(r.code) + '">✉️ Текст напоминания</button>'
+          : '') + '</div></div>';
     });
     h += '</div></div>';
   } else if (!groupState.busy){
@@ -28385,6 +28734,7 @@ function screenGroup(){
     '<span class="sp"></span><button class="bigbtn ghost" data-ghome="1">На главную</button></div>';
 
   app.innerHTML = h;
+  bindGroupHw();
   var lb = document.getElementById("grpload");
   if (lb) lb.onclick = function(){
     var key = (document.getElementById("grpkey").value || "").trim();
@@ -28401,6 +28751,13 @@ function screenGroup(){
         viewState = { code: code, data: r.data, serverAt: r.serverAt || 0 };
         screenAdmin();
       }, function(){});
+    };
+  });
+  app.querySelectorAll("[data-gremind]").forEach(function(b){
+    b.onclick = function(){
+      var code = b.getAttribute("data-gremind");
+      var row = (groupState.rows || []).filter(function(r){ return r.code === code; })[0];
+      if (row) copyText(quietReminderText(row), b);
     };
   });
   app.querySelectorAll("[data-glabel]").forEach(function(b){
@@ -30036,6 +30393,9 @@ window.__game = {
   hwMine: hwMine, hwPending: hwPending, hwBuild: hwBuild, hwMark: hwMark,
   hwDaysLeft: hwDaysLeft, hwDueText: hwDueText, hwAvailableFor: hwAvailableFor,
   hwDefaultDue: hwDefaultDue, screenHW: screenHW, openHW: openHW,
+  groupAssignHW: groupAssignHW, grpHwState: grpHwState,
+  weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHTML,
+  quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
   setLessonForTest: function(id){ curLessonId = id; }

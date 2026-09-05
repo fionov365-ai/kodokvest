@@ -1569,3 +1569,10 @@ body.focus .toTop{display:none}
 .hwitem .dim{display:block;font-size:12.5px}
 .hwitem.off{opacity:.55;cursor:default}
 .hwitem.off:hover{border-color:var(--line)}
+/* отчёт родителю текстом и вопросы к занятию */
+.reptext{white-space:pre-wrap;background:var(--sunken);border:1px solid var(--line2);
+  border-radius:11px;padding:12px 14px;font-size:14px;line-height:1.55;
+  font-family:inherit;margin:10px 0;overflow-x:auto}
+.askqs{display:grid;gap:10px;margin:12px 0;padding-left:20px}
+.askqs li{line-height:1.5}
+.askqs li .dim{display:block;font-size:13px}

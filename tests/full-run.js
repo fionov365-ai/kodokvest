@@ -3952,7 +3952,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let hwChecked = 0;
+  let hwChecked = 0, reportChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
@@ -5368,7 +5368,153 @@ function checkEncoding(){
       viewReset(g);
     }
 
+    /* 10.4. Домашка всей группе одной кнопкой. Сервер настоящий (мок только
+       у fetch), поэтому проверяется вся цепочка: выдача → запись → чтение. */
+    {
+      g.adminUnlock();
+      /* серверная папка из раздела «синхронизация» уже убрана — поднимаем
+         свою: функция настоящая, меняется только место на диске */
+      const hwDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-grp-hw-"));
+      process.env.DATA_DIR = hwDir;
+      w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      const now = Date.now(), day = 864e5;
+      const stA = g.ensureShape({ stars: { "math": 3 },
+        log: { "math": { solvedAt: now - day, last: now - day, attempts: 1 } } });
+      const stB = g.ensureShape({});          /* ещё ничего не прошёл */
+      await w.Cloud.save(stA, "grp-a");
+      await w.Cloud.save(stB, "grp-b");
+      g.groupState.rows = [g.groupRow("grp-a", stA), g.groupRow("grp-b", stB)];
+      g.screenGroup();
+      await tick();
+      const t = doc.getElementById("app").textContent;
+
+      /* карточка есть, и счётчик честный: задача уедет одному из двух */
+      const boxes = doc.querySelectorAll("[data-ghwpick]");
+      if (!boxes.length) bad("[группа-домашка] на экране группы нет выдачи домашки");
+      if (!/получат: 1 из 2/.test(t))
+        bad("[группа-домашка] счётчик «получат N из M» не показан или врёт");
+      /* задача, которую не может получить никто, выключена */
+      const dead = doc.querySelector('[data-ghwpick="hw-class"]');
+      if (dead && !dead.disabled)
+        bad("[группа-домашка] задача, недоступная всем, не выключена");
+
+      /* выдаём две задачи по уроку «math» */
+      const due = g.shiftDay(g.dayKey(), 5);
+      await g.groupAssignHW(["hw-klass", "hw-konfety"], due);
+      const gotA = await w.Cloud.load("grp-a");
+      const gotB = await w.Cloud.load("grp-b");
+      const hwA = (gotA.data || {}).hw || {};
+      const hwB = (gotB.data || {}).hw || {};
+      if (Object.keys(hwA).length !== 2)
+        bad("[группа-домашка] ученику с пройденным уроком уехало " + Object.keys(hwA).length + " задач вместо 2");
+      if (Object.keys(hwB).length !== 0)
+        bad("[группа-домашка] ученику без пройденных уроков что-то уехало — ему дадут необъяснённое");
+      Object.keys(hwA).forEach(k => {
+        if (hwA[k].due !== due) bad("[группа-домашка] срок не записался");
+        if (hwA[k].by !== "наставник") bad("[группа-домашка] не записано, кто задал");
+      });
+      /* строка ученика в группе обновилась без перезагрузки */
+      const rowA = g.groupState.rows.filter(r => r.code === "grp-a")[0];
+      if (!rowA || rowA.hwAll !== 2)
+        bad("[группа-домашка] счётчик домашки в строке ученика не обновился");
+      /* итог называет и то, что не уехало */
+      if (!/Не уехало 2/.test(g.grpHwState.note))
+        bad("[группа-домашка] итог молчит о задачах, которые не дошли: " + g.grpHwState.note);
+
+      /* повторная выдача тех же задач не задваивает */
+      await g.groupAssignHW(["hw-klass", "hw-konfety"], due);
+      const again = await w.Cloud.load("grp-a");
+      if (Object.keys((again.data || {}).hw || {}).length !== 2)
+        bad("[группа-домашка] повторная выдача задвоила задачи");
+
+      /* у двух учеников одна задача — РАЗНЫЕ числа: семя своё у каждого */
+      const stC = g.ensureShape({ stars: { "math": 3 },
+        log: { "math": { solvedAt: now - day, last: now - day, attempts: 1 } } });
+      await w.Cloud.save(stC, "grp-c");
+      g.groupState.rows.push(g.groupRow("grp-c", stC));
+      await g.groupAssignHW(["hw-klass"], due);
+      const gotC = await w.Cloud.load("grp-c");
+      const keyA = Object.keys(hwA).filter(k => hwA[k].id === "hw-klass")[0];
+      const keyC = Object.keys((gotC.data || {}).hw || {}).filter(k => k.indexOf("hw-klass") === 0)[0];
+      if (!keyC) bad("[группа-домашка] третьему ученику задача не уехала");
+      else if (hwA[keyA].seed === gotC.data.hw[keyC].seed)
+        bad("[группа-домашка] у соседей по группе совпало семя — числа будут одни, спишут");
+
+      g.groupState.rows = null;
+      g.grpHwState.note = "";
+      try { fs.rmSync(hwDir, { recursive:true, force:true }); } catch(e){}
+      viewReset(g);
+    }
+
     if (problems.length === p0) groupChecked++;
+  }
+
+  /* --- 10б. отчёт родителю текстом, вопросы к занятию, напоминание --- */
+  if (typeof g.parentReportText === "function"){
+    const p0 = problems.length;
+    const now = Date.now(), day = 864e5;
+
+    /* неделя с плохой новостью, домашкой и проверкой понимания */
+    const st = g.ensureShape({
+      name: "Секретик",
+      stars: { "print-first": 3, "vars": 2 },
+      log: {
+        "print-first": { solvedAt: now - day, last: now - day, attempts: 1, hints: 0, timeMs: 300000 },
+        "vars": { solvedAt: now - 2*day, last: now - 2*day, attempts: 6, hints: 2, shown: 1, timeMs: 600000 }
+      },
+      days: (function(){ const d = {}; d[g.dayKey(new Date(now - day))] = 1;
+                         d[g.dayKey(new Date(now - 2*day))] = 1; return d; })(),
+      zan: { "z1": { end: now - day, predAll: 2, predOk: 1 } },
+      hw: { "hw-klass#7": { id:"hw-klass", seed:7, due:g.shiftDay(g.dayKey(), 2),
+                            by:"наставник", at: now, done: now, tries: 1 },
+            "hw-konfety#7": { id:"hw-konfety", seed:7, due:g.shiftDay(g.dayKey(), 2),
+                              by:"наставник", at: now, done: 0, tries: 0 } }
+    });
+    const text = g.parentReportText(st);
+    if (text.indexOf("Секретик") >= 0)
+      bad("[отчёт-текст] имя ребёнка попало в текст для мессенджера");
+    if (!/2 занятия|2 занятий/.test(text)) bad("[отчёт-текст] занятия не посчитаны: " + text.split("\n")[0]);
+    if (!/смотрел решение/.test(text))
+      bad("[отчёт-текст] плохая новость вычищена — «смотрел решение» должно быть в тексте");
+    if (!/верно 1 из 2/.test(text)) bad("[отчёт-текст] проверка понимания не попала в текст");
+    if (!/сдано 1 из 2/.test(text)) bad("[отчёт-текст] домашка не попала в текст");
+    if (!/Дальше по программе/.test(text)) bad("[отчёт-текст] нет следующего шага");
+    if (!/Спросите за ужином/.test(text)) bad("[отчёт-текст] нет вопроса за ужином");
+    if (/ленит|отста|плох|прогул|спис/i.test(text))
+      bad("[отчёт-текст] текст выносит приговор: " + text);
+
+    /* пустая неделя — плохая новость говорится прямо */
+    const empty = g.parentReportText(g.ensureShape({}));
+    if (!/занятий не было/i.test(empty))
+      bad("[отчёт-текст] про пустую неделю не сказано прямо: " + empty.split("\n")[0]);
+
+    /* вопросы к занятию: из трудного урока и из бестиария */
+    st.errs = { "TypeError": { seen: 4, beaten: 0, at: now - day } };
+    const ask = g.askCardHTML(st);
+    if (!/Переменные/.test(ask)) bad("[вопросы] трудный урок недели не стал вопросом");
+    if (!/TypeError/.test(ask)) bad("[вопросы] частая ошибка недели не стала вопросом");
+    if (/ленит|отста|плох|допрос/i.test(ask)) bad("[вопросы] вопросы звучат приговором");
+    if (g.askCardHTML(g.ensureShape({})) !== "")
+      bad("[вопросы] на пустом прогрессе карточка не пуста");
+
+    /* напоминание молчащему: приглашение, не укор */
+    const row = g.groupRow("x", st);
+    const rem = g.quietReminderText(row);
+    if (/заброс|запустил|пропустил|потерял|давно пора|стыдно/i.test(rem))
+      bad("[напоминание] текст стыдит: " + rem);
+    if (!/напиши мне/.test(rem)) bad("[напоминание] нет приглашения к разговору");
+    /* порог тишины: три дня, не пять */
+    if (g.GROUP_QUIET_DAYS !== 3) bad("[напоминание] порог тишины не 3 дня: " + g.GROUP_QUIET_DAYS);
+    const тихий3 = g.groupRow("y", g.ensureShape({
+      stars: { "print-first": 3 },
+      log: { "print-first": { solvedAt: now - 4*day, last: now - 4*day, attempts: 1 } } }));
+    if (тихий3.marks.map(m => m.k).indexOf("quiet") < 0)
+      bad("[напоминание] четыре дня тишины не отмечены при пороге в три");
+
+    /* отчёт и вопросы стоят в карточке ученика: сверяем разметку экрана */
+    g.state.hw = {};
+    if (problems.length === p0) reportChecked++;
+    viewReset(g);
   }
 
   /* --- 11. нотация приёмки --- */
@@ -5895,6 +6041,7 @@ function checkEncoding(){
   console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
+  console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
