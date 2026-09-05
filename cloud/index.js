@@ -14,6 +14,8 @@
      POST ?op=save&code=КОД   тело=JSON   записать прогресс ученика
      GET  ?op=list&key=КЛЮЧ               список всех учеников (кратко)
      GET  ?op=stats&key=КЛЮЧ              метрики возвращаемости по всем
+     POST ?op=live_set&code=КОД тело=JSON  ребёнок транслирует экран (код+вывод)
+     GET  ?op=live_get&code=КОД            взрослый смотрит трансляцию
 
    Кто что может: кто знает код ученика — читает и пишет его прогресс.
    Список всех учеников доступен только по ADMIN_KEY.
@@ -51,6 +53,11 @@ function cleanCode(raw){
   return CODE_RE.test(c) ? c : null;
 }
 function fileOf(code){ return path.join(dataDir(), code + ".json"); }
+/* Файл живой трансляции лежит рядом с прогрессом, но учеником не является.
+   Точка в имени кода запрещена (CODE_RE), поэтому «misha.live.json» не может
+   оказаться чьим-то прогрессом — а вот в списках его надо пропускать. */
+function liveFileOf(code){ return path.join(dataDir(), code + ".live.json"); }
+function isStudentFile(f){ return /\.json$/.test(f) && !/\.live\.json$/.test(f); }
 
 function readBody(event){
   let b = event && event.body ? event.body : "";
@@ -99,7 +106,7 @@ module.exports.handler = async function(event){
         try { fs.unlinkSync(probe); } catch(e){}
       } catch(e){ why = e.code ? e.code + ": " + e.message : String(e.message || e); }
       let files = [];
-      try { files = fs.readdirSync(dir).filter(function(f){ return /\.json$/.test(f); }); }
+      try { files = fs.readdirSync(dir).filter(isStudentFile); }
       catch(e){ why = why || ("папка не читается — " + (e.message || e)); }
       return reply(canWrite ? 200 : 500, {
         ok: canWrite, dir: dir, students: files.length,
@@ -117,7 +124,7 @@ module.exports.handler = async function(event){
       if (!key) return reply(403, { ok:false, error:"Список отключён: в настройках функции не задан ADMIN_KEY." });
       if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ наставника не подошёл." });
       let files = [];
-      try { files = fs.readdirSync(dir).filter(function(f){ return /\.json$/.test(f); }); }
+      try { files = fs.readdirSync(dir).filter(isStudentFile); }
       catch(e){ return reply(500, { ok:false, error:"Папка прогресса не читается: " + (e.message || e) }); }
       const out = [];
       files.forEach(function(f){
@@ -143,7 +150,7 @@ module.exports.handler = async function(event){
       if (!key) return reply(403, { ok:false, error:"Метрики отключены: в настройках функции не задан ADMIN_KEY." });
       if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ наставника не подошёл." });
       let files = [];
-      try { files = fs.readdirSync(dir).filter(function(f){ return /\.json$/.test(f); }); }
+      try { files = fs.readdirSync(dir).filter(isStudentFile); }
       catch(e){ return reply(500, { ok:false, error:"Папка прогресса не читается: " + (e.message || e) }); }
 
       const DAY = 864e5;
@@ -231,6 +238,53 @@ module.exports.handler = async function(event){
                           savedAt: rec.savedAt || 0, serverAt: rec.serverAt || 0 });
     }
 
+    /* ---------- живое занятие ----------
+       Ребёнок сам включает трансляцию кнопкой, и его код с выводом начинают
+       ложиться в отдельный файл; взрослый читает его по коду ученика — та же
+       модель доверия, что у прогресса: кто знает код, тот и смотрит.
+       ⚠️ Скрытого режима нет по построению: писать сюда умеет только
+       устройство ребёнка, и оно же рисует плашку «наставник видит твой код».
+       Файл маленький и живёт недолго: выключение трансляции его удаляет,
+       а зритель считает трансляцию законченной, если запись не свежее 20 секунд. */
+    if (op === "live_set"){
+      if (method !== "POST") return reply(405, { ok:false, error:"Трансляция пишется методом POST." });
+      const body = readBody(event);
+      if (!body) return reply(400, { ok:false, error:"Пустое тело запроса." });
+      if (Buffer.byteLength(body, "utf8") > 40 * 1024)
+        return reply(413, { ok:false, error:"Слишком большой кадр трансляции." });
+      let data;
+      try { data = JSON.parse(body); }
+      catch(e){ return reply(400, { ok:false, error:"Тело запроса — не JSON." }); }
+      if (data && data.off){
+        try { fs.unlinkSync(liveFileOf(code)); } catch(e){}
+        return reply(200, { ok:true, off:true });
+      }
+      if (!data || typeof data !== "object" || typeof data.code !== "string")
+        return reply(400, { ok:false, error:"Это не похоже на кадр трансляции: нужно поле code." });
+      const rec = { at: Number(data.at) || 0, place: String(data.place || "").slice(0, 40),
+                    title: String(data.title || "").slice(0, 120),
+                    code: String(data.code).slice(0, 20000),
+                    output: String(data.output || "").slice(0, 8000),
+                    serverAt: Date.now() };
+      try { fs.writeFileSync(liveFileOf(code), JSON.stringify(rec)); }
+      catch(e){ return reply(500, { ok:false, error:"Не удалось записать кадр: " + (e.message || e) }); }
+      return reply(200, { ok:true, serverAt: rec.serverAt });
+    }
+
+    if (op === "live_get"){
+      let raw;
+      try { raw = fs.readFileSync(liveFileOf(code), "utf8"); }
+      catch(e){
+        if (e.code === "ENOENT") return reply(200, { ok:true, found:false });
+        return reply(500, { ok:false, error:"Не удалось прочитать трансляцию: " + (e.message || e) });
+      }
+      let rec;
+      try { rec = JSON.parse(raw); }
+      catch(e){ return reply(200, { ok:true, found:false }); }
+      rec.ok = true; rec.found = true; rec.now = Date.now();
+      return reply(200, rec);
+    }
+
     if (op === "save"){
       if (method !== "POST") return reply(405, { ok:false, error:"Запись делается методом POST." });
       const body = readBody(event);
@@ -252,7 +306,7 @@ module.exports.handler = async function(event){
       return reply(200, { ok:true, serverAt: rec.serverAt, summary: summarize(rec) });
     }
 
-    return reply(400, { ok:false, error:"Неизвестная операция. Бывают: ping, load, save, list, stats." });
+    return reply(400, { ok:false, error:"Неизвестная операция. Бывают: ping, load, save, list, stats, live_set, live_get." });
   } catch(e){
     return reply(500, { ok:false, error:"Внутренняя ошибка функции: " + (e && e.message ? e.message : String(e)) });
   }

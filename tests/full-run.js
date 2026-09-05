@@ -4072,7 +4072,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let hwChecked = 0, reportChecked = 0, returnChecked = 0;
+  let hwChecked = 0, reportChecked = 0, returnChecked = 0, liveChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
@@ -5752,6 +5752,125 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 10г. присутствие и живое занятие ---
+     Правило продукта: РЕБЁНОК ВСЕГДА ВИДИТ, КОГДА ЕГО ВИДЯТ. Проверяем и
+     механику, и это правило: трансляция без плашки — дефект, а не мелочь. */
+  if (typeof g.presenceInfo === "function"){
+    const p0 = problems.length;
+
+    /* 10г.1. Статус присутствия: свежая запись — «сейчас в тренажёре». */
+    {
+      const st = g.ensureShape({ now: { at: Date.now(), place: "lesson", lesson: "vars" } });
+      const p = g.presenceInfo(st, Date.now() - 30e3);
+      if (!p) bad("[присутствие] свежая запись не считается «сейчас в тренажёре»");
+      else if (!/Переменные/.test(p.what)) bad("[присутствие] урок не назван: " + p.what);
+      if (g.presenceInfo(st, Date.now() - 10 * 60e3))
+        bad("[присутствие] запись десятиминутной давности считается «сейчас»");
+      if (g.presenceInfo(st, 0)) bad("[присутствие] отсутствие записи считается присутствием");
+      /* «офлайн» не показывается: пустая строка, а не упрёк */
+      if (g.presenceHTML(st, 0) !== "")
+        bad("[присутствие] для молчащего рисуется строка — офлайн рядом с именем читается как упрёк");
+    }
+
+    /* 10г.2. Активный тик пишет S.now, и оно уезжает в снимок для сервера. */
+    {
+      const lid = CUR[0].lessons[0].id;
+      g.state.now = null;
+      g.setLessonForTest(lid);
+      g.setIdleForTest(600000); g.actMark();
+      g.tickOnce();
+      if (!g.state.now || g.state.now.lesson !== lid)
+        bad("[присутствие] активный тик не записал, чем занят ребёнок");
+      if (!g.cloudSnapshot().now)
+        bad("[присутствие] статус не попадает в снимок для сервера");
+      g.setLessonForTest(null);
+      /* слияние: свежее побеждает */
+      const m = g.mergeProgress({ now: { at: 2000, place: "games" }, savedAt: 1 },
+                                { now: { at: 5000, place: "hw" }, savedAt: 2 });
+      if (!m.now || m.now.place !== "hw") bad("[присутствие] при слиянии победил не свежий статус");
+    }
+
+    /* 10г.3. Живое занятие: сервер настоящий, путь целиком. */
+    {
+      const lvDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-live-"));
+      process.env.DATA_DIR = lvDir;
+      w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      w.Cloud.setCode("live-kid");
+
+      /* включить может только устройство с кодом — и включение рисует плашку */
+      g.liveOffNow();
+      if (!g.liveOn()) bad("[живое] трансляция не включилась при настроенном сервере");
+      if (!doc.getElementById("livebar"))
+        bad("[живое] трансляция идёт, а плашки нет — ребёнок не видит, что его видят");
+      if (!/видит твой код/i.test(doc.getElementById("livebar").textContent))
+        bad("[живое] плашка не говорит главного");
+
+      /* плашка переживает смену экрана: спрятать её навигацией нельзя */
+      g.screenWorlds(); await tick();
+      if (!doc.getElementById("livebar")) bad("[живое] смена экрана сняла плашку");
+
+      /* кадр уезжает на сервер и читается взрослым */
+      g.openLesson(CUR[0].lessons[0].id); await tick();
+      const stEd = studioOf();
+      if (stEd) stEd.editor.setCode('print("привет со шпионского моста")');
+      g.setIdleForTest(600000); g.actMark();
+      g.liveShare.lastSig = "";
+      g.liveTick();
+      await tick(30);
+      const rec = await w.Cloud.liveGet("live-kid");
+      if (!rec.found) bad("[живое] кадр не доехал до сервера");
+      else {
+        if (rec.code.indexOf("шпионского моста") < 0)
+          bad("[живое] в кадре не тот код: " + String(rec.code).slice(0, 60));
+        if (!/Урок 1/.test(rec.title || "")) bad("[живое] кадр не назвал урок: " + rec.title);
+      }
+
+      /* одинаковый кадр повторно не пишется: кадры не бесплатны */
+      const putsBefore = calls;
+      g.liveTick(); await tick(20);
+      g.liveTick(); await tick(20);
+      if (calls > putsBefore)
+        bad("[живое] неизменившийся кадр всё равно уехал на сервер: " + (calls - putsBefore) + " лишних запросов");
+
+      /* экран зрителя показывает код и честность */
+      g.screenLiveView("live-kid", "Петя"); await tick(60);
+      const t = doc.getElementById("app").textContent;
+      if (!/шпионского моста/.test(t)) bad("[живое] зритель не видит код ребёнка");
+      if (!/только смотрите|менять отсюда ничего/i.test(t))
+        bad("[живое] зрителю не сказано, что менять нельзя");
+      if (!/плашка/i.test(t)) bad("[живое] зрителю не сказано, что ребёнок видит просмотр");
+
+      /* выключение: плашка гаснет, файл удаляется */
+      g.liveOffNow(); await tick(30);
+      if (doc.getElementById("livebar")) bad("[живое] после выключения плашка осталась");
+      const gone = await w.Cloud.liveGet("live-kid");
+      if (gone.found) bad("[живое] после выключения кадр остался на сервере");
+
+      /* конец занятия гасит трансляцию сам */
+      g.liveOn();
+      g.state.zan = {};
+      const zr = { key: g.dayKey() + "#1", plan: [], done: [], cut: [], start: Date.now() };
+      g.screenZanDone(zr); await tick();
+      if (g.liveShare.on) bad("[живое] конец занятия не выключил трансляцию");
+      if (doc.getElementById("livebar")) bad("[живое] после конца занятия плашка осталась");
+
+      /* профиль говорит ребёнку, что видят взрослые */
+      g.screenAccount(); await tick();
+      const ta = doc.getElementById("app").textContent;
+      if (!/Что видят наставник и родитель/.test(ta))
+        bad("[профиль] ребёнку не сказано, что видят взрослые");
+      if (!/Показать экран наставнику/.test(ta))
+        bad("[профиль] в профиле нет кнопки показа экрана");
+
+      w.Cloud.forgetCode();
+      try { fs.rmSync(lvDir, { recursive:true, force:true }); } catch(e){}
+    }
+
+    g.state.now = null;
+    if (problems.length === p0) liveChecked++;
+    viewReset(g);
+  }
+
   /* --- 11. нотация приёмки --- */
   if (typeof g.specVerdict === "function"){
     const p0 = problems.length;
@@ -6322,6 +6441,7 @@ function checkEncoding(){
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
+  console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
   console.log(`игра по ссылке: ${playChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);

@@ -75,6 +75,14 @@ var Cloud = (function(){
       return ask({ op:"save", code: code || myCode() }, JSON.stringify(data));
     },
     list: function(key){ return ask({ op:"list", key: key || "" }); },
-    stats: function(key){ return ask({ op:"stats", key: key || "" }); }
+    stats: function(key){ return ask({ op:"stats", key: key || "" }); },
+    /* живое занятие: ребёнок шлёт кадр (код + вывод), взрослый читает по коду */
+    liveSet: function(data, code){
+      return ask({ op:"live_set", code: code || myCode() }, JSON.stringify(data));
+    },
+    liveOff: function(code){
+      return ask({ op:"live_set", code: code || myCode() }, JSON.stringify({ off: true }));
+    },
+    liveGet: function(code){ return ask({ op:"live_get", code: code || myCode() }); }
   };
 })();

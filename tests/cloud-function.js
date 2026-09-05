@@ -173,6 +173,39 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   check("медиана уроков за 4 недели", m.month && m.month.medianLessons === 1,
         JSON.stringify(m.month));
 
+  /* ---------- живое занятие ---------- */
+  r = await call(post({ op:"live_set", code:"misha-7f3a" },
+        JSON.stringify({ at: 1, place:"lesson", title:"Урок 3", code:"print(1)", output:"1" })));
+  check("кадр трансляции записался", r.statusCode === 200, r.body);
+  r = await call(get({ op:"live_get", code:"misha-7f3a" }));
+  check("кадр читается", json(r).found === true, r.body);
+  check("в кадре код", json(r).code === "print(1)");
+  check("в кадре серверное время", typeof json(r).serverAt === "number");
+  check("в ответе время сервера для свежести", typeof json(r).now === "number");
+  r = await call(get({ op:"live_get", code:"anya_2" }));
+  check("чужой трансляции нет — found:false, не ошибка", json(r).found === false, r.body);
+  /* файл трансляции не притворяется учеником */
+  r = await call(get({ op:"list", key:"kluch-nastavnika" }));
+  check("трансляция не попала в список учеников",
+        !json(r).students.some(s => /\.live$/.test(s.code || "")), r.body.slice(0, 200));
+  r = await call(get({ op:"stats", key:"kluch-nastavnika" }));
+  const st2 = json(r);
+  check("трансляция не считается учеником в метриках", st2.students === 6, JSON.stringify(st2.students));
+  /* негодные кадры */
+  r = await call(get({ op:"live_set", code:"misha-7f3a" }));
+  check("кадр через GET отклонён", r.statusCode === 405);
+  r = await call(post({ op:"live_set", code:"misha-7f3a" }, JSON.stringify({ hello: 1 })));
+  check("кадр без кода отклонён", r.statusCode === 400);
+  r = await call(post({ op:"live_set", code:"misha-7f3a" },
+        JSON.stringify({ code: "x".repeat(50 * 1024) })));
+  check("слишком большой кадр отклонён", r.statusCode === 413, "код " + r.statusCode);
+  /* выключение удаляет файл */
+  r = await call(post({ op:"live_set", code:"misha-7f3a" }, JSON.stringify({ off: true })));
+  check("выключение отвечает 200", r.statusCode === 200);
+  r = await call(get({ op:"live_get", code:"misha-7f3a" }));
+  check("после выключения трансляции нет", json(r).found === false, r.body);
+  check("файл трансляции удалён с диска", !fs.existsSync(path.join(DIR, "misha-7f3a.live.json")));
+
   try { fs.rmSync(DIR, { recursive:true, force:true }); } catch(e){}
   console.log(bad ? "\nПРОБЛЕМ: " + bad : "\nсерверная функция в порядке");
   process.exit(bad ? 1 : 0);

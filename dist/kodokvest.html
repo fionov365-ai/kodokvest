@@ -1603,6 +1603,16 @@ body.focus .toTop{display:none}
 .studio.plonly .editorbox .keybar{display:none}
 .studio.plonly .editorbox{background:transparent;border:none;box-shadow:none;padding:0}
 .gamecard.locked{opacity:.55;cursor:default}
+/* присутствие и живое занятие */
+.presence{border:1px solid var(--okline);background:var(--okbg);color:var(--okink);
+  border-radius:11px;padding:9px 12px;margin:0 0 12px;font-size:14px}
+.presence.live{border-color:#e2a1a1;background:rgba(200,60,60,.08);color:inherit;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.livebar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:80;
+  display:flex;align-items:center;gap:14px;background:var(--panel);color:var(--ink);
+  border:2px solid #d66;border-radius:14px;padding:10px 16px;font-size:14px;
+  box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw}
+.grlive{font-size:11px}
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -11584,7 +11594,15 @@ var Cloud = (function(){
       return ask({ op:"save", code: code || myCode() }, JSON.stringify(data));
     },
     list: function(key){ return ask({ op:"list", key: key || "" }); },
-    stats: function(key){ return ask({ op:"stats", key: key || "" }); }
+    stats: function(key){ return ask({ op:"stats", key: key || "" }); },
+    /* живое занятие: ребёнок шлёт кадр (код + вывод), взрослый читает по коду */
+    liveSet: function(data, code){
+      return ask({ op:"live_set", code: code || myCode() }, JSON.stringify(data));
+    },
+    liveOff: function(code){
+      return ask({ op:"live_set", code: code || myCode() }, JSON.stringify({ off: true }));
+    },
+    liveGet: function(code){ return ask({ op:"live_get", code: code || myCode() }); }
   };
 })();
 
@@ -15949,7 +15967,7 @@ function blankProgress(){
      Живёт рядом с sandbox и по той же причине: это не результат занятий,
      а незаконченная работа ребёнка, и терять её на переходе нельзя. */
   var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] },
-            frame: blankFrame() };
+            frame: blankFrame(), now:null };
   PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
   PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
   return o;
@@ -15962,6 +15980,9 @@ function ensureShape(o){
   PROGRESS_NUMS.forEach(function(k){ if (typeof o[k] !== "number") o[k] = 0; });
   if (!Array.isArray(o.badges)) o.badges = [];
   if (typeof o.sandbox !== "string") o.sandbox = null;
+  /* «чем занят сейчас»: место и урок, обновляется активным тиком. Едет на
+     сервер с прогрессом — из него взрослый видит статус присутствия */
+  if (!o.now || typeof o.now !== "object" || typeof o.now.at !== "number") o.now = null;
   if (!o.mytaskDraft || typeof o.mytaskDraft !== "object") o.mytaskDraft = null;
   if (typeof o.name !== "string") o.name = "";
   if (!o.schedule || typeof o.schedule !== "object") o.schedule = { days:[] };
@@ -16004,6 +16025,7 @@ function clearAll(o){
   clearResults(o);
   KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
   o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
+  o.now = null;
   /* ⚠️ Рамку взрослого целиком здесь стирать НЕЛЬЗЯ. Раньше стирали — и потолок
      дня, жёсткий режим, дни занятий и каникулы исчезали от двух тапов в детском
      профиле («Выйти» → «Да»). Родительское ограничение, которое снимает сам
@@ -17077,6 +17099,10 @@ function tickOnce(){
     if (g){ g.timeMs += 10000; g.last = Date.now(); }
     hoursAdd(10);
     zanTick(10, true);
+    /* статус присутствия: место и открытый урок. Уедет на сервер обычным
+       путём (save → schedulePush, не чаще раза в 25 секунд) — никаких новых
+       запросов ради него не появляется */
+    S.now = { at: Date.now(), place: curPlace, lesson: curLessonId || null };
   } else {
     if (g) g.pauseMs += 10000;
     zanTick(10, false);
@@ -17541,6 +17567,10 @@ function mergeProgress(a, b){
                   tries: maxN(x.tries, y.tries) };
   });
 
+  /* статус «чем занят сейчас» — просто самый свежий из двух */
+  out.now = (a.now && b.now) ? ((a.now.at || 0) >= (b.now.at || 0) ? a.now : b.now)
+                             : (a.now || b.now || null);
+
   /* код в песочнице сложить нельзя — берём из более свежего сохранения */
   var fresher = (b.savedAt || 0) > (a.savedAt || 0) ? b : a;
   var older = fresher === b ? a : b;
@@ -17797,6 +17827,180 @@ function schedulePush(){
     cloudState.timer = null;
     cloudPush().catch(function(){});
   }, wait);
+}
+
+/* ================= ПРИСУТСТВИЕ И ЖИВОЕ ЗАНЯТИЕ =================
+   Ответ на вопрос фаундера «могу ли я и родители видеть, что делает ребёнок
+   онлайн». Два уровня, и у обоих одно правило, записанное в README:
+   РЕБЁНОК ВСЕГДА ВИДИТ, КОГДА ЕГО ВИДЯТ. Скрытого наблюдения нет по
+   построению: вся ставка продукта — судья, которому верят, и подглядывание
+   разрушило бы доверие ко всему остальному — отчёту, проверке, авторству.
+
+   Уровень 1 — статус: «сейчас в тренажёре, урок 23». Ничего нового не
+   отправляется: активный тик пишет S.now, прогресс и так уезжает на сервер
+   не чаще раза в 25 секунд (schedulePush), свежесть записи и есть статус.
+   Ребёнку про это сказано в профиле.
+
+   Уровень 2 — трансляция: наставник видит код и вывод ребёнка с задержкой
+   в несколько секунд. Три условия, без которых её делать было нельзя:
+     1. включает САМ РЕБЁНОК кнопкой — включить удалённо невозможно,
+        писать кадры умеет только его устройство;
+     2. пока включена, на экране горит несмываемая плашка;
+     3. гаснет сама: по кнопке, по концу занятия или через 45 минут.
+   ============================================================ */
+
+/* ---------- уровень 1: статус присутствия ---------- */
+var PRESENCE_FRESH = 2 * 60e3;   /* запись свежее двух минут = сейчас в тренажёре */
+var PLACE_RU = {
+  lesson:"проходит урок", project:"собирает проект", projectdone:"смотрит собранный проект",
+  game:"играет", games:"выбирает игру", warmup:"делает разминку", warmups:"выбирает разминку",
+  today:"на экране «Сегодня»", zan:"идёт занятие", again:"повторяет трудное",
+  algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена", ai:"в разделе «Ты и ИИ»",
+  hw:"смотрит домашку", hwone:"делает домашку", sandbox:"в песочнице", viz:"в визуализаторе",
+  mine:"составляет своё задание", friendtask:"решает задание от друга",
+  play:"играет в игру по ссылке", specs:"в приёмке", folio:"в портфолио"
+};
+/* Чем занят, по чужому снимку. serverAt — серверное время последней записи:
+   сравнивать его с часами зрителя чуть нечестно, но дрейф часов много меньше
+   окна в две минуты. null — не в тренажёре, и это НЕ показывается отдельной
+   строкой: «офлайн» рядом с именем читается как упрёк. */
+function presenceInfo(st, serverAt){
+  if (!serverAt || Date.now() - serverAt > PRESENCE_FRESH) return null;
+  var w = "в тренажёре";
+  var nr = st && st.now;
+  if (nr){
+    var l = nr.lesson ? CURRICULUM.byId(nr.lesson) : null;
+    if (l) w = "урок " + l.num + " «" + l.title + "»";
+    else if (PLACE_RU[nr.place]) w = PLACE_RU[nr.place];
+  }
+  return { what: w };
+}
+function presenceHTML(st, serverAt){
+  var p = presenceInfo(st, serverAt);
+  return p ? '<div class="presence">🟢 Сейчас в тренажёре: <b>' + esc(p.what) + '</b></div>' : "";
+}
+
+/* ---------- уровень 2: трансляция экрана (сторона ребёнка) ---------- */
+var LIVE_EVERY = 7000;          /* кадр не чаще раза в 7 секунд */
+var LIVE_MAX_MS = 45 * 60e3;    /* дальше гаснет сама: занятие столько не идёт */
+var LIVE_FRESH = 25e3;          /* кадр старше — трансляция для зрителя закончилась */
+var liveShare = { on:false, timer:null, startAt:0, lastSig:"" };
+
+function livePayload(){
+  var code = "", output = "";
+  try {
+    if (session && session.studio && session.studio.editor) code = session.studio.editor.getCode();
+    var con = session && session.studio ? session.studio.querySelector(".console") : null;
+    if (con) output = con.textContent || "";
+  } catch(e){}
+  var l = curLessonId ? CURRICULUM.byId(curLessonId) : null;
+  return { at: Date.now(), place: curPlace,
+           title: l ? "Урок " + l.num + " «" + l.title + "»" : (PLACE_RU[curPlace] || "в тренажёре"),
+           code: code.slice(0, 20000), output: output.slice(0, 8000) };
+}
+function liveTick(){
+  if (!liveShare.on) return;
+  if (Date.now() - liveShare.startAt > LIVE_MAX_MS) return liveOffNow();
+  if (!pageActive()) return;                /* спрятанная вкладка кадров не шлёт */
+  var p = livePayload();
+  var sig = p.title + " " + p.code + " " + p.output;
+  if (sig === liveShare.lastSig) return;    /* без изменений — без записи: кадры не бесплатны */
+  liveShare.lastSig = sig;
+  Cloud.liveSet(p).catch(function(){});
+}
+function liveOn(){
+  if (liveShare.on) return false;
+  if (!serverOn() || !myCode()) return false;
+  liveShare.on = true; liveShare.startAt = Date.now(); liveShare.lastSig = "";
+  liveShare.timer = setInterval(liveTick, LIVE_EVERY);
+  liveTick();
+  liveBanner(true);
+  return true;
+}
+function liveOffNow(){
+  if (!liveShare.on) return;
+  liveShare.on = false;
+  if (liveShare.timer){ clearInterval(liveShare.timer); liveShare.timer = null; }
+  liveBanner(false);
+  if (serverOn() && myCode()) Cloud.liveOff().catch(function(){});
+}
+/* ⚠️ Плашка живёт на body, а не в #app: перерисовки экранов её не трогают,
+   и спрятать её сменой экрана невозможно — в этом весь смысл. */
+function liveBanner(showIt){
+  var el = document.getElementById("livebar");
+  if (!showIt){ if (el) el.parentNode.removeChild(el); return; }
+  if (el) return;
+  el = document.createElement("div");
+  el.id = "livebar"; el.className = "livebar";
+  el.innerHTML = '<span>🔴 <b>Наставник видит твой код</b></span>' +
+    '<button class="rbtn sec" id="liveoff">Прекратить</button>';
+  document.body.appendChild(el);
+  el.querySelector("#liveoff").onclick = function(){ liveOffNow(); };
+}
+/* кнопка ребёнка — на экране занятия и в профиле */
+function liveRowHTML(){
+  if (!serverOn() || !myCode()) return "";
+  if (liveShare.on)
+    return '<div class="winrow"><button class="bigbtn ghost" id="zlive">🔴 Наставник видит твой код · выключить</button></div>';
+  return '<div class="winrow"><button class="bigbtn ghost" id="zlive">📺 Показать экран наставнику</button></div>';
+}
+function bindLiveRow(after){
+  var b = document.getElementById("zlive");
+  if (!b) return;
+  b.onclick = function(){
+    if (liveShare.on) liveOffNow(); else liveOn();
+    if (after) after();
+  };
+}
+
+/* ---------- уровень 2: экран зрителя (сторона взрослого) ---------- */
+function screenLiveView(code, label){
+  var seq = enterScreen("home", "liveview");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">живое занятие</div>' +
+    '<h1>📺 ' + esc(label || code) + '</h1></div>' +
+    '<div class="right"><span class="tag">только смотрите</span></div></div>' +
+    '<p class="lede">Код и вывод ребёнка, с задержкой в несколько секунд. Менять отсюда ничего ' +
+    'нельзя — это его работа. Трансляцию включил и может выключить он сам; у него на экране ' +
+    'горит плашка о том, что вы смотрите.</p>' +
+    '<div id="livebody"><p class="dim">Подключаюсь…</p></div>' +
+    '<div class="pager"><button class="bigbtn ghost" id="lvback">← Назад</button></div>';
+  document.getElementById("lvback").onclick = function(){
+    if (isAdminDevice()) screenKid(code); else if (parentOf()) screenParent(); else screenWorlds();
+  };
+  function draw(rec){
+    var box = document.getElementById("livebody");
+    if (!box) return;
+    if (!rec || !rec.found || (rec.now - rec.serverAt) > LIVE_FRESH){
+      box.innerHTML = '<div class="note"><b>Трансляция сейчас не идёт</b>' +
+        'Попросите ребёнка нажать «📺 Показать экран наставнику» — кнопка на экране занятия ' +
+        'и в его профиле. Как только он нажмёт, здесь появится код.</div>';
+      return;
+    }
+    var age = Math.max(0, Math.round((rec.now - rec.serverAt) / 1000));
+    box.innerHTML =
+      '<div class="card"><h3>' + esc(rec.title || "Сейчас на экране") + '</h3>' +
+      '<p class="dim">обновлено ' + age + ' ' + plural(age, "секунду", "секунды", "секунд") + ' назад</p>' +
+      '<div class="showcode"><pre><code>' + hl(rec.code || "") + '</code></pre></div>' +
+      (rec.output
+        ? '<div class="pane"><div class="ph">что напечатала программа</div><div class="console">' +
+          esc(rec.output) + '</div></div>'
+        : '<p class="dim">Программа пока ничего не печатала.</p>') + '</div>';
+  }
+  function pull(){
+    if (screenStale(seq)) return;
+    Cloud.liveGet(code).then(function(rec){
+      if (screenStale(seq)) return;
+      draw(rec);
+      setTimeout(pull, 5000);
+    }, function(){
+      if (screenStale(seq)) return;
+      setTimeout(pull, 8000);
+    });
+  }
+  pull();
+  refreshTop();
 }
 
 /* ================= контент ================= */
@@ -21621,6 +21825,18 @@ function screenAccount(){
     h += '<div class="card"><p class="lede">Сервер не подключён — прогресс хранится только ' +
       'на этом устройстве, кода нет.</p></div>';
   }
+  /* ⚠️ Честность к ребёнку: что именно видят взрослые — написано ЕМУ, в его
+     профиле, а не спрятано в кабинете взрослого. Правило продукта: ребёнок
+     всегда видит, когда его видят. */
+  if (serverOn() && code){
+    h += '<div class="card"><h3>Что видят наставник и родитель</h3>' +
+      '<ul class="trrules">' +
+      '<li><b>Когда ты занимаешься и какой урок открыт</b> — по твоему коду ученика. ' +
+      'Сам экран и то, что ты печатаешь, им не видно.</li>' +
+      '<li><b>Твой код и вывод</b> — только если ты сам нажмёшь «Показать экран наставнику». ' +
+      'Пока показ включён, у тебя горит плашка, и выключить его можешь только ты.</li>' +
+      '</ul>' + liveRowHTML() + '</div>';
+  }
   h += '<div class="card"><h3>Сменить ученика</h3>' +
     '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
     'Прогресс на сервере при этом не удаляется.</p>' +
@@ -21679,6 +21895,7 @@ function screenAccount(){
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
 
+  bindLiveRow(screenAccount);
   var cc = document.getElementById("copycode");
   if (cc) cc.onclick = function(){ copyText(code, cc); };
   var cl = document.getElementById("copylink");
@@ -24601,7 +24818,8 @@ function screenZan(){
     ? '<div class="winrow"><button class="bigbtn ghost" id="zbreak">☕ Перерыв ' + ZAN_BREAK + ' минут</button></div>'
     : "";
 
-  app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn;
+  app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn + liveRowHTML();
+  bindLiveRow(screenZan);
 
   app.querySelectorAll(".zopen").forEach(function(b){
     b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
@@ -24713,6 +24931,9 @@ function welcomeBackHTML(){
    взрослый — без отчёта ровно в тот день, когда отчёт нужнее всего. */
 function screenZanDone(rec){
   enterScreen(undefined, "zan");
+  /* занятие закончилось — трансляция гаснет сама: обещание «выключается по
+     концу занятия» держит код, а не память ребёнка */
+  liveOffNow();
   var r = zanReport(rec, S);
   markActiveToday();
   app.innerHTML =
@@ -28612,7 +28833,9 @@ function kidLoad(code){
        нормальное начало: расписание ему можно поставить заранее. */
     kidTarget.data = ensureShape(r.found && r.data ? r.data : blankProgress());
     kidTarget.fresh = !(r.found && r.data);
+    kidTarget.serverAt = r.serverAt || 0;
     kidRender();
+    kidWatch(code, seq);
   }, function(err){
     if (screenStale(seq)) return;
     var b = document.getElementById("kidbody");
@@ -28625,6 +28848,9 @@ function kidRender(savedNote){
   if (!box || !kidTarget || !kidTarget.data) return;
   var st = kidTarget.data;
   var h = "";
+  /* статус присутствия и вход в живое занятие — первой строкой: «что он
+     делает сейчас» и есть вопрос, с которым взрослый открыл карточку */
+  h += '<div id="kidpresence">' + presenceHTML(st, kidTarget.serverAt) + '</div>';
   if (kidTarget.fresh)
     h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
          'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
@@ -28648,6 +28874,51 @@ function kidRender(savedNote){
   var mark = document.getElementById("kidsaved");
   if (mark) mark.textContent = kidTarget.dirty ? "есть несохранённые изменения" : "";
 }
+/* ===== опрос присутствия в открытой карточке =====
+   Пока карточка ученика открыта, раз в 20 секунд читаем трансляцию и раз в
+   минуту — запись прогресса, и обновляем ТОЛЬКО строку присутствия: полная
+   перерисовка съела бы отмеченные галочки домашки. Опрос — это чтения, а не
+   записи: у чтений бесплатный предел в десять раз больше. */
+function kidWatch(code, seq){
+  var beat = 0;
+  function roll(){
+    if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return;
+    beat++;
+    var jobs = [];
+    jobs.push(Cloud.liveGet(code).then(function(rec){
+      return (rec && rec.found && (rec.now - rec.serverAt) <= LIVE_FRESH) ? rec : null;
+    }, function(){ return null; }));
+    if (beat % 3 === 0)
+      jobs.push(Cloud.load(code).then(function(r){
+        if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return null;
+        if (r.found && r.data){
+          kidTarget.serverAt = r.serverAt || 0;
+          /* данные не подменяем: взрослый мог начать редактировать рамку */
+          kidTarget.data.now = (ensureShape(r.data)).now;
+        }
+        return null;
+      }, function(){ return null; }));
+    Promise.all(jobs).then(function(res){
+      if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return;
+      var live = res[0];
+      var el = document.getElementById("kidpresence");
+      if (el){
+        el.innerHTML = presenceHTML(kidTarget.data, kidTarget.serverAt) +
+          (live
+            ? '<div class="presence live">🔴 Ребёнок показывает экран: <b>' + esc(live.title || "") +
+              '</b> <button class="rbtn check" id="kidwatch">Смотреть</button></div>'
+            : "");
+        var wb = document.getElementById("kidwatch");
+        if (wb) wb.onclick = function(){
+          screenLiveView(code, (kidGet(code) || {}).name || parentLabel() || code);
+        };
+      }
+      setTimeout(roll, 20000);
+    });
+  }
+  setTimeout(roll, 20000);
+}
+
 /* ===== выдача домашки со стороны взрослого =====
    Порядок разговора здесь такой же, как в расписании: сначала что уже задано,
    потом что можно задать. ⚠️ Список задач строится ИЗ ПРОГРЕССА РЕБЁНКА, а не
@@ -29381,7 +29652,7 @@ var GROUP_QUIET_DAYS = 3;
 
 /* Сводка по одному ученику из его прогресса. Работает на ЛЮБОМ снимке — и на
    своём, и на чужом, — потому что ничего не берёт из S. */
-function groupRow(code, st){
+function groupRow(code, st, serverAt){
   st = st || {};
   var lg = st.log || {}, sm = st.stars || {};
   var today = dayKey(), keys = [];
@@ -29443,6 +29714,7 @@ function groupRow(code, st){
     " " + plural(ahead, "урок", "урока", "уроков") });
 
   return { code: code, label: adminLabel(code) || "", week: week, tries: tries,
+           presence: presenceInfo(st, serverAt || 0),
            solved: Object.keys(sm).length, lastAt: lastAt, quiet: quiet,
            pred: pred, marks: marks, hwDone: hwDone, hwAll: hwAllRecs.length,
            /* для выдачи домашки всей группе: что пройдено и что уже висит.
@@ -29682,7 +29954,7 @@ function groupLoad(key){
       if (i >= groupState.total) return rows;
       var code = st[i++].code;
       return Cloud.load(code).then(function(res){
-        if (res && res.found && res.data) rows.push(groupRow(code, ensureShape(res.data)));
+        if (res && res.found && res.data) rows.push(groupRow(code, ensureShape(res.data), res.serverAt || 0));
         groupState.loaded++;
         var bar = document.getElementById("grpbar");
         if (bar) bar.textContent = "Загружено " + groupState.loaded + " из " + groupState.total + "…";
@@ -29758,7 +30030,9 @@ function screenGroup(){
          сервера, и кэшированное имя показывало бы старое. */
       var lbl = adminLabel(r.code) || "";
       h += '<div class="grouprow' + (r.marks.length ? "" : " ok") + '">' +
-        '<div class="grphead"><b>' + esc(lbl || r.code) + '</b>' +
+        '<div class="grphead"><b>' +
+        (r.presence ? '<span class="grlive" title="сейчас в тренажёре">🟢</span> ' : '') +
+        esc(lbl || r.code) + '</b>' +
         '<span class="dim">' + (lbl ? esc(r.code) + " · " : "") +
         'за неделю ' + r.week + ' · всего ' + r.solved +
         (r.hwAll ? ' · домашка ' + r.hwDone + '/' + r.hwAll : '') + ' · ' +
@@ -31552,6 +31826,9 @@ window.__game = {
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
   grpStats: grpStats,
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
+  presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH,
+  liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
+  livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
