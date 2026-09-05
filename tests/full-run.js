@@ -6056,6 +6056,23 @@ function checkEncoding(){
           const st = MP.run(t.starter, { stdin: stdin() });
           if (!st.error && JSON.stringify(st.lines) === JSON.stringify(sol.lines))
             bad("[алгоритмы] заготовка «" + t.id + "» проходит проверку сама");
+          /* ⚠️ ЭКЗАМЕНАЦИОННАЯ задача с проверкой по выводу обязана иметь
+             скрытые наборы: без них она сдаётся строкой print с ответом из
+             примера, а «сдал задачу ОГЭ» — это обещание, которым не шутят.
+             Учебных задач без ввода (cost-compare) правило не касается: их
+             смысл — в разборе, а не в зачёте. */
+          if ((t.group === "oge" || t.group === "ege") &&
+              (!Array.isArray(t.sets) || t.sets.length < 2))
+            bad("[алгоритмы] у «" + t.id + "» меньше двух скрытых наборов — её можно сдать напечатанной константой");
+          (t.sets || []).forEach((din, si) => {
+            if (JSON.stringify(din) === JSON.stringify(t.stdin))
+              bad("[алгоритмы] скрытый набор " + (si + 1) + " задачи «" + t.id + "» совпадает с открытым примером");
+            const hs = MP.run(t.solution, { stdin: din.slice() });
+            if (hs.error)
+              bad("[алгоритмы] эталон «" + t.id + "» падает на скрытом наборе " + (si + 1) + ": " + hs.error.msg);
+            else if (!hs.lines.length)
+              bad("[алгоритмы] эталон «" + t.id + "» молчит на скрытом наборе " + (si + 1));
+          });
         } else {
           if (!t.check.calls || t.check.calls.length < 3)
             bad("[алгоритмы] у «" + t.id + "» меньше трёх скрытых проверок");
@@ -6124,6 +6141,33 @@ function checkEncoding(){
           if (!/шаг/i.test(card)) bad("[алгоритмы] в победе не названа цена программы в шагах");
           closeWin();
           if (!g.algoDone(t.id)) bad("[алгоритмы] решённая задача не попала в прогресс");
+        }
+      }
+    }
+
+    /* 13.3а. Обход константой: программа, печатающая ответ с открытого
+       примера, обязана провалиться на скрытых данных — ровно ради этого
+       скрытые наборы и заведены. */
+    {
+      const t = XS.filter(x => x.id === "oge-count-base")[0];
+      if (!t) bad("[алгоритмы] нет задачи oge-count-base для проверки обхода");
+      else {
+        g.state.algo = {};
+        g.openAlgo(t.id); await tick();
+        const st = studioOf();
+        if (st){
+          st.editor.setCode('print("' + t.sample.out + '")\n');
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()){ bad("[алгоритмы] напечатанная константа сдала задачу с примера"); closeWin(); }
+          else if (!/скрыт/i.test(msgText()))
+            bad("[алгоритмы] про скрытые данные при провале не сказано: " + msgText());
+          /* а настоящий эталон проходит и открытый пример, и скрытые наборы */
+          st.editor.setCode(t.solution);
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[алгоритмы] эталон oge-count-base не прошёл скрытые наборы: " + msgText());
+          else closeWin();
         }
       }
     }

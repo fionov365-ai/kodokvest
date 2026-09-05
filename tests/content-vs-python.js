@@ -26,6 +26,7 @@ eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/cheatsheet.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/algo.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -255,6 +256,19 @@ let projsteps = 0;
   });
 });
 
+/* Алгоритмы и экзамен: у задач с выводом эталон гоняется и на видимом вводе,
+   и на всех скрытых наборах — программа, которую ребёнок понесёт на экзамен,
+   обязана вести себя как настоящий python3 на любых данных. */
+let algoChecked2 = 0;
+(global.ALGO || []).forEach(t => {
+  if (!t.check || t.check.kind !== "output") return;
+  const sets = [t.stdin || []].concat(t.sets || []);
+  sets.forEach((st, i) => {
+    if (compare("алгоритмы " + t.id + " · набор " + (i + 1), t.solution, null, null, st.slice()) !== false)
+      algoChecked2++;
+  });
+});
+
 /* Шпаргалка: пример показывают ребёнку как «вот так это работает», значит он
    обязан работать так же, как настоящий python3. Примеры со случайностью
    compare пропустит сам — они и должны каждый раз печатать разное. */
@@ -272,7 +286,7 @@ try { fs.rmSync(TMP, { recursive: true, force: true }); } catch(e){}
    с python3 не сверяются вовсе. */
 console.log("\nсверено с python3: " + checked + " (из них разминок: " + warmups +
             ", снимков памяти: " + memChecked +
-            ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ", шпаргалка: " + sheetChecked +
+            ", «Ты и ИИ»: " + ailab + ", шагов проектов: " + projsteps + ", наборов экзамена: " + algoChecked2 + ", шпаргалка: " + sheetChecked +
             "), пропущено как черепашка и случайность: " + skipped);
 console.log(bad ? "РАСХОЖДЕНИЙ: " + bad : "содержание уроков совпадает с настоящим Python");
 /* Число сверок названо в README словами. Расходится — значит документация
