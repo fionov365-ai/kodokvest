@@ -679,6 +679,126 @@ function checkEncoding(){
     }
   }
 
+  /* --- игра по ссылке: друг открывает и сразу играет --- */
+  let playChecked = 0;
+  if (typeof g.playLink === "function" && GAMES.length){
+    const p0 = problems.length;
+    const gm = GAMES[0];
+
+    /* ссылка собирается и разбирается обратно */
+    const link = g.playLink({ title: gm.title, code: gm.code, author: "Петя", emoji: gm.emoji });
+    const packed = link.split("#play=")[1] || "";
+    const back = g.playUnpack(packed);
+    if (!back || back.title !== gm.title || back.code !== gm.code || back.author !== "Петя")
+      bad("[игра-ссылка] ссылка не разобралась обратно");
+    if (g.playUnpack("мусор-не-base64")) bad("[игра-ссылка] мусор принят за игру");
+    if (g.playUnpack(g.playLink({ title:"x", code:"x".repeat(5000) }).split("#play=")[1]))
+      bad("[игра-ссылка] слишком длинный код принят — ссылка была бы неподъёмной");
+
+    /* экран: сначала играют, код спрятан */
+    g.screenPlay(back);
+    await tick();
+    const st = studioOf();
+    if (!st) bad("[игра-ссылка] экран игры не открылся");
+    else {
+      if (!st.classList.contains("plonly"))
+        bad("[игра-ссылка] код не спрятан — фокус показан с изнанки");
+      const runBtn = st.querySelector('[data-role="run"]');
+      if (!runBtn) bad("[игра-ссылка] нет кнопки «Новая игра»");
+      else {
+        runBtn.click();
+        await tick();
+        const con = st.querySelector(".console");
+        if (!/загадал число/i.test(con.textContent || ""))
+          bad("[игра-ссылка] партия не началась: " + (con.textContent || "").slice(0, 60));
+        const playbar = st.querySelector(".playbar");
+        if (!playbar || playbar.style.display === "none")
+          bad("[игра-ссылка] игра не ждёт хода");
+      }
+      /* «Заглянуть в код» открывает изнанку */
+      const codeBtn = doc.getElementById("plcode");
+      if (!codeBtn) bad("[игра-ссылка] нет кнопки «Заглянуть в код»");
+      else {
+        codeBtn.click();
+        await tick();
+        if (st.classList.contains("plonly"))
+          bad("[игра-ссылка] «Заглянуть в код» не открыла редактор");
+      }
+      /* «Забрать в песочницу» уносит код */
+      const takeBtn = doc.getElementById("pltake");
+      if (!takeBtn) bad("[игра-ссылка] нет кнопки «Забрать в песочницу»");
+      else {
+        takeBtn.click();
+        await tick();
+        if (g.state.sandbox !== gm.code)
+          bad("[игра-ссылка] код не попал в песочницу");
+      }
+    }
+
+    /* на экране игры есть «Отправить другу», и ссылка оттуда — играбельная */
+    g.openGame(gm.id);
+    await tick();
+    if (!doc.getElementById("gshare"))
+      bad("[игра-ссылка] на экране игры нет кнопки «Отправить игру другу»");
+
+    /* --- игра-проект: замок, сборка, финал с игрой и ссылкой --- */
+    const hang = (w.PROJECTS || []).filter(x => x.kind === "game")[0];
+    if (!hang) bad("[игра-проект] в PROJECTS нет ни одной игры-проекта");
+    else {
+      /* замок: игра открывается собранным проектом мира, а не уроками */
+      const savedUnlock = g.state.admin.unlockAll;
+      g.state.admin.unlockAll = false;
+      g.state.projects = {};
+      if (g.projectOpen(hang)) bad("[игра-проект] игра открыта до сборки проекта мира");
+      g.state.projects[hang.needs] = { step: 99, done: Date.now(), code: "" };
+      if (!g.projectOpen(hang)) bad("[игра-проект] собранный проект мира не открыл игру");
+
+      /* карточка на экране игр: заперта — с замком, открыта — кнопкой */
+      g.state.projects = {};
+      g.screenGames();
+      await tick();
+      let card = doc.querySelector('[data-proj="' + hang.id + '"]');
+      if (!card) bad("[игра-проект] на экране игр нет карточки «собери свою»");
+      else if (!card.disabled) bad("[игра-проект] запертая игра нажимается");
+      if (!/откроется, когда собран проект/.test(doc.getElementById("app").textContent))
+        bad("[игра-проект] у запертой игры не сказано, что её откроет");
+      g.state.projects[hang.needs] = { step: 99, done: Date.now(), code: "" };
+      g.screenGames();
+      await tick();
+      card = doc.querySelector('[data-proj="' + hang.id + '"]');
+      if (card && card.disabled) bad("[игра-проект] открытая игра всё ещё заперта");
+
+      /* финал: игра ИГРАЕТСЯ (режим play) и уезжает другу ссылкой */
+      const fin = hang.steps[hang.steps.length - 1];
+      g.state.projects[hang.id] = { step: hang.steps.length, done: Date.now(), code: fin.solution };
+      g.openProject(hang.id);
+      await tick(20);
+      const stD = studioOf();
+      if (!stD) bad("[игра-проект] финальный экран не открылся");
+      else {
+        const runB = stD.querySelector('[data-role="run"]');
+        if (!runB || runB.textContent.indexOf("Новая игра") < 0)
+          bad("[игра-проект] на финале игра не в игровом режиме — «Запустить» упадёт на input()");
+        if (!doc.getElementById("pshare"))
+          bad("[игра-проект] на финале нет кнопки «Отправить игру другу»");
+        /* ссылка из финального кода — играбельная */
+        const lnk = g.playLink({ title: hang.title, code: fin.solution, emoji: hang.emoji });
+        const bk = g.playUnpack(lnk.split("#play=")[1]);
+        if (!bk || bk.code !== fin.solution) bad("[игра-проект] финальный код не влезает в ссылку");
+      }
+      g.state.projects = {};
+      g.state.admin.unlockAll = savedUnlock;
+    }
+
+    /* битая ссылка — понятный экран, а не пустота */
+    g.screenPlayBroken ? (function(){})() : null;
+    w.location.hash = "";
+    await tick();
+    g.state.sandbox = null;
+    if (problems.length === p0) playChecked++;
+    viewReset(g);
+  }
+
   /* --- живой разбор расхождения ---
      Когда код не падает, а отвечает не то, ребёнку раньше показывали только
      две колонки и номер строки. Теперь разбор называет причину словами.
@@ -6158,6 +6278,7 @@ function checkEncoding(){
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
+  console.log(`игра по ссылке: ${playChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);

@@ -5277,10 +5277,42 @@ function screenGames(){
       '<b>' + esc(g.title) + (edited ? ' <span class="edittag">твоя версия</span>' : '') + '</b>' +
       '<span>' + esc(g.desc) + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '</div>';
+
+  /* ===== игры-проекты: собери свою =====
+     Открываются собранным проектом мира (финал мира открывает следующую
+     игру). Конечный список, а не лента: собрал — понёс другу, а не «ещё». */
+  var gps = projectsList().filter(function(p){ return p.kind === "game"; });
+  if (gps.length){
+    h += '<div class="sect"><h2>🛠 Собери свою игру</h2><div class="line"></div></div>' +
+      '<p class="dim">Эти игры не лежат готовыми — ты собираешь их сам, шаг за шагом. ' +
+      'Собранная уходит в портфолио, а по ссылке её можно отправить другу: он будет играть, ' +
+      'не видя твоего кода.</p><div class="gamegrid">';
+    gps.forEach(function(p){
+      var open = projectOpen(p), done = projectDone(p.id);
+      var needName = "";
+      if (!open && p.needs){
+        var np = projectById(p.needs);
+        needName = np ? np.title : "";
+      }
+      h += '<button class="gamecard' + (open ? "" : " locked") + '" data-proj="' + p.id + '"' +
+        (open ? "" : " disabled") + '>' +
+        '<span class="gemoji">' + p.emoji + '</span>' +
+        '<b>' + esc(p.title) + (done ? ' <span class="edittag done">собрана ✓</span>' : '') + '</b>' +
+        '<span>' + esc(p.tagline) + '</span>' +
+        (open ? "" : '<span class="wtag">🔒 откроется, когда собран проект «' + esc(needName) + '»</span>') +
+        '</button>';
+    });
+    h += '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   app.innerHTML = h;
-  app.querySelectorAll(".gamecard").forEach(function(b){
+  app.querySelectorAll(".gamecard[data-id]").forEach(function(b){
     b.onclick = function(){ openGame(b.getAttribute("data-id")); };
+  });
+  app.querySelectorAll(".gamecard[data-proj]").forEach(function(b){
+    b.onclick = function(){ openProject(b.getAttribute("data-proj")); };
   });
   document.getElementById("tomap").onclick = screenWorlds;
   refreshTop();
@@ -5301,7 +5333,11 @@ function openGame(id){
     '<div class="note"><b>Как играть</b>Нажми «Новая игра», потом пиши ходы в поле снизу и жми Enter. Хочешь изменить игру — правь код слева и снова жми «Новая игра».</div>';
   app.innerHTML = head + '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-go="games">← Ко всем играм</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="greset">↩ Вернуть оригинал</button></div>';
+    '<span class="sp"></span>' +
+    /* Ссылка уносит ТЕКУЩИЙ код: правил игру — друг сыграет твою версию.
+       Это и есть крючок: у работы появляется зритель. */
+    '<button class="bigbtn ghost" id="gshare">🔗 Отправить игру другу</button>' +
+    '<button class="bigbtn ghost" id="greset">↩ Вернуть оригинал</button></div>';
 
   var studio = makeStudio({
     engine: "mini", draw: !!g.draw, play: true, code: gameCode(g), label: g.title,
@@ -5319,6 +5355,12 @@ function openGame(id){
   });
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
+  document.getElementById("gshare").onclick = function(){
+    var code = studio.editor.getCode();
+    var edited = code !== g.code;
+    copyText(playLink({ title: g.title + (edited ? " — моя версия" : ""),
+                        code: code, author: myName() || "", emoji: g.emoji }), this);
+  };
   document.getElementById("greset").onclick = function(){
     if (S.games) delete S.games[g.id];
     save();
@@ -7594,6 +7636,9 @@ function projectDraftId(pid, i){ return "proj-" + pid + "-" + i; }
    нет карты мира, поэтому и открывается он по своему разделу. */
 function projectOpen(p){
   if (S.admin && S.admin.unlockAll) return true;
+  /* игра-проект открывается собранным проектом мира: финал мира открывает
+     следующую игру (план, п. 4.5). Конечный список, а не лента. */
+  if (p.needs) return projectDone(p.needs);
   if (p.world === 0){
     var xs = ailabList();
     return xs.length > 0 && xs.every(function(x){ return ailabDone(x.id); });
@@ -7683,6 +7728,7 @@ function openProject(id, forceStep){
       engine: "mini",
       code: startCode,
       label: "твоя программа",
+      stdin: step.stdin || null,
       check: function(ed, showMsg){ runProjectCheck(p, i, ed, showMsg); }
     });
     document.getElementById("studio").appendChild(studio);
@@ -7731,9 +7777,12 @@ function runProjectCheck(p, i, ed, showMsg){
       }
     }
   }
-  var res = eng.run(code, {});
+  /* Ответы на input() — из шага, одинаковые для кода ребёнка и эталона:
+     без этого шаг с игрой (а игра ЖДЁТ хода) было бы не проверить вовсе. */
+  var answers = (step.stdin || []).slice();
+  var res = eng.run(code, { stdin: answers.slice() });
   if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
-  var exp = eng.run(step.solution, {}).lines, got = res.lines;
+  var exp = eng.run(step.solution, { stdin: answers.slice() }).lines, got = res.lines;
   if (!(exp.length === got.length && exp.every(function(v, n){ return v === got[n]; }))){
     showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
     return;
@@ -7798,17 +7847,28 @@ function screenProjectDone(id){
     '<p class="lede">' + esc(p.finale) + '</p>' +
     '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
+    (p.kind === "game" ? '<button class="bigbtn" id="pshare">🔗 Отправить игру другу</button>' : '') +
     '<button class="bigbtn ghost" id="pfolio">🎒 Все мои работы</button>' +
     '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
     '<button class="bigbtn ghost" data-go="world">← ' +
     (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
 
-  var studio = makeStudio({ engine: "mini", code: code, label: "твоя программа целиком" });
+  /* Игра-проект на финале ИГРАЕТСЯ, а не просто показывается: у неё внутри
+     input(), и кнопка «Запустить» без игрового режима падала бы на первом же
+     ходе. Правишь код — «Новая игра» играет твою версию. */
+  var studio = makeStudio({ engine: "mini", code: code, play: p.kind === "game",
+                            label: "твоя программа целиком" });
   document.getElementById("studio").appendChild(studio);
   session.studio = studio;
 
   document.getElementById("tosand").onclick = function(){
     S.sandbox = studio.editor.getCode(); save(); screenSandbox();
+  };
+  var psh = document.getElementById("pshare");
+  if (psh) psh.onclick = function(){
+    /* уезжает ТЕКУЩИЙ код: поменял секретное слово — друг играет твою версию */
+    copyText(playLink({ title: p.title, code: studio.editor.getCode(),
+                        author: myName() || "", emoji: p.emoji }), psh);
   };
   document.getElementById("pfolio").onclick = screenFolio;
   document.getElementById("pagain").onclick = function(){
@@ -9299,19 +9359,23 @@ function winSpec(task, v){
 var SHOW_LINES = 12;      /* столько строк вывода показываем в карточке */
 var showOut = {};         /* вывод считается один раз за сессию */
 
-function showcaseRun(code){
-  if (showOut[code] === undefined){
-    var r = Runtime.get("mini").run(code, {});
-    showOut[code] = r.error ? null : String(r.output || "").replace(/\n+$/, "");
+function showcaseRun(code, stdin){
+  var key = code + "\u0000" + (stdin || []).join("\u0000");
+  if (showOut[key] === undefined){
+    var r = Runtime.get("mini").run(code, { stdin: (stdin || []).slice() });
+    showOut[key] = r.error ? null : String(r.output || "").replace(/\n+$/, "");
   }
-  return showOut[code];
+  return showOut[key];
 }
 /* Готовая программа проекта — это последний шаг. Берём её же, что и экран
-   «проект собран», чтобы витрина не разошлась с тем, что получит ребёнок. */
+   «проект собран», чтобы витрина не разошлась с тем, что получит ребёнок.
+   ⚠️ Игра-проект ЖДЁТ ходов — витрине отдаём записанную партию из её же
+   проверки (step.stdin): на экране живой вывод настоящей игры, а не ошибка. */
 function showcaseProjects(){
   return projectsList().map(function(p){
-    var code = p.steps[p.steps.length - 1].solution || "";
-    return { p: p, code: code, out: showcaseRun(code), done: projectDone(p.id) };
+    var last = p.steps[p.steps.length - 1];
+    var code = last.solution || "";
+    return { p: p, code: code, out: showcaseRun(code, last.stdin), done: projectDone(p.id) };
   });
 }
 /* Сколько уроков надо пройти, чтобы дойти до проекта: честная цена входа,
@@ -12024,6 +12088,12 @@ function routeHash(){
   }
   /* Работа по ссылке — тоже до приведения к нижнему регистру: base64
      различает «A» и «a». */
+  var ppk = /^#play=(.+)$/.exec(location.hash || "");
+  if (ppk){
+    var gotp = playUnpack(ppk[1]);
+    if (gotp) screenPlay(gotp); else screenPlayBroken();
+    return true;
+  }
   var wpk = /^#work=(.+)$/.exec(location.hash || "");
   if (wpk){
     var gotw = workUnpack(wpk[1]);
@@ -14233,8 +14303,106 @@ function workShareHTML(code){
   return '<button class="bigbtn ghost" id="wshare">🔗 Поделиться работой</button>';
 }
 
+/* ============================================================
+   ИГРА ПО ССЫЛКЕ: друг открывает — и сразу играет.
+   Сильнейший детский крючок из доступных без ПДн (план
+   docs/razvitie-2026-09-05.md, п. 1.3): ребёнок собрал игру, отправил
+   ссылку — друг ИГРАЕТ, а потом может открыть код и собрать свою.
+
+   Чем это отличается от «Поделиться работой» (#work=), где запуск закрыт
+   намеренно: там ссылкой уезжает ЛЮБАЯ программа, и экран честно показывает
+   только код. Здесь уезжает ИГРА — интерактивная программа, чей смысл именно
+   в запуске: показывать её кодом вперёд значит показывать фокус с изнанки.
+   Порядок перевёрнут: сначала играешь, потом заглядываешь в код.
+
+   Как и всё остальное «по ссылке»: ничего не хранится на сервере, игра лежит
+   в самой ссылке, ПДн не появляется. Имя автора — по правилу «своего
+   задания»: без него «смотри, что я сделал» теряет смысл.
+   ============================================================ */
+var PLAY_CODE_MAX = 4000;   /* игры длиннее задач — своя граница, но тоже открытка */
+
+function playPack(w){
+  return b64urlEnc(JSON.stringify({ v:1, t:w.title, c:w.code, a:w.author || "", e:w.emoji || "" }));
+}
+function playUnpack(s){
+  var o = null;
+  try { o = JSON.parse(b64urlDec(s)); } catch(e){ return null; }
+  if (!o || o.v !== 1) return null;
+  if (typeof o.t !== "string" || typeof o.c !== "string") return null;
+  if (!o.c.trim() || o.c.length > PLAY_CODE_MAX) return null;
+  return { title: o.t.slice(0, 80), code: o.c,
+           author: typeof o.a === "string" ? o.a.slice(0, 24) : "",
+           emoji: typeof o.e === "string" ? o.e.slice(0, 8) : "" };
+}
+function playLink(w){
+  var base = "";
+  try { base = location.origin + location.pathname; } catch(e){}
+  return base + "#play=" + playPack(w);
+}
+
+function screenPlay(w){
+  if (capHard()) return screenCapReached();
+  enterScreen("train", "play");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var who = w.author ? "прислал(а) " + esc(w.author) : "игра по ссылке";
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">' + who + '</div>' +
+    '<h1>' + (w.emoji ? w.emoji + " " : "🎮 ") + esc(w.title) + '</h1></div></div>' +
+    '<p class="lede">Это настоящая игра на Python' +
+    (w.author ? ", и её собрал человек, который прислал ссылку" : "") +
+    '. Жми «▶ Новая игра», ходи в поле снизу — а когда наиграешься, загляни в код: ' +
+    'игра целиком написана вот этими строками, и их можно менять.</p>' +
+    '<div id="studio"></div>' +
+    '<div class="pager">' +
+      '<button class="bigbtn" id="plcode">🔧 Заглянуть в код</button>' +
+      '<span class="sp"></span>' +
+      '<button class="bigbtn ghost" id="pltake">Забрать в песочницу</button>' +
+      '<button class="bigbtn ghost" id="plhome">Что это за тренажёр</button></div>';
+
+  /* Тот же игровой станок, что в разделе «Игры», только редактор спрятан:
+     сначала играют. «Заглянуть в код» снимает класс — и вот она, изнанка. */
+  var studio = makeStudio({ engine: "mini", play: true, code: w.code, label: esc(w.title) });
+  studio.classList.add("plonly");
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+
+  document.getElementById("plcode").onclick = function(){
+    studio.classList.remove("plonly");
+    this.style.display = "none";
+    /* объяснение появляется в момент открытия кода, не раньше: до этого оно
+       отвечало бы на вопрос, который ещё не задан */
+    var note = document.createElement("div");
+    note.className = "note";
+    note.innerHTML = "<b>Это и есть игра</b>Поменяй что-нибудь — текст, числа, правила — " +
+      "и нажми «▶ Новая игра», чтобы сыграть свою версию. У автора ссылки ничего не изменится.";
+    studio.parentNode.insertBefore(note, studio);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  document.getElementById("pltake").onclick = function(){
+    S.sandbox = studio.editor.getCode(); save();
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenSandbox();
+  };
+  document.getElementById("plhome").onclick = function(){
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    screenWorlds();
+  };
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function screenPlayBroken(){
+  enterScreen("train", "play");
+  app.innerHTML =
+    '<div class="lvlhead"><div><div class="idx">игра по ссылке</div><h1>Ссылка не прочиталась</h1></div></div>' +
+    '<p class="lede">Скорее всего, её обрезал мессенджер: длинные ссылки часто ломаются ' +
+    'на переносе строки. Попроси прислать ещё раз — целиком, одним куском.</p>' +
+    '<div class="winrow"><button class="bigbtn" id="plhome">На главную</button></div>';
+  document.getElementById("plhome").onclick = screenWorlds;
+}
+
 /* Чужая работа: только смотреть и забрать себе в песочницу. Запускать прямо
-   отсюда не даём намеренно — иначе это ещё один экран урока без урока. */
+   отсюда не даём намеренно — иначе это ещё один экран урока без урока.
+   ⚠️ Для ИГР это правило перевёрнуто сознательно — см. #play= выше. */
 function screenWork(w){
   enterScreen("home", "work");
   app.innerHTML =
@@ -15482,6 +15650,7 @@ window.__game = {
   worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
   grpStats: grpStats,
+  playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },

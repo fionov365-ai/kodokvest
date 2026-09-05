@@ -246,12 +246,12 @@ let ailab = 0;
 let projsteps = 0;
 (global.PROJECTS || []).forEach(p => {
   (p.steps || []).forEach((step, i) => {
-    if (compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, null) !== false)
+    if (compare("проект " + p.id + " · шаг " + (i + 1), step.solution, null, null, step.stdin || null) !== false)
       projsteps++;
     /* заготовка любого шага, а не только первого: в проекте с ИИ-напарником
        шаг начинается с его редакции, и ребёнок запускает её своими руками */
     if (step.starter !== undefined)
-      compare("проект " + p.id + " · заготовка шага " + (i + 1), step.starter, null, null, null);
+      compare("проект " + p.id + " · заготовка шага " + (i + 1), step.starter, null, null, step.stdin || null);
   });
 });
 

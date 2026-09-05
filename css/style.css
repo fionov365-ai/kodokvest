@@ -1579,3 +1579,9 @@ body.focus .toTop{display:none}
 /* возвращение после паузы и «в следующий раз» */
 .comeback{border-color:var(--okline);background:var(--okbg)}
 .nexttime h3{margin-bottom:6px}
+/* игра по ссылке: сначала играют, код спрятан до «Заглянуть в код» */
+.studio.plonly .editorbox .ehead,
+.studio.plonly .editorbox .edit-area,
+.studio.plonly .editorbox .keybar{display:none}
+.studio.plonly .editorbox{background:transparent;border:none;box-shadow:none;padding:0}
+.gamecard.locked{opacity:.55;cursor:default}

@@ -518,7 +518,13 @@ const seenPR = {};
     if (i === 0 && (step.starter === undefined || !String(step.starter).trim()))
       say(`${tag}: у первого шага обязан быть starter`);
 
-    const sol = MP.run(step.solution || "", { stdin: [] });
+    /* input() в шаге требует записанных ответов — как в уроках */
+    const usesInput = /\binput\s*\(/.test((step.solution || "") + "\n" + (step.starter || ""));
+    if (usesInput && !(step.stdin && step.stdin.length))
+      say(`${tag}: в шаге есть input(), но нет списка ответов step.stdin`);
+    if (step.stdin && !usesInput)
+      say(`${tag}: задан step.stdin, но input() в шаге не вызывается`);
+    const sol = MP.run(step.solution || "", { stdin: (step.stdin || []).slice() });
     if (sol.error) return say(`${tag}: решение падает — ${sol.error.kind}: ${sol.error.msg}`);
     if (!sol.output || !sol.output.trim()) say(`${tag}: решение ничего не печатает`);
     if (prevOut !== null && sol.output === prevOut)
@@ -530,7 +536,7 @@ const seenPR = {};
        ребёнка, а с новой редакции от напарника. Требования к ней те же —
        запускается и проверку НЕ проходит, иначе шага нет. */
     if (step.starter !== undefined){
-      const st = MP.run(step.starter, { stdin: [] });
+      const st = MP.run(step.starter, { stdin: (step.stdin || []).slice() });
       if (st.error) say(`${tag}: заготовка обязана запускаться, а падает — ${st.error.kind}: ${st.error.msg}`);
       else if (st.output === sol.output) say(`${tag}: заготовка уже даёт верный вывод — задания нет`);
       /* редакция напарника обязана отличаться от того, что было на прошлом шаге:
