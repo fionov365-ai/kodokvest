@@ -13,6 +13,32 @@ const fs = require("fs");
 
 /* Тот же поиск куска кода, что и в app.js: спецсимволы экранируем,
    границу слова приклеиваем только к латинским краям. */
+/* ===== подсказки: одна проверка на все разделы =====
+   Подсказка — строка или объект { t, code }: t — текст, code — маленький
+   пример, который экран рисует отдельным блоком. Куски кода в тексте пишутся
+   в `обратных кавычках`. Проверяем три вещи: текст есть, кавычки парные
+   (иначе кусок кода не закроется и ребёнок увидит кашу), пример запускается
+   движком без ошибок. Проверка обязана звучать для ВСЕХ мест, где подсказки
+   показывает wireHint: уроки, разминки, «Ты и ИИ», проекты, алгоритмы,
+   спецификации (домашку так же проверяет tests/homework.js). */
+function checkHints(hints, tag){
+  (Array.isArray(hints) ? hints : []).forEach((h, i) => {
+    const isObj = h && typeof h === "object";
+    const текст = isObj ? h.t : h;
+    if (typeof текст !== "string" || !текст.trim()){
+      say(`[подсказка ${i + 1}] ${tag}: нет текста — нужна строка или объект { t, code }`);
+      return;
+    }
+    if (((текст.match(/`/g) || []).length) % 2)
+      say(`[подсказка ${i + 1}] ${tag}: непарная обратная кавычка в тексте`);
+    if (isObj && h.code !== undefined){
+      const r = MP.run(h.code, { turtle: new MP.Turtle(), sources: {}, files: {}, stdin: [] });
+      if (r.error)
+        say(`[подсказка ${i + 1}] ${tag}: пример падает — ${r.error.kind}: ${r.error.msg}`);
+    }
+  });
+}
+
 function codeHas(code, needle){
   const esc = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pre = /^[A-Za-z0-9_]/.test(needle) ? "\\b" : "";
@@ -33,6 +59,8 @@ eval(fs.readFileSync(path.join(root, "js/warmups.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/cheatsheet.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/specs.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/algo.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
@@ -231,26 +259,7 @@ CURRICULUM.forEach(w => {
     if (!Array.isArray(task.hints) || !task.hints.length)
       say(`[схема] ${l.id}: нет подсказок (hints) — кнопке «Подсказка» нечего показать`);
 
-    /* Подсказка может быть строкой или объектом { t, code }: t — текст,
-       code — маленький пример, который экран рисует отдельным блоком.
-       Куски кода в тексте пишутся в `обратных кавычках`. Проверяем три
-       вещи: текст есть, кавычки парные (иначе кусок кода не закроется и
-       ребёнок увидит кашу), пример запускается движком без ошибок. */
-    (Array.isArray(task.hints) ? task.hints : []).forEach((h, i) => {
-      const isObj = h && typeof h === "object";
-      const текст = isObj ? h.t : h;
-      if (typeof текст !== "string" || !текст.trim()){
-        say(`[подсказка ${i + 1}] ${l.id}: нет текста — нужна строка или объект { t, code }`);
-        return;
-      }
-      if (((текст.match(/`/g) || []).length) % 2)
-        say(`[подсказка ${i + 1}] ${l.id}: непарная обратная кавычка в тексте`);
-      if (isObj && h.code !== undefined){
-        const r = MP.run(h.code, { turtle: new MP.Turtle(), sources: {}, files: {}, stdin: [] });
-        if (r.error)
-          say(`[подсказка ${i + 1}] ${l.id}: пример падает — ${r.error.kind}: ${r.error.msg}`);
-      }
-    });
+    checkHints(task.hints, l.id);
 
     /* 4. check.lines против настоящего вывода решения */
     if (task.check.kind === "output" && task.check.lines && !sol.error){
@@ -295,6 +304,7 @@ function memFrames(code){
   });
   if (!Array.isArray(w.hints) || !w.hints.length)
     say(`[разминка] ${id}: нет подсказок (hints)`);
+  checkHints(w.hints, `разминка ${id}`);
   const r = MP.run(w.code || "", { stdin: [] });
   if (r.error) say(`[разминка] ${id}: программа падает — ${r.error.kind}: ${r.error.msg}`);
   else if (!r.output || !r.output.trim())
@@ -357,6 +367,7 @@ const seenAI = {};
   });
   if (!Array.isArray(x.hints) || !x.hints.length)
     say(`[ты-и-ии] ${id}: нет подсказок (hints)`);
+  checkHints(x.hints, `ты-и-ии ${id}`);
 
   if (x.type === "predict"){
     if (!x.code || !x.code.trim()) return say(`[ты-и-ии] ${id}: у predict нет code`);
@@ -536,6 +547,7 @@ const seenPR = {};
       if (!step[f] || !String(step[f]).trim()) say(`${tag}: пустое поле «${f}»`);
     });
     if (!Array.isArray(step.hints) || !step.hints.length) say(`${tag}: нет подсказок (hints)`);
+    checkHints(step.hints, tag);
     if (i === 0 && (step.starter === undefined || !String(step.starter).trim()))
       say(`${tag}: у первого шага обязан быть starter`);
 
@@ -826,6 +838,12 @@ const seenCS = {};
     });
   });
 })();
+
+/* алгоритмы и спецификации lessons.js целиком не проверяет (их запуск —
+   в content-vs-python и full-run), но подсказки у них показывает тот же
+   wireHint — значит и проверка подсказок обязана их видеть */
+(global.SPECS || []).forEach(x => checkHints((x.task && x.task.hints) || x.hints, `спецификация ${x.id || "?"}`));
+(global.ALGO || []).forEach(x => checkHints(x.hints, `алгоритмы ${x.id || "?"}`));
 
 console.log(`\nуроков проверено: ${lessons} (из них «починить»: ${fixes}), примеров: ${demos}, разминок: ${warmups}, «Ты и ИИ»: ${ailab}, проектов: ${projects} (шагов: ${psteps}), шпаргалка: ${sheetItems}`);
 console.log(`порядок объяснений проверен на ${auditLessons} уроках`);

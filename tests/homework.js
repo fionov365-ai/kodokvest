@@ -72,6 +72,19 @@ BANK.forEach(item => {
   if (typeof item.code !== "function") say(`[схема] ${id}: code должен быть функцией от чисел`);
   if (!Array.isArray(item.hints) || item.hints.length < 2)
     say(`[схема] ${id}: подсказок меньше двух — застрявшему ребёнку не на что опереться`);
+  /* подсказка — строка или { t, code }: как в tests/lessons.js (checkHints) */
+  (item.hints || []).forEach((h, i) => {
+    const isObj = h && typeof h === "object";
+    const текст = isObj ? h.t : h;
+    if (typeof текст !== "string" || !текст.trim())
+      return say(`[подсказка ${i + 1}] ${id}: нет текста — нужна строка или объект { t, code }`);
+    if (((текст.match(/`/g) || []).length) % 2)
+      say(`[подсказка ${i + 1}] ${id}: непарная обратная кавычка в тексте`);
+    if (isObj && h.code !== undefined){
+      const r = runner(h.code);
+      if (r.error) say(`[подсказка ${i + 1}] ${id}: пример падает — ${r.error.kind}: ${r.error.msg}`);
+    }
+  });
   if (item.need && !item.needMsg) say(`[схема] ${id}: есть need, но нет needMsg — ребёнок не поймёт отказ`);
   if (item.ban && !item.banMsg) say(`[схема] ${id}: есть ban, но нет banMsg`);
 
