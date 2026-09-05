@@ -1613,6 +1613,7 @@ body.focus .toTop{display:none}
   border:2px solid #d66;border-radius:14px;padding:10px 16px;font-size:14px;
   box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw}
 .grlive{font-size:11px}
+.presence.day{border-color:var(--line);background:var(--sunken);color:var(--soft);margin-top:-6px}
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -17851,14 +17852,21 @@ function schedulePush(){
 
 /* ---------- уровень 1: статус присутствия ---------- */
 var PRESENCE_FRESH = 2 * 60e3;   /* запись свежее двух минут = сейчас в тренажёре */
+/* ⚠️ Ключи — настоящие имена мест из enterScreen/curPlace, и на это есть
+   проверка в тесте: словарь с выдуманными ключами молча показывал бы всем
+   «в тренажёре» — так и вышло в первый день на бою. */
 var PLACE_RU = {
   lesson:"проходит урок", project:"собирает проект", projectdone:"смотрит собранный проект",
-  game:"играет", games:"выбирает игру", warmup:"делает разминку", warmups:"выбирает разминку",
-  today:"на экране «Сегодня»", zan:"идёт занятие", again:"повторяет трудное",
-  algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена", ai:"в разделе «Ты и ИИ»",
-  hw:"смотрит домашку", hwone:"делает домашку", sandbox:"в песочнице", viz:"в визуализаторе",
-  mine:"составляет своё задание", friendtask:"решает задание от друга",
-  play:"играет в игру по ссылке", specs:"в приёмке", folio:"в портфолио"
+  game:"играет", games:"выбирает игру", warmup:"делает разминку", warm:"выбирает разминку",
+  today:"на экране «Сегодня»", zan:"идёт занятие", review:"повторяет трудное",
+  algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена",
+  ai:"в разделе «Ты и ИИ»", ailesson:"в разделе «Ты и ИИ»",
+  hw:"смотрит домашку", hwone:"делает домашку", sand:"в песочнице", viz:"в визуализаторе",
+  mytasks:"составляет своё задание", friendtask:"решает задание от друга",
+  play:"играет в игру по ссылке", specs:"в приёмке", spec:"в приёмке",
+  folio:"в портфолио", works:"на витрине", home:"на главном экране",
+  world:"выбирает урок", train:"выбирает тренировку", guide:"читает инструкцию",
+  account:"в профиле", trace:"смотрит, как шла работа"
 };
 /* Чем занят, по чужому снимку. serverAt — серверное время последней записи:
    сравнивать его с часами зрителя чуть нечестно, но дрейф часов много меньше
@@ -17877,7 +17885,63 @@ function presenceInfo(st, serverAt){
 }
 function presenceHTML(st, serverAt){
   var p = presenceInfo(st, serverAt);
-  return p ? '<div class="presence">🟢 Сейчас в тренажёре: <b>' + esc(p.what) + '</b></div>' : "";
+  if (!p) return "";
+  /* место неизвестно — не повторяем «в тренажёре: в тренажёре» */
+  if (p.what === "в тренажёре")
+    return '<div class="presence">🟢 <b>Сейчас в тренажёре</b></div>';
+  return '<div class="presence">🟢 Сейчас в тренажёре: <b>' + esc(p.what) + '</b></div>';
+}
+
+/* Живая сводка момента для карточки ученика: не только «где он», но и что
+   уже сделано сегодня и как идёт занятие. Всё считается из обычного снимка
+   прогресса — ребёнок ничего дополнительного не отправляет. */
+function presenceDetailHTML(st, serverAt){
+  var h = presenceHTML(st, serverAt);
+  var day = dayKey();
+  var lg = (st && st.log) || {}, sm = (st && st.stars) || {};
+
+  /* уроки, сданные сегодня, в порядке сдачи */
+  var solvedToday = [];
+  Object.keys(lg).forEach(function(id){
+    var g = lg[id];
+    if (!g || !g.solvedAt || sm[id] === undefined) return;
+    if (dayKey(new Date(g.solvedAt)) !== day) return;
+    var l = CURRICULUM.byId(id);
+    solvedToday.push({ at: g.solvedAt, title: l ? l.title : id });
+  });
+  solvedToday.sort(function(a, b){ return a.at - b.at; });
+
+  var hwToday = hwRecords(st).filter(function(r){
+    return r.done && dayKey(new Date(r.done)) === day;
+  }).length;
+  var dailyOk = !!((st.daily || {})[day]);
+
+  /* занятие сегодняшнего дня: идёт или уже закрыто */
+  var zanLine = "";
+  Object.keys(st.zan || {}).forEach(function(k){
+    if (k.indexOf(day) !== 0) return;
+    var r = st.zan[k];
+    if (!r) return;
+    var doneN = (r.done || []).length, total = (r.plan || []).length;
+    zanLine = r.end
+      ? "занятие закрыто: " + doneN + " из " + total + " " + plural(total, "шага", "шагов", "шагов")
+      : "идёт занятие: сделано " + doneN + " из " + total + " " + plural(total, "шага", "шагов", "шагов");
+  });
+
+  var bits = [];
+  if (solvedToday.length){
+    var names = solvedToday.slice(-2).map(function(x){ return "«" + esc(x.title) + "»"; }).join(", ");
+    bits.push("сдано " + solvedToday.length + " " +
+      plural(solvedToday.length, "урок", "урока", "уроков") + " (" +
+      (solvedToday.length > 2 ? "последние — " : "") + names + ")");
+  }
+  if (hwToday) bits.push("домашка: " + hwToday + " " + plural(hwToday, "задача", "задачи", "задач"));
+  if (dailyOk) bits.push("задача дня ✓");
+  if (zanLine) bits.push(zanLine);
+
+  if (bits.length)
+    h += '<div class="presence day">Сегодня: ' + bits.join(" · ") + '</div>';
+  return h;
 }
 
 /* ---------- уровень 2: трансляция экрана (сторона ребёнка) ---------- */
@@ -28850,7 +28914,7 @@ function kidRender(savedNote){
   var h = "";
   /* статус присутствия и вход в живое занятие — первой строкой: «что он
      делает сейчас» и есть вопрос, с которым взрослый открыл карточку */
-  h += '<div id="kidpresence">' + presenceHTML(st, kidTarget.serverAt) + '</div>';
+  h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</div>';
   if (kidTarget.fresh)
     h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
          'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
@@ -28893,8 +28957,15 @@ function kidWatch(code, seq){
         if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return null;
         if (r.found && r.data){
           kidTarget.serverAt = r.serverAt || 0;
-          /* данные не подменяем: взрослый мог начать редактировать рамку */
-          kidTarget.data.now = (ensureShape(r.data)).now;
+          /* рамку не подменяем: взрослый мог начать её редактировать. А вот
+             живые поля сводки — обновляем, ради них опрос и существует */
+          var freshD = ensureShape(r.data);
+          kidTarget.data.now = freshD.now;
+          kidTarget.data.log = freshD.log;
+          kidTarget.data.stars = freshD.stars;
+          kidTarget.data.zan = freshD.zan;
+          kidTarget.data.daily = freshD.daily;
+          kidTarget.data.hw = freshD.hw;
         }
         return null;
       }, function(){ return null; }));
@@ -28903,7 +28974,7 @@ function kidWatch(code, seq){
       var live = res[0];
       var el = document.getElementById("kidpresence");
       if (el){
-        el.innerHTML = presenceHTML(kidTarget.data, kidTarget.serverAt) +
+        el.innerHTML = presenceDetailHTML(kidTarget.data, kidTarget.serverAt) +
           (live
             ? '<div class="presence live">🔴 Ребёнок показывает экран: <b>' + esc(live.title || "") +
               '</b> <button class="rbtn check" id="kidwatch">Смотреть</button></div>'
@@ -31826,7 +31897,8 @@ window.__game = {
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
   grpStats: grpStats,
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
-  presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH,
+  presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
+  presenceDetailHTML: presenceDetailHTML,
   liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
   livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,

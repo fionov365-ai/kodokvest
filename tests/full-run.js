@@ -5770,6 +5770,59 @@ function checkEncoding(){
       /* «офлайн» не показывается: пустая строка, а не упрёк */
       if (g.presenceHTML(st, 0) !== "")
         bad("[присутствие] для молчащего рисуется строка — офлайн рядом с именем читается как упрёк");
+
+      /* ⚠️ Каждый ключ словаря мест обязан быть НАСТОЯЩИМ местом из кода:
+         выдуманный ключ молча превращает статус в «в тренажёре: в тренажёре» —
+         так и случилось на бою в первый же день. Список мест снимаем с самого
+         приложения, а не переписываем руками. */
+      {
+        const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+        const real = new Set();
+        (src.match(/enterScreen\([^,)]*,\s*"([a-z]+)"/g) || []).forEach(m =>
+          real.add(m.replace(/^.*"([a-z]+)"$/, "$1")));
+        (src.match(/curPlace = "([a-z]+)"/g) || []).forEach(m =>
+          real.add(m.replace(/^.*"([a-z]+)"$/, "$1")));
+        Object.keys(g.PLACE_RU).forEach(k => {
+          if (!real.has(k))
+            bad("[присутствие] в словаре мест выдуманный ключ «" + k + "» — такого экрана нет, подпись мертва");
+        });
+      }
+      /* подробная сводка: что сделано сегодня и как идёт занятие */
+      {
+        const now2 = Date.now();
+        const stD = g.ensureShape({
+          now: { at: now2, place: "lesson", lesson: "math" },
+          stars: { "print-first": 3, "vars": 2 },
+          log: { "print-first": { solvedAt: now2 - 60e3 }, "vars": { solvedAt: now2 - 30e3 } },
+          daily: (function(){ const o = {}; o[g.dayKey()] = 1; return o; })(),
+          zan: (function(){ const o = {}; o[g.dayKey() + "#1"] =
+            { plan: [{ k:"a" }, { k:"b" }, { k:"c" }], done: ["a"], end: 0 }; return o; })(),
+          hw: { "hw-klass#5": { id:"hw-klass", seed:5, due:"", by:"наставник",
+                               at: now2, done: now2 - 10e3, tries: 1 } }
+        });
+        const dh = g.presenceDetailHTML(stD, now2 - 10e3).replace(/<[^>]+>/g, " ");
+        if (!/Арифметика/.test(dh)) bad("[присутствие] сводка не назвала текущий урок: " + dh.slice(0, 120));
+        if (!/сдано 2 урока/.test(dh)) bad("[присутствие] сводка не посчитала сданные сегодня уроки: " + dh);
+        if (!/Переменные/.test(dh)) bad("[присутствие] сводка не назвала сданный урок");
+        if (!/идёт занятие: сделано 1 из 3/.test(dh)) bad("[присутствие] ход занятия не показан: " + dh);
+        if (!/домашка: 1 задача/.test(dh)) bad("[присутствие] сданная сегодня домашка не показана");
+        if (!/задача дня ✓/.test(dh)) bad("[присутствие] задача дня не показана");
+        /* вчерашние уроки в «сегодня» не попадают */
+        const stOld = g.ensureShape({ stars: { "vars": 2 },
+          log: { "vars": { solvedAt: now2 - 3 * 864e5 } } });
+        if (/сдано/.test(g.presenceDetailHTML(stOld, 0)))
+          bad("[присутствие] в «сегодня» попали старые уроки");
+      }
+
+      /* неизвестное место не даёт «в тренажёре: в тренажёре» */
+      {
+        const odd = g.ensureShape({ now: { at: Date.now(), place: "novoe-mesto", lesson: null } });
+        const html = g.presenceHTML(odd, Date.now() - 10e3);
+        if (/в тренажёре:.*в тренажёре/.test(html.replace(/<[^>]+>/g, "")))
+          bad("[присутствие] неизвестное место даёт «в тренажёре: в тренажёре»: " + html);
+        if (!/Сейчас в тренажёре/.test(html))
+          bad("[присутствие] при неизвестном месте статус пропал совсем");
+      }
     }
 
     /* 10г.2. Активный тик пишет S.now, и оно уезжает в снимок для сервера. */
