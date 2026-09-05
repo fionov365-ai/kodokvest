@@ -1596,3 +1596,15 @@ body.focus .toTop{display:none}
   box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw}
 .grlive{font-size:11px}
 .presence.day{border-color:var(--line);background:var(--sunken);color:var(--soft);margin-top:-6px}
+
+/* ================= планшет: открыта виртуальная клавиатура =================
+   Класс kb вешает kbApply() по сжатию visualViewport. Пока он висит, на
+   экране не должно быть ничего липкого и плавающего: липкая колонка и
+   полоска задания дёргаются при каждом скролле, а плавающие кнопки на iOS
+   всплывают над клавиатурой посреди экрана. */
+.kb .lessongrid:not(.one) .lcol-work{position:static}
+.kb .taskpin{display:none}
+.kb .toTop,.kb .toast,.kb .livebar{display:none}
+/* Автопрокрутка браузера к сфокусированному полю метит в край экрана:
+   отступы говорят ей не прятать поле под шапку и не прижимать к клавиатуре. */
+html{scroll-padding-top:84px;scroll-padding-bottom:140px}

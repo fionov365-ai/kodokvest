@@ -4072,7 +4072,8 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let hwChecked = 0, reportChecked = 0, returnChecked = 0, liveChecked = 0;
+  let hwChecked = 0, reportChecked = 0, returnChecked = 0, liveChecked = 0, kbChecked = 0;
+  let timeFmtChecked = 0, homeChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
@@ -5924,6 +5925,145 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 10д. планшет: виртуальная клавиатура ---
+     Жалоба с боя: клавиатура выскакивает — экран съезжает. Проверяем всё,
+     что можно проверить без настоящего планшета: мету вьюпорта, включение
+     класса kb по сжатию вьюпорта и CSS-правила, снимающие липкое. */
+  if (typeof g.kbApply === "function"){
+    const p0 = problems.length;
+
+    if (html.indexOf("interactive-widget=resizes-content") < 0)
+      bad("[клавиатура] в мете вьюпорта нет interactive-widget — на Android клавиатура накрывает страницу");
+
+    /* класс kb вешается по сжатию и снимается по возврату */
+    if (!g.kbApply(800 - g.KB_SHRINK - 60, 800))
+      bad("[клавиатура] заметное сжатие вьюпорта не распознано как клавиатура");
+    if (!doc.documentElement.classList.contains("kb"))
+      bad("[клавиатура] класс kb не повешен");
+    if (g.kbApply(800 - 60, 800))
+      bad("[клавиатура] лёгкое сжатие (панель браузера) принято за клавиатуру");
+    if (doc.documentElement.classList.contains("kb"))
+      bad("[клавиатура] класс kb не снят после закрытия");
+
+    /* CSS: под клавиатурой не остаётся липкого и плавающего */
+    if (html.indexOf(".kb .lessongrid:not(.one) .lcol-work{position:static}") < 0)
+      bad("[клавиатура] липкая колонка редактора не отключается");
+    if (html.indexOf(".kb .taskpin{display:none}") < 0)
+      bad("[клавиатура] липкая полоска задания не прячется");
+    if (!/\.kb [^{]*\.livebar[^{]*\{display:none\}/.test(html))
+      bad("[клавиатура] плавающая плашка трансляции не прячется под клавиатурой");
+    if (html.indexOf("scroll-padding-top") < 0 || html.indexOf("scroll-padding-bottom") < 0)
+      bad("[клавиатура] нет scroll-padding — автопрокрутка к полю метит в край экрана");
+
+    if (problems.length === p0) kbChecked++;
+  }
+
+  /* --- 10е. время в минутах и секундах ---
+     Жалоба с боя: «не видно, сколько времени занимался ребёнок». Старый
+     формат печатал «—» на всём короче минуты — сорок секунд работы выглядели
+     как её отсутствие. Для родителя это ложь ровно в ту сторону, в какую
+     врать нельзя, поэтому правило теперь под проверкой. */
+  if (typeof g.fmtDur === "function"){
+    const p0 = problems.length;
+
+    if (g.fmtDur(40000) !== "40 сек")
+      bad("[время] сорок секунд показаны как «" + g.fmtDur(40000) + "» вместо «40 сек»");
+    if (/—/.test(g.fmtDur(40000)))
+      bad("[время] короткая работа показана прочерком — это выглядит как её отсутствие");
+    if (g.fmtDur(3 * 60000 + 20000) !== "3 мин 20 сек")
+      bad("[время] минуты с секундами: «" + g.fmtDur(200000) + "»");
+    if (g.fmtDur(5 * 60000) !== "5 мин")
+      bad("[время] ровные минуты не должны тянуть «0 сек»: «" + g.fmtDur(300000) + "»");
+    if (g.fmtDur(72 * 60000) !== "1 ч 12 мин")
+      bad("[время] больше часа секунды становятся шумом: «" + g.fmtDur(72 * 60000) + "»");
+    if (g.fmtDur(0) !== "0 сек") bad("[время] ноль показан как «" + g.fmtDur(0) + "»");
+
+    /* время за день считается из карты часов — то есть чистая работа */
+    {
+      const st = g.ensureShape({ hours: (function(){
+        const row = new Array(24).fill(0);
+        row[10] = 90; row[11] = 45;      /* 135 секунд работы за день */
+        const o = {}; o[g.dayKey()] = row; return o;
+      })() });
+      if (g.daySec(st, g.dayKey()) !== 135)
+        bad("[время] секунды за день посчитаны неверно: " + g.daySec(st, g.dayKey()));
+      if (g.fmtDur(g.dayMs(st, g.dayKey())) !== "2 мин 15 сек")
+        bad("[время] день показан как «" + g.fmtDur(g.dayMs(st, g.dayKey())) + "»");
+      /* и это видно взрослому в сводке момента */
+      st.now = { at: Date.now(), place: "lesson", lesson: "vars" };
+      const dh = g.presenceDetailHTML(st, Date.now() - 5000).replace(/<[^>]+>/g, " ");
+      if (!/за тренажёром 2 мин 15 сек/.test(dh))
+        bad("[время] в сводке взрослому нет времени за сегодня: " + dh.slice(0, 160));
+      /* и ребёнку на «Сегодня» */
+      const keepHours = g.state.hours;
+      g.state.hours = st.hours;
+      g.screenToday();
+      await tick();
+      const tt = doc.getElementById("app").textContent;
+      if (!/Сегодня за тренажёром/.test(tt))
+        bad("[время] на экране «Сегодня» ребёнку не показано время");
+      if (!/2 мин 15 сек/.test(tt))
+        bad("[время] время на «Сегодня» не точное");
+      g.state.hours = keepHours;
+    }
+
+    if (problems.length === p0) timeFmtChecked++;
+    viewReset(g);
+  }
+
+  /* --- 10ж. «домой» у каждой роли своё ---
+     Жалоба с боя: родитель нажал «Кодоквест» в шапке и оказался в тренажёре
+     ребёнка. У взрослого детская навигация спрятана, и логотип был там
+     единственной кнопкой — то есть единственная кнопка вела не туда. */
+  if (typeof g.goHome === "function"){
+    const p0 = problems.length;
+    const savedAdmin = g.state.admin.isAdmin, savedParent = g.state.admin.parentOf;
+    const savedPass = g.state.admin.pass;
+
+    /* ученик: домой — это его уроки */
+    g.state.admin.isAdmin = false; g.state.admin.parentOf = "";
+    g.goHome(); await tick();
+    if (!doc.querySelector(".worlds") && !/тренажёр по информатике|дальше — урок/i.test(doc.getElementById("app").textContent))
+      bad("[домой] ученик не попал на свой главный экран");
+
+    /* родитель: домой — его кабинет, а не детские уроки */
+    g.state.admin.parentOf = "rebenok-1"; g.state.admin.parentLabel = "Рома";
+    g.goHome(); await tick();
+    {
+      const t = doc.getElementById("app").textContent;
+      if (!/кабинет родителя/i.test(t))
+        bad("[домой] родитель по кнопке «домой» попал не в свой кабинет: " + t.slice(0, 90));
+      if (/Начать первый урок|тренажёр по информатике/.test(t))
+        bad("[домой] родитель провалился в тренажёр ребёнка");
+    }
+
+    /* наставник: домой — список учеников */
+    g.state.admin.parentOf = ""; g.state.admin.isAdmin = true; g.state.admin.pass = "x";
+    g.goHome(); await tick();
+    {
+      const t = doc.getElementById("app").textContent;
+      if (/Начать первый урок|дальше — урок/.test(t))
+        bad("[домой] наставник провалился в тренажёр ребёнка: " + t.slice(0, 90));
+    }
+
+    /* и сам логотип в шапке зовёт именно goHome, а не детский экран */
+    {
+      const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+      if (/getElementById\("logo"\)\.onclick = screenWorlds/.test(src))
+        bad("[домой] логотип по-прежнему ведёт в детский экран мимо ролей");
+      if (!/getElementById\("logo"\)\.onclick = goHome/.test(src))
+        bad("[домой] логотип не привязан к goHome");
+      if (/onclick = screenWorlds;/.test(src))
+        bad("[домой] осталась кнопка «домой», ведущая в детский экран мимо ролей");
+    }
+
+    g.state.admin.isAdmin = savedAdmin;
+    g.state.admin.parentOf = savedParent;
+    g.state.admin.pass = savedPass;
+    if (problems.length === p0) homeChecked++;
+    viewReset(g);
+  }
+
   /* --- 11. нотация приёмки --- */
   if (typeof g.specVerdict === "function"){
     const p0 = problems.length;
@@ -6495,6 +6635,9 @@ function checkEncoding(){
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
+  console.log(`клавиатура планшета: ${kbChecked ? "да" : "нет"}`);
+  console.log(`время в минутах и секундах: ${timeFmtChecked ? "да" : "нет"}`);
+  console.log(`«домой» по роли: ${homeChecked ? "да" : "нет"}`);
   console.log(`игра по ссылке: ${playChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);

@@ -903,7 +903,9 @@ function zanReport(rec, st){
   var mins = zanMins(rec), pause = zanPauseMins(rec);
 
   /* 1. что было */
-  var was = "Занятие " + mins + " " + plural(mins, "минута", "минуты", "минут");
+  /* Точное время работы: «Занятие 12 мин 40 сек». Округление до минут в
+     отчёте взрослому — та же неточность, что и «—» вместо сорока секунд. */
+  var was = "Занятие " + fmtDur((rec.sec || 0) * 1000);
   if (pause >= 2) was += " работы и " + pause + " " + plural(pause, "минута", "минуты", "минут") + " перерыва";
   was += ", " + lessons.length + " " + plural(lessons.length, "урок", "урока", "уроков");
   var cutN = (rec.cut || []).length;
@@ -1456,6 +1458,18 @@ function syncBack(){
   if (lbl) lbl.textContent = t.label;
   b.title = "Назад: " + t.label;
   b.onclick = function(){ t.go(); };
+}
+
+/* ⚠️ «Домой» у каждой роли своё. Жалоба с боя (05.09.2026): родитель нажал
+   «Кодоквест» в шапке и оказался в тренажёре ребёнка — при том, что вся
+   детская навигация у него спрятана, и логотип был единственной кнопкой на
+   экране. Раньше это чинили по одной кнопке за раз («На главную» в кабинете,
+   выброс из кабинета при регистрации); теперь дом считается из роли в одном
+   месте, и все кнопки «домой» зовут его. */
+function goHome(){
+  if (isAdminDevice()) return screenAdminHome();
+  if (parentOf()) return screenParent();
+  return screenWorlds();
 }
 
 function refreshTop(){
@@ -2047,6 +2061,10 @@ function presenceDetailHTML(st, serverAt){
   });
 
   var bits = [];
+  /* Сколько времени сегодня — первым: это первый вопрос взрослого, и до сих
+     пор ответа на него не было нигде, кроме карты часов. */
+  var todayMs = dayMs(st, day);
+  if (todayMs) bits.push("за тренажёром " + fmtDur(todayMs));
   if (solvedToday.length){
     var names = solvedToday.slice(-2).map(function(x){ return "«" + esc(x.title) + "»"; }).join(", ");
     bits.push("сдано " + solvedToday.length + " " +
@@ -4406,7 +4424,7 @@ function screenTrain(){
       for (var i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].go();
     };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   document.getElementById("toagain").onclick = screenReview;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -4503,7 +4521,7 @@ function screenWorld(n){
     app.querySelectorAll(".lesson").forEach(function(b){
       b.onclick = function(){ if (!b.disabled) openLesson(b.getAttribute("data-id")); };
     });
-    document.getElementById("tomap").onclick = screenWorlds;
+    document.getElementById("tomap").onclick = goHome;
     var op = document.getElementById("openproj");
     if (op) op.onclick = function(){
       var pr = projectOfWorld(n);
@@ -4708,7 +4726,7 @@ function screenCapReached(){
     plural(m, "минута", "минуты", "минут") + '</b>Столько вы договорились со взрослым. ' +
     'Новый урок откроется завтра — а тот, что начат, доделать можно.</div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
 }
 function openLesson(id){
@@ -5563,7 +5581,7 @@ function screenGames(){
   app.querySelectorAll(".gamecard[data-proj]").forEach(function(b){
     b.onclick = function(){ openProject(b.getAttribute("data-proj")); };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -6131,7 +6149,7 @@ function screenAccount(){
     try { yes = confirm("Выйти и очистить прогресс на этом устройстве?\n\n" + back); } catch(e){}
     if (yes) doLogout();
   };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -6249,6 +6267,17 @@ function screenToday(){
     shieldBoxHTML() +
   '</div>';
 
+  /* Сколько сегодня работал — ребёнку тоже: он спрашивает «сколько я уже
+     позанимался?» ровно так же, как взрослый. Число честное: чистая работа
+     без пауз, из карты часов. */
+  var todayMs = dayMs(S, dayKey());
+  var timeCard = todayMs
+    ? '<div class="card"><h3>⏱ Сегодня за тренажёром</h3>' +
+      '<p class="lede"><b>' + fmtDur(todayMs) + '</b> чистой работы.</p>' +
+      '<p class="dim">Это только то время, когда ты действительно работал: ' +
+      'открытая вкладка, пока тебя нет за столом, сюда не считается.</p></div>'
+    : "";
+
   var taskCard;
   if (!pick){
     /* Ноль открытых разминок — это нормальное начало пути, а не поломка */
@@ -6318,7 +6347,7 @@ function screenToday(){
       '<div class="right"><span class="tag">дней подряд: ' + streak + '</span></div></div>' +
     '<p class="lede">Одна маленькая задача в день и серия, которую жалко прерывать. ' +
     'Звёзды тут не начисляются — важна привычка возвращаться.</p>' +
-    installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + taskCard + schedBox +
+    installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   wireInstallTip(app);
@@ -6345,7 +6374,7 @@ function screenToday(){
       if (ref) openLesson(ref); else screenWorlds();
     };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -6380,7 +6409,7 @@ function screenWarmups(){
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -6813,7 +6842,7 @@ function screenReview(){
   app.querySelectorAll(".revcard").forEach(function(b){
     b.onclick = function(){ openLesson(b.getAttribute("data-id")); };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -7243,7 +7272,7 @@ function screenHW(){
   app.querySelectorAll("[data-hw]").forEach(function(b){
     b.onclick = function(){ openHW(b.getAttribute("data-hw")); };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -7517,7 +7546,7 @@ function screenAILab(){
   if (aop) aop.onclick = function(){
     if (projectDone(aproj.id)) screenProjectDone(aproj.id); else openProject(aproj.id);
   };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -8817,7 +8846,7 @@ function screenFolio(){
       openCert(v === "course" ? "course" : +v.replace("world", ""));
     };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -9150,7 +9179,7 @@ function screenZanDone(rec){
     '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
   document.getElementById("ztoday").onclick = screenToday;
-  document.getElementById("zmap").onclick = screenWorlds;
+  document.getElementById("zmap").onclick = goHome;
   var za = document.getElementById("zask");
   if (za) za.onclick = function(){ screenMyTasks(); };
   sfx("win");
@@ -9794,7 +9823,7 @@ function screenShowcase(){
   });
   var sf = document.getElementById("showfolio");
   if (sf) sf.onclick = screenFolio;
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
 
   /* Рисунки: контент первого мира приходит по требованию. Если экран за это
      время сменился, ничего не рисуем — иначе canvas'ы уедут в чужую разметку. */
@@ -10096,7 +10125,7 @@ function screenShop(){
     buildSave(code);
     screenShop();
   };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -10600,7 +10629,7 @@ function screenTrace(){
 
   app.innerHTML = h;
   app.querySelectorAll("[data-back]").forEach(function(b){ b.onclick = screenAdult; });
-  app.querySelectorAll("[data-home]").forEach(function(b){ b.onclick = screenWorlds; });
+  app.querySelectorAll("[data-home]").forEach(function(b){ b.onclick = goHome; });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -11439,7 +11468,7 @@ function screenMyTasks(edit){
       screenMyTasks();
     };
   });
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -11514,7 +11543,7 @@ function openFriendTask(t, opts){
   }
 
   document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -11579,7 +11608,7 @@ function screenTaskBroken(){
     '<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
   document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
 }
 
@@ -12159,7 +12188,7 @@ function screenViz(opts){
   });
   var vb = document.getElementById("vizback");
   if (vb) vb.onclick = function(){ opts.backTo.go(); };
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
   /* Пришли с урока — сразу показываем разбор: ребёнок нажал «разобрать»,
@@ -12410,12 +12439,35 @@ function routeHash(){
   if (ph && projectById(ph)){ openProject(ph); return true; }
   return false;
 }
-function fmtMins(ms){
-  var m = Math.round((ms || 0) / 60000);
-  if (m < 1) return "—";
-  if (m < 60) return m + " мин";
+/* ⚠️ Время показывается ТОЧНО — в минутах и секундах, пока его меньше часа.
+   Жалоба с боя (05.09.2026): «не видно, сколько времени занимался ребёнок».
+   Старый формат округлял до минут и, что хуже, печатал «—» на всём, что
+   короче минуты: сорок секунд работы выглядели как её отсутствие. Для
+   родителя это прямая ложь ровно в ту сторону, в какую врать нельзя.
+   Больше часа секунды становятся шумом — там «1 ч 12 мин». */
+function fmtDur(ms){
+  var sec = Math.round((ms || 0) / 1000);
+  if (sec <= 0) return "0 сек";
+  if (sec < 60) return sec + " сек";
+  var m = Math.floor(sec / 60), r = sec % 60;
+  if (m < 60) return m + " мин" + (r ? " " + r + " сек" : "");
   return Math.floor(m / 60) + " ч " + (m % 60) + " мин";
 }
+/* Оставлено под своим именем: им меряют НЕДЕЛЬНЫЕ и общие суммы, где секунды
+   не значат ничего. Всё, что про «сегодня» и про один урок, идёт через fmtDur. */
+function fmtMins(ms){ return fmtDur(ms); }
+
+/* Активные секунды за день. Берутся из карты часов (S.hours) — там уже лежат
+   именно РАБОЧИЕ секунды, без пауз и без открытой вкладки. Работает на любом
+   снимке, поэтому годится и взрослому, который смотрит чужой прогресс. */
+function daySec(st, key){
+  var row = ((st && st.hours) || {})[key || dayKey()];
+  if (!Array.isArray(row)) return 0;
+  var n = 0;
+  for (var i = 0; i < row.length; i++) n += row[i] || 0;
+  return n;
+}
+function dayMs(st, key){ return daySec(st, key) * 1000; }
 function fmtWhen(ts){
   if (!ts) return "—";
   var d = new Date(ts), p = function(x){ return (x < 10 ? "0" : "") + x; };
@@ -12859,7 +12911,7 @@ function screenAdminSetup(){
     becomeAdmin();
     screenKids();
   };
-  document.getElementById("anotnow").onclick = screenWorlds;
+  document.getElementById("anotnow").onclick = goHome;
   refreshTop();
 }
 /* Вход в уже заведённый кабинет. */
@@ -13357,7 +13409,7 @@ function adminGate(after){
   }
   document.getElementById("admgo").onclick = tryIn;
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") tryIn(); });
-  document.getElementById("admback").onclick = screenWorlds;
+  document.getElementById("admback").onclick = goHome;
   inp.focus();
   refreshTop();
 }
@@ -13381,6 +13433,9 @@ function statsGridHTML(st){
     if ((g.last || 0) > last) last = g.last;
   });
   return '<div class="admstats">' +
+    /* «Сегодня» стоит первым: общее время за всё время отвечает на вопрос
+       «сколько всего», а взрослый спрашивает «сколько сегодня». */
+    statBox("Сегодня за тренажёром", fmtDur(dayMs(st, dayKey()))) +
     statBox("Пройдено уроков", solvedCount + " из " + CURRICULUM.total) +
     statBox("Уроков готово", String(readyTotal)) +
     statBox("Звёзды", stars + " из " + (readyTotal * 3)) +
@@ -14301,7 +14356,7 @@ function screenGroup(){
   app.querySelectorAll("[data-gback]").forEach(function(b){
     b.onclick = function(){ location.hash = "#panel"; screenAdmin(); };
   });
-  app.querySelectorAll("[data-ghome]").forEach(function(b){ b.onclick = screenWorlds; });
+  app.querySelectorAll("[data-ghome]").forEach(function(b){ b.onclick = goHome; });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -14761,7 +14816,7 @@ function screenPlayBroken(){
     '<p class="lede">Скорее всего, её обрезал мессенджер: длинные ссылки часто ломаются ' +
     'на переносе строки. Попроси прислать ещё раз — целиком, одним куском.</p>' +
     '<div class="winrow"><button class="bigbtn" id="plhome">На главную</button></div>';
-  document.getElementById("plhome").onclick = screenWorlds;
+  document.getElementById("plhome").onclick = goHome;
 }
 
 /* Чужая работа: только смотреть и забрать себе в песочницу. Запускать прямо
@@ -14798,7 +14853,7 @@ function screenWorkBroken(){
     '<p class="lede">Скорее всего, её обрезал мессенджер: длинные ссылки часто ломаются ' +
     'на переносе строки. Попроси прислать ещё раз — целиком, одним куском.</p>' +
     '<div class="winrow"><button class="bigbtn" id="whome">На главную</button></div>';
-  document.getElementById("whome").onclick = screenWorlds;
+  document.getElementById("whome").onclick = goHome;
 }
 
 /* ============================================================
@@ -15599,7 +15654,7 @@ function screenGuide(){
     b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paint(); };
   });
   paint();
-  document.getElementById("tomap").onclick = screenWorlds;
+  document.getElementById("tomap").onclick = goHome;
   document.getElementById("gostart").onclick = function(){
     var n = nextLesson();
     if (n) openLesson(n.id); else screenWorlds();
@@ -15632,9 +15687,9 @@ function screenGuide(){
    огонёк дня, шпаргалка, профиль, фокус.
    Старые кнопки (Миры, Разминка, Игры…) убраны из панели, но экраны и адреса
    остались: на них ведут карточки с экранов и хэши вроде #games. */
-document.getElementById("logo").onclick = screenWorlds;
+document.getElementById("logo").onclick = goHome;
 (function(){
-  var byTab = { home: screenWorlds, train: screenTrain, mine: screenFolio };
+  var byTab = { home: goHome, train: screenTrain, mine: screenFolio };
   var nav = document.querySelector(".tabs");
   if (nav) nav.addEventListener("click", function(e){
     var b = e.target.closest(".tab");
@@ -15771,10 +15826,64 @@ window.addEventListener("resize", function(){
      3. общий обработчик ошибок ниже: если экран так и остался пустым,
         ребёнок видит человеческое сообщение и кнопку «Обновить», которая
         чистит кэш и перезагружает страницу. */
+/* ================= планшет: виртуальная клавиатура =================
+   Жалоба с боя (05.09.2026): на планшете при наборе кода выскакивает
+   клавиатура и «экран съезжает». Причины три, и лечатся они по отдельности:
+
+   1. Android Chrome по умолчанию НАКРЫВАЕТ страницу клавиатурой, не меняя
+      вьюпорт: липкая шапка и полоска задания остаются посреди экрана и
+      прыгают. Лечится словом interactive-widget=resizes-content в мете
+      вьюпорта (index.html): клавиатура начинает СЖИМАТЬ страницу, и
+      раскладка честно перестраивается. iOS это слово игнорирует.
+
+   2. Пока клавиатура открыта, липким и плавающим элементам не место:
+      липкая колонка редактора и полоска задания дёргаются при каждом
+      скролле, а плавающие кнопки всплывают над клавиатурой посреди экрана.
+      Открытую клавиатуру мы узнаём по visualViewport: он сжался заметно
+      сильнее, чем бывает от поворота, — вешаем класс kb на documentElement,
+      и CSS прячет лишнее (правила «.kb …» в style.css).
+
+   3. Браузер сам прокручивает страницу к сфокусированному полю, но метит в
+      край экрана — поле оказывается впритык к клавиатуре или под шапкой.
+      Помогают scroll-padding в CSS и мягкое доцентрирование: через полсекунды
+      после фокуса (клавиатура уже выехала) редактор подтягивается к середине
+      видимой области. Только на устройствах с пальцем: на десктопе от такого
+      доцентрирования страница дёргалась бы при каждом клике в редактор. */
+var KB_SHRINK = 140;   /* насколько должен сжаться вьюпорт, чтобы это была клавиатура */
+function kbApply(vvHeight, winHeight){
+  var on = (winHeight - vvHeight) > KB_SHRINK;
+  try { document.documentElement.classList.toggle("kb", on); } catch(e){}
+  return on;
+}
+function kbInit(){
+  var vv = window.visualViewport;
+  if (!vv) return;                         /* старые браузеры — без класса, как раньше */
+  var roll = function(){ kbApply(vv.height, window.innerHeight); };
+  vv.addEventListener("resize", roll);
+  roll();
+}
+/* доцентрировать редактор после того, как клавиатура выехала */
+function kbFocusInit(){
+  var touch = false;
+  try { touch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0; } catch(e){}
+  if (!touch) return;
+  document.addEventListener("focusin", function(e){
+    var t = e.target;
+    if (!t || (t.tagName !== "TEXTAREA" && t.tagName !== "INPUT")) return;
+    var box = t.closest ? (t.closest(".editorbox") || t.closest(".pane") || t) : t;
+    setTimeout(function(){
+      if (document.activeElement !== t) return;      /* фокус уже ушёл */
+      try { box.scrollIntoView({ block:"center", behavior:"smooth" }); } catch(e){}
+    }, 450);
+  });
+}
+
 function bootRender(){
   /* общий счётчик активных минут запускается один раз на всю сессию: он
      считает не «сколько открыта вкладка», а сколько ребёнок реально работал */
   actStart();
+  kbInit();
+  kbFocusInit();
   try {
     if (!routeHash()){
       /* Каждое устройство открывается в СВОЮ роль. Порядок важен: сначала
@@ -16017,6 +16126,8 @@ window.__game = {
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
   presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
   presenceDetailHTML: presenceDetailHTML,
+  kbApply: kbApply, KB_SHRINK: KB_SHRINK,
+  fmtDur: fmtDur, daySec: daySec, dayMs: dayMs, goHome: goHome,
   liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
   livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
