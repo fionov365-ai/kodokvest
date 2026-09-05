@@ -203,8 +203,31 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   r = await call(post({ op:"live_set", code:"misha-7f3a" }, JSON.stringify({ off: true })));
   check("выключение отвечает 200", r.statusCode === 200);
   r = await call(get({ op:"live_get", code:"misha-7f3a" }));
-  check("после выключения трансляции нет", json(r).found === false, r.body);
+  check("после выключения кадра нет", json(r).found === false, r.body);
   check("файл трансляции удалён с диска", !fs.existsSync(path.join(DIR, "misha-7f3a.live.json")));
+
+  /* ⚠️ Главная ловушка боя: в смонтированном бакете unlink молча не работает.
+     Тогда выключение обязано класть «надгробие», а не врать про успех.
+     Подделываем неудаляемый файл: делаем папку с таким именем — unlink на ней
+     упадёт, и код обязан пойти вторым путём. */
+  {
+    const stuck = path.join(DIR, "upryamyi.live.json");
+    await call(post({ op:"live_set", code:"upryamyi" },
+          JSON.stringify({ at:1, code:"print(2)" })));
+    check("кадр упрямого ученика записан", fs.existsSync(stuck));
+    const realUnlink = fs.unlinkSync;
+    fs.unlinkSync = function(p){ if (String(p) === stuck) throw new Error("бакет не даёт удалять"); return realUnlink(p); };
+    r = await call(post({ op:"live_set", code:"upryamyi" }, JSON.stringify({ off:true })));
+    fs.unlinkSync = realUnlink;
+    check("выключение при неудаляемом файле отвечает 200", r.statusCode === 200, r.body);
+    /* ⚠️ Надгробие отдаётся КАК ЕСТЬ, с флагом off и своим временем: решение
+       «трансляции нет» принимает клиент, потому что только он помнит, что уже
+       видел. Сервер, отвечающий «ничего нет», заставлял бы зрителя мигать —
+       у смонтированного бакета кэш свой в каждом экземпляре функции. */
+    r = await call(get({ op:"live_get", code:"upryamyi" }));
+    check("надгробие отдано с флагом off", json(r).off === true, r.body);
+    check("у надгробия есть время", typeof json(r).serverAt === "number", r.body);
+  }
 
   try { fs.rmSync(DIR, { recursive:true, force:true }); } catch(e){}
   console.log(bad ? "\nПРОБЛЕМ: " + bad : "\nсерверная функция в порядке");

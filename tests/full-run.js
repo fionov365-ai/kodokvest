@@ -5886,6 +5886,32 @@ function checkEncoding(){
       if (calls > putsBefore)
         bad("[живое] неизменившийся кадр всё равно уехал на сервер: " + (calls - putsBefore) + " лишних запросов");
 
+      /* ⚠️ Зритель монотонен. На бою выяснилось: у смонтированного бакета кэш
+         свой в каждом экземпляре функции, и соседние ответы расходятся — то
+         свежий кадр, то десятисекундной давности, то надгробие. Если верить
+         каждому, картинка мигает «идёт / не идёт». */
+      {
+        const W = g.liveWatcher();
+        const t0 = Date.now();
+        const f1 = { found:true, serverAt: t0, now: t0, code:"первый", title:"1" };
+        const f2 = { found:true, serverAt: t0 + 5000, now: t0 + 5000, code:"второй", title:"2" };
+        if (g.liveAccept(W, f1).code !== "первый") bad("[живое] первый кадр не принят");
+        if (g.liveAccept(W, f2).code !== "второй") bad("[живое] свежий кадр не принят");
+        /* пришёл старый ответ от другого экземпляра — откатываться нельзя */
+        const back = g.liveAccept(W, { found:true, serverAt: t0, now: t0 + 5200, code:"первый" });
+        if (!back || back.code !== "второй")
+          bad("[живое] зритель откатился на старый кадр — картинка будет мигать");
+        /* выключение фиксируется и старыми кадрами не отменяется */
+        g.liveAccept(W, { found:true, off:true, serverAt: t0 + 9000, now: t0 + 9000 });
+        if (g.liveAccept(W, { found:true, serverAt: t0 + 5000, now: t0 + 9100, code:"второй" }))
+          bad("[живое] старый кадр воскресил выключенную трансляцию");
+        /* молчание дольше окна свежести — трансляции нет */
+        const W2 = g.liveWatcher();
+        g.liveAccept(W2, { found:true, serverAt: t0, now: t0, code:"x" });
+        if (g.liveAccept(W2, { found:false, now: t0 + g.LIVE_FRESH + 5000 }))
+          bad("[живое] протухший кадр всё ещё показывается как живой");
+      }
+
       /* экран зрителя показывает код и честность */
       g.screenLiveView("live-kid", "Петя"); await tick(60);
       const t = doc.getElementById("app").textContent;

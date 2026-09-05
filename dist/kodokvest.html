@@ -18050,6 +18050,31 @@ function bindLiveRow(after){
   };
 }
 
+/* ---------- чтение трансляции: зритель монотонен ----------
+   ⚠️ У смонтированного бакета свой кэш в каждом экземпляре функции: соседние
+   запросы отвечают разным — то свежим кадром, то тем, что было десять секунд
+   назад, то надгробием от выключения (замерено на бою 05.09.2026). Если верить
+   каждому ответу, картинка мигает между «идёт» и «не идёт».
+   Поэтому зритель ПОМНИТ самое свежее serverAt и назад не откатывается:
+   старый ответ просто игнорируется. Выключение при этом надёжно — у надгробия
+   время самое свежее, и после него ничего старого уже не примется. */
+function liveWatcher(){
+  return { seenAt: 0, frame: null, off: false };
+}
+/* Вернуть кадр, который стоит показать, или null — «трансляции нет». */
+function liveAccept(w, rec){
+  if (rec && rec.found && (rec.serverAt || 0) > w.seenAt){
+    w.seenAt = rec.serverAt || 0;
+    w.off = !!rec.off;
+    w.frame = rec.off ? null : rec;
+  }
+  if (w.off || !w.frame) return null;
+  /* «сейчас» берём с сервера: часы зрителя могут врать на минуты */
+  var now = (rec && rec.now) || Date.now();
+  if (now - w.seenAt > LIVE_FRESH) return null;
+  return w.frame;
+}
+
 /* ---------- уровень 2: экран зрителя (сторона взрослого) ---------- */
 function screenLiveView(code, label){
   var seq = enterScreen("home", "liveview");
@@ -18066,16 +18091,18 @@ function screenLiveView(code, label){
   document.getElementById("lvback").onclick = function(){
     if (isAdminDevice()) screenKid(code); else if (parentOf()) screenParent(); else screenWorlds();
   };
-  function draw(rec){
+  var watch = liveWatcher();
+  function draw(raw){
     var box = document.getElementById("livebody");
     if (!box) return;
-    if (!rec || !rec.found || (rec.now - rec.serverAt) > LIVE_FRESH){
+    var rec = liveAccept(watch, raw);
+    if (!rec){
       box.innerHTML = '<div class="note"><b>Трансляция сейчас не идёт</b>' +
         'Попросите ребёнка нажать «📺 Показать экран наставнику» — кнопка на экране занятия ' +
         'и в его профиле. Как только он нажмёт, здесь появится код.</div>';
       return;
     }
-    var age = Math.max(0, Math.round((rec.now - rec.serverAt) / 1000));
+    var age = Math.max(0, Math.round((((raw && raw.now) || Date.now()) - watch.seenAt) / 1000));
     box.innerHTML =
       '<div class="card"><h3>' + esc(rec.title || "Сейчас на экране") + '</h3>' +
       '<p class="dim">обновлено ' + age + ' ' + plural(age, "секунду", "секунды", "секунд") + ' назад</p>' +
@@ -29012,12 +29039,13 @@ function kidRender(savedNote){
    записи: у чтений бесплатный предел в десять раз больше. */
 function kidWatch(code, seq){
   var beat = 0;
+  var watch = liveWatcher();
   function roll(){
     if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return;
     beat++;
     var jobs = [];
     jobs.push(Cloud.liveGet(code).then(function(rec){
-      return (rec && rec.found && (rec.now - rec.serverAt) <= LIVE_FRESH) ? rec : null;
+      return liveAccept(watch, rec);
     }, function(){ return null; }));
     if (beat % 3 === 0)
       jobs.push(Cloud.load(code).then(function(r){
@@ -32027,6 +32055,7 @@ window.__game = {
   fmtDur: fmtDur, daySec: daySec, dayMs: dayMs, goHome: goHome,
   liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
   livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
+  liveWatcher: liveWatcher, liveAccept: liveAccept,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },

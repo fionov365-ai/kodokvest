@@ -255,8 +255,19 @@ module.exports.handler = async function(event){
       let data;
       try { data = JSON.parse(body); }
       catch(e){ return reply(400, { ok:false, error:"Тело запроса — не JSON." }); }
+      /* ⚠️ Выключение НЕ полагается на удаление файла. В смонтированном
+         бакете unlink молча не срабатывает (проверено на бою 05.09.2026:
+         после «off» кадр продолжал читаться), а мы при этом отвечали ok —
+         то есть врали. Поэтому кладём «надгробие»: запись с флагом off,
+         которую live_get отдаёт как «трансляции нет». Удалить всё равно
+         пробуем: там, где это работает, файл не копится. */
       if (data && data.off){
-        try { fs.unlinkSync(liveFileOf(code)); } catch(e){}
+        var gone = false;
+        try { fs.unlinkSync(liveFileOf(code)); gone = true; } catch(e){}
+        if (!gone){
+          try { fs.writeFileSync(liveFileOf(code), JSON.stringify({ off:true, serverAt: Date.now() })); }
+          catch(e){ return reply(500, { ok:false, error:"Не удалось выключить трансляцию: " + (e.message || e) }); }
+        }
         return reply(200, { ok:true, off:true });
       }
       if (!data || typeof data !== "object" || typeof data.code !== "string")
@@ -281,6 +292,13 @@ module.exports.handler = async function(event){
       let rec;
       try { rec = JSON.parse(raw); }
       catch(e){ return reply(200, { ok:true, found:false }); }
+      /* ⚠️ Надгробие отдаём КАК ЕСТЬ, с его временем, а не как «ничего нет».
+         Причина выяснилась на бою 05.09.2026: у смонтированного бакета свой
+         кэш В КАЖДОМ экземпляре функции, и соседние запросы отвечают разным —
+         то надгробием, то старым кадром, и так больше десяти секунд. Если
+         сервер будет говорить «нет трансляции», зритель начнёт мигать между
+         «идёт» и «не идёт». Решение переносится на клиент: он помнит самое
+         свежее serverAt и просто не откатывается назад. */
       rec.ok = true; rec.found = true; rec.now = Date.now();
       return reply(200, rec);
     }
