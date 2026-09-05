@@ -46,9 +46,10 @@ CONTENT.world4 = {
     starter:'def hypot(a, b):\n    return 0\n\n\ndef circle(r):\n    return 0\n\n\nprint(hypot(3, 4))\nprint(hypot(5, 12))\nprint(circle(1))\nprint(circle(2.5))\n',
     solution:'import math\n\n\ndef hypot(a, b):\n    return math.sqrt(a * a + b * b)\n\n\ndef circle(r):\n    return round(math.pi * r * r, 2)\n\n\nprint(hypot(3, 4))\nprint(hypot(5, 12))\nprint(circle(1))\nprint(circle(2.5))\n',
     hints:[
-      "Строка import math идёт в самом начале файла, до функций",
-      "Теорема Пифагора: квадрат гипотенузы равен сумме квадратов катетов. Значит нужен корень из суммы квадратов",
-      "Площадь круга — π на радиус в квадрате. Число π лежит в math.pi, а округляет round из Мира 1"
+      { t:"Строка `import math` идёт в самом начале файла, до функций. После неё команды модуля зовутся через точку: `math.sqrt(...)`, `math.pi`.",
+        code:'import math\n\nprint(math.sqrt(25))\nprint(round(math.pi, 2))' },
+      { t:"Теорема Пифагора: гипотенуза — это корень из суммы квадратов катетов, то есть `math.sqrt(a * a + b * b)`." },
+      { t:"Площадь круга — π умножить на радиус в квадрате: `math.pi * r * r`. Округлить до двух знаков — знакомый `round(..., 2)`." }
     ],
     check:{ kind:"output", needCode:["import"],
             needMsg:"Условие задания: считать нужно через модуль math, а не своими формулами." }
@@ -87,9 +88,10 @@ CONTENT.world4 = {
     starter:'def report(scores):\n    return ""\n\n\nprint(report([4, 8, 6, 10, 2]))\nprint(report([5, 5, 5]))\nprint(report([1, 100]))\n',
     solution:'import statistics\n\n\ndef report(scores):\n    avg = round(statistics.mean(scores), 1)\n    mid = statistics.median(scores)\n    spread = max(scores) - min(scores)\n    return f"среднее {avg}, медиана {mid}, разброс {spread}"\n\n\nprint(report([4, 8, 6, 10, 2]))\nprint(report([5, 5, 5]))\nprint(report([1, 100]))\n',
     hints:[
-      "statistics.mean(scores) даёт среднее, statistics.median(scores) — медиану",
-      "Среднее округляем: round(statistics.mean(scores), 1)",
-      "Собери строку f-строкой: f\"среднее {avg}, медиана {mid}, разброс {spread}\""
+      { t:"Подключи модуль и возьми готовое: `statistics.mean(scores)` — среднее, `statistics.median(scores)` — медиана.",
+        code:'import statistics\n\nprint(statistics.mean([2, 4, 9]))\nprint(statistics.median([2, 4, 9]))' },
+      { t:"Среднее округли до одного знака: `round(statistics.mean(scores), 1)`. Разброс — это `max(scores) - min(scores)`." },
+      { t:"Собери ответ f-строкой: `return f\"среднее {avg}, медиана {mid}, разброс {spread}\"` — слова и запятые точно как в условии." }
     ],
     check:{ kind:"output", needCode:["statistics"],
             needMsg:"По условию среднее и медиану берём из модуля statistics." }
@@ -128,9 +130,10 @@ CONTENT.world4 = {
     starter:'from datetime import date\n\n\ndef days_left(start, when):\n    return 0\n\n\ndef line(name, start, when):\n    return name\n\n\nstart = date(2026, 9, 1)\npeople = [("аня", date(2026, 9, 15)), ("боря", date(2026, 12, 31)), ("витя", date(2026, 8, 20))]\nfor name, when in people:\n    print(line(name, start, when))\n',
     solution:'from datetime import date\n\n\ndef days_left(start, when):\n    return (when - start).days\n\n\ndef line(name, start, when):\n    return f"{name}: {when.strftime(\'%d.%m.%Y\')}, дней осталось: {days_left(start, when)}"\n\n\nstart = date(2026, 9, 1)\npeople = [("аня", date(2026, 9, 15)), ("боря", date(2026, 12, 31)), ("витя", date(2026, 8, 20))]\nfor name, when in people:\n    print(line(name, start, when))\n',
     hints:[
-      "Вычитание двух дат даёт timedelta, а у него есть поле days: (when - start).days",
-      "В f-строке кавычки внутри должны быть другими: f\"{when.strftime('%d.%m.%Y')}\"",
-      "В строку по порядку идут: имя, отформатированная дата, потом вызов days_left"
+      { t:"Вычитание двух дат даёт timedelta — «срок», и у него есть поле days: `(when - start).days` — это и есть ответ для days_left.",
+        code:'from datetime import date\n\nd1 = date(2026, 3, 1)\nd2 = date(2026, 3, 10)\nprint((d2 - d1).days)' },
+      { t:"В f-строке кавычки внутри должны отличаться от наружных: `f\"{when.strftime('%d.%m.%Y')}\"` — снаружи двойные, внутри одиночные." },
+      { t:"Строку line собирай по порядку из трёх кусков: имя, отформатированная дата, и вызов своей же `days_left(start, when)` прямо в фигурных скобках." }
     ],
     check:{ kind:"output", needCode:["strftime"],
             needMsg:"По условию дату нужно печатать через strftime, а не собирать из полей вручную." }
@@ -175,9 +178,10 @@ CONTENT.world4 = {
     starter:'best_name = ""\nbest_avg = 0\n\nwith open("оценки.txt") as f:\n    for line in f:\n        parts = line.split()\n        name = parts[0]\n        marks = parts[1:]\n        print(name, marks)\n\nprint("лучший:", best_name)\n',
     solution:'best_name = ""\nbest_avg = 0\n\nwith open("оценки.txt") as f:\n    for line in f:\n        parts = line.split()\n        name = parts[0]\n        marks = [int(m) for m in parts[1:]]\n        avg = round(sum(marks) / len(marks), 2)\n        print(f"{name}: средний {avg}")\n        if avg > best_avg:\n            best_avg = avg\n            best_name = name\n\nprint("лучший:", best_name)\n',
     hints:[
-      "parts[1:] — это срез: все оценки без имени. Но они строки, их надо превратить в числа",
-      "Включением это одна строка: marks = [int(m) for m in parts[1:]]",
-      "Средний балл: round(sum(marks) / len(marks), 2). Лучшего запоминай в двух переменных сверху"
+      { t:"`parts[1:]` — срез «всё после имени». Но это СТРОКИ, а не числа: считать по ним нельзя, сначала преврати каждую в int включением.",
+        code:'parts = ["ёж", "5", "3"]\nprint(parts[1:])\nprint([int(m) for m in parts[1:]])' },
+      { t:"Средний балл: `avg = round(sum(marks) / len(marks), 2)` — сумма на количество и две цифры после точки." },
+      { t:"Лучшего запоминай по ходу цикла: если `avg > best_avg` — положи в `best_avg` и `best_name` новые значения. Обе переменные уже заведены сверху." }
     ],
     check:{ kind:"output", needCode:["open"],
             needMsg:"Оценки нужно прочитать из файла через open, а не вписать в код." }
@@ -212,9 +216,9 @@ CONTENT.world4 = {
     starter:'with open("журнал.txt", "w") as f:\n    f.write("журнал работ\\n")\n\nfor i in range(3):\n    with open("журнал.txt", "w") as f:\n        f.write(f"шаг {i}\\n")\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
     solution:'with open("журнал.txt", "w") as f:\n    f.write("журнал работ\\n")\n\nfor i in range(3):\n    with open("журнал.txt", "a") as f:\n        f.write(f"шаг {i}\\n")\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
     hints:[
-      "Открой файл в панели справа после запуска и посмотри, что в нём осталось",
-      "Режим \"w\" стирает содержимое при каждом открытии — а открываем мы его в цикле",
-      "Дописывать в конец умеет режим \"a\": with open(\"журнал.txt\", \"a\") as f"
+      { t:"Запусти и открой журнал.txt в панели файлов справа: там осталась одна строка «шаг 2». Всё, что писалось раньше, кто-то стёр." },
+      { t:"Стирает режим `\"w\"`: при КАЖДОМ открытии он начинает файл заново. А файл открывается внутри цикла три раза — и каждый раз старое пропадает." },
+      { t:"Внутри цикла нужен режим дописывания: `with open(\"журнал.txt\", \"a\") as f:` — «a» значит append, добавить в конец. Первое открытие с \"w\" оставь как есть: заголовок и должен начинать файл заново." }
     ],
     check:{ kind:"output", fixBudget:2 }
   }
@@ -250,9 +254,10 @@ CONTENT.world4 = {
     starter:'from pathlib import Path\n\n\ndef describe(path):\n    return str(path)\n\n\nfor raw in ["данные/отчёт.txt", "readme", "img/лого.png", "заметки.md"]:\n    print(describe(Path(raw)))\n',
     solution:'from pathlib import Path\n\n\ndef describe(path):\n    kind = path.suffix[1:] if path.suffix else "нет"\n    return f"{path.name}: имя {path.stem}, тип {kind}, папка {path.parent}"\n\n\nfor raw in ["данные/отчёт.txt", "readme", "img/лого.png", "заметки.md"]:\n    print(describe(Path(raw)))\n',
     hints:[
-      "path.suffix даёт расширение вместе с точкой: «.txt». Убрать точку поможет срез [1:]",
-      "Пустая строка — ложь, поэтому короткий if: path.suffix[1:] if path.suffix else \"нет\"",
-      "Остальное собирается f-строкой из path.name, path.stem и path.parent"
+      { t:"`path.suffix` даёт расширение вместе с точкой — «.txt». Точку убирает срез `[1:]`: «с первого знака и до конца».",
+        code:'from pathlib import Path\n\np = Path("фото.png")\nprint(p.suffix)\nprint(p.suffix[1:])' },
+      { t:"У файла без расширения suffix — пустая строка, а пустая строка это ложь. Отсюда короткий выбор: `kind = path.suffix[1:] if path.suffix else \"нет\"`." },
+      { t:"Остальное — готовые части пути: `path.name` имя с расширением, `path.stem` без него, `path.parent` папка. Собери их f-строкой по образцу из условия." }
     ],
     check:{ kind:"output", needCode:["suffix"],
             needMsg:"Разбирать путь нужно средствами Path (name, stem, suffix, parent), а не split." }
@@ -294,9 +299,9 @@ CONTENT.world4 = {
     starter:'import json\n\nwith open("сейв.json") as f:\n    save = json.load(f)\n\nprint(save)\n\nwith open("сейв.json", "w") as f:\n    json.dump(save, f, ensure_ascii=False, indent=2)\n\nwith open("сейв.json") as f:\n    print(f.read())\n',
     solution:'import json\n\nwith open("сейв.json") as f:\n    save = json.load(f)\n\nsave["герой"]["hp"] += 5\nsave["вещи"].append("щит")\nsave["уровень"] += 1\n\nwith open("сейв.json", "w") as f:\n    json.dump(save, f, ensure_ascii=False, indent=2)\n\nwith open("сейв.json") as f:\n    print(f.read())\n',
     hints:[
-      "После json.load это обычный словарь: save[\"герой\"][\"hp\"] += 5",
-      "Вещи — список, у него есть append. Уровень — обычное число",
-      "Порядок важен: сначала все изменения, потом запись, и только потом чтение"
+      { t:"После `json.load` в переменной save лежит обычный словарь Python. До hp героя добираются двойным обращением: сначала `save[\"герой\"]`, потом ключ `\"hp\"` — и к нему уже прибавляют 5." },
+      { t:"Вещи — обычный список: `save[\"вещи\"].append(\"щит\")`. Уровень — число: `save[\"уровень\"] += 1`." },
+      { t:"Порядок важен: сначала ВСЕ изменения, потом запись json.dump, и только потом чтение с печатью. И убери отладочный `print(save)` — в выводе должен остаться только текст файла." }
     ],
     check:{ kind:"output", needCode:["json"],
             needMsg:"Работать нужно через модуль json, а не собирать текст руками." }
@@ -336,9 +341,9 @@ CONTENT.world4 = {
     starter:'import csv\n\nrows = []\ntotal = 0\n\nwith open("покупки.csv") as f:\n    for item in csv.DictReader(f):\n        print(item["товар"], item["количество"], item["цена"])\n\nwith open("итог.csv", "w") as f:\n    w = csv.writer(f)\n    w.writerow(["товар", "сумма"])\n\nwith open("итог.csv") as f:\n    for row in csv.reader(f):\n        print(row)\n',
     solution:'import csv\n\nrows = []\ntotal = 0\n\nwith open("покупки.csv") as f:\n    for item in csv.DictReader(f):\n        cost = int(item["количество"]) * int(item["цена"])\n        total += cost\n        rows.append([item["товар"], cost])\n\nrows.append(["всего", total])\n\nwith open("итог.csv", "w") as f:\n    w = csv.writer(f)\n    w.writerow(["товар", "сумма"])\n    w.writerows(rows)\n\nwith open("итог.csv") as f:\n    for row in csv.reader(f):\n        print(row)\n',
     hints:[
-      "Значения из DictReader — строки: int(item[\"количество\"]) * int(item[\"цена\"])",
-      "Складывай пары [товар, сумма] в список rows, а в конце добавь [\"всего\", total]",
-      "Записать сразу все строки: w.writerows(rows)"
+      { t:"Всё, что отдаёт DictReader, — строки, даже цифры. Перед умножением переведи их в числа: `int(item[\"количество\"]) * int(item[\"цена\"])`." },
+      { t:"Складывай готовые пары в список: `rows.append([item[\"товар\"], cost])`, а сумму копи в total. После цикла добавь последнюю пару: `rows.append([\"всего\", total])`." },
+      { t:"Записать все строки разом умеет `w.writerows(rows)` — поставь его сразу после строки с заголовком." }
     ],
     check:{ kind:"output", needCode:["csv"],
             needMsg:"Читать и писать таблицу нужно через модуль csv." }
@@ -378,9 +383,10 @@ CONTENT.world4 = {
     starter:'from collections import Counter\n\nauthors = Counter()\nwords = Counter()\n\nwith open("чат.txt", encoding="utf-8") as f:\n    for line in f:\n        name, text = line.split(":")\n        print(name, "|", text.strip())\n',
     solution:'from collections import Counter\n\nauthors = Counter()\nwords = Counter()\n\nwith open("чат.txt", encoding="utf-8") as f:\n    for line in f:\n        name, text = line.split(":")\n        authors[name] += 1\n        words.update(text.split())\n\nfor name, n in authors.most_common():\n    print("сообщений:", name, n)\n\nprint("слов всего:", sum(words.values()))\n\nfor word, n in words.most_common(3):\n    print(word, n)\n',
     hints:[
-      "Counter можно наполнять по одному: authors[name] += 1 — проверки не нужны",
-      "Слова добавляются порцией — тем самым update из теории",
-      "Для вывода: most_common() без числа даёт всех, most_common(3) — первых трёх. Общее число слов — sum(words.values())"
+      { t:"Counter наполняется без всяких проверок: `authors[name] += 1` — несуществующий ключ сам начнётся с нуля.",
+        code:'from collections import Counter\n\nc = Counter()\nc["ёж"] += 1\nc["ёж"] += 1\nprint(c["ёж"])' },
+      { t:"Слова одного сообщения добавляй порцией: `words.update(text.split())` — update у Counter ПРИБАВЛЯЕТ, а не заменяет." },
+      { t:"Вывод: `authors.most_common()` без числа отдаёт всех по убыванию, `words.most_common(3)` — трёх самых частых. Общее число слов — `sum(words.values())`." }
     ],
     check:{ kind:"output", needCode:["Counter"],
             needMsg:"По условию считать нужно через Counter из collections." }
@@ -419,9 +425,10 @@ CONTENT.world4 = {
     starter:'import itertools\n\n\ndef pairs(team):\n    return []\n\n\ndef menu(dishes, drinks):\n    return []\n\n\ndef first_over(limit):\n    return 0\n\n\nprint(pairs(["аня", "боря", "витя"]))\nprint(len(pairs(["а", "б", "в", "г"])))\nprint(menu(["суп", "плов"], ["чай", "сок"]))\nprint(first_over(100), first_over(1000))\n',
     solution:'import itertools\n\n\ndef pairs(team):\n    return list(itertools.combinations(team, 2))\n\n\ndef menu(dishes, drinks):\n    return list(itertools.product(dishes, drinks))\n\n\ndef first_over(limit):\n    for n in itertools.count(1):\n        if n ** 3 > limit:\n            return n\n\n\nprint(pairs(["аня", "боря", "витя"]))\nprint(len(pairs(["а", "б", "в", "г"])))\nprint(menu(["суп", "плов"], ["чай", "сок"]))\nprint(first_over(100), first_over(1000))\n',
     hints:[
-      "Разница простая: в матче «аня против бори» и «боря против ани» — одно и то же, а в меню «суп с чаем» и «чай с супом» — тоже, но перебирать надо каждое блюдо с каждым напитком. Значит нужны два разных инструмента",
-      "Первый — combinations, второй — product. Оба должны вернуть список, поэтому list(...)",
-      "В first_over иди по бесконечному счётчику и делай return, как только куб больше limit"
+      { t:"Разница между задачами: в матче «аня против бори» и «боря против ани» — одна и та же пара, порядок не важен. А в меню надо перебрать КАЖДОЕ блюдо с КАЖДЫМ напитком. Это два разных инструмента." },
+      { t:"Пары без учёта порядка — `itertools.combinations(team, 2)`, все сочетания двух списков — `itertools.product(dishes, drinks)`. Оба оберни в `list(...)`: функции должны вернуть списки.",
+        code:'import itertools\n\nprint(list(itertools.combinations("абв", 2)))\nprint(list(itertools.product([1, 2], "xy")))' },
+      { t:"В first_over иди по бесконечному счётчику: `for n in itertools.count(1):` — и как только `n ** 3 > limit`, сразу `return n`. return и остановит бесконечный перебор." }
     ],
     check:{ kind:"output", needCode:["combinations","product","count"],
             needMsg:"По условию нужны именно готовые инструменты: combinations, product и count из itertools." }
@@ -464,9 +471,10 @@ CONTENT.world4 = {
     starter:'def lines(name):\n    return []\n\n\ndef long_lines(name, n):\n    return []\n\n\ndef first(gen, k):\n    return []\n\n\nprint(list(lines("письмо.txt")))\nprint(list(long_lines("письмо.txt", 10)))\nprint(list(first(lines("письмо.txt"), 2)))\nprint(list(first(long_lines("письмо.txt", 10), 1)))\n',
     solution:'def lines(name):\n    with open(name) as f:\n        for line in f:\n            yield line.strip()\n\n\ndef long_lines(name, n):\n    for line in lines(name):\n        if len(line) > n:\n            yield line\n\n\ndef first(gen, k):\n    taken = 0\n    for value in gen:\n        if taken >= k:\n            return\n        yield value\n        taken += 1\n\n\nprint(list(lines("письмо.txt")))\nprint(list(long_lines("письмо.txt", 10)))\nprint(list(first(lines("письмо.txt"), 2)))\nprint(list(first(long_lines("письмо.txt", 10), 1)))\n',
     hints:[
-      "Функция с yield — уже генератор: список собирать не надо, значения отдаются по одному",
-      "long_lines может ходить по твоему же генератору: for line in lines(name), а отдавать только подходящие",
-      "В first считай отданные значения и останови генератор пустым return, когда хватит"
+      { t:"Функция с yield — уже генератор: список собирать не надо, значения отдаются по одному. В lines открой файл через with, иди циклом по строкам и отдавай `yield line.strip()`.",
+        code:'def nums():\n    yield 1\n    yield 2\n\nprint(list(nums()))' },
+      { t:"long_lines не должен сам открывать файл — он ходит по твоему же генератору: `for line in lines(name):` — и отдаёт только строки длиннее n." },
+      { t:"В first считай отданные значения: перед `yield value` проверь `if taken >= k:` — и останови генератор пустым `return`. После yield увеличь счётчик." }
     ],
     check:{ kind:"output", needCode:["yield"], noCode:["islice","append"],
             needMsg:"По условию все три функции должны быть генераторами — внутри нужен yield.",
@@ -506,9 +514,9 @@ CONTENT.world4 = {
     starter:'calls = {"было": 0}\n\n\ndef remembers(fn):\n    return fn\n\n\n@remembers\ndef slow_square(n):\n    return n * n\n\n\nprint(slow_square(4))\nprint(slow_square(4))\nprint(slow_square(5))\nprint(slow_square(4))\nprint("настоящих вызовов:", calls["было"])\n',
     solution:'calls = {"было": 0}\n\n\ndef remembers(fn):\n    known = {}\n\n    def inner(n):\n        if n in known:\n            return known[n]\n        calls["было"] += 1\n        known[n] = fn(n)\n        return known[n]\n    return inner\n\n\n@remembers\ndef slow_square(n):\n    return n * n\n\n\nprint(slow_square(4))\nprint(slow_square(4))\nprint(slow_square(5))\nprint(slow_square(4))\nprint("настоящих вызовов:", calls["было"])\n',
     hints:[
-      "Словарь known создаётся в remembers, до inner — тогда он общий для всех вызовов обёртки",
-      "Внутри inner: сначала проверь if n in known, и только потом считай",
-      "Не забудь вернуть саму обёртку: return inner в конце remembers"
+      { t:"Словарь для запоминания заведи В remembers, но ДО inner: тогда он создастся один раз и будет общим для всех вызовов обёртки — это то самое замыкание из теории." },
+      { t:"Внутри inner сначала проверь, считали ли уже: `if n in known:` — верни готовое `known[n]`, не вызывая функцию. Иначе посчитай `fn(n)`, положи в словарь и верни." },
+      { t:"Настоящий вызов — это когда дошло до `fn(n)`: там же и `calls[\"было\"] += 1`. И последней строкой remembers верни саму обёртку: `return inner`." }
     ],
     check:{ kind:"output", needCode:["def inner","return inner"],
             needMsg:"Нужен настоящий декоратор: внутренняя функция inner и возврат её из remembers." }
@@ -546,9 +554,9 @@ CONTENT.world4 = {
     data:{ "журнал.txt": "" },
     solution:'class Journal:\n    def __init__(self, name, path):\n        self.name = name\n        self.path = path\n\n    def __enter__(self):\n        with open(self.path, "a") as f:\n            f.write(f"начали: {self.name}\\n")\n        return self\n\n    def __exit__(self, a, b, c):\n        with open(self.path, "a") as f:\n            f.write(f"закончили: {self.name}\\n")\n\n    def write(self, text):\n        with open(self.path, "a") as f:\n            f.write(f"  {text}\\n")\n\n\nwith Journal("сборка", "журнал.txt") as j:\n    j.write("шаг один")\n    j.write("шаг два")\n\ntry:\n    with Journal("проверка", "журнал.txt") as j:\n        j.write("начал проверять")\n        raise ValueError("не сошлось")\nexcept ValueError:\n    pass\n\nwith open("журнал.txt") as f:\n    print(f.read())\n',
     hints:[
-      "Открывать файл нужно в режиме дописывания. Если взять \"w\", каждая запись сотрёт предыдущие — и в журнале останется одна строка",
-      "Вторая половина задания проверяется блоком try внизу: __exit__ обязан сработать и тогда, когда внутри with случилась ошибка",
-      "В каждом методе своя короткая запись: with open(self.path, \"a\", encoding=\"utf-8\") as f, и не забудь \\n в конце строки"
+      { t:"Каждый метод открывает файл сам — через with и в режиме дописывания: `open(self.path, \"a\")`. Режим \"w\" не годится: он стирал бы журнал при каждой записи." },
+      { t:"`__enter__` дописывает строку `f\"начали: {self.name}\\n\"` и обязательно возвращает self — это то, что попадёт после as. `__exit__` так же дописывает «закончили: …»." },
+      { t:"Проверка с ошибкой внизу — про `__exit__`: он срабатывает ВСЕГДА, даже когда внутри with что-то упало; так устроен сам with, дописывать ничего не надо. В write не забудь два пробела в начале и `\\n` в конце строки." }
     ],
     check:{ kind:"output", needCode:["__enter__","__exit__"],
             needMsg:"Нужны оба особых метода: __enter__ и __exit__." }
@@ -593,9 +601,10 @@ CONTENT.world4 = {
     starter:'import re\n\ntext = "26.08.2026 заказ abc-1234 ошибка 500;  27.08.2026 заказ xyz-0007 ошибка   404"\n\n\ndef dates(t):\n    return []\n\n\ndef codes(t):\n    return []\n\n\ndef clean(t):\n    return t\n\n\nprint(dates(text))\nprint(codes(text))\nprint(clean(text))\n',
     solution:'import re\n\ntext = "26.08.2026 заказ abc-1234 ошибка 500;  27.08.2026 заказ xyz-0007 ошибка   404"\n\n\ndef dates(t):\n    return re.findall(r"\\d{2}\\.\\d{2}\\.\\d{4}", t)\n\n\ndef codes(t):\n    return re.findall(r"[a-z]{3}-\\d{4}", t)\n\n\ndef clean(t):\n    return re.sub(r"\\s+", " ", re.sub(r"\\d+", "N", t))\n\n\nprint(dates(text))\nprint(codes(text))\nprint(clean(text))\n',
     hints:[
-      "Точное количество знаков задаётся фигурными скобками: \\d{2} это ровно две цифры",
-      "Точка в шаблоне значит «любой знак», поэтому настоящую точку пишут как \\.",
-      "В clean замены можно вложить одну в другую: сначала числа, потом пробелы"
+      { t:"Точное количество знаков задают фигурные скобки: `\\d{2}` — ровно две цифры. А настоящая точка в шаблоне пишется `\\.`, потому что просто точка значит «любой знак».",
+        code:'import re\n\nprint(re.findall(r"\\d{4}", "год 2026, код 77"))' },
+      { t:"Дата — `\\d{2}\\.\\d{2}\\.\\d{4}`. Код заказа — `[a-z]{3}-\\d{4}`: три маленькие латинские буквы, дефис, четыре цифры. Оба ищутся через `re.findall(шаблон, t)`." },
+      { t:"В clean две замены `re.sub`, одна внутри другой: сначала все числа `\\d+` замени на «N», потом цепочки пробелов `\\s+` — на один пробел." }
     ],
     check:{ kind:"output", needCode:["findall"],
             needMsg:"По условию искать нужно через re.findall, а не разбирать строку руками." }
@@ -631,9 +640,9 @@ CONTENT.world4 = {
     starter:'def initials(name):\n    return ""\n\n\ndef average(marks):\n    return 0\n\n\nprint(initials("иван петров"))\nprint(initials("Пётр"))\nprint(average([5, 4, 5, 3]))\nprint(average([3]))\n',
     solution:'def initials(name: str) -> str:\n    """Первые буквы слов заглавными, каждая с точкой."""\n    parts = name.split()\n    return "".join([w[0].upper() + "." for w in parts])\n\n\ndef average(marks: list) -> float:\n    """Среднее значение списка, округлённое до двух знаков."""\n    return round(sum(marks) / len(marks), 2)\n\n\nprint(initials("иван петров"))\nprint(initials("Пётр"))\nprint(average([5, 4, 5, 3]))\nprint(average([3]))\n',
     hints:[
-      "Подсказка пишется так: def initials(name: str) -> str:",
-      "Строка документации — первая строка тела, в тройных кавычках",
-      "Такие функции в курсе уже были: split и join для инициалов, sum и len для среднего"
+      { t:"Подсказки типов пишутся прямо в объявлении: `def initials(name: str) -> str:` — двоеточие с типом после параметра, стрелка с типом результата после скобок." },
+      { t:"Строка документации — САМАЯ первая строка тела функции, в тройных кавычках: одно короткое предложение о том, что функция делает." },
+      { t:"Сами функции уже были в курсе: инициалы — `split()`, первая буква `w[0].upper() + \".\"` и склейка `\"\".join(...)`; среднее — `round(sum(marks) / len(marks), 2)`." }
     ],
     check:{ kind:"output", needText:["-> str", "-> float", '"""'],
             needMsg:"По условию нужны и подсказки типов со стрелкой, и строка документации в тройных кавычках." }
@@ -671,9 +680,9 @@ CONTENT.world4 = {
     starter:'total = 0\npinned = 0\n\nwith open("requirements.txt") as f:\n    for line in f:\n        line = line.strip()\n        print(repr(line))\n\nprint(f"всего: {total}, с точной версией: {pinned}")\n',
     solution:'total = 0\npinned = 0\n\nwith open("requirements.txt") as f:\n    for line in f:\n        line = line.strip()\n        if not line:\n            continue\n        total += 1\n        if "==" in line:\n            name, version = line.split("==")\n            pinned += 1\n            print(f"{name}: версия {version}")\n        else:\n            print(f"{line}: любая версия")\n\nprint(f"всего: {total}, с точной версией: {pinned}")\n',
     hints:[
-      "Пустую строку пропускают так: if not line: continue",
-      "Проверка «есть ли версия» — знакомый оператор in: if \"==\" in line",
-      "Разделить на имя и версию поможет split(\"==\") — он даёт два куска"
+      { t:"Пустые строки пропускай в самом начале круга: `if not line: continue` — после strip() пустая строка это ложь." },
+      { t:"«Указана ли версия» — знакомый оператор in: `if \"==\" in line:` — двойное равно бывает только у строк с точной версией." },
+      { t:"Такую строку раздели: `name, version = line.split(\"==\")` — получится ровно два куска для f-строки. Не забудь: total растёт на каждой непустой строке, pinned — только на точных." }
     ],
     check:{ kind:"output" }
   }
@@ -718,9 +727,9 @@ CONTENT.world4 = {
     starter:'import zagadka\n\nprint(zagadka.a([]))\nprint(zagadka.b(""))\nprint(zagadka.c([]))\n',
     solution:'import zagadka\n\nprint(zagadka.a([1, 2, 3, 4, 5]))\nprint(zagadka.b("аня"))\nprint(zagadka.c([1, 2, 3, 4, 5, 6]))\n',
     hints:[
-      "Начни с того, что каждая функция возвращает на пустом списке и на одном элементе — это быстрее, чем читать построчно",
-      "Первая складывает, вторая меняет регистр. Значит для первой подойдёт любой список с нужной суммой",
-      "Третья берёт элементы с чётными номерами: 0, 2, 4. Чтобы получить [1, 3, 5], подай подряд идущие числа"
+      { t:"Не читай построчно — прогони каждую функцию на пустом списке и на одном элементе, и станет видно, что она делает. Заготовка уже запускает их на пустых данных: смотри на вывод." },
+      { t:"`a` складывает всё, что в списке, `b` делает буквы заглавными. Значит, для 15 годится ЛЮБОЙ список с суммой 15, а для АНЯ — строка «аня» маленькими буквами." },
+      { t:"`c` берёт элементы с чётными НОМЕРАМИ — 0, 2, 4 (нумерация с нуля). Чтобы получить [1, 3, 5], подай список из подряд идущих чисел от 1 до 6." }
     ],
     check:{ kind:"output", lines:["15","АНЯ","[1, 3, 5]"] }
   }
@@ -756,9 +765,9 @@ CONTENT.world4 = {
     starter:'def calcTotal(a,b):\n    return a*b\n\nclass heroCard:\n    def __init__(self,n,hp=100):\n        self.n=n\n        self.hp=hp\n    def card(self):\n        return self.n+": "+str(self.hp)+"/"+str(100)\n\nprint(calcTotal(120,3))\nh=heroCard("аня",18)\nprint(h.card())\n',
     solution:'MAX_HP = 100\n\n\ndef calc_total(price, count):\n    return price * count\n\n\nclass HeroCard:\n    def __init__(self, name, hp=MAX_HP):\n        self.name = name\n        self.hp = hp\n\n    def card(self):\n        return f"{self.name}: {self.hp}/{MAX_HP}"\n\n\nprint(calc_total(120, 3))\nhero = HeroCard("аня", 18)\nprint(hero.card())\n',
     hints:[
-      "Начни с имён: в них ошибка видна сразу. Потом пробелы, потом пустые строки",
-      "Однобуквенные n и h тоже переименуй — по ним не понять, что внутри",
-      "Склейку через + и str() удобнее заменить f-строкой — так короче и читается лучше"
+      { t:"Иди по слоям: сначала имена — функция маленькими через подчёркивание (`calc_total`), класс с большой (`HeroCard`); потом пробелы вокруг знаков и после запятых; потом пустые строки." },
+      { t:"Однобуквенные `n` и `h` тоже переименуй в говорящие — по ним не понять, что внутри. И вынеси число 100 в постоянную `MAX_HP = 100`: оно встречается дважды." },
+      { t:"Склейку через + и str() замени f-строкой: `f\"{self.name}: {self.hp}/{MAX_HP}\"` — короче и читается лучше." }
     ],
     check:{ kind:"custom", fn:"pep8style" }
   }
@@ -793,9 +802,9 @@ CONTENT.world4 = {
     starter:'def slow(nums):\n    return [], 0\n\n\ndef fast(nums):\n    return [], 0\n\n\ndata = [3, 7, 1, 7, 9, 3, 4, 8, 3]\nprint(slow(data))\nprint(fast(data))\nprint(slow(list(range(50))))\nprint(fast(list(range(50))))\n',
     solution:'def slow(nums):\n    steps = 0\n    found = set()\n    for i in range(len(nums)):\n        for j in range(i + 1, len(nums)):\n            steps += 1\n            if nums[i] == nums[j]:\n                found.add(nums[i])\n    return sorted(found), steps\n\n\ndef fast(nums):\n    steps = 0\n    seen = set()\n    found = set()\n    for n in nums:\n        steps += 1\n        if n in seen:\n            found.add(n)\n        seen.add(n)\n    return sorted(found), steps\n\n\ndata = [3, 7, 1, 7, 9, 3, 4, 8, 3]\nprint(slow(data))\nprint(fast(data))\nprint(slow(list(range(50))))\nprint(fast(list(range(50))))\n',
     hints:[
-      "В slow два цикла по номерам: for i in range(len(nums)) и for j in range(i + 1, len(nums))",
-      "Повторы удобно собирать в множество — оно само выбросит дубликаты, а sorted сделает список",
-      "В fast храни уже встреченные в множестве seen: если число там есть, значит это повтор"
+      { t:"В slow два цикла по номерам: `for i in range(len(nums)):` и внутри `for j in range(i + 1, len(nums)):` — j начинается с i + 1, чтобы не сравнивать одну пару дважды." },
+      { t:"Повторы собирай в множество found — оно само выбрасывает дубли. Вернуть надо `sorted(found)` вместе со счётчиком шагов: `return sorted(found), steps`." },
+      { t:"В fast храни уже встреченные числа в множестве seen: `if n in seen:` — значит это повтор, клади его в found. И в любом случае добавляй n в seen. Один проход — один шаг на элемент." }
     ],
     check:{ kind:"output",
       needCode:["def "],
@@ -845,9 +854,9 @@ CONTENT.world4 = {
     starter:'import marks\n\ndata = marks.read_marks("оценки.txt")\nprint(data)\nfor line in marks.report(data):\n    print(line)\nprint("лучший:", marks.best(data))\n',
     solution:'import marks\n\ndata = marks.read_marks("оценки.txt")\nprint(data)\nfor line in marks.report(data):\n    print(line)\nprint("лучший:", marks.best(data))\n',
     hints:[
-      "В read_marks первое слово строки — имя, остальные превращай в числа: [int(x) for x in parts[1:]]",
-      "В best отсортируй имена по алфавиту, а потом возьми max с ключом по среднему — тогда при равенстве победит первое по алфавиту",
-      "report — одно включение по sorted(data.keys()) с f-строкой внутри"
+      { t:"В read_marks первое слово строки — имя, остальные превращай в числа включением: `[int(x) for x in parts[1:]]`. Пустые строки пропускай: `if not parts: continue`." },
+      { t:"average и best начинаются с пустого случая: пустой список → 0, пустой словарь → пустая строка. В best отсортируй имена по алфавиту и возьми `max(names, key=...)` со средним в ключе — при равенстве победит первое по алфавиту." },
+      { t:"report — одно включение по `sorted(data.keys())` с f-строкой `f\"{name}: {average(data[name])}\"` внутри. И помни: модуль только возвращает — печатает main.py." }
     ],
     check:{ kind:"tests", calls:[
       'marks.read_marks("оценки.txt")',

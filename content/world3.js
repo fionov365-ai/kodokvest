@@ -39,9 +39,10 @@ CONTENT.world3 = {
     starter:'def total(price, count, discount):\n    return 0\n\n\nprint(total(120, 3, 10))\nprint(total(50, 2, 0))\nprint(total(count=4, price=99.5, discount=25))\n',
     solution:'def total(price, count, discount):\n    return round(price * count * (100 - discount) / 100, 2)\n\n\nprint(total(120, 3, 10))\nprint(total(50, 2, 0))\nprint(total(count=4, price=99.5, discount=25))\n',
     hints:[
-      "Сначала полная стоимость: price * count",
-      "Скидка 10% значит, что платим 90%: умножить на (100 - discount) и разделить на 100",
-      "Округление: return round(price * count * (100 - discount) / 100, 2)"
+      { t:"Начни с полной стоимости без скидки — это `price * count`: цена одной штуки умножить на количество." },
+      { t:"Скидка 10% значит «платим 90%». Приём такой: умножить на `(100 - discount)` и разделить на 100.",
+        code:'price = 200\ndiscount = 25\nprint(price * (100 - discount) / 100)' },
+      { t:"Собери всё в один return с округлением до двух знаков: `return round(price * count * (100 - discount) / 100, 2)`." }
     ],
     check:{ kind:"output",
       needCode:["def "],
@@ -78,9 +79,10 @@ CONTENT.world3 = {
     starter:'def bounds(nums):\n    return 0\n\n\nnums = [4, 9, 1, 7, 3]\nlow = 0\nhigh = 0\nspread = 0\nprint(f"мин {low}, макс {high}, разброс {spread}")\n',
     solution:'def bounds(nums):\n    return min(nums), max(nums), max(nums) - min(nums)\n\n\nnums = [4, 9, 1, 7, 3]\nlow, high, spread = bounds(nums)\nprint(f"мин {low}, макс {high}, разброс {spread}")\n',
     hints:[
-      "min(nums) и max(nums) были в Мире 1, в уроке про списки — их можно вызывать прямо в return",
-      "На приёме одна строка вместо трёх: low, high, spread = bounds(nums)",
-      "Целиком: return min(nums), max(nums), max(nums) - min(nums)"
+      { t:"`min(nums)` и `max(nums)` — готовые команды из Мира 1, их можно звать прямо внутри return. Разброс — это `max(nums) - min(nums)`." },
+      { t:"return через запятую отдаёт сразу несколько значений — это кортеж:",
+        code:'def two(nums):\n    return min(nums), max(nums)\n\nprint(two([4, 1, 9]))' },
+      { t:"На приёме распакуй одной строкой: `low, high, spread = bounds(nums)` — три имени слева, три значения справа. Сам return целиком: `return min(nums), max(nums), max(nums) - min(nums)`." }
     ],
     check:{ kind:"output",
       needCode:["def "],
@@ -118,9 +120,9 @@ CONTENT.world3 = {
     starter:'coins = 0\n\n\ndef add(current, amount):\n    return 0\n\n\ndef spend(current, amount):\n    return 0\n\n\ncoins = add(coins, 5)\ncoins = add(coins, 3)\ncoins = spend(coins, 2)\ncoins = spend(coins, 100)\nprint("В копилке:", coins)\n',
     solution:'coins = 0\n\n\ndef add(current, amount):\n    return current + amount\n\n\ndef spend(current, amount):\n    if amount > current:\n        return current\n    return current - amount\n\n\ncoins = add(coins, 5)\ncoins = add(coins, 3)\ncoins = spend(coins, 2)\ncoins = spend(coins, 100)\nprint("В копилке:", coins)\n',
     hints:[
-      "add проще некуда: return current + amount",
-      "В spend сначала проверь, хватает ли: if amount > current — тогда просто вернуть current",
-      "Последний вызов тратит 100 из 6 — значит копилка должна остаться прежней"
+      { t:"`add` проще некуда: возьми то, что пришло параметрами, и верни сумму — `return current + amount`. Никаких внешних переменных: только параметры и return." },
+      { t:"В `spend` первой строкой проверь, хватает ли денег: `if amount > current:` — если тратят больше, чем есть, верни копилку без изменений: `return current`." },
+      { t:"Проверь себя на последнем вызове: тратим 100, а в копилке 6 — печать должна показать те же 6. Если вышло отрицательное число, проверка «хватает ли» стоит не первой." }
     ],
     check:{ kind:"output", noCode:["global"],
             noMsg:"Смысл урока в том, чтобы обойтись без global: функция получает значение параметром и возвращает результат.",
@@ -157,9 +159,9 @@ CONTENT.world3 = {
     starter:'def buy(item, cart=[]):\n    cart.append(item)\n    return cart\n\n\nprint(buy("хлеб"))\nprint(buy("молоко"))\nprint(buy("сыр"))\n',
     solution:'def buy(item, cart=None):\n    if cart is None:\n        cart = []\n    cart.append(item)\n    return cart\n\n\nprint(buy("хлеб"))\nprint(buy("молоко"))\nprint(buy("сыр"))\n',
     hints:[
-      "Пустой список в объявлении создаётся один раз на всю жизнь функции — вот он и накапливает",
-      "Поставь cart=None вместо cart=[]",
-      "И первыми строками внутри функции: if cart is None: cart = []"
+      { t:"Пустой список в объявлении `cart=[]` создаётся ОДИН раз — когда Python читает def, а не при каждом вызове. Все три вызова складывают покупки в один и тот же список — вот он и растёт." },
+      { t:"Правильный приём был в теории: по умолчанию ставят None. Поменяй объявление на `cart=None`." },
+      { t:"И первыми строками внутри функции создай новый список, если его не передали: `if cart is None:` и с отступом `cart = []`. С None сравнивают словом `is`." }
     ],
     check:{ kind:"output", fixBudget:4 }
   }
@@ -197,9 +199,10 @@ CONTENT.world3 = {
     starter:'def stats(*nums):\n    return "нет данных"\n\n\ndef tag(name, **props):\n    return name\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
     solution:'def stats(*nums):\n    if not nums:\n        return "нет данных"\n    return f"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}"\n\n\ndef tag(name, **props):\n    if not props:\n        return name\n    parts = [f"{k}:{props[k]}" for k in sorted(props)]\n    return name + " [" + "; ".join(parts) + "]"\n\n\nprint(stats())\nprint(stats(7, 2, 3))\nprint(tag("щит"))\nprint(tag("меч", урон=7, вес=3))\n',
     hints:[
-      "Про пустоту было в теории: if not nums значит «ничего не передали»",
-      "len(nums), sum(nums), max(nums) — всё, что нужно для строки. Собери её f-строкой",
-      "Для tag: sorted(props) даёт ключи по алфавиту, пары собираются включением, а склеивает их \"; \".join([...])"
+      { t:"Пустота — это ложь: `if not nums` читается «если ничего не передали». С этой проверки и начинается stats — верни «нет данных».",
+        code:'def check(*nums):\n    if not nums:\n        return "пусто"\n    return "есть"\n\nprint(check())\nprint(check(1, 2))' },
+      { t:"Строка stats собирается f-строкой из готовых команд: `f\"{len(nums)} шт, сумма {sum(nums)}, максимум {max(nums)}\"`." },
+      { t:"Для tag: `sorted(props)` даёт ключи по алфавиту, пары собери включением `[f\"{k}:{props[k]}\" for k in sorted(props)]`, склей их через `\"; \".join(parts)` и добавь квадратные скобки по краям." }
     ],
     check:{ kind:"output",
       needCode:["def "],
@@ -236,9 +239,10 @@ CONTENT.world3 = {
     starter:'def digit_sum(n):\n    return n\n\n\nprint(digit_sum(7))\nprint(digit_sum(123))\nprint(digit_sum(9999))\nprint(digit_sum(100))\n',
     solution:'def digit_sum(n):\n    if n < 10:\n        return n\n    return n % 10 + digit_sum(n // 10)\n\n\nprint(digit_sum(7))\nprint(digit_sum(123))\nprint(digit_sum(9999))\nprint(digit_sum(100))\n',
     hints:[
-      "Сначала база: if n < 10: return n — иначе функция не остановится",
-      "n % 10 отрезает последнюю цифру, n // 10 — всё число без неё",
-      "return n % 10 + digit_sum(n // 10)"
+      { t:"Сначала база — случай, где ответ известен сразу: число из одной цифры само себе ответ. `if n < 10:` — верни n. Без базы рекурсия не остановится никогда." },
+      { t:"Теперь шаг: `n % 10` отрезает последнюю цифру, а `n // 10` даёт число без неё.",
+        code:'print(123 % 10)\nprint(123 // 10)' },
+      { t:"Сложи цифру с суммой цифр остатка: `return n % 10 + digit_sum(n // 10)` — функция зовёт саму себя с задачей поменьше, пока не дойдёт до базы." }
     ],
     check:{ kind:"output", noCode:["for","while"],
             noMsg:"Задание про рекурсию: цифры нужно перебрать вызовами самой функции, а не циклом. Убери for и while.",
@@ -276,9 +280,10 @@ CONTENT.world3 = {
     starter:'ops = {}\n\n\ndef apply(table, sign, a, b):\n    return 0\n\n\nfor sign in ["+", "-", "*", "max", "?"]:\n    print(sign, "->", apply(ops, sign, 12, 5))\n',
     solution:'ops = {\n    "+": lambda a, b: a + b,\n    "-": lambda a, b: a - b,\n    "*": lambda a, b: a * b,\n    "max": max,\n}\n\n\ndef apply(table, sign, a, b):\n    if sign not in table:\n        return "не знаю такой знак"\n    return table[sign](a, b)\n\n\nfor sign in ["+", "-", "*", "max", "?"]:\n    print(sign, "->", apply(ops, sign, 12, 5))\n',
     hints:[
-      "Значение в словаре — функция без скобок: \"max\": max, а не \"max\": max()",
-      "Проверка «есть ли ключ» — знакомый оператор in: if sign not in table",
-      "Достали функцию — сразу вызвали: return table[sign](a, b)"
+      { t:"В словарь кладут САМУ функцию — имя без скобок: `\"max\": max`. Со скобками в словарь лёг бы результат вызова, а не функция.",
+        code:'def hi():\n    return "привет"\n\nd = {"звать": hi}\nprint(d["звать"]())' },
+      { t:"«Есть ли такой знак» — знакомый оператор in: `if sign not in table:` — тогда верни строку «не знаю такой знак»." },
+      { t:"Достал функцию — сразу вызови её со скобками: `return table[sign](a, b)`. А первые три знака удобно записать лямбдами: `\"+\": lambda a, b: a + b` и так далее." }
     ],
     check:{ kind:"output",
       needCode:["def "],
@@ -324,9 +329,10 @@ CONTENT.world3 = {
     starter:'import tools\n\nprint(tools.clean("   ДоБрОе УтРо   "))\nprint(tools.shout("подъём"))\n',
     solution:'import tools\n\nprint(tools.clean("   ДоБрОе УтРо   "))\nprint(tools.shout("подъём"))\n',
     hints:[
-      "Убрать пробелы по краям — strip(). Сделать маленькими — lower(). Их можно вызвать подряд: text.strip().lower()",
-      "Заглавные — upper(). Восклицательный знак приклеивается сложением: text.upper() + \"!\"",
-      "Не забудь return: функция без return возвращает None, и в выводе появится None"
+      { t:"Работай во вкладке tools.py. Убрать пробелы по краям — `strip()`, сделать маленькими — `lower()`. Команды строк зовутся цепочкой: `text.strip().lower()`.",
+        code:'s = "  ПрИвЕт  "\nprint(s.strip().lower())' },
+      { t:"Для shout: заглавные делает `upper()`, а восклицательный знак приклей сложением: `text.upper() + \"!\"`." },
+      { t:"Обе функции должны ВЕРНУТЬ результат через `return`. Функция без return отдаёт None — и в выводе вместо текста появится слово None." }
     ],
     check:{ kind:"output" }
   }
@@ -364,9 +370,10 @@ CONTENT.world3 = {
     starter:'answers = ["10", "7", "нет", "25", "", "-5", "пять"]\ntotal = 0\nbad = 0\n\nfor a in answers:\n    pass\n\nprint("Сумма:", total)\nprint("Испорчено:", bad)\n',
     solution:'answers = ["10", "7", "нет", "25", "", "-5", "пять"]\ntotal = 0\nbad = 0\n\nfor a in answers:\n    try:\n        total += int(a)\n    except ValueError:\n        bad += 1\n\nprint("Сумма:", total)\nprint("Испорчено:", bad)\n',
     hints:[
-      "Внутри цикла: try, потом попытка int(a), потом except ValueError",
-      "В try достаточно одной строки: total += int(a). Если int упадёт, прибавления не случится",
-      "В except увеличиваем счётчик испорченных: bad += 1"
+      { t:"Каркас внутри цикла: попробовать в `try`, а на случай падения — ветка `except` с типом ошибки. Программа не умирает: она прыгает в except и идёт дальше.",
+        code:'try:\n    x = 10 / 0\nexcept ZeroDivisionError:\n    x = 0\nprint(x)' },
+      { t:"В try достаточно одной строки: `total += int(a)`. Если int упадёт, прибавление не успеет случиться — сумма не испортится. Ловить надо именно `ValueError` — ошибку негодного значения." },
+      { t:"В ветке except считай испорченные ответы: `bad += 1`. Итоговые print уже стоят в заготовке — их не трогай." }
     ],
     check:{ kind:"output", needCode:["except"],
             needMsg:"В этом задании нужен именно try/except — по условию проверяем через попытку, а не через isdigit." }
@@ -402,9 +409,10 @@ CONTENT.world3 = {
     starter:'def register(name, age):\n    return f"{name}, {age}"\n\n\nfor person in [("Аня", 12), ("Я", 12), ("Боря", 200), ("Витя", 40)]:\n    try:\n        print(register(person[0], person[1]))\n    except ValueError as e:\n        print("отказ:", e)\n',
     solution:'def register(name, age):\n    if len(name) < 2:\n        raise ValueError("имя слишком короткое")\n    if age < 5 or age > 120:\n        raise ValueError("возраст вне разумных границ")\n    return f"{name}, {age}"\n\n\nfor person in [("Аня", 12), ("Я", 12), ("Боря", 200), ("Витя", 40)]:\n    try:\n        print(register(person[0], person[1]))\n    except ValueError as e:\n        print("отказ:", e)\n',
     hints:[
-      "Проверки идут первыми строками функции, до return",
-      "Длина имени — len(name). Условие: if len(name) < 2",
-      "Границы возраста в одном условии: if age < 5 or age > 120"
+      { t:"Проверки пиши ПЕРВЫМИ строками функции, до return: негодные данные должны останавливать работу сразу, а не после подсчётов.",
+        code:'def half(n):\n    if n % 2 != 0:\n        raise ValueError("число нечётное")\n    return n // 2\n\ntry:\n    print(half(9))\nexcept ValueError as e:\n    print("отказ:", e)' },
+      { t:"Первая проверка — длина имени: `if len(name) < 2:` и следом `raise ValueError(\"имя слишком короткое\")` — текст берётся прямо из условия задачи." },
+      { t:"Обе границы возраста помещаются в одно условие: `if age < 5 or age > 120:` — и следом raise со вторым текстом из условия." }
     ],
     check:{ kind:"output", needCode:["raise"],
             needMsg:"Условие задания: о негодных данных нужно сообщать через raise, а не возвращать текст об ошибке." }
@@ -439,9 +447,10 @@ CONTENT.world3 = {
     starter:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if a == 5:\n        right += 1\n\nprint("Верных:", right)\n',
     solution:'answers = ["5", "3", "5", "7"]\nright = 0\n\nfor a in answers:\n    if int(a) == 5:\n        right += 1\n\nprint("Верных:", right)\n',
     hints:[
-      "Вставь в цикл строку print(repr(a), a == 5) и посмотри, что сравнивается с чем",
-      "В списке лежат строки — «5» в кавычках. Строка никогда не равна числу, об этом было в теории",
-      "Либо сравнивай с числом после превращения: int(a) == 5, либо со строкой: a == \"5\""
+      { t:"Не гадай — посмотри. Вставь в цикл строку `print(repr(a), a == 5)`: repr печатает значение с кавычками, и сразу видно, ЧТО с чем сравнивается." },
+      { t:"В списке лежат СТРОКИ — «5» в кавычках. А строка никогда не равна числу: сравнение молча отвечает «нет», ничего не падает.",
+        code:'print("5" == 5)\nprint(int("5") == 5)' },
+      { t:"Почини сравнение: либо преврати строку в число — `if int(a) == 5:` — либо сравнивай со строкой: `a == \"5\"`. Оба варианта верные." }
     ],
     check:{ kind:"output" }
   }
@@ -476,9 +485,9 @@ CONTENT.world3 = {
     starter:'def strong(password):\n    return True\n\n\n# твои проверки через assert:\n\nprint(strong("abcd1234"), strong("ab1"), strong("abcdefgh"), strong(""))\n',
     solution:'def strong(password):\n    if len(password) < 8:\n        return False\n    for ch in password:\n        if ch.isdigit():\n            return True\n    return False\n\n\nassert strong("abcd1234") == True\nassert strong("ab1") == False\nassert strong("abcdefgh") == False\nassert strong("") == False\n\nprint(strong("abcd1234"), strong("ab1"), strong("abcdefgh"), strong(""))\n',
     hints:[
-      "Сначала длина: if len(password) < 8: return False",
-      "Потом цифра: пройти циклом по знакам и проверить ch.isdigit()",
-      "Проверки пишутся так: assert strong(\"abcd1234\") == True и assert strong(\"ab1\") == False"
+      { t:"Сначала длина: `if len(password) < 8:` — сразу `return False`, дальше и проверять нечего." },
+      { t:"Потом ищи цифру: пройди циклом по знакам — `for ch in password:` — и как только `ch.isdigit()` ответил «да», сразу `return True`. Цикл закончился, а цифры не было — верни False." },
+      { t:"Проверки внизу пишутся так: `assert strong(\"abcd1234\") == True`, `assert strong(\"ab1\") == False` — и ещё две: пароль без цифр и пустая строка. Пока все утверждения верны, assert молчит." }
     ],
     check:{ kind:"output", needCode:["assert"],
             needMsg:"Условие задания: проверки нужно написать через assert — не меньше четырёх, по одной на каждый случай." }
@@ -515,9 +524,10 @@ CONTENT.world3 = {
     starter:'def initials(name):\n    return name[0] + "."\n\n\nprint(initials("иван петров"))\n',
     solution:'def initials(name):\n    parts = name.split()\n    if not parts:\n        return ""\n    return "".join([w[0].upper() + "." for w in parts])\n\n\nprint(initials("иван петров"))\n',
     hints:[
-      "split() без аргументов сам выбрасывает лишние пробелы: \"  а   б  \".split() даёт ['а', 'б']",
-      "Пустой список — это ложь: if not parts означает «слов нет»",
-      "Первая буква слова — w[0], заглавная — w[0].upper(). Склеить всё вместе поможет \"\".join([...])"
+      { t:"`split()` без аргументов сам выбрасывает все лишние пробелы — и по краям, и в середине:",
+        code:'print("  а   б  ".split())\nprint("   ".split())' },
+      { t:"Пустой список — это ложь: `if not parts:` означает «слов не осталось» — верни пустую строку. Это тот самый неудобный случай, на котором такие функции обычно ломаются." },
+      { t:"Из каждого слова возьми первую букву заглавной и приклей точку: `w[0].upper() + \".\"`. Собери это включением по всем словам и склей без разделителя: `\"\".join([...])`." }
     ],
     check:{ kind:"tests", calls:[
       'initials("иван петров")',
@@ -558,9 +568,9 @@ CONTENT.world3 = {
     starter:'class Item:\n    owner = "никто"\n\n\nsword = Item()\nsword.name = "меч"\nsword.damage = 7\n\n# сделай здесь щит по образцу\n\nfor it in [sword]:\n    print(f"{it.name}: урон {it.damage}, владелец {it.owner}")\n',
     solution:'class Item:\n    owner = "никто"\n\n\nsword = Item()\nsword.name = "меч"\nsword.damage = 7\n\nshield = Item()\nshield.name = "щит"\nshield.damage = 0\nshield.owner = "Аня"\n\nfor it in [sword, shield]:\n    print(f"{it.name}: урон {it.damage}, владелец {it.owner}")\n',
     hints:[
-      "Щит создаётся так же, как меч: shield = Item(), потом три строки с точкой",
-      "owner у щита своё — оно перекроет общее поле класса только для него",
-      "Не забудь список внизу: for it in [sword, shield]"
+      { t:"Щит делается по тому же образцу, что меч над ним: сначала создай объект вызовом класса, потом допиши поля через точку — имя, урон, владельца." },
+      { t:"Три строки по образцу меча: `shield = Item()`, `shield.name = \"щит\"`, `shield.damage = 0`. Владельца задай своим полем: `shield.owner = \"Аня\"` — оно перекроет общее «никто» только у щита. Мечу owner не пиши: он возьмёт общее из класса." },
+      { t:"Не забудь добавить щит в список внизу: `for it in [sword, shield]:` — иначе напечатается только меч." }
     ],
     check:{ kind:"output", needCode:["class"],
             needMsg:"Задание про классы: нужен именно class Item, а не словарь." }
@@ -595,9 +605,9 @@ CONTENT.world3 = {
     starter:'class Purse:\n    coins = 0\n\n    def add(self, amount):\n        return 0\n\n    def spend(self, amount):\n        return 0\n\n\np = Purse()\nprint(p.add(5))\nprint(p.add(3))\nprint(p.spend(2))\nprint(p.spend(100))\nprint("итого:", p.coins)\n',
     solution:'class Purse:\n    coins = 0\n\n    def add(self, amount):\n        self.coins = self.coins + amount\n        return self.coins\n\n    def spend(self, amount):\n        if amount > self.coins:\n            return self.coins\n        self.coins = self.coins - amount\n        return self.coins\n\n\np = Purse()\nprint(p.add(5))\nprint(p.add(3))\nprint(p.spend(2))\nprint(p.spend(100))\nprint("итого:", p.coins)\n',
     hints:[
-      "Внутри метода к полю обращаются через self: self.coins",
-      "add: сначала self.coins = self.coins + amount, потом return self.coins",
-      "spend: если amount > self.coins — сразу return self.coins, ничего не меняя"
+      { t:"Внутри метода к полю объекта обращаются через self: не `coins`, а `self.coins`. Просто `coins` было бы новой местной переменной — поле объекта осталось бы нетронутым." },
+      { t:"add — прочитай, прибавь, положи обратно: `self.coins = self.coins + amount`, а потом `return self.coins`." },
+      { t:"spend — первой строкой проверь, хватает ли: `if amount > self.coins:` — тогда сразу `return self.coins`, ничего не меняя. Иначе вычти и верни новую сумму." }
     ],
     check:{ kind:"output",
       needCode:["class "],
@@ -633,9 +643,9 @@ CONTENT.world3 = {
     starter:'class Book:\n    def __init__(self, title, author, year=2020):\n        self.title = title\n\n    def __repr__(self):\n        return "какая-то книга"\n\n\nshelf = [Book("Муму", "Тургенев", 1852), Book("Тайна", "Никитин")]\nprint(shelf[0])\nprint(shelf)\ntry:\n    Book("", "никто")\nexcept ValueError as e:\n    print("отказ:", e)\n',
     solution:'class Book:\n    def __init__(self, title, author, year=2020):\n        if not title:\n            raise ValueError("название не может быть пустым")\n        self.title = title\n        self.author = author\n        self.year = year\n\n    def __repr__(self):\n        return f"Book({self.title!r}, {self.author!r}, {self.year})"\n\n\nshelf = [Book("Муму", "Тургенев", 1852), Book("Тайна", "Никитин")]\nprint(shelf[0])\nprint(shelf)\ntry:\n    Book("", "никто")\nexcept ValueError as e:\n    print("отказ:", e)\n',
     hints:[
-      "В __init__ не хватает двух строк: self.author = author и self.year = year",
-      "Пустая строка — это ложь, поэтому проверка короткая: if not title",
-      "В __repr__ кавычки вокруг строк ставит !r: f\"Book({self.title!r}, {self.author!r}, {self.year})\""
+      { t:"`__init__` должен разложить по полям ВСЕ три аргумента — в заготовке не хватает двух строк: `self.author = author` и `self.year = year`." },
+      { t:"Пустая строка — это ложь, поэтому проверка короткая: `if not title:` — и следом raise с текстом из условия. Ставь её самой первой строкой __init__: негодная книга не должна родиться." },
+      { t:"В `__repr__` кавычки вокруг строк ставит `!r`: `return f\"Book({self.title!r}, {self.author!r}, {self.year})\"` — у года !r не нужен, это число." }
     ],
     check:{ kind:"output", needCode:["__init__","__repr__"],
             needMsg:"По условию нужны оба особых метода: __init__ и __repr__." }
@@ -671,9 +681,9 @@ CONTENT.world3 = {
     starter:'class Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def voice(self):\n        return "..."\n\n    def card(self):\n        return f"{self.name} говорит: {self.voice()}"\n\n\nclass Dog(Animal):\n    pass\n\n\nclass Cat(Animal):\n    pass\n\n\nfor a in [Animal("Кто-то"), Dog("Рекс"), Cat("Мурка")]:\n    print(a.card())\n',
     solution:'class Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def voice(self):\n        return "..."\n\n    def card(self):\n        return f"{self.name} говорит: {self.voice()}"\n\n\nclass Dog(Animal):\n    def voice(self):\n        return "гав"\n\n\nclass Cat(Animal):\n    def __init__(self, name):\n        super().__init__(name)\n        self.lives = 9\n\n    def voice(self):\n        return "мяу"\n\n    def card(self):\n        return super().card() + f", жизней {self.lives}"\n\n\nfor a in [Animal("Кто-то"), Dog("Рекс"), Cat("Мурка")]:\n    print(a.card())\n',
     hints:[
-      "Псу хватит одного метода voice — всё остальное он получает от Animal",
-      "У кота свой __init__: сначала super().__init__(name), потом self.lives = 9",
-      "И свой card: super().card() возвращает строку родителя, а к ней плюсом приклеиваешь свою добавку про жизни"
+      { t:"Псу хватит ОДНОГО метода voice, возвращающего «гав», — всё остальное он бесплатно получает от Animal по наследству." },
+      { t:"У кота свой `__init__`: сначала поручи общую часть родителю — `super().__init__(name)`, — а потом добавь своё: `self.lives = 9`." },
+      { t:"И свой card: `super().card()` вернёт строку родителя, а к ней плюсом приклей добавку про жизни: `+ f\", жизней {self.lives}\"`." }
     ],
     check:{ kind:"output", needCode:["super"],
             needMsg:"По условию у Cat метод card должен звать родительский через super(), а не повторять его текст." }
@@ -712,9 +722,10 @@ CONTENT.world3 = {
     starter:'from dataclasses import dataclass\n\n\nclass Track:\n    def __init__(self, title, artist, seconds=0):\n        self.title = title\n        self.artist = artist\n        self.seconds = seconds\n\n    def __repr__(self):\n        return f"Track(title={self.title!r}, artist={self.artist!r}, seconds={self.seconds})"\n\n    def length(self):\n        return f"{self.seconds // 60}:{self.seconds % 60:02d}"\n\n\nplaylist = [Track("Кукушка", "Кино", 185), Track("Звезда", "Кино", 245), Track("Тишина", "Никто")]\nfor t in playlist:\n    print(t, t.length())\nprint(Track("Кукушка", "Кино", 185) == playlist[0])\n',
     solution:'from dataclasses import dataclass\n\n\n@dataclass\nclass Track:\n    title: str\n    artist: str\n    seconds: int = 0\n\n    def length(self):\n        return f"{self.seconds // 60}:{self.seconds % 60:02d}"\n\n\nplaylist = [Track("Кукушка", "Кино", 185), Track("Звезда", "Кино", 245), Track("Тишина", "Никто")]\nfor t in playlist:\n    print(t, t.length())\nprint(Track("Кукушка", "Кино", 185) == playlist[0])\n',
     hints:[
-      "Поставь @dataclass над строкой class Track и удали оба особых метода",
-      "Поля перечисляются с типами вместо __init__: title: str, artist: str, seconds: int = 0",
-      "Вывод repr должен остаться прежним — @dataclass печатает именно так: Track(title='…', artist='…', seconds=…)"
+      { t:"Поставь строку `@dataclass` прямо над `class Track:` и удали оба особых метода — их теперь напишет декоратор." },
+      { t:"Вместо __init__ поля перечисляются с подсказками типов — имя, двоеточие, тип, и значение по умолчанию у последнего:",
+        code:'from dataclasses import dataclass\n\n\n@dataclass\nclass Pet:\n    name: str\n    age: int = 1\n\n\nprint(Pet("ёж"))\nprint(Pet("ёж") == Pet("ёж"))' },
+      { t:"Метод `length()` оставь как был — декоратор методы не трогает. А последняя печать станет True сама: @dataclass делает объекты с одинаковыми полями равными." }
     ],
     check:{ kind:"output", needCode:["dataclass"], noCode:["__init__","__repr__"],
             needMsg:"Условие задания: __init__ и __repr__ должен написать декоратор @dataclass, а не ты.",
@@ -751,10 +762,10 @@ CONTENT.world3 = {
     starter:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    pass\n\n\ndef fight(a, b):\n    return a\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
     solution:'class Fighter:\n    def __init__(self, name, hp, damage):\n        self.name = name\n        self.hp = hp\n        self.damage = damage\n\n    def alive(self):\n        return self.hp > 0\n\n    def take(self, amount):\n        self.hp = max(0, self.hp - amount)\n\n    def __repr__(self):\n        return f"{self.name}({self.hp} hp)"\n\n\nclass Knight(Fighter):\n    def take(self, amount):\n        super().take(max(1, amount - 3))\n\n\ndef fight(a, b):\n    step = 0\n    while a.alive() and b.alive():\n        step += 1\n        b.take(a.damage)\n        print(f"{step}: {a.name} -> {b.name}: -{a.damage}, осталось {b.hp}")\n        a, b = b, a\n    return a if a.alive() else b\n\n\nanya = Fighter("Аня", 20, 6)\nknight = Knight("Рыцарь", 22, 5)\nwinner = fight(anya, knight)\nprint("победил:", winner.name)\nprint([anya, knight])\n',
     hints:[
-      "У Knight хватит одного метода: def take(self, amount): super().take(max(1, amount - 3))",
-      "В fight цикл while a.alive() and b.alive(): наносим удар, печатаем строку журнала, меняем бойцов местами",
-      "Поменять бойцов местами можно одной строкой: a, b = b, a",
-      "Осторожно с концовкой: после последнего обмена в a может лежать проигравший. Поэтому вернуть надо того, кто жив: return a if a.alive() else b"
+      { t:"У Knight хватит одного метода: переопредели take и поручи остальное родителю — `super().take(max(1, amount - 3))`. max с единицей не даёт урону упасть ниже 1." },
+      { t:"Бой — это цикл `while a.alive() and b.alive():`. Внутри три дела: посчитать шаг, ударить — `b.take(a.damage)` — и напечатать строку журнала." },
+      { t:"В конце каждого круга поменяй бойцов местами одной строкой: `a, b = b, a`. После неё бьёт всегда тот, кто в `a`, и никакого «а теперь наоборот» не нужно." },
+      { t:"Осторожно с концовкой: после последнего обмена в `a` может лежать проигравший. Верни того, кто жив: `return a if a.alive() else b`." }
     ],
     check:{ kind:"output", needCode:["while","super"],
             needMsg:"Условие проекта: бой идёт циклом while, а броня рыцаря сделана через super()." }
@@ -798,9 +809,9 @@ CONTENT.world3 = {
     starter:'import textkit\n\nprint(textkit.clean("  Ёлка Растёт  "))\nprint(textkit.words("Ёж и ёлка"))\nprint(textkit.top_word("да нет да может да"))\nprint(textkit.top_word("аа бб аа бб"))\n',
     solution:'import textkit\n\nprint(textkit.clean("  Ёлка Растёт  "))\nprint(textkit.words("Ёж и ёлка"))\nprint(textkit.top_word("да нет да может да"))\nprint(textkit.top_word("аа бб аа бб"))\n',
     hints:[
-      "clean — три метода подряд: text.strip().lower().replace(\"ё\", \"е\")",
-      "words — вызови свою же clean, а потом split(): пробелы он разберёт сам",
-      "top_word: сначала словарь-счётчик по словам, потом сортировка пар по двум условиям — сначала по количеству в обратную сторону, потом по слову, как в теории. Ответ — первое слово первой пары"
+      { t:"clean — три команды строк цепочкой: `text.strip().lower().replace(\"ё\", \"е\")` — убрать края, опустить буквы, заменить ё на е." },
+      { t:"words — позови свою же clean и разрежь результат: `return clean(text).split()`. Внутри одного файла функции видят друг друга по имени, без import. Пустой текст split() сам превратит в пустой список." },
+      { t:"top_word: собери словарь-счётчик по words(text); если список пуст — сразу верни пустую строку. Потом отсортируй пары по двум условиям сразу: `sorted(counts.items(), key=lambda p: (-p[1], p[0]))` — минус переворачивает счёт, а слово решает ничьи по алфавиту. Ответ — первое слово первой пары: `pairs[0][0]`." }
     ],
     check:{ kind:"tests", calls:[
       'textkit.clean("  Ёлка Растёт  ")',
