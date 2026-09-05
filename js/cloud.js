@@ -74,6 +74,7 @@ var Cloud = (function(){
     save: function(data, code){
       return ask({ op:"save", code: code || myCode() }, JSON.stringify(data));
     },
-    list: function(key){ return ask({ op:"list", key: key || "" }); }
+    list: function(key){ return ask({ op:"list", key: key || "" }); },
+    stats: function(key){ return ask({ op:"stats", key: key || "" }); }
   };
 })();

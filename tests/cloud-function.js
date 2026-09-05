@@ -128,6 +128,51 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   check("испорченный файл не ломает список", r.statusCode === 200, r.body);
   check("испорченный файл помечен", json(r).students.some(s => s.broken === true), r.body);
 
+  /* ---------- метрики возвращаемости ----------
+     Раскладываем учеников по всем веткам расчёта:
+       vera    — начала 20 дней назад, ВЕРНУЛАСЬ на третий день, 25 уроков,
+                 активна на этой неделе (уроки в журнале свежие);
+       gosha   — начал 20 дней назад и НЕ вернулся в первую неделю;
+       novichok— первый день позавчера: окно недели ещё открыто, в долю не входит;
+       pusto   — код есть, занятий нет (не «начал»);
+       misha и anya из проверок выше — дней занятий у них нет, тоже не начали. */
+  const DAY = 864e5, NOW = Date.now();
+  const dk = t => { const d = new Date(t); const p = n => (n < 10 ? "0" : "") + n;
+    return d.getUTCFullYear() + "-" + p(d.getUTCMonth() + 1) + "-" + p(d.getUTCDate()); };
+  const mkDays = (...ts) => { const o = {}; ts.forEach(t => o[dk(t)] = 1); return o; };
+  const manyStars = n => { const o = {}; for (let i = 0; i < n; i++) o["l" + i] = 3; return o; };
+
+  await call(post({ op:"save", code:"vera-1" }, JSON.stringify({ xp:1, stars: manyStars(25),
+    days: mkDays(NOW - 20*DAY, NOW - 17*DAY, NOW - 2*DAY),
+    log: { a:{ solvedAt: NOW - 2*DAY }, b:{ solvedAt: NOW - 3*DAY }, c:{ solvedAt: NOW - 40*DAY } } })));
+  await call(post({ op:"save", code:"gosha-1" }, JSON.stringify({ xp:1, stars: manyStars(5),
+    days: mkDays(NOW - 20*DAY), log: {} })));
+  await call(post({ op:"save", code:"novichok-1" }, JSON.stringify({ xp:1, stars: manyStars(1),
+    days: mkDays(NOW - 2*DAY), log: { a:{ solvedAt: NOW - 2*DAY } } })));
+  await call(post({ op:"save", code:"pusto-1" }, JSON.stringify({ xp:0, stars:{}, days:{}, log:{} })));
+
+  r = await call(get({ op:"stats" }));
+  check("метрики без ключа закрыты", r.statusCode === 403, r.body);
+  r = await call(get({ op:"stats", key:"не тот" }));
+  check("метрики с неверным ключом закрыты", r.statusCode === 403);
+  r = await call(get({ op:"stats", key:"kluch-nastavnika" }));
+  check("метрики отвечают 200", r.statusCode === 200, r.body);
+  const m = json(r);
+  check("кодов всего посчитано верно", m.students === 6, JSON.stringify(m));
+  check("начавших посчитано верно (дни занятий есть у троих)", m.started === 3, JSON.stringify(m));
+  check("в долю недели входят двое (у новичка окно не закрыто)",
+        m.week && m.week.eligible === 2, JSON.stringify(m.week));
+  check("вернулась одна", m.week && m.week.returned === 1, JSON.stringify(m.week));
+  const r20 = (m.reach || []).filter(x => x.lessons === 20)[0];
+  const r40 = (m.reach || []).filter(x => x.lessons === 40)[0];
+  check("до 20-го урока дошла одна", r20 && r20.students === 1, JSON.stringify(m.reach));
+  check("до 40-го не дошёл никто", r40 && r40.students === 0, JSON.stringify(m.reach));
+  /* активны все трое начавших: и день Гоши (20 дней назад) внутри 28-дневного окна */
+  check("активных за 4 недели трое", m.month && m.month.active === 3, JSON.stringify(m.month));
+  /* уроки за 28 дней: Гоша 0, новичок 1, Вера 2 (третий её урок старше) → медиана 1 */
+  check("медиана уроков за 4 недели", m.month && m.month.medianLessons === 1,
+        JSON.stringify(m.month));
+
   try { fs.rmSync(DIR, { recursive:true, force:true }); } catch(e){}
   console.log(bad ? "\nПРОБЛЕМ: " + bad : "\nсерверная функция в порядке");
   process.exit(bad ? 1 : 0);

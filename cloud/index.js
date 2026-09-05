@@ -13,6 +13,7 @@
      GET  ?op=load&code=КОД               прочитать прогресс ученика
      POST ?op=save&code=КОД   тело=JSON   записать прогресс ученика
      GET  ?op=list&key=КЛЮЧ               список всех учеников (кратко)
+     GET  ?op=stats&key=КЛЮЧ              метрики возвращаемости по всем
 
    Кто что может: кто знает код ученика — читает и пишет его прогресс.
    Список всех учеников доступен только по ADMIN_KEY.
@@ -131,6 +132,86 @@ module.exports.handler = async function(event){
       return reply(200, { ok:true, students: out });
     }
 
+    /* ---------- метрики возвращаемости ----------
+       Две цифры, ради которых это построено (docs/razvitie-2026-09-05.md,
+       корзина 4): доля вернувшихся в первую неделю после первого занятия и
+       доля дошедших до конца каждого мира. Плюс медиана уроков за 4 недели.
+       Считается по уже хранимым снимкам — никаких новых данных о ребёнке.
+       Доступ — по тому же ADMIN_KEY, что и список: это цифры наставника. */
+    if (op === "stats"){
+      const key = process.env.ADMIN_KEY;
+      if (!key) return reply(403, { ok:false, error:"Метрики отключены: в настройках функции не задан ADMIN_KEY." });
+      if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ наставника не подошёл." });
+      let files = [];
+      try { files = fs.readdirSync(dir).filter(function(f){ return /\.json$/.test(f); }); }
+      catch(e){ return reply(500, { ok:false, error:"Папка прогресса не читается: " + (e.message || e) }); }
+
+      const DAY = 864e5;
+      const now = Date.now();
+      /* день из строки «ГГГГ-ММ-ДД». Полдень UTC, чтобы разница дней не
+         прыгала от часовых поясов: нам нужны разности, а не моменты */
+      const dayMs = k => Date.parse(k + "T12:00:00Z");
+
+      let students = 0, started = 0;
+      let weekEligible = 0, weekReturned = 0;
+      /* курс строго последовательный (замки), поэтому «пройдено N уроков» и
+         «дошёл до N-го урока» — одно и то же. Пороги — концы пяти миров. */
+      const REACH = [20, 40, 60, 80, 100];
+      const reached = REACH.map(() => 0);
+      let active4w = 0;
+      const recent = [];
+
+      files.forEach(function(f){
+        let rec;
+        try { rec = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); }
+        catch(e){ return; }
+        const data = (rec && rec.data) || {};
+        students++;
+
+        const days = Object.keys(data.days || {}).sort();
+        if (!days.length) return;          /* завёл код, но не занимался */
+        started++;
+
+        /* вернулся ли в первую неделю: есть день занятий на 1–7 сутки после
+           первого. Считаем только тех, у кого окно уже закрылось, — иначе
+           вчерашний новичок портил бы долю, не успев вернуться */
+        const first = dayMs(days[0]);
+        if (now - first >= 8 * DAY){
+          weekEligible++;
+          const came = days.some(function(k){
+            const d = (dayMs(k) - first) / DAY;
+            return d >= 1 && d <= 7;
+          });
+          if (came) weekReturned++;
+        }
+
+        const solved = Object.keys(data.stars || {}).length;
+        REACH.forEach(function(n, i){ if (solved >= n) reached[i]++; });
+
+        /* уроки за последние 4 недели — по времени решения из журнала */
+        let lessons28 = 0;
+        const log = data.log || {};
+        Object.keys(log).forEach(function(k){
+          const g = log[k] || {};
+          if (g.solvedAt && now - g.solvedAt <= 28 * DAY) lessons28++;
+        });
+        const activeRecently = days.some(function(k){ return now - dayMs(k) <= 28 * DAY; });
+        if (activeRecently){ active4w++; recent.push(lessons28); }
+      });
+
+      recent.sort(function(a, b){ return a - b; });
+      const median = recent.length
+        ? (recent.length % 2 ? recent[(recent.length - 1) / 2]
+           : (recent[recent.length / 2 - 1] + recent[recent.length / 2]) / 2)
+        : 0;
+
+      return reply(200, { ok:true, generatedAt: now,
+        students: students, started: started,
+        week: { eligible: weekEligible, returned: weekReturned },
+        reach: REACH.map(function(n, i){ return { lessons: n, students: reached[i] }; }),
+        month: { active: active4w, medianLessons: median } });
+    }
+
     /* ---------- дальше нужен код ученика ---------- */
     const code = cleanCode(q.code);
     if (!code) return reply(400, { ok:false, error:
@@ -171,7 +252,7 @@ module.exports.handler = async function(event){
       return reply(200, { ok:true, serverAt: rec.serverAt, summary: summarize(rec) });
     }
 
-    return reply(400, { ok:false, error:"Неизвестная операция. Бывают: ping, load, save, list." });
+    return reply(400, { ok:false, error:"Неизвестная операция. Бывают: ping, load, save, list, stats." });
   } catch(e){
     return reply(500, { ok:false, error:"Внутренняя ошибка функции: " + (e && e.message ? e.message : String(e)) });
   }

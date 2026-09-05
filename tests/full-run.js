@@ -3952,7 +3952,7 @@ function checkEncoding(){
      активные минуты вместо «вкладка открыта», карта по часам, занятие как
      единица, отчёт взрослому, рамка и задания от взрослого. */
   let timeChecked = 0, zanChecked = 0, adultChecked = 0, ptaskChecked = 0, statChecked = 0;
-  let hwChecked = 0, reportChecked = 0;
+  let hwChecked = 0, reportChecked = 0, returnChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let breakChecked = 0;
@@ -5517,6 +5517,121 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 10в. возвращаемость: метрики, «в следующий раз», «до конца мира»,
+     возвращение после паузы --- */
+  if (typeof g.worldCountdown === "function"){
+    const p0 = problems.length;
+    const now = Date.now(), day = 864e5;
+
+    /* Предыдущие разделы решили все сто уроков и настроили рамку — прячем
+       живое состояние и возвращаем его в конце раздела как было. */
+    const keep = { stars: g.state.stars, days: g.state.days,
+                   frame: g.state.frame, schedule: g.state.schedule };
+    g.state.stars = {}; g.state.days = {};
+    g.state.frame = { days: [] }; g.state.schedule = { days: [] };
+
+    /* 10в.1. До конца мира — в занятиях. 5 уроков из 20 пройдено, рамки нет:
+       15 уроков по 3 на занятие (30 минут) — 5 занятий. */
+    w.CURRICULUM[0].lessons.slice(0, 5).forEach(l => { g.state.stars[l.id] = 3; });
+    const cd = g.worldCountdown(1);
+    if (!cd) bad("[возврат] счётчик до конца мира пуст на начатом мире");
+    else {
+      if (cd.left !== 15) bad("[возврат] осталось уроков: " + cd.left + " вместо 15");
+      if (cd.zan !== 5) bad("[возврат] занятий посчитано " + cd.zan + " вместо 5");
+    }
+    if (g.worldCountdown(2)) bad("[возврат] счётчик показан на не начатом мире");
+    w.CURRICULUM[0].lessons.forEach(l => { g.state.stars[l.id] = 3; });
+    if (g.worldCountdown(1)) bad("[возврат] счётчик показан на законченном мире");
+
+    /* на Главном строка «до конца мира» видна */
+    g.state.stars = {};
+    w.CURRICULUM[0].lessons.slice(0, 5).forEach(l => { g.state.stars[l.id] = 3; });
+    g.screenWorlds();
+    await tick();
+    if (!/до конца мира 1/.test(doc.getElementById("app").textContent))
+      bad("[возврат] на Главном нет строки «до конца мира»");
+
+    /* и на экране мира */
+    g.screenWorld(1);
+    await tick(20);
+    if (!/это примерно/.test(doc.getElementById("app").textContent))
+      bad("[возврат] на экране мира нет счётчика в занятиях");
+
+    /* 10в.2. Возвращение после паузы: карточка без вины. */
+    g.state.stars = {};
+    g.state.stars["print-first"] = 3;
+    g.state.days = {};
+    g.state.days[g.dayKey(new Date(now - 5 * day))] = 1;
+    const back = g.welcomeBackHTML();
+    if (!/С возвращением/.test(back)) bad("[возврат] после паузы нет карточки возвращения");
+    if (!/Всё на месте/.test(back)) bad("[возврат] карточка не говорит главного: всё цело");
+    if (/пропуст|забросил|потерял|дней не |вин/i.test(back))
+      bad("[возврат] карточка возвращения упрекает: " + back.replace(/<[^>]+>/g, " ").slice(0, 120));
+    /* сегодня уже занимался — карточки нет */
+    g.state.days[g.dayKey()] = 1;
+    if (g.welcomeBackHTML() !== "") bad("[возврат] карточка не исчезла после занятия сегодня");
+    /* короткая пауза — карточки нет */
+    g.state.days = {};
+    g.state.days[g.dayKey(new Date(now - 2 * day))] = 1;
+    if (g.welcomeBackHTML() !== "") bad("[возврат] карточка вылезла после двух дней — это ещё не пауза");
+    /* совсем новый ученик — карточки нет */
+    g.state.days = {};
+    if (g.welcomeBackHTML() !== "") bad("[возврат] карточка показана тому, кто ещё не начинал");
+
+    /* 10в.3. «В следующий раз»: следующий урок назван, день из расписания. */
+    g.state.stars = {}; g.state.days = {};
+    g.state.stars["print-first"] = 3;
+    g.state.schedule.days = [0, 1, 2, 3, 4, 5, 6];    /* любой день — занятие */
+    const nt = g.nextTimeHTML();
+    if (!/В следующий раз/.test(nt)) bad("[возврат] нет карточки «в следующий раз»");
+    if (!/Текст и числа/.test(nt)) bad("[возврат] следующий урок не назван");
+    if (!/Следующее занятие по расписанию/.test(nt)) bad("[возврат] день следующего занятия не назван");
+    const nk = g.nextZanDayKey();
+    if (nk !== g.shiftDay(g.dayKey(), 1))
+      bad("[возврат] при ежедневном расписании следующее занятие не завтра: " + nk);
+    g.state.schedule.days = [];
+    if (/Следующее занятие/.test(g.nextTimeHTML()))
+      bad("[возврат] день занятия назван без расписания — из чего он взялся?");
+
+    /* 10в.4. Метрики на сервере и карточка на экране группы. */
+    {
+      const stDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-stats-"));
+      process.env.DATA_DIR = stDir;
+      w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      const mkDays = ts => { const o = {}; ts.forEach(t => o[g.dayKey(new Date(t))] = 1); return o; };
+      const stars25 = {}; for (let i = 0; i < 25; i++) stars25["l" + i] = 3;
+      await w.Cloud.save({ xp:1, stars: stars25,
+        days: mkDays([now - 20*day, now - 17*day, now - day]),
+        log: { a:{ solvedAt: now - day } } }, "stat-a");
+      await w.Cloud.save({ xp:1, stars: { x:3 }, days: mkDays([now - 20*day]), log: {} }, "stat-b");
+      const m = await w.Cloud.stats("kluch-testa");
+      if (m.started !== 2) bad("[метрики] начавших: " + m.started + " вместо 2");
+      if (m.week.eligible !== 2 || m.week.returned !== 1)
+        bad("[метрики] неделя посчитана неверно: " + JSON.stringify(m.week));
+      const r20 = m.reach.filter(x => x.lessons === 20)[0];
+      if (!r20 || r20.students !== 1) bad("[метрики] до 20-го урока: " + JSON.stringify(m.reach));
+      /* карточка на экране группы: и цифры, и честность к малым числам */
+      g.adminUnlock();
+      g.grpStats.data = m; g.grpStats.error = "";
+      g.screenGroup();
+      await tick();
+      const t = doc.getElementById("app").textContent;
+      if (!/Возвращаемость/.test(t)) bad("[метрики] на экране группы нет карточки возвращаемости");
+      if (!/Вернулись в первую неделю: 1 из 2/.test(t))
+        bad("[метрики] доля недели не показана");
+      if (!/это ещё случаи, а не замер/.test(t))
+        bad("[метрики] экран молчит о том, что на малых числах это не замер");
+      if (!doc.getElementById("grpstats")) bad("[метрики] нет кнопки «Посчитать»");
+      g.grpStats.data = null;
+      try { fs.rmSync(stDir, { recursive:true, force:true }); } catch(e){}
+    }
+
+    g.state.stars = keep.stars; g.state.days = keep.days;
+    g.state.frame = keep.frame; g.state.schedule = keep.schedule;
+    if (problems.length === p0) returnChecked++;
+    viewReset(g);
+  }
+
   /* --- 11. нотация приёмки --- */
   if (typeof g.specVerdict === "function"){
     const p0 = problems.length;
@@ -6042,6 +6157,7 @@ function checkEncoding(){
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
+  console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`самоизмерение длины занятия: ${statChecked ? "да" : "нет"}`);
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);

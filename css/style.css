@@ -1576,3 +1576,6 @@ body.focus .toTop{display:none}
 .askqs{display:grid;gap:10px;margin:12px 0;padding-left:20px}
 .askqs li{line-height:1.5}
 .askqs li .dim{display:block;font-size:13px}
+/* возвращение после паузы и «в следующий раз» */
+.comeback{border-color:var(--okline);background:var(--okbg)}
+.nexttime h3{margin-bottom:6px}

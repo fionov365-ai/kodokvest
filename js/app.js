@@ -3905,6 +3905,13 @@ function screenWorlds(){
       (hwLeft ? '<button class="bigbtn ghost" id="go-hw">📮 Домашка · ' + hwLeft + '</button>' : '') +
     '</div>' +
     '<div class="nowhints">' +
+      (function(){
+        /* до конца текущего мира — в занятиях: расстояние, которое ребёнок
+           чувствует. Проценты не говорят ничего, дни — не его единица */
+        var cd = next ? worldCountdown(next.world) : null;
+        return cd ? '<span>· до конца мира ' + next.world + ' — примерно ' + cd.zan + ' ' +
+          plural(cd.zan, "занятие", "занятия", "занятий") + '</span>' : '';
+      })() +
       (hwLeft ? '<span>· домашка от наставника: ' + hwLeft + ' ' +
                 plural(hwLeft, "задача", "задачи", "задач") + '</span>' : '') +
       '<span>' + (dailyOk ? "✓ задача дня сделана" : "· задача дня ещё ждёт") + '</span>' +
@@ -3913,6 +3920,10 @@ function screenWorlds(){
       '<span>· шпаргалка 📖 наверху открывается прямо посреди урока</span>' +
       '<span>· не понял, что за экран, — жми <b>?</b> в правом верхнем углу</span>' +
     '</div></div>';
+
+  /* карточка возвращения — сразу под «Сейчас», выше всего остального:
+     вернувшемуся важнее всего услышать «всё цело», а не увидеть список миров */
+  h += welcomeBackHTML();
 
   /* ===== как это работает: только пока ни один урок не пройден ===== */
   if (!doneTotal){
@@ -4080,6 +4091,10 @@ function screenWorlds(){
   if (ga) ga.onclick = screenReview;
   var gh = document.getElementById("go-hw");
   if (gh) gh.onclick = screenHW;
+  var cbw = document.getElementById("cbwarm");
+  if (cbw) cbw.onclick = screenWarmups;
+  var cbg = document.getElementById("cbgo");
+  if (cbg) cbg.onclick = function(){ if (next) openLesson(next.id); };
   document.getElementById("go-train").onclick = screenTrain;
   var gg = document.getElementById("go-guide");
   if (gg) gg.onclick = screenGuide;
@@ -4161,10 +4176,16 @@ function screenWorld(n){
 
     if (!ready.length)
       h += '<div class="note"><b>Этот мир ещё пишется</b>Ниже — план уроков, чтобы было видно дорогу. Уроки появятся волнами по десять.</div>';
-    else
+    else {
       h += '<p class="dim">Уроки проходят по порядку: следующий открывается, когда сдан предыдущий. ' +
         'Звёзды показывают, как прошёл: три — с первой попытки без подсказок. ' +
         'Пройденный урок можно открыть заново в любой момент, звёзды за это не отнимаются.</p>';
+      var cd = worldCountdown(n);
+      if (cd)
+        h += '<p class="wrnext">До конца мира — ' + cd.left + ' ' +
+          plural(cd.left, "урок", "урока", "уроков") + ', это примерно <b>' + cd.zan + ' ' +
+          plural(cd.zan, "занятие", "занятия", "занятий") + '</b>. В конце — проект и сертификат.</p>';
+    }
 
     h += '<div class="lessons">';
     w.lessons.forEach(function(l){
@@ -8650,6 +8671,81 @@ function screenZan(){
   };
   refreshTop();
 }
+/* ===== в следующий раз =====
+   Сессия имеет начало и конец — это красная линия продукта. Но «конец» не
+   значит «обрыв»: занятие закончилось, а СЛЕДУЮЩЕЕ — названо: какой урок и
+   в какой день. Это не «ещё чуть-чуть» (ничего нельзя продолжить сейчас),
+   это причина вернуться завтра. */
+function nextZanDayKey(){
+  for (var i = 1; i <= 14; i++){
+    var k = shiftDay(dayKey(), i);
+    if (frameOn() ? frameStudyDay(k) : isStudyDay(k)) return k;
+  }
+  return "";
+}
+var WD_FULL = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+function nextTimeHTML(){
+  var next = nextLesson();
+  var when = nextZanDayKey();
+  if (!next && !when) return "";
+  var h = '<div class="card nexttime"><h3>👋 В следующий раз</h3>';
+  if (next)
+    h += '<p>Дальше по курсу — <b>урок ' + next.num + ' «' + esc(next.title) + '»</b>: ' +
+      esc(next.sub) + '.</p>';
+  else
+    h += '<p>Все готовые уроки пройдены — дальше повторение и проекты.</p>';
+  if (when){
+    var d = new Date(when + "T12:00:00");
+    h += '<p class="dim">Следующее занятие по расписанию — ' + WD_FULL[d.getDay()] + ', ' +
+      (d.getDate() < 10 ? "0" : "") + d.getDate() + "." +
+      (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + '.</p>';
+  }
+  return h + '</div>';
+}
+
+/* ===== до конца мира — в занятиях =====
+   Проценты ребёнок не чувствует, дни — не контролирует. Занятие — единица,
+   которую он проживает, поэтому расстояние до проекта мира меряется в них.
+   Темп берётся его собственный (frame.perLesson, если взрослый принял замер). */
+function worldCountdown(n){
+  var w = CURRICULUM.world(n);
+  if (!w) return null;
+  var left = 0;
+  w.lessons.forEach(function(l){ if (!solved(l.id)) left++; });
+  if (!left || left === w.lessons.length) return null;   /* не начат или закончен */
+  var zan = Math.max(1, Math.ceil(left / zanSlotsFor(frame().len || 30)));
+  return { left: left, zan: zan };
+}
+
+/* ===== возвращение после паузы =====
+   Ребёнку, который пропустил несколько дней, страшнее всего первый экран:
+   вдруг всё сгорело и придётся оправдываться. Поэтому после паузы Главное
+   встречает отдельной карточкой: всё на месте, вот где ты остановился, вот
+   лёгкий вход. ⚠️ Ни слова упрёка и ни одной цифры пропуска на видном месте:
+   виноватый не возвращается. Карточка исчезает сама, как только сегодня
+   что-то сделано, — состояния у неё нет. */
+var PAUSE_DAYS = 4;
+function daysSincePause(){
+  var last = "";
+  Object.keys(coveredNow()).forEach(function(k){ if (k > last) last = k; });
+  if (!last) return null;                       /* ещё не занимался вовсе */
+  if (activeOn(dayKey())) return 0;             /* сегодня уже был — не пауза */
+  return Math.round((new Date(dayKey() + "T12:00:00") - new Date(last + "T12:00:00")) / 864e5);
+}
+function welcomeBackHTML(){
+  var gap = daysSincePause();
+  if (gap === null || gap < PAUSE_DAYS) return "";
+  var next = nextLesson();
+  return '<div class="card comeback"><h3>👋 С возвращением</h3>' +
+    '<p>Всё на месте: прогресс цел, звёзды целы, уроки открыты те же' +
+    (next ? ' — ты остановился перед уроком ' + next.num + ' «' + esc(next.title) + '»' : '') + '.</p>' +
+    '<p class="dim">После паузы легче входить с малого: одна разминка на пару минут — и рука вспомнит сама.</p>' +
+    '<div class="admrow">' +
+      '<button class="rbtn check" id="cbwarm">🎲 Начать с разминки</button>' +
+      (next ? '<button class="rbtn sec" id="cbgo">▶ Сразу к уроку</button>' : '') +
+    '</div></div>';
+}
+
 /* Итог занятия. Показывается и когда всё сделано, и когда закончили руками —
    разница только в словах. Занятие, брошенное на первом уроке, тоже
    закрывается: иначе ребёнок, у которого не пошло, остаётся без финала, а
@@ -8686,6 +8782,7 @@ function screenZanDone(rec){
       '<p class="dim">Составить задачу труднее, чем решить: придётся объяснить её словами так, ' +
       'чтобы человек понял без твоей программы.</p>' +
       '<div class="admrow"><button class="rbtn check" id="zask">Задать задачу →</button></div></div>' +
+    nextTimeHTML() +
     '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
       '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
   document.getElementById("ztoday").onclick = screenToday;
@@ -13450,6 +13547,62 @@ function groupHwHTML(rows){
   return h;
 }
 
+/* ===== метрики возвращаемости =====
+   Ответ на два вопроса из плана (docs/razvitie-2026-09-05.md, корзина 4):
+   возвращается ли ребёнок через неделю и доходит ли до конца мира. Без этих
+   цифр всё остальное строится вслепую — главный незакрытый вопрос продукта
+   «доходит ли чужой ребёнок до 20-го урока» закрывается ровно здесь.
+   Считает сервер по всем снимкам (op=stats), ключ тот же, что у списка. */
+var grpStats = { data: null, busy: false, error: "" };
+
+function groupStatsHTML(){
+  var h = '<div class="card"><h3>📈 Возвращаемость</h3>' +
+    '<p class="dim">Две главные цифры курса: вернулся ли ребёнок в первую неделю ' +
+    'и доходит ли до конца мира. Считается по всем ученикам на сервере, не только по группе.</p>';
+  if (grpStats.error)
+    h += '<div class="msg show bad"><b>Не получилось</b>' + esc(grpStats.error) + '</div>';
+  var m = grpStats.data;
+  if (m){
+    h += '<ul class="trsum">' +
+      '<li>Кодов на сервере: <b>' + m.students + '</b>, начинали заниматься: <b>' + m.started + '</b>.</li>';
+    if (m.week.eligible)
+      h += '<li>Вернулись в первую неделю: <b>' + m.week.returned + ' из ' + m.week.eligible +
+        '</b> начавших неделю назад и раньше.</li>';
+    else
+      h += '<li>Возвращение за неделю считать пока не по кому: ни у кого не закрылось окно первых семи дней.</li>';
+    h += '<li>Дошли до конца мира: ' + m.reach.map(function(x, i){
+        return 'мир ' + (i + 1) + ' — <b>' + x.students + '</b>';
+      }).join(" · ") + '.</li>' +
+      '<li>За четыре недели занимались: <b>' + m.month.active + '</b>, медиана уроков на ученика: <b>' +
+        m.month.medianLessons + '</b>.</li></ul>';
+    /* ⚠️ Честность к малым числам: доля из трёх человек — случай, а не замер,
+       и говорить это обязан сам экран, а не память фаундера. */
+    if (m.started && m.started < 5)
+      h += '<p class="dim">⚠️ Начавших меньше пяти: это ещё случаи, а не замер. ' +
+        'Доли начнут что-то значить с пятого-десятого ученика.</p>';
+  }
+  h += '<div class="admrow"><button class="rbtn sec" id="grpstats">' +
+    (m ? "Пересчитать" : "Посчитать") + '</button>' +
+    (grpStats.busy ? '<span class="dim">Считаю…</span>' : '') + '</div></div>';
+  return h;
+}
+function bindGroupStats(){
+  var btn = document.getElementById("grpstats");
+  if (!btn) return;
+  btn.onclick = function(){
+    var key = ((document.getElementById("grpkey") || {}).value || "").trim() || adminKeySaved();
+    if (!key){ grpStats.error = "Нужен ключ наставника — впишите его выше."; return screenGroup(); }
+    adminKeyRemember(key);
+    grpStats.busy = true; grpStats.error = ""; screenGroup();
+    Cloud.stats(key).then(function(m){
+      grpStats.busy = false; grpStats.data = m; screenGroup();
+    }, function(err){
+      grpStats.busy = false; grpStats.error = (err && err.message) || String(err);
+      screenGroup();
+    });
+  };
+}
+
 function bindGroupHw(){
   var btn = document.getElementById("ghwgive");
   if (!btn) return;
@@ -13600,6 +13753,8 @@ function screenGroup(){
     (groupState.error ? '<div class="msg show bad"><b>Не получилось</b>' + esc(groupState.error) + '</div>' : '') +
     '</div>';
 
+  h += groupStatsHTML();
+
   /* ⚠️ Рамка честности стоит до цифр — как на записи авторства, и по той же
      причине: список «на кого посмотреть» без неё читается как список плохих. */
   h += '<div class="card"><h3>⚖️ Что это за таблица</h3><ul class="trrules">' +
@@ -13663,6 +13818,7 @@ function screenGroup(){
 
   app.innerHTML = h;
   bindGroupHw();
+  bindGroupStats();
   var lb = document.getElementById("grpload");
   if (lb) lb.onclick = function(){
     var key = (document.getElementById("grpkey").value || "").trim();
@@ -15323,6 +15479,9 @@ window.__game = {
   hwDefaultDue: hwDefaultDue, screenHW: screenHW, openHW: openHW,
   groupAssignHW: groupAssignHW, grpHwState: grpHwState,
   weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHTML,
+  worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
+  nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
+  grpStats: grpStats,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
