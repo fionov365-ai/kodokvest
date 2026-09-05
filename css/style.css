@@ -704,6 +704,14 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .hintout.show{display:block}
 .hintout .step{margin-bottom:7px}
 .hintout .step:last-child{margin-bottom:0}
+/* Код внутри текста подсказки: тем же «чипом», что и в теории, — чтобы
+   print(left) не сливался с обычными словами. Пример-программа — отдельным
+   блоком с подписью: ребёнок видит приём глазами, а не восстанавливает его
+   из хвоста предложения. */
+.hintout .step code{background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.9em;color:var(--codeink);white-space:pre-wrap;overflow-wrap:anywhere}
+.hintout .hintex{margin:8px 0 3px 20px}
+.hintout .hintexlbl{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.hintout .hintcode{margin:0;background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:13px;line-height:1.55;color:var(--codeink);overflow-x:auto;white-space:pre}
 
 .pager{display:flex;gap:10px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line);flex-wrap:wrap}
 .pager .sp{flex:1}

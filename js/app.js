@@ -3985,6 +3985,25 @@ function cmpBlock(labelA, A, labelB, B, limit, vis){
    бы страницу на первом же нажатии (в тестах требование hints стояло только
    для разминок, «Ты и ИИ» и проектов). onTake — что записать в журнал:
    у уроков подсказка стоит звезды, в остальных разделах нет. */
+
+/* Подсказка — строка или объект { t, code }. Куски кода внутри текста
+   пишутся в `обратных кавычках` и показываются как код, а не сливаются
+   с обычными словами. code — маленький пример-программа, он рисуется
+   отдельным блоком с подписью. Пример пишется на ДРУГИХ числах и именах,
+   чем решение задачи: он объясняет приём, а не выдаёт ответ (за долей
+   выданного в первой подсказке следит tests/audit.js). */
+function hintHTML(x, i){
+  var t = (x && typeof x === "object") ? (x.t || "") : String(x);
+  var body = esc(t).replace(/`([^`]+)`/g, function(_, c){
+    return "<code>" + c + "</code>";
+  });
+  var ex = (x && typeof x === "object" && x.code)
+    ? '<div class="hintex"><span class="hintexlbl">Пример (не ответ, а образец):</span>' +
+      '<pre class="hintcode">' + esc(x.code) + '</pre></div>'
+    : "";
+  return '<div class="step"><b>' + (i + 1) + '.</b> ' + body + ex + '</div>';
+}
+
 function wireHint(hints, onTake){
   var btn = document.getElementById("hintbtn");
   if (!btn) return;
@@ -3996,9 +4015,7 @@ function wireHint(hints, onTake){
     if (onTake) onTake();
     var out = document.getElementById("hintout");
     out.className = "hintout show";
-    out.innerHTML = hs.slice(0, session.hints).map(function(x, i){
-      return '<div class="step"><b>' + (i+1) + '.</b> ' + esc(x) + '</div>';
-    }).join("");
+    out.innerHTML = hs.slice(0, session.hints).map(hintHTML).join("");
     if (session.hints >= hs.length) btn.textContent = "Подсказки кончились";
   };
 }

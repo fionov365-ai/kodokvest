@@ -122,7 +122,11 @@ section("3. Первая подсказка содержит готовую ст
   CURRICULUM.forEach(w => w.lessons.forEach(l => {
     const b = (CONTENT["world" + w.n] || {})[l.id];
     if (!b || !b.task || !(b.task.hints || []).length) return;
-    const first = String(b.task.hints[0]);
+    /* Подсказка бывает объектом { t, code } — тогда «выданным» считается
+       и текст, и код примера: пример на строках решения это тот же слив. */
+    const h0 = b.task.hints[0];
+    const first = (h0 && typeof h0 === "object")
+      ? [h0.t, h0.code].filter(Boolean).join("\n") : String(h0);
     /* Решение многофайлового задания лежит НЕ в task.solution: там main.py,
        который ребёнок обычно и не трогает. Работа — в task.files[].solution.
        Пока проверка смотрела только в main.py, урок 48 проходил чистым,

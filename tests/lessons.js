@@ -231,6 +231,27 @@ CURRICULUM.forEach(w => {
     if (!Array.isArray(task.hints) || !task.hints.length)
       say(`[схема] ${l.id}: нет подсказок (hints) — кнопке «Подсказка» нечего показать`);
 
+    /* Подсказка может быть строкой или объектом { t, code }: t — текст,
+       code — маленький пример, который экран рисует отдельным блоком.
+       Куски кода в тексте пишутся в `обратных кавычках`. Проверяем три
+       вещи: текст есть, кавычки парные (иначе кусок кода не закроется и
+       ребёнок увидит кашу), пример запускается движком без ошибок. */
+    (Array.isArray(task.hints) ? task.hints : []).forEach((h, i) => {
+      const isObj = h && typeof h === "object";
+      const текст = isObj ? h.t : h;
+      if (typeof текст !== "string" || !текст.trim()){
+        say(`[подсказка ${i + 1}] ${l.id}: нет текста — нужна строка или объект { t, code }`);
+        return;
+      }
+      if (((текст.match(/`/g) || []).length) % 2)
+        say(`[подсказка ${i + 1}] ${l.id}: непарная обратная кавычка в тексте`);
+      if (isObj && h.code !== undefined){
+        const r = MP.run(h.code, { turtle: new MP.Turtle(), sources: {}, files: {}, stdin: [] });
+        if (r.error)
+          say(`[подсказка ${i + 1}] ${l.id}: пример падает — ${r.error.kind}: ${r.error.msg}`);
+      }
+    });
+
     /* 4. check.lines против настоящего вывода решения */
     if (task.check.kind === "output" && task.check.lines && !sol.error){
       const exp = task.check.lines, got = sol.lines;
@@ -638,7 +659,8 @@ CURRICULUM.forEach(w => (w.lessons || []).forEach(l => {
     .concat((body.theory || []).map((t, i) => ["теория " + (i + 1),
                    t.h + " " + t.p + " " + (t.showNote || "") + " " + (t.note || "")]))
     .concat(((body.task && body.task.list) || []).map((x, i) => ["требование " + (i + 1), x]))
-    .concat(((body.task && body.task.hints) || []).map((x, i) => ["подсказка " + (i + 1), x]));
+    .concat(((body.task && body.task.hints) || []).map((x, i) =>
+      ["подсказка " + (i + 1), (x && typeof x === "object") ? x.t : x]));
   куски.forEach(([где, txt]) => {
     if (!txt) return;
     (String(txt).match(/<\/?[a-zA-Z][^>]*>/g) || []).forEach(tag => {
