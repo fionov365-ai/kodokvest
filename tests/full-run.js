@@ -3831,7 +3831,7 @@ function checkEncoding(){
     /* у каждого экрана есть свой текст, и он не пустой */
     const places = ["home","world","lesson","train","sand","games","game","today","warm","warmup",
                     "review","ai","ailesson","project","projectdone","folio","mytasks","friendtask",
-                    "viz","account","register","guide","admin","stars","worlds","tools","path"];
+                    "viz","account","register","guide","admin","stars","worlds","tools","path","worlddone"];
     places.forEach(k => {
       const e = g.HELP[k];
       if (!e) return bad("[помощь] нет текста для места «" + k + "»");
@@ -6495,6 +6495,78 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 12в. выпускной мира --- */
+  let gradChecked = 0;
+  if (typeof g.screenWorldDone === "function"){
+    const p0 = problems.length;
+    const CURG = w.CURRICULUM;
+
+    /* 1. Содержание: умения написаны глаголами и ведут в НАСТОЯЩИЕ уроки
+       СВОЕГО мира. Строчка «а где это было» — половина смысла экрана; если
+       она ведёт в чужой мир или в никуда, список превращается в похвалу. */
+    CURG.forEach(x => {
+      const sk = g.worldSkills(x.n);
+      if (sk.length < 5) bad(`[выпускной] у мира ${x.n} всего ${sk.length} умений — списку нечего сказать`);
+      sk.forEach(s => {
+        const l = CURG.byId(s.id);
+        if (!l) return bad(`[выпускной] мир ${x.n}: умение ссылается на несуществующий урок «${s.id}»`);
+        if (l.world !== x.n)
+          bad(`[выпускной] мир ${x.n}: умение ведёт в урок мира ${l.world} («${s.id}»)`);
+        if (!/^[а-яё]/.test(String(s.v)))
+          bad(`[выпускной] мир ${x.n}: умение начинается не со строчной буквы: «${s.v}»`);
+        /* ⚠️ Умение — это ГЛАГОЛ от первого лица, а не тема из оглавления:
+           «списки и словари» ребёнку про него самого не говорят ничего.
+           Проверяем первое слово: у глагола «я …» окончание -ю или -у
+           (пишу, считаю, режу, храню). Существительное так не кончается.
+           ⚠️ Границу слова \b здесь не применить: в JS она считает буквой
+           только латиницу, и на кириллице молча не срабатывает — на этом
+           первая версия проверки и обожглась. */
+        const первое = String(s.v).split(/[^а-яё]/i)[0];
+        if (!/^[а-яё]+[юу]$/i.test(первое))
+          bad(`[выпускной] мир ${x.n}: умение начинается не с глагола «я …» — «${s.v}»`);
+      });
+    });
+
+    /* 2. Выпускной наступает по тому же правилу, что сертификат: все уроки
+       мира пройдены И проект собран. Иначе он поздравлял бы раньше времени. */
+    g.state.stars = {};
+    g.state.projects = {};
+    if (g.worldGraduated(1)) bad("[выпускной] мир выпущен при нулевом прогрессе");
+    CURG[0].lessons.forEach(l => { g.state.stars[l.id] = 3; });
+    if (g.worldGraduated(1)) bad("[выпускной] мир выпущен, хотя проект ещё не собран");
+    const pw1 = g.projectOfWorld(1);
+    g.state.projects[pw1.id] = { step: pw1.steps.length, code:"print(1)", done:1, aiAt:-1, doneAt: Date.now() };
+    if (!g.worldGraduated(1)) bad("[выпускной] уроки пройдены и проект собран, а мир не выпущен");
+
+    /* 3. Сам экран. */
+    g.screenWorldDone(1); await tick(); await tick();
+    const app2 = doc.getElementById("app");
+    const items = [...doc.querySelectorAll(".canitem")];
+    if (items.length !== g.worldSkills(1).length)
+      bad(`[выпускной] строчек умений ${items.length}, а в списке ${g.worldSkills(1).length}`);
+    if (!/что ты теперь правда делаешь сам|Ты теперь умеешь/i.test(app2.textContent))
+      bad("[выпускной] на экране не сказано, что это список умений");
+    if (/%/.test(app2.textContent)) bad("[выпускной] на экране появились проценты");
+    /* ⚠️ «Показать» — половина пункта 2.2: ребёнку нужно, чем предъявить. */
+    if (!doc.getElementById("gr-cert")) bad("[выпускной] нечем показать взрослому: нет кнопки листа");
+    else {
+      doc.getElementById("gr-cert").click(); await tick();
+      if (!g.certIsOpen()) bad("[выпускной] «Показать лист» не открыл лист");
+      g.closeCert();
+    }
+    /* строчка ведёт именно в СВОЙ урок, а не в какой попало */
+    if (items[0]){
+      const хотим = CURG.byId(g.worldSkills(1)[0].id);
+      items[0].click(); await tick(); await tick();
+      const текст = doc.getElementById("app").textContent;
+      if (!хотим || текст.indexOf(хотим.title) < 0)
+        bad("[выпускной] строчка умения открыла не тот урок: ждали «" +
+            ((хотим && хотим.title) || "?") + "»");
+    }
+    if (problems.length === p0) gradChecked++;
+    viewReset(g);
+  }
+
   /* --- 12б. карта пути --- */
   let pathChecked = 0;
   if (typeof g.screenPath === "function"){
@@ -6876,6 +6948,7 @@ function checkEncoding(){
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
   console.log(`витрина проектов: ${showcaseChecked ? "да" : "нет"}`);
   console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
+  console.log(`выпускной мира: ${gradChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);

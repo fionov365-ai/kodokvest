@@ -1135,6 +1135,22 @@ body.focus .lede{display:none}
 .peekbar b{color:var(--ink)}
 .peekbar .rbtn{margin-left:auto}
 
+/* ---------- выпускной мира ----------
+   Список умений — не украшенная похвала, а перечень, по которому ходят
+   пальцем. Поэтому строчка выглядит как строка списка, а не как карточка:
+   их восемь-десять подряд, и карточки превратили бы экран в простыню. */
+.cando{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.canitem{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+  padding:9px 12px;border:1px solid transparent;border-radius:10px;
+  background:var(--sunken);color:var(--ink);font:inherit;font-size:14px;cursor:pointer;transition:.15s}
+.canitem:hover{border-color:var(--acc);background:var(--panel2)}
+.cantick{flex:none;width:20px;height:20px;border-radius:50%;background:var(--acc);
+  color:var(--onacc);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cantxt{flex:1;min-width:0}
+.canwhere{flex:none;font-size:12px;color:var(--faint);white-space:nowrap}
+.gradproof,.gradshow{margin-top:14px}
+@media (max-width:520px){ .canwhere{display:none} }
+
 /* ---------- карта пути: сто уроков одной дорогой ----------
    Кружки, а не список: список из ста строк читается как перечень дел, а
    дорога — как расстояние. Ряд на мир, в конце ряда веха-проект. */
@@ -24827,6 +24843,148 @@ function pyCardWire(seq, studio, real, waking){
   if (waking) start();
 }
 
+/* ================= выпускной мира =================
+   Пункт 2.2 плана. Мир заканчивается проектом, и до сих пор в этот момент
+   ребёнку показывали собранную программу — и всё. А главный вопрос у него
+   другой: «что я теперь умею». Ответ на него нигде не звучал ни разу.
+
+   ⚠️ Умения написаны ГЛАГОЛАМИ и от первого лица ребёнка, а не темами
+   программы. «Списки, словари, множества» — это оглавление учебника, оно
+   ничего не говорит о нём самом. «Считаю, сколько раз встретилось слово» —
+   говорит.
+
+   ⚠️ У каждого умения стоит id урока, где оно появилось, и это не украшение:
+   строчка «а где это было» превращает список из похвалы в оглавление своей
+   же памяти. Тест требует, чтобы урок существовал. */
+var WORLD_SKILLS = {
+  1: [
+    { v:"печатаю на экран текст и числа и знаю, чем они отличаются", id:"text-vs-num" },
+    { v:"складываю, делю с остатком и не путаюсь в порядке действий", id:"math" },
+    { v:"читаю красный текст ошибки и понимаю, в какой строке беда", id:"errors-read" },
+    { v:"вставляю числа прямо в текст через f-строку", id:"fstrings" },
+    { v:"режу строку на части и собираю обратно", id:"text-work" },
+    { v:"рисую черепашкой: квадрат, спираль, узор", id:"for-turtle" },
+    { v:"повторяю действие циклом вместо того, чтобы писать его двадцать раз", id:"for-range" },
+    { v:"ставлю условие: программа принимает решение сама", id:"if-else" },
+    { v:"храню много значений в списке и хожу по нему", id:"lists-first" },
+    { v:"пишу свою команду с именем — функцию", id:"functions" }
+  ],
+  2: [
+    { v:"вырезаю кусок списка срезом, без единого цикла", id:"slices" },
+    { v:"сортирую по своему правилу, а не только по возрастанию", id:"sorting" },
+    { v:"строю поле и карту двумерным списком", id:"grid" },
+    { v:"держу данные в словаре: по ключу, а не по номеру", id:"dict-first" },
+    { v:"считаю, сколько раз встретилось слово или буква", id:"dict-counter" },
+    { v:"оставляю только уникальные значения множеством", id:"sets" },
+    { v:"собираю новый список одной строкой — включением", id:"comp-basic" },
+    { v:"разбираю текст и считаю по нему статистику", id:"text-stats" }
+  ],
+  3: [
+    { v:"пишу функции с параметрами и значениями по умолчанию", id:"fn-default" },
+    { v:"возвращаю из функции сразу несколько значений", id:"fn-multi" },
+    { v:"решаю задачу рекурсией — функцией, которая зовёт саму себя", id:"recursion" },
+    { v:"раскладываю программу по своим модулям и подключаю их", id:"modules-own" },
+    { v:"ловлю ошибку через try и except вместо того, чтобы падать", id:"try-except" },
+    { v:"пишу тесты, которые проверяют мой код за меня", id:"assert" },
+    { v:"описываю вещь классом: свои поля и свои методы", id:"class-first" },
+    { v:"наследую класс от класса и не переписываю общее дважды", id:"inherit" }
+  ],
+  4: [
+    { v:"подключаю чужие модули и знаю, что лежит в стандартной библиотеке", id:"imports" },
+    { v:"считаю даты и сроки, не путаясь в длине месяцев", id:"datetime" },
+    { v:"читаю файл с диска и записываю в него результат", id:"files-write" },
+    { v:"разбираю JSON — то, чем говорят между собой программы", id:"json" },
+    { v:"читаю таблицу CSV и считаю по её столбцам", id:"csv" },
+    { v:"нахожу в тексте нужное регулярным выражением", id:"regex" },
+    { v:"пишу генератор и понимаю, чем он дешевле списка", id:"generators" },
+    { v:"вижу, что в программе тормозит, и умею это измерить", id:"perf" }
+  ],
+  5: [
+    { v:"собираю игру-квест из комнат, вещей и правил", id:"quest-2" },
+    { v:"загружаю данные, чищу их и отвечаю ими на вопрос", id:"data-2" },
+    { v:"разбираю ответ сервера и достаю из него нужное", id:"api-2" },
+    { v:"делаю страницу, которая открывается в браузере", id:"web-2" },
+    { v:"храню историю изменений в git и не боюсь сломать", id:"git-1" },
+    { v:"ищу ответ в документации, а не жду, пока подскажут", id:"docs" }
+  ]
+};
+/* Порядок — по урокам, а не по тому, как я их выписал: список читается как
+   дорога, которую ребёнок прошёл, и «урок 13» перед «уроком 11» эту дорогу
+   ломает. Сортируем здесь, чтобы в самих данных можно было держать умения в
+   любом удобном для правки порядке. */
+function worldSkills(n){
+  return (WORLD_SKILLS[n] || []).slice().sort(function(a, b){
+    var la = CURRICULUM.byId(a.id), lb = CURRICULUM.byId(b.id);
+    return ((la && la.num) || 0) - ((lb && lb.num) || 0);
+  });
+}
+/* Мир считается выпущенным по тому же правилу, что и сертификат: все уроки
+   пройдены И проект собран. Иначе «выпускной» наступал бы, когда главное
+   дело мира ещё не сделано. */
+function worldGraduated(n){ return certWorldReady(n); }
+
+function screenWorldDone(n){
+  var w = CURRICULUM.world(n);
+  if (!w) return screenWorlds();
+  var seq = enterScreen("home", "worlddone");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  worldContent(n).then(function(){
+    if (screenStale(seq)) return;
+    var skills = worldSkills(n);
+    var p = projectOfWorld(n);
+    var stars = 0;
+    w.lessons.forEach(function(l){ stars += starsOf(l.id) || 0; });
+    var next = CURRICULUM.world(n + 1);
+
+    var h = '<div class="crumbs"><span data-go="home">🏠 Главное</span> › 🎓 Выпускной мира ' + n + '</div>' +
+      '<div class="lvlhead"><div><div class="idx">мир ' + n + ' пройден</div>' +
+      '<h1>🎓 ' + w.icon + ' ' + esc(w.title) + '</h1></div>' +
+      '<div class="right"><span class="tag">★ ' + stars + '</span></div></div>' +
+      '<p class="lede">Двадцать уроков и проект позади. Это не «молодец» — это список того, ' +
+      'что ты теперь правда делаешь сам. Нажми на строчку, если хочешь вспомнить, где это было.</p>';
+
+    h += '<div class="card gradlist"><h3>Ты теперь умеешь</h3><ul class="cando">';
+    skills.forEach(function(s){
+      var l = CURRICULUM.byId(s.id);
+      h += '<li><button class="canitem" data-open="' + s.id + '">' +
+        '<span class="cantick">✓</span><span class="cantxt">' + esc(s.v) + '</span>' +
+        (l ? '<span class="canwhere">урок ' + l.num + '</span>' : '') + '</button></li>';
+    });
+    h += '</ul></div>';
+
+    if (p && projectDone(p.id)){
+      h += '<div class="card gradproof"><h3>И вот чем это доказано</h3>' +
+        '<p>Проект «' + esc(p.title) + '» ты собрал сам, шаг за шагом. Программа цела, ' +
+        'её можно запустить, показать и забрать себе.</p>' +
+        '<div class="row"><button class="bigbtn" id="gr-proj">Открыть мой проект</button></div></div>';
+    }
+
+    h += '<div class="card gradshow"><h3>Показать взрослому</h3>' +
+      '<p>Лист с твоим именем, названием мира и датой. Его можно распечатать ' +
+      'или сохранить в PDF — и он останется у тебя на руках.</p>' +
+      '<div class="row"><button class="bigbtn" id="gr-cert">🖨 Показать лист</button>' +
+      '<button class="bigbtn ghost" id="gr-folio">🎒 Все мои работы</button></div></div>';
+
+    h += '<div class="pager">' +
+      (next ? '<button class="bigbtn" id="gr-next">Дальше: мир ' + next.n + ' · ' + esc(next.title) + ' →</button>' : '') +
+      '<button class="bigbtn ghost" data-go="home">← На главную</button></div>';
+
+    app.innerHTML = h;
+    app.querySelectorAll("[data-open]").forEach(function(b){
+      b.onclick = function(){ openLesson(b.getAttribute("data-open")); };
+    });
+    app.querySelectorAll('[data-go="home"]').forEach(function(b){ b.onclick = goHome; });
+    var pj = document.getElementById("gr-proj");
+    if (pj && p) pj.onclick = function(){ screenProjectDone(p.id); };
+    document.getElementById("gr-cert").onclick = function(){ openCert(n); };
+    document.getElementById("gr-folio").onclick = screenFolio;
+    var nx = document.getElementById("gr-next");
+    if (nx && next) nx.onclick = function(){ screenWorld(next.n); };
+    refreshTop();
+    window.scrollTo({ top:0, behavior:"smooth" });
+  });
+}
+
 /* ================= карта пути =================
    Сто уроков одной дорогой. Зачем это отдельным экраном, если на Главном
    уже есть пять карточек миров: карточки отвечают на вопрос «что внутри»,
@@ -24924,11 +25082,12 @@ function screenPath(){
       h += '</div>';
       if (pj){
         var pdone = projectDone(pj.id), popen = projectOpen(pj);
+        var grad = worldGraduated(w.n);
         h += '<button class="pmile' + (pdone ? " done" : popen ? " open" : "") + '"' +
-          (popen ? ' data-proj="' + pj.id + '"' : ' disabled') + '>' +
+          (grad ? ' data-grad="' + w.n + '"' : popen ? ' data-proj="' + pj.id + '"' : ' disabled') + '>' +
           '<span class="pmem">' + pj.emoji + '</span>' +
           '<span class="pmbody"><span class="pmkick">веха мира ' + w.n +
-            (pdone ? " · собрана ✓" : popen ? " · открыта" : " · закрыта") + '</span>' +
+            (grad ? " · мир выпущен 🎓" : pdone ? " · собрана ✓" : popen ? " · открыта" : " · закрыта") + '</span>' +
           '<b>' + esc(pj.title) + '</b>' +
           '<span>' + esc(pj.tagline) + '</span></span></button>';
       }
@@ -24951,6 +25110,9 @@ function screenPath(){
     });
     app.querySelectorAll(".pmile[data-proj]").forEach(function(b){
       b.onclick = function(){ openProject(b.getAttribute("data-proj")); };
+    });
+    app.querySelectorAll(".pmile[data-grad]").forEach(function(b){
+      b.onclick = function(){ screenWorldDone(+b.getAttribute("data-grad")); };
     });
     app.querySelectorAll('[data-go="home"]').forEach(function(b){
       b.onclick = goHome;
@@ -27622,7 +27784,14 @@ function winProjectStep(p, i, code){
   document.getElementById("wincard").innerHTML = last
     ? '<div class="big">🏆</div><h2>Проект собран!</h2>' +
       '<p>' + esc(p.finale) + '</p>' +
-      '<div class="winrow"><button class="bigbtn" id="pfin">Посмотреть, что получилось</button></div>'
+      '<div class="winrow"><button class="bigbtn" id="pfin">Посмотреть, что получилось</button>' +
+      /* ⚠️ Проект мира — это и конец мира. Раньше в этот момент ребёнку
+         показывали собранную программу и всё; на вопрос «что я теперь умею»
+         не отвечал никто. Кнопка стоит второй, а не первой: сначала он хочет
+         увидеть свою вещь, и отнимать у него эту минуту нельзя. */
+      (worldGraduated(p.world)
+        ? '<button class="bigbtn ghost" id="pgrad">🎓 Что я теперь умею</button>' : '') +
+      '</div>'
     : '<div class="big">' + (firstTry ? "🎯" : "🧱") + '</div>' +
       '<h2>Шаг ' + (i + 1) + ' из ' + p.steps.length + ' готов</h2>' +
       '<p>' + esc(p.steps[i + 1].brief) + '</p>' +
@@ -27634,6 +27803,8 @@ function winProjectStep(p, i, code){
   if (pn) pn.onclick = function(){ closeWin(); openProject(p.id, i + 1); };
   var pf = document.getElementById("pfin");
   if (pf) pf.onclick = function(){ closeWin(); screenProjectDone(p.id); };
+  var pg = document.getElementById("pgrad");
+  if (pg) pg.onclick = function(){ closeWin(); screenWorldDone(p.world); };
   var ws = document.getElementById("wstay");
   if (ws) ws.onclick = closeWin;
 }
@@ -35758,6 +35929,21 @@ function themeSet(t){
 var curPlace = "home";
 
 var HELP = {
+  worlddone: { t:"🎓 Выпускной мира — что ты теперь умеешь", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Он открывается, когда мир пройден целиком: все двадцать уроков сданы ' +
+    'и проект собран. Здесь список того, что ты теперь делаешь сам — не темами ' +
+    'из программы, а обычными словами.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Нажми на любую строчку — откроется урок, где это было. Пройденный ' +
+    'урок можно перерешать, звёзды при этом не отнимаются.</li>' +
+    '<li><b>«🖨 Показать лист»</b> откроет лист с твоим именем, названием мира и датой. ' +
+    'Его можно распечатать или сохранить в PDF.</li></ul>' +
+    '<h4>Зачем это</h4>' +
+    '<p>Через месяц занятий трудно вспомнить, чему ты научился: кажется, что просто ' +
+    'решал задачки. Этот список для того и нужен — чтобы было видно, сколько всего ' +
+    'уже умеешь.</p>' },
+
   path: { t:"🗺 Карта пути — где ты и что впереди", h:
     '<h4>Что это за экран</h4>' +
     '<p>Весь курс одной дорогой: сто уроков по порядку и пять вех. ' +
@@ -36605,6 +36791,8 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   goLogo: goLogo, landNums: landNums, landLiveCode: landLiveCode,
+  screenWorldDone: screenWorldDone, worldSkills: worldSkills,
+  worldGraduated: worldGraduated, WORLD_SKILLS: WORLD_SKILLS,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
