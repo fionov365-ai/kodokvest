@@ -1664,7 +1664,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   --lgrid:rgba(255,255,255,.045);
   --dwbar:#101632;
 }
-.land{display:flex;flex-direction:column;gap:52px}
+.land{display:flex;flex-direction:column;gap:34px}
 
 /* ---------- появление при прокрутке ----------
    Не украшение: на длинной странице сдвиг на десяток пикселей говорит глазу
@@ -1798,8 +1798,21 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .landsect{scroll-margin-top:90px}
 .seckick{display:block;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--acc2);font-weight:700;margin-bottom:7px}
-.landsect h2{margin:0 0 8px;font-size:30px;line-height:1.15;letter-spacing:-.015em}
-.landsect .lede{margin:0 0 20px;max-width:720px;font-size:15.5px}
+.landsect h2{margin:0 0 8px;font-size:27px;line-height:1.15;letter-spacing:-.015em}
+.landsect .lede{margin:0;font-size:15.5px}
+/* Заголовок слева, лид справа. Узкая строка лида нужна (длинную не читают),
+   но обрыв на 720 px при колонке 1080 читается как сломанная вёрстка —
+   жалоба фаундера 06.09.2026. Здесь справа от короткой строки не пустота,
+   а заголовок слева, и обе колонки вместе занимают всю ширину. */
+.secthead{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:12px 40px;align-items:end;margin-bottom:18px}
+.secthead .sechl{min-width:0}
+.secthead h2{margin:0}
+.secthead .lede{padding-bottom:4px}
+@media (max-width:820px){
+  .secthead{grid-template-columns:1fr;gap:8px;align-items:start}
+  .secthead .lede{padding-bottom:0}
+}
 
 /* ---------- четыре шага урока ----------
    Дорожка с узлами, а не список: у шагов есть порядок, и линия между ними
@@ -1831,35 +1844,34 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    той же причине: пять миров проходят ПО ПОРЯДКУ, и порядок должен быть
    виден, а не подразумеваться. Рельс выдерживает любую ширину, в отличие от
    ломаной дороги по диагонали, которая на телефоне превращается в кашу. */
-.landworlds{display:grid;gap:14px;position:relative;padding-left:0}
-.landworld{position:relative;display:grid;grid-template-columns:56px minmax(0,1fr);
-  gap:18px;align-items:start;border:1px solid var(--line);border-radius:20px;
-  background:var(--panel);padding:20px 22px;overflow:hidden;transition:.18s}
+.landworlds{display:grid;gap:10px;position:relative;padding-left:0}
+.landworld{position:relative;display:grid;grid-template-columns:46px minmax(0,1fr);
+  gap:15px;align-items:start;border:1px solid var(--line);border-radius:18px;
+  background:var(--panel);padding:14px 18px;overflow:hidden;transition:.18s}
 .landworld:hover{border-color:var(--wc);transform:translateY(-2px);box-shadow:var(--sh)}
 /* Цветная полоса слева — единственное, чем миры отличаются друг от друга
    на расстоянии вытянутой руки. */
 .landworld::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--wc)}
 /* Крупная цифра мира призраком в углу: она не для чтения, а для того, чтобы
    пятая карточка не выглядела такой же, как первая. */
-.lwno{position:absolute;right:16px;top:2px;font-family:'Fredoka','Inter',sans-serif;
-  font-size:76px;line-height:1;color:var(--wc);opacity:.13;pointer-events:none}
-.landworld .lwico{width:56px;height:56px;border-radius:18px;background:var(--wcbg);
-  display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
+.lwno{position:absolute;right:14px;top:-4px;font-family:'Fredoka','Inter',sans-serif;
+  font-size:62px;line-height:1;color:var(--wc);opacity:.13;pointer-events:none}
+.landworld .lwico{width:46px;height:46px;border-radius:15px;background:var(--wcbg);
+  display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
 .lwbody{min-width:0}
 .lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--wc);font-weight:700}
-.lwbody b{font-size:20px}
+.lwbody b{font-size:18px}
 .lwbody p{margin:3px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5;max-width:640px}
 /* Названия уроков — фишками, а не строкой через точку. Строка читалась как
    один длинный текст, из которого не видно, что это перечень тем. */
-.lwlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.lwlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .lwlist span{font-size:12px;color:var(--soft);background:var(--sunken);
   border:1px solid var(--line);border-radius:8px;padding:4px 9px}
 .lwlist span.more{color:var(--faint);background:none;border-style:dashed}
-/* Хвост карточки: чем мир заканчивается. Отдельной строкой, потому что это
-   одинаково у всех пяти и повторять это в описании каждого — шум. */
-.lwend{display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:11px;
-  border-top:1px dashed var(--line);font-size:12.5px;color:var(--faint)}
+/* Имя босса переехало в строку-указатель над названием мира: отдельной
+   строкой с рамкой оно добавляло каждой из пяти карточек полтора сантиметра
+   высоты, а страница не должна быть длинной (правило фаундера 06.09.2026). */
 
 /* ---------- карточки ---------- */
 .landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
@@ -1910,18 +1922,156 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   font-weight:700;color:var(--warn)}
 .landhonest li b{color:var(--ink)}
 
+/* ---------- вкладки внутри страницы ----------
+   Главный инструмент против длины. Восемь карточек «Взрослому» и два раздела
+   подряд («как проходит урок» + «не только язык») занимали три экрана;
+   вкладками то же содержание занимает один, и каждый читает только своё.
+   ⚠️ Это НЕ вкладки верхней панели (.tab): тех ровно три, за этим следит
+   тест, и путать их нельзя ни классом, ни видом. */
+.ltabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ltab{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  background:var(--panel);border-radius:13px;padding:9px 14px;font:inherit;
+  font-size:14.5px;font-weight:600;color:var(--soft);cursor:pointer;transition:.16s;
+  text-align:left}
+.ltab:hover{border-color:var(--line2);color:var(--ink)}
+.ltab.on{border-color:transparent;background:var(--acc);color:var(--onacc);
+  box-shadow:0 10px 22px -12px var(--acc)}
+.ltab .lte{font-size:17px;line-height:1}
+/* Вкладки миров красятся в цвет своего мира — тот же приём, что на дороге
+   курса: пять одинаковых кнопок не читаются как пять разных миров.
+   ⚠️ Модификатор называется .wld, а не .world, и это не вкусовщина: `.world`
+   в этом файле давно занят карточкой мира на карте курса (градиент, рамка,
+   отступы), и вкладки молча получали её фон — белую плашку вокруг всего
+   ряда. Любой новый класс вывески сначала проверяется на столкновение с
+   тем, что уже есть в style.css. */
+.ltabs.wld .ltab.on{background:var(--wc);box-shadow:0 10px 22px -12px var(--wc)}
+.ltabs.wld .ltab .ltt{display:flex;flex-direction:column;line-height:1.25}
+.ltabs.wld .ltab .ltt i{font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;opacity:.72}
+.ltabs.wld .ltab .ltt b{font-size:14.5px;font-weight:700}
+.ltabs.ltsm .ltab{padding:7px 12px;font-size:13.5px;border-radius:11px}
+.ldpane{min-height:60px}
+.ldpanefoot{margin:12px 0 0;font-size:13px;color:var(--faint)}
+
+/* ---------- живые блоки: черепашка и разминка ----------
+   Пожелание фаундера 06.09.2026: «чтобы люди игрались, нажимали, и что-то
+   оживало». Обе штуки работают настоящим движком, как и окно в шапке, —
+   скриншотов и записанных гифок здесь нет и не будет. */
+.drawwin{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;
+  align-items:start}
+.drawc{width:100%;display:block;border:1px solid var(--line);border-radius:16px;
+  background:var(--board)}
+.drawside{display:flex;flex-direction:column;gap:10px;min-width:0}
+.drawside .dwcode{border:1px solid var(--line);border-radius:14px;background:var(--code);
+  overflow:hidden}
+.drawside .dwbtn{align-self:flex-start}
+.livenote{margin:0;font-size:12.5px;color:var(--faint);line-height:1.5}
+.warmask{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;
+  align-items:start}
+.warmask .dwcode{border:1px solid var(--line);border-radius:14px;background:var(--code);
+  overflow:hidden}
+.warmans{display:flex;flex-direction:column;gap:8px;min-width:0}
+.warmans label{font-size:14px;font-weight:600}
+.warmans textarea{width:100%;box-sizing:border-box;border:1px solid var(--line2);
+  border-radius:12px;background:var(--panel);color:var(--ink);padding:10px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.6;resize:vertical}
+.warmans textarea:focus{outline:none;border-color:var(--acc)}
+.warmans .dwbar{background:none;border:none;padding:0}
+.warmres{display:none;border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55}
+.warmres.show{display:block}
+.warmres b{display:block;margin-bottom:3px}
+.warmres.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
+.warmres.ok b{color:var(--ok)}
+.warmres.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
+.warmres.bad b{color:var(--bad)}
+.warmres.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
+/* Расхождение двумя колонками — ровно так его показывает урок: не «неверно»,
+   а «вот твоё, вот нужное», рядом и построчно. */
+.warmdiff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.warmdiff i{display:block;font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;opacity:.75;margin-bottom:3px}
+.warmdiff pre{margin:0;padding:8px 10px;border-radius:9px;background:var(--sunken);
+  color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12.5px;
+  line-height:1.5;overflow-x:auto}
+.warmwhy{display:block;color:var(--soft);font-size:13px;line-height:1.55}
+
+/* ---------- витрина проектов ---------- */
+.showwin{border:1px solid var(--line);border-radius:18px;background:var(--panel);
+  overflow:hidden}
+.shhead{display:flex;gap:14px;align-items:center;padding:13px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}
+.shico{width:44px;height:44px;border-radius:14px;background:var(--wcbg);flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:22px}
+.shttl{min-width:0}
+.shkick{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--wc);
+  font-weight:700}
+.shttl b{font-size:17px}
+.shttl p{margin:1px 0 0;color:var(--soft);font-size:13.5px;line-height:1.45}
+/* Вывод ограничен по высоте и прокручивается внутри: «Свой сайт» печатает
+   шестьдесят строк, и без потолка одна вкладка растянула бы страницу на
+   пол-экрана — то, чего быть не должно. */
+.ldout{margin:0;padding:14px 18px;max-height:250px;overflow:auto;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;
+  color:var(--outink);white-space:pre-wrap;word-break:break-word;background:var(--res)}
+.ldcode{border-top:1px solid var(--line);background:var(--code);max-height:320px;overflow:auto}
+.ldcode .dwcode{border:none}
+
+/* ---------- взрослому: три роли ---------- */
+.rolepane{border:1px solid var(--line);border-radius:18px;background:var(--panel);
+  padding:18px 20px}
+.rolein{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:22px;
+  align-items:start}
+.rolein.one{grid-template-columns:minmax(0,1fr)}
+.rolehow{display:inline-block;font-size:12px;color:var(--acc2);font-weight:600;
+  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:5px 11px;margin-bottom:10px}
+.rolelede{margin:0 0 14px;color:var(--soft);font-size:14.5px;line-height:1.55}
+/* Строки, а не карточки: восемь карточек фаундер прочитать не смог, и он
+   прав — карточка обещает отдельную мысль, а здесь их пять от одного лица. */
+.rolelist{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.rolelist li{display:flex;gap:11px;align-items:flex-start;font-size:14px;line-height:1.55;
+  color:var(--soft)}
+.rolelist .rlem{flex:none;width:26px;text-align:center;font-size:17px;line-height:1.4}
+.rolelist b{color:var(--ink)}
+.roledemo{border:1px solid var(--line);border-radius:15px;background:var(--panel2);
+  padding:14px 16px}
+.rdhead{font-size:12.5px;color:var(--faint);line-height:1.5;margin-bottom:10px}
+.hwtop{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.hwem{font-size:22px;line-height:1}
+.hwtop b{display:block;font-size:15px}
+.hwtop i{font-style:normal;font-size:12px;color:var(--faint)}
+.hwtop .dwbtn{margin-left:auto;flex:none}
+.hwgoal{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--soft)}
+.hwans{border-top:1px dashed var(--line);padding-top:9px}
+.hwans i{display:block;font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.hwans pre{margin:0;font-family:'JetBrains Mono',monospace;font-size:13px;
+  line-height:1.5;color:var(--ink);white-space:pre-wrap}
+@media (max-width:900px){
+  .drawwin,.warmask,.rolein{grid-template-columns:1fr}
+}
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте
    страницы, а не на белом фоне между двумя разделами. */
+/* Границы обещания и вход стоят В ОДНОМ блоке и рядом, а не двумя разделами
+   подряд: раньше страница заканчивалась дважды и была на экран длиннее.
+   Порядок внутри блока сохранён — границы слева, вход справа: обещание и его
+   край читаются вместе, а не «сначала продали, потом оговорились». */
 .landend{position:relative;overflow:hidden;border:1px solid var(--line);
-  border-radius:26px;background:var(--panel);padding:40px;text-align:center;
-  box-shadow:var(--shbig)}
+  border-radius:26px;background:var(--panel);padding:32px 34px;box-shadow:var(--shbig)}
 .landend > *:not(.lhaur){position:relative}
-.landend h2{font-size:32px}
-.landend .lede{margin:0 auto 22px;max-width:620px}
-.landend .landcta{justify-content:center}
-.landend .landsub{margin:18px auto 0;max-width:620px}
+.endin{position:relative;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+  gap:30px;align-items:start}
+.landend h2{margin:0 0 14px;font-size:26px;line-height:1.15;letter-spacing:-.015em}
+.landend .lede{margin:0 0 18px;font-size:15.5px}
+.landend .landsub{margin:16px 0 0}
+.endright{border-left:1px solid var(--line);padding-left:30px}
+@media (max-width:860px){
+  .endin{grid-template-columns:1fr;gap:24px}
+  .endright{border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:24px}
+}
 
 @media (max-width:980px){
   .lhin{grid-template-columns:1fr;gap:28px}
