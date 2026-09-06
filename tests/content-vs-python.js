@@ -27,6 +27,7 @@ eval(fs.readFileSync(path.join(root, "js/ailab.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/projects.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/cheatsheet.js"), "utf8"));
 eval(fs.readFileSync(path.join(root, "js/algo.js"), "utf8"));
+eval(fs.readFileSync(path.join(root, "js/algo-exam.js"), "utf8"));
 fs.readdirSync(path.join(root, "content"))
   .filter(f => /^world\d+\.js$/.test(f))
   .forEach(f => eval(fs.readFileSync(path.join(root, "content", f), "utf8")));
