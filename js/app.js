@@ -4418,13 +4418,11 @@ function screenWorlds(){
      тот, кто его написал. Ставим ссылку туда, где на любом сайте её и ищут —
      в самый низ, дим-строкой. Ребёнку она не мешает: он до неё не долистает
      и ничего не теряет, а взрослый ищет именно внизу. */
-  h += '<div class="landfoot"><button class="linkbtn" id="go-about">🐍 О тренажёре: ' +
-    'что это, сколько уроков и что видит взрослый</button></div>';
+  h += aboutFootHTML();
 
   app.innerHTML = installTipHTML() + h;
   wireInstallTip(app);
-  var gab = document.getElementById("go-about");
-  if (gab) gab.onclick = screenAbout;
+  wireAboutFoot(app);
 
   var goNext = document.getElementById("go-next");
   if (goNext) goNext.onclick = function(){
@@ -12896,6 +12894,21 @@ function aboutCounts(){
     certs:    (typeof certList === "function") ? certList().length : 0
   };
 }
+/* Подвал дома — один на все роли. Заведён по жалобе фаундера 06.09.2026,
+   повторённой дважды: «жму на логотип и всё то же самое». Логотип исправен,
+   он ведёт домой; дыра была в том, что из дома нет двери на вывеску. Первый
+   раз я поставил её только в детский дом — а у фаундера устройство родителя,
+   и для него ничего не изменилось. Поэтому теперь одна функция и три вызова:
+   карта миров, кабинет родителя, кабинет наставника. */
+function aboutFootHTML(){
+  return '<div class="landfoot"><button class="linkbtn" data-goabout="1">' +
+    '🐍 О тренажёре: что это, сколько уроков и что видит взрослый</button></div>';
+}
+function wireAboutFoot(box){
+  (box || document).querySelectorAll("[data-goabout]").forEach(function(b){
+    b.onclick = screenAbout;
+  });
+}
 function screenAbout(){
   enterScreen("home", "about");
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -13339,8 +13352,10 @@ function screenKids(){
      нужна, репетитору с классом — да, поэтому лежит отдельной ссылкой. */
   h += '<div class="pager"><button class="bigbtn ghost" data-kact="role">⇄ Сменить роль</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-kact="panel">Полная панель наставника →</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-kact="off">Это устройство больше не кабинет</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" data-kact="off">Это устройство больше не кабинет</button></div>' +
+    aboutFootHTML();
   app.innerHTML = h;
+  wireAboutFoot(app);
 
   var msg = document.getElementById("kidmsg");
   app.querySelectorAll("[data-kact]").forEach(function(b){
@@ -13699,7 +13714,9 @@ function screenParent(code){
     'Ребёнок занимается на своём устройстве — его тренажёр отдельно от этого экрана.</p>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Выйти</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Выйти</button></div>' +
+    aboutFootHTML();
+  wireAboutFoot(app);
   app.querySelectorAll("[data-pd]").forEach(function(b){
     b.onclick = function(){
       if (b.getAttribute("data-pd") === "role"){ kidTarget = null; return screenRoles(); }
