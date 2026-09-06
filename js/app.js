@@ -2459,7 +2459,14 @@ var KIND_RU = {
      она требует, чтобы у каждого зверя было имя по-русски. */
   FileNotFoundError:"Файл не найден", UnboundLocalError:"Имя ещё без значения",
   OSError:"Так с файлом нельзя", JSONDecodeError:"Это не похоже на JSON",
-  EOFError:"Ответы для input() кончились"
+  EOFError:"Ответы для input() кончились",
+  /* Эти бросает только настоящий CPython в песочнице: мини-движок до них не
+     доходит. Без русских имён плашка показала бы английское слово. */
+  ModuleNotFoundError:"Нет такого модуля", OverflowError:"Число слишком большое",
+  MemoryError:"Не хватило памяти", TabError:"Смешаны табы и пробелы",
+  UnicodeDecodeError:"Не удалось прочитать текст", UnicodeEncodeError:"Не удалось записать текст",
+  PermissionError:"Так с файлом нельзя", IsADirectoryError:"Это папка, а не файл",
+  FloatingPointError:"Ошибка в вычислении", SystemError:"Сбой внутри Python"
 };
 function errHTML(e){
   return '<b>' + (KIND_RU[e.kind] || e.kind) + (e.line ? ' — строка ' + e.line : '') + '</b>' + esc(e.msg);
@@ -5556,27 +5563,68 @@ function confetti(n){
 
 /* ================= песочница ================= */
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
+/* Тот же чистый лист, но для настоящего Python: черепашки там нет, и
+   встретить ребёнка кодом, который сразу падает, было бы издевательством.
+   Подменяется ТОЛЬКО нетронутый пример — своё написанное не трогаем никогда. */
+var SANDBOX_START_PY = 'import sys\n\nprint("Это настоящий Python", sys.version.split()[0])\n\nfor i in range(1, 6):\n    print(i, "в квадрате —", i * i)\n';
+/* ================= настоящий Python в песочнице =================
+   Тяжёлый контур из docs/golos-i-produkty-2026-09-06.md § 3.7: лёгкий движок
+   остаётся продуктом, а настоящий CPython включает человек и только здесь.
+
+   ⚠️ Выбор хранится ОТДЕЛЬНЫМ ключом и в облако не уезжает — это настройка
+   устройства, как тема и звук (SFX_KEY, VOICE_KEY). На школьном компьютере
+   качать шесть мегабайт незачем, дома — можно, и это разные ответы для
+   одного и того же ребёнка.
+
+   ⚠️ Курса это не касается вовсе: уроки, экзамен, разминки и проверки всегда
+   на «mini», иначе сверок с python3 стало бы вдвое больше. */
+var PY_KEY = "kodokvest_python";
+function pyWanted(){ try { return localStorage.getItem(PY_KEY) === "on"; } catch(e){ return false; } }
+function pySet(on){
+  try { if (on) localStorage.setItem(PY_KEY, "on"); else localStorage.removeItem(PY_KEY); } catch(e){}
+}
+/* Настоящий Python доступен только на живом сайте: в сборке одним файлом
+   рядом нет папки vendor, и обещание «всё внутри» это охраняет. */
+function pyPossible(){ return !window.__SINGLE_FILE__ && Runtime.has("pyodide"); }
+
 function screenSandbox(){
-  enterScreen("train", "sand");
+  var seq = enterScreen("train", "sand");
   /* sandbox:true — метка для draftFlush: уход с этого экрана обязан сохранить код */
   session = { id:null, attempts:0, hints:0, shown:false, sandbox:true };
-  var ref = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
+
+  /* Настоящий Python живёт в памяти вкладки: после перезагрузки страницы его
+     надо поднять заново. Файлы к этому времени уже в кэше — это быстро и
+     работает без сети, но всё равно не мгновенно, поэтому экран рисуется
+     сразу на быстром движке, а когда тяжёлый поднимется — перерисовывается. */
+  var real = pyPossible() && pyWanted() && Runtime.isReady("pyodide");
+  var waking = pyPossible() && pyWanted() && !real;
+
+  var refTurtle = ["forward(100)","back(50)","right(90)","left(90)",'color("red")',"width(5)","penup()","pendown()",
              "goto(0, 0)","dot(10)","circle(60)","print(x)","range(10)","len(s)","sum(xs)","randint(1, 6)","sqrt(16)"];
+  /* На настоящем Python черепашки нет, и предлагать её командами было бы
+     обманом. Зато есть импорты, которых мини-движок не знает. */
+  var refReal = ["print(x)","range(10)","len(s)","sum(xs)","sorted(xs)","enumerate(xs)","zip(a, b)",
+             "import math","import random","import json","import itertools","f\"{x:.2f}\"","[x*x for x in xs]"];
+  var ref = real ? refReal : refTurtle;
+
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">свободный режим</div><h1>Песочница</h1></div></div>' +
     '<p class="lede">Никаких заданий и проверок. Пиши что угодно, запускай, ломай и чини. Код сохраняется между заходами.</p>' +
+    pyCardHTML(real, waking) +
     '<div class="card"><h3>Что можно позвать</h3><div class="ref">' +
       ref.map(function(x){ return "<span>" + esc(x) + "</span>"; }).join("") +
     '</div><p class="dim">Нажми на команду — она вставится в конец кода.</p></div>' +
     '<div id="studio"></div>' +
+    (real ? "" :
     '<div class="savepic"><button class="rbtn" id="topic">🖼 Сохранить рисунок в галерею</button>' +
     '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
     'Первая строка-комментарий станет названием.</span>' +
-    '<div class="msg" id="picmsg"></div></div>' +
+    '<div class="msg" id="picmsg"></div></div>') +
     '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
 
   var studio = makeStudio({
-    engine:"mini", draw:true, code: S.sandbox || SANDBOX_START,
+    engine: real ? "pyodide" : "mini", draw: !real,
+    code: (real && (!S.sandbox || S.sandbox === SANDBOX_START)) ? SANDBOX_START_PY : (S.sandbox || SANDBOX_START),
     onRun: function(){
       S.sandboxRuns = (S.sandboxRuns || 0) + 1;
       S.sandbox = studio.editor.getCode();
@@ -5601,7 +5649,8 @@ function screenSandbox(){
       studio.editor.focusEditor();
     };
   });
-  document.getElementById("topic").onclick = function(){
+  var topic = document.getElementById("topic");
+  if (topic) topic.onclick = function(){
     var code = studio.editor.getCode();
     var m = document.getElementById("picmsg");
     var res = galleryDrawing(code);
@@ -5627,8 +5676,87 @@ function screenSandbox(){
       "считается заново каждый раз, поэтому места занимает несколько строк.";
   };
   document.getElementById("tomap").onclick = function(){ S.sandbox = studio.editor.getCode(); save(); screenWorlds(); };
+  pyCardWire(seq, studio, real, waking);
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* ---- карточка «движок» в песочнице ----
+   Написано прямым текстом, что именно меняется: сколько скачается, что
+   будет потом и чего не станет. Это правило тяжёлого контура — «у
+   переключателя сказано, что происходит», — а не украшение. */
+function pyCardHTML(real, waking){
+  if (!pyPossible()) return "";
+  if (real)
+    return '<div class="card pyeng on"><h3>🐍 Сейчас работает настоящий Python</h3>' +
+      '<p>Тот самый CPython, что стоит на компьютерах взрослых. Он уже скачан — ' +
+      'интернет для него больше не нужен.</p>' +
+      '<div class="pyrow"><button class="rbtn sec" id="pyoff">Вернуть быстрый</button>' +
+      '<span class="tip">Черепашки и пошагового разбора в настоящем Python нет — они живут в быстром.</span></div>' +
+      '<div class="msg" id="pymsg"></div></div>';
+  return '<div class="card pyeng"><h3>🐍 Хочешь настоящий Python?</h3>' +
+    '<p>Сейчас код запускает наш быстрый движок: мгновенно, без интернета, с черепашкой. ' +
+    'А по кнопке в песочницу можно поставить настоящий CPython — ровно тот, что стоит ' +
+    'у взрослых на компьютере.</p>' +
+    '<div class="pyrow">' +
+      '<button class="rbtn" id="pyon"' + (waking ? " disabled" : "") + '>' +
+        (waking ? "Поднимаю настоящий Python…" : "Включить настоящий Python") + '</button>' +
+      '<div class="pybar" id="pybar"' + (waking ? "" : " hidden") + '><i></i></div>' +
+      '<span class="pypct" id="pypct"></span>' +
+    '</div>' +
+    '<p class="dim">Скачается один раз, около 6 МБ. После этого работает и без интернета. ' +
+    'Пока не нажал — не качается ничего: уроки, экзамен и разминки к этому отношения не имеют, ' +
+    'они всегда на быстром движке. В настоящем Python нет черепашки и пошагового разбора.</p>' +
+    '<div class="msg" id="pymsg"></div></div>';
+}
+
+function pyCardWire(seq, studio, real, waking){
+  if (!pyPossible()) return;
+  var msg = document.getElementById("pymsg");
+  function keepCode(){ S.sandbox = studio.editor.getCode(); save(); }
+
+  var off = document.getElementById("pyoff");
+  if (off) off.onclick = function(){ keepCode(); pySet(false); screenSandbox(); };
+
+  var bar = document.getElementById("pybar"), pct = document.getElementById("pypct");
+  function show(p){
+    if (bar){ bar.hidden = false; bar.querySelector("i").style.width = p + "%"; }
+    if (pct) pct.textContent = p + "%";
+  }
+  function start(){
+    var on = document.getElementById("pyon");
+    if (on){ on.disabled = true; on.textContent = "Качаю настоящий Python…"; }
+    show(0);
+    Runtime.load("pyodide", function(p){ if (!screenStale(seq)) show(p); }).then(function(){
+      if (screenStale(seq)) return;
+      pySet(true);
+      keepCode();
+      screenSandbox();
+    }, function(e){
+      if (screenStale(seq)) return;
+      /* Не получилось — остаёмся на быстром движке и говорим почему.
+         Чаще всего это «нет сети и раньше не качали»: файлы лежат у нас, но
+         в кэше их ещё нет. */
+      pySet(false);
+      if (bar) bar.hidden = true;
+      if (pct) pct.textContent = "";
+      var b = document.getElementById("pyon");
+      if (b){ b.disabled = false; b.textContent = "Попробовать ещё раз"; }
+      if (msg){
+        msg.className = "msg show bad";
+        /* Почему не скачалось — словами ребёнка, без названий файлов:
+           читать «не удалось загрузить vendor/pyodide/pyodide.js» ему нечем. */
+        msg.innerHTML = "<b>Не скачалось</b>Похоже, нет интернета. Настоящий Python нужно " +
+          "получить один раз — потом он работает и без сети. Быстрый движок работает как работал, " +
+          "можно спокойно продолжать и попробовать ещё раз потом.";
+      }
+    });
+  }
+
+  var on = document.getElementById("pyon");
+  if (on && !waking) on.onclick = start;
+  /* Выбор уже сделан раньше, страницу просто перезагрузили: поднимаем молча. */
+  if (waking) start();
 }
 
 /* ================= экран: игры =================

@@ -1072,6 +1072,18 @@ body.focus .lede{display:none}
 .gamecard.locked:hover{transform:none}
 
 /* ---------- галерея рисунков ---------- */
+/* ---------- карточка «движок» в песочнице ----------
+   Тяжёлый контур включается человеком, и переключатель обязан выглядеть
+   как выбор, а не как реклама: обычная карточка, кнопка и честный текст. */
+.pyeng.on{border-color:var(--acc2)}
+.pyrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0 0}
+.pyrow .tip{font-size:12.5px;color:var(--faint)}
+.pybar{flex:0 0 160px;height:8px;border-radius:99px;background:var(--sunken);
+  border:1px solid var(--line);overflow:hidden}
+.pybar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc2),var(--acc));
+  transition:width .3s linear}
+.pypct{font-size:12.5px;color:var(--soft);font-variant-numeric:tabular-nums}
+
 .savepic{display:flex;flex-direction:column;gap:7px;margin:14px 0 0}
 .savepic .tip{font-size:12.5px;color:var(--faint)}
 .savepic .rbtn{align-self:flex-start}
