@@ -1674,78 +1674,564 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 /* ================= вывеска: первый экран для гостя =================
    Единственный экран сайта, который читают, а не проходят, — и это диктует
    вёрстку. Строка здесь длиннее обычной (720px против сплошной колонки):
-   на витрине читают абзацами, а не сканируют список уроков. Числа стоят
-   отдельной полосой, потому что объём курса — главный аргумент, и он должен
-   схватываться глазом раньше, чем человек начнёт читать.
-   ⚠️ Ни одного своего цвета: всё на переменных темы. Вывеска обязана быть
-   такой же в тёмной теме, иначе на первом же экране сайт выглядит чужим. */
+   на витрине читают абзацами, а не сканируют список уроков.
+
+   Оформление переписано 06.09.2026 после разбора конкурентов
+   (docs/vyveska.md § 7). Коротко, что оттуда взято и что нет:
+
+   • У всех российских школ на первом экране ФОТОГРАФИЯ ребёнка за ноутбуком
+     (Алгоритмика, Пиксель, Айтигенио). Снимать нам некого, покупать сток —
+     значит выглядеть как все. Поэтому первый экран показывает не ребёнка,
+     а САМ ПРОДУКТ: живое окно редактора, где код действительно запускается
+     нашим движком. Ни один конкурент так не может — у них обучение живёт за
+     логином, у нас оно и есть страница.
+   • У Codédex (лучший по картинке из всех) первый экран — это МИР, в который
+     заходишь. Метафора совпадает с нашей («квест», пять миров, боссы),
+     поэтому программа курса нарисована дорогой с узлами, а не серым списком.
+   • Чего не берём: 3D-глянец, всплывающие окна с «оставьте телефон» и
+     обратный отсчёт. Продукт продаёт понятность, и вывеска обязана быть
+     такой же.
+
+   ⚠️ Ни одного своего цвета в правилах: всё на переменных темы. Вывеска
+   обязана одинаково жить в светлой и тёмной, иначе на первом же экране сайт
+   выглядит чужим. Переменные, которые нужны только здесь, объявлены ниже
+   двумя блоками — светлым и тёмным, — и больше нигде не используются. */
+:root{
+  /* Пять миров — пять цветов. Нужны затем, что пятёрка одинаковых серых
+     карточек не читается как ПУТЬ: глазу не за что зацепиться, и «Мир 3»
+     от «Мира 4» отличается только цифрой. Оттенки взяты из уже имеющейся
+     палитры подсветки кода, чтобы вывеска не завела на сайте второй набор
+     цветов. */
+  --w1:#0e7a55; --w2:#9a6a00; --w3:#1f56c8; --w4:#6d3fd6; --w5:#b8365f;
+  --w1bg:#e4f4ee; --w2bg:#faf0dc; --w3bg:#e6ecfd; --w4bg:#eee8fd; --w5bg:#fce9ef;
+  /* Свечение первого экрана. Три пятна, а не градиент в две точки: градиент
+     на широком мониторе виден полосой, пятна — нет. */
+  --lg1:rgba(124,92,255,.26); --lg2:rgba(0,168,140,.20); --lg3:rgba(255,168,64,.16);
+  --lgrid:rgba(26,31,61,.055);
+  --dwbar:#eef1fa;
+}
+:root[data-theme="dark"]{
+  --w1:#4fd8a0; --w2:#ffc964; --w3:#82aaff; --w4:#b79bff; --w5:#ff87ac;
+  --w1bg:rgba(79,216,160,.11); --w2bg:rgba(255,201,100,.11); --w3bg:rgba(130,170,255,.11);
+  --w4bg:rgba(183,155,255,.11); --w5bg:rgba(255,135,172,.11);
+  --lg1:rgba(124,92,255,.30); --lg2:rgba(0,224,184,.14); --lg3:rgba(255,168,64,.10);
+  --lgrid:rgba(255,255,255,.045);
+  --dwbar:#101632;
+}
 .land{display:flex;flex-direction:column;gap:34px}
-.landhero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;
-  padding:34px 30px;box-shadow:var(--sh)}
-.landkick{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--acc2);font-weight:700;margin-bottom:8px}
-.landhero h1{margin:0 0 12px;font-size:38px;line-height:1.12}
-.landlede{margin:0;font-size:17.5px;line-height:1.55;color:var(--soft);max-width:720px}
-.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 0}
-.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:720px}
-/* Числа: auto-fit, а не фиксированные колонки, — их восемь, и на любой ширине
-   они обязаны разложиться без дырки в конце строки. */
-.landnums{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.landnum{border:1px solid var(--line);border-radius:14px;background:var(--panel);
-  padding:14px 16px;display:flex;flex-direction:column;gap:1px}
-.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:30px;line-height:1.05;color:var(--acc)}
+
+/* ---------- появление при прокрутке ----------
+   Не украшение: на длинной странице сдвиг на десяток пикселей говорит глазу
+   «сюда пришёл новый блок» и разбивает восемь разделов подряд на порции.
+   Класс вешает наблюдатель в js/app.js; без JS всё видно сразу, потому что
+   начальное состояние ставится ТОЛЬКО вместе с классом .rv. */
+.rv{opacity:0;transform:translateY(14px)}
+.rv.in{opacity:1;transform:none;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.3,1)}
+@media (prefers-reduced-motion:reduce){
+  .rv,.rv.in{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- первый экран ---------- */
+.landhero{position:relative;overflow:hidden;border:1px solid var(--line);
+  border-radius:26px;background:var(--panel);box-shadow:var(--shbig);
+  padding:44px 40px 40px}
+/* Фон рисуется отдельным слоем, а не фоном самой карточки: слоёв три
+   (сетка + три пятна), и в одном свойстве background они дрались бы за
+   background-size друг с другом. aria-hidden стоит в разметке. */
+.lhaur{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(600px 360px at 10% -12%, var(--lg1), transparent 72%),
+    radial-gradient(560px 340px at 94% 6%,   var(--lg2), transparent 70%),
+    radial-gradient(500px 320px at 58% 112%, var(--lg3), transparent 72%)}
+/* Сетка лежит ОТДЕЛЬНЫМ слоем поверх пятен и гасится маской к краям: без
+   маски карточка выглядит миллиметровкой, а если гасить не маской, а
+   накрывающей плашкой цвета панели, — вместе с сеткой гаснут и сами пятна,
+   и первый экран становится белым листом. */
+.lhaur::after{content:"";position:absolute;inset:0;
+  background:
+    linear-gradient(0deg,var(--lgrid) 1px,transparent 1px) 0 0/100% 34px,
+    linear-gradient(90deg,var(--lgrid) 1px,transparent 1px) 0 0/34px 100%;
+  -webkit-mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%);
+  mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%)}
+.lhin{position:relative;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);
+  gap:34px;align-items:center}
+.lhtext{min-width:0}
+/* Плашка над заголовком. Точка перед текстом — не декор: она держит взгляд
+   на строке, набранной капителью, которая иначе читается как подпись. */
+.landkick{display:inline-flex;align-items:center;gap:8px;
+  font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:14px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:6px 13px 6px 10px}
+.landkick i{width:7px;height:7px;border-radius:50%;background:var(--acc2);flex:none}
+.landhero h1{margin:0 0 14px;font-size:52px;line-height:1.04;letter-spacing:-.02em}
+/* Подчёркивание под ключевыми словами. Рисуется фоном, а не border-bottom:
+   нужна толстая мягкая полоса ПОД буквами, не задевающая хвосты «р» и «у». */
+.hlite{position:relative;white-space:nowrap;
+  background:linear-gradient(var(--acc-lt),var(--acc-lt)) 0 96%/100% .14em no-repeat}
+:root[data-theme="dark"] .hlite{background-image:linear-gradient(var(--acc-lt),var(--acc-lt))}
+.landlede{margin:0;font-size:18px;line-height:1.55;color:var(--soft);max-width:640px}
+.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0}
+/* Главная кнопка на вывеске светится. Единственное место на сайте, где это
+   уместно: у гостя на экране два десятка карточек и одно действие. */
+.landcta .bigbtn:first-child{box-shadow:0 10px 30px -10px var(--acc)}
+.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:640px}
+/* Четыре факта строкой. Это ответ на возражения, которые родитель проговаривает
+   про себя, пока читает заголовок: «опять что-то ставить», «опять интернет»,
+   «опять телефон оставлять». Отвечать на них абзацем поздно — он до абзаца
+   не дойдёт. */
+.landjump{margin:18px 0 0;font-size:13.5px;color:var(--faint)}
+.linkjump{background:none;border:none;padding:0;font:inherit;font-size:13.5px;
+  font-weight:600;color:var(--accink);cursor:pointer;text-decoration:underline;
+  text-underline-offset:3px;text-decoration-thickness:1px}
+.linkjump:hover{text-decoration-thickness:2px}
+.landtrust{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.landtrust li{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--soft);
+  background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:7px 12px}
+.landtrust b{font-weight:600;color:var(--ink)}
+
+/* ---------- живое окно редактора на первом экране ----------
+   Главный аргумент вывески и единственная её «картинка». Никакого скриншота:
+   внутри работает тот же движок, что и в уроке, поэтому окно не может
+   разойтись с продуктом — если сломается движок, сломается и витрина. */
+.lhdemo{min-width:0}
+.demowin{margin:0;border:1px solid var(--line2);border-radius:18px;overflow:hidden;
+  background:var(--code);box-shadow:var(--shbig)}
+.dwhead{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--dwbar);border-bottom:1px solid var(--line);font-size:12.5px;color:var(--soft)}
+.dwdots{display:flex;gap:5px;flex:none}
+.dwdots i{width:9px;height:9px;border-radius:50%;background:var(--dot)}
+.dwhead b{color:var(--ink);font-size:12.5px;white-space:nowrap}
+.dwhead .dwtag{margin-left:auto;color:var(--acc2);font-weight:600;white-space:nowrap}
+/* Код с колонкой номеров — ровно как в редакторе урока. Это не украшение:
+   родитель, увидевший на вывеске то же окно, что потом откроет ребёнок,
+   узнаёт его и не думает, что ему показали рекламный макет. */
+.dwcode{display:flex;font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.65}
+.dwnums{flex:none;padding:14px 10px;background:var(--gut);color:var(--gutink);
+  text-align:right;user-select:none;white-space:pre;font-size:12.5px;line-height:1.65}
+.dwcode pre{margin:0;padding:14px 16px;overflow-x:auto;flex:1;min-width:0;color:var(--codeink)}
+.dwbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:11px 14px;
+  background:var(--dwbar);border-top:1px solid var(--line)}
+.dwbtn{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+  border-radius:10px;padding:7px 13px;font:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;transition:.15s}
+.dwbtn:hover{border-color:var(--acc);color:var(--accink)}
+.dwbtn.go{background:var(--acc);border-color:transparent;color:var(--onacc)}
+.dwbtn.go:hover{background:var(--acc-lt);color:var(--onacc)}
+.dwhint{margin-left:auto;font-size:12px;color:var(--faint)}
+/* Окно вывода. Высота задана снизу, а не сверху: без min-height окно
+   подпрыгивает на высоту шести строк в тот момент, когда на него смотрят. */
+.dwout{padding:14px 16px;min-height:132px;background:var(--res);
+  border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;
+  font-size:13.5px;line-height:1.6;color:var(--outink);white-space:pre-wrap;
+  word-break:break-word}
+.dwout .dwwait{color:var(--faint);font-family:'Inter',sans-serif;font-size:13.5px}
+.dwout .dwcaret{display:inline-block;width:8px;height:16px;vertical-align:-3px;
+  background:var(--acc);animation:dwblink 1s steps(1) infinite}
+@keyframes dwblink{50%{opacity:0}}
+/* Плашка ошибки — та же, что видит ребёнок в уроке (класс .msg.bad там же). */
+.dwerr{border:1px solid var(--badline);background:var(--badbg);color:var(--badink);
+  border-radius:12px;padding:10px 13px;font-family:'Inter',sans-serif;font-size:13.5px;
+  line-height:1.5;white-space:normal}
+.dwerr b{display:block;color:var(--bad);margin-bottom:2px}
+.dwnote{margin:12px 2px 0;font-size:13px;color:var(--faint);line-height:1.5}
+
+/* ---------- полоса чисел ----------
+   Восемь чисел, и все восемь — про объём. Раньше они стояли восемью
+   одинаковыми карточками, то есть восемью прямоугольниками с рамками:
+   такое читается как сетка ссылок, а не как «вот сколько тут всего».
+   Теперь это одна полоса с волосяными разделителями. */
+.landnums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+  border:1px solid var(--line);border-radius:20px;background:var(--line);
+  overflow:hidden;box-shadow:var(--sh)}
+.landnum{padding:18px 20px;display:flex;flex-direction:column;gap:1px;background:var(--panel)}
+.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:34px;line-height:1.05;
+  color:var(--acc);letter-spacing:-.01em}
 .landnum span{font-size:14px;font-weight:600}
-.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:3px}
-.landsect h2{margin:0 0 6px;font-size:25px}
-.landsect .lede{margin:0 0 16px;max-width:720px}
-/* Шаги урока — нумерованные, но номер рисуем сами: у списка по умолчанию он
-   мелкий и серый, а здесь это опора взгляда. */
-.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;display:grid;gap:10px}
-.landsteps li{counter-increment:ls;position:relative;padding:14px 16px 14px 56px;
-  border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-.landsteps li::before{content:counter(ls);position:absolute;left:16px;top:13px;
-  width:26px;height:26px;border-radius:9px;background:var(--acc);color:var(--onacc);
-  font-family:'Fredoka','Inter',sans-serif;font-size:15px;display:flex;
-  align-items:center;justify-content:center}
-.landsteps li b{display:block;font-size:16px}
-.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.5;margin-top:2px}
-.landworlds{display:grid;gap:12px}
-.landworld{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--line);
-  border-radius:var(--r);background:var(--panel);padding:16px 18px}
-.landworld .lwico{font-size:30px;line-height:1.1;flex:none}
+.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:4px}
+
+/* ---------- заголовки разделов ----------
+   Надпись-указатель над заголовком отвечает на «что это за кусок страницы»
+   раньше, чем человек прочтёт сам заголовок. На странице восемь разделов —
+   без указателей они сливаются в один длинный текст. */
+.landsect{scroll-margin-top:90px}
+.seckick{display:block;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:7px}
+.landsect h2{margin:0 0 8px;font-size:27px;line-height:1.15;letter-spacing:-.015em}
+.landsect .lede{margin:0;font-size:15.5px}
+/* Заголовок слева, лид справа. Узкая строка лида нужна (длинную не читают),
+   но обрыв на 720 px при колонке 1080 читается как сломанная вёрстка —
+   жалоба фаундера 06.09.2026. Здесь справа от короткой строки не пустота,
+   а заголовок слева, и обе колонки вместе занимают всю ширину. */
+.secthead{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:12px 40px;align-items:end;margin-bottom:18px}
+.secthead .sechl{min-width:0}
+.secthead h2{margin:0}
+.secthead .lede{padding-bottom:4px}
+@media (max-width:820px){
+  .secthead{grid-template-columns:1fr;gap:8px;align-items:start}
+  .secthead .lede{padding-bottom:0}
+}
+
+/* ---------- четыре шага урока ----------
+   Дорожка с узлами, а не список: у шагов есть порядок, и линия между ними
+   говорит это без слова «затем». */
+.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0}
+.landsteps li{counter-increment:ls;position:relative;padding:0 20px 0 0;background:none;border:none}
+.landsteps li::before{content:counter(ls);display:flex;align-items:center;justify-content:center;
+  width:40px;height:40px;border-radius:14px;background:var(--acc);color:var(--onacc);
+  font-family:'Fredoka','Inter',sans-serif;font-size:20px;margin-bottom:12px;
+  box-shadow:0 8px 20px -10px var(--acc);position:relative;z-index:1}
+/* Линия идёт от узла вправо и обрывается у последнего: рисуем её на самом
+   узле, а у последнего гасим. */
+.landsteps li::after{content:"";position:absolute;left:40px;top:19px;right:0;height:2px;
+  background:linear-gradient(90deg,var(--line2),var(--line))}
+.landsteps li:last-child::after{display:none}
+.landsteps li b{display:block;font-size:16.5px}
+.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.55;margin-top:4px}
+@media (max-width:900px){
+  .landsteps{grid-template-columns:1fr;gap:14px}
+  .landsteps li{padding:0 0 0 56px}
+  .landsteps li::before{position:absolute;left:0;top:0;margin:0}
+  .landsteps li::after{left:19px;top:40px;right:auto;bottom:-14px;width:2px;height:auto;
+    background:linear-gradient(180deg,var(--line2),var(--line))}
+}
+
+/* ---------- программа курса: дорога из пяти миров ----------
+   Слева вертикальный рельс с узлами — тот же приём, что у шагов урока, и по
+   той же причине: пять миров проходят ПО ПОРЯДКУ, и порядок должен быть
+   виден, а не подразумеваться. Рельс выдерживает любую ширину, в отличие от
+   ломаной дороги по диагонали, которая на телефоне превращается в кашу. */
+.landworlds{display:grid;gap:10px;position:relative;padding-left:0}
+.landworld{position:relative;display:grid;grid-template-columns:46px minmax(0,1fr);
+  gap:15px;align-items:start;border:1px solid var(--line);border-radius:18px;
+  background:var(--panel);padding:14px 18px;overflow:hidden;transition:.18s}
+.landworld:hover{border-color:var(--wc);transform:translateY(-2px);box-shadow:var(--sh)}
+/* Цветная полоса слева — единственное, чем миры отличаются друг от друга
+   на расстоянии вытянутой руки. */
+.landworld::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--wc)}
+/* Крупная цифра мира призраком в углу: она не для чтения, а для того, чтобы
+   пятая карточка не выглядела такой же, как первая. */
+.lwno{position:absolute;right:14px;top:-4px;font-family:'Fredoka','Inter',sans-serif;
+  font-size:62px;line-height:1;color:var(--wc);opacity:.13;pointer-events:none}
+.landworld .lwico{width:46px;height:46px;border-radius:15px;background:var(--wcbg);
+  display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
 .lwbody{min-width:0}
 .lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--acc2);font-weight:700}
+  color:var(--wc);font-weight:700}
 .lwbody b{font-size:18px}
-.lwbody p{margin:2px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5}
-/* Названия уроков — намеренно мелкие и приглушённые: это доказательство, что
-   программа настоящая, а не список, который читают целиком. */
-.lwlist{display:block;margin-top:7px;font-size:12.5px;color:var(--faint);line-height:1.5}
-.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
-  padding:16px 18px;display:flex;flex-direction:column;gap:3px}
-.landcard .lcem{font-size:26px;line-height:1.1}
-.landcard b{font-size:16.5px}
-.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.5}
-/* Границы обещания. Рамка предупреждения, а не обычная карточка: это место
-   человек обязан заметить, а не пролистать (docs/vyveska.md § 0). */
-.landhonest{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.landhonest li{border:1px solid var(--warnline);background:var(--warnbg);color:var(--warnink);
-  border-radius:13px;padding:12px 15px;font-size:14.5px;line-height:1.55}
-.landhonest li b{color:var(--ink)}
-.landend{border-top:1px solid var(--line);padding-top:26px}
-@media (max-width:620px){
-  .landhero{padding:26px 20px;border-radius:18px}
-  .landhero h1{font-size:29px}
-  .landlede{font-size:16px}
-  .landsect h2{font-size:22px}
-  .landcta .bigbtn{width:100%}
-  .landworld{gap:12px;padding:14px 15px}
+.lwbody p{margin:3px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5;max-width:640px}
+/* Названия уроков — фишками, а не строкой через точку. Строка читалась как
+   один длинный текст, из которого не видно, что это перечень тем. */
+.lwlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.lwlist span{font-size:12px;color:var(--soft);background:var(--sunken);
+  border:1px solid var(--line);border-radius:8px;padding:4px 9px}
+.lwlist span.more{color:var(--faint);background:none;border-style:dashed}
+/* Имя босса переехало в строку-указатель над названием мира: отдельной
+   строкой с рамкой оно добавляло каждой из пяти карточек полтора сантиметра
+   высоты, а страница не должна быть длинной (правило фаундера 06.09.2026). */
+
+/* ---------- карточки ---------- */
+.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+/* Число колонок задаётся разделом, а не подбирается автоматически. Причина
+   простая и видная глазом: auto-fit при шести карточках раскладывает их
+   4 + 2, и раздел заканчивается дырой в пол-экрана. Колонка, на которую
+   делится КОНКРЕТНЫЙ список, известна заранее — её и ставим. */
+.landgrid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.landgrid.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.landgrid.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){
+  .landgrid.g2,.landgrid.g3,.landgrid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+@media (max-width:600px){
+  .landgrid.g2,.landgrid.g3,.landgrid.g4{grid-template-columns:minmax(0,1fr)}
+}
+.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  padding:20px;display:flex;flex-direction:column;gap:4px;transition:.18s}
+.landcard:hover{border-color:var(--line2);transform:translateY(-2px);box-shadow:var(--sh)}
+/* Значок на подложке, а не голой эмодзи. Голая эмодзи в потоке текста
+   выглядит опечаткой; плитка делает из неё значок и заодно выравнивает
+   карточки между собой — эмодзи у разных наборов разной высоты. */
+.landcard .lcem{width:44px;height:44px;border-radius:14px;background:var(--panel2);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:8px}
+.landcard b{font-size:16.5px}
+.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.55}
 /* Карточка направления шире обычной: у неё внутри абзац с числами, а не
    строка-подпись. На узкой сетке она бы резалась на четыре слова в строку. */
 .landcard.wide{grid-column:span 2}
 @media (max-width:760px){ .landcard.wide{grid-column:span 1} }
+/* Направления — единственные карточки с цветом: они отвечают на «а это точно
+   не курсы питона для малышей», и им разрешено быть заметнее остальных. */
+.landcard.dir{background:linear-gradient(160deg,var(--panel),var(--panel2))}
+.landcard.dir .lcem{background:var(--wcbg);border-color:transparent;color:var(--wc)}
+.landcard.dir b{color:var(--wc)}
+
+/* ---------- границы обещания ----------
+   Раньше это были четыре жёлтых полосы подряд — экран аварийного щита. Читать
+   их страшно, а написано там честное и полезное. Теперь это один документ:
+   рамка одна, а строки внутри помечены знаком «этого здесь нет». */
+.landhonest{border:1px solid var(--warnline);background:var(--warnbg);border-radius:20px;
+  padding:8px 22px;list-style:none;margin:0}
+.landhonest li{position:relative;padding:15px 0 15px 32px;font-size:14.5px;line-height:1.6;
+  color:var(--warnink);border-bottom:1px solid var(--warnline)}
+.landhonest li:last-child{border-bottom:none}
+.landhonest li::before{content:"—";position:absolute;left:6px;top:15px;
+  font-weight:700;color:var(--warn)}
+.landhonest li b{color:var(--ink)}
+
+/* ---------- устный ответ в кабинете взрослого ----------
+   Карточка, по которой родитель спрашивает ребёнка вслух. Правильный ответ
+   спрятан в <details> НЕ ради красоты: родитель читает вопрос с экрана, и
+   если ответ лежит рядом открытым, он его проговаривает раньше ребёнка. */
+.card.oral .oralcode{margin:12px 0;padding:12px 14px;border:1px solid var(--line);
+  border-radius:12px;background:var(--code);color:var(--codeink);overflow-x:auto;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6}
+.orall{margin:0;padding-left:22px;display:grid;gap:14px}
+.orall li b{display:block;font-size:15px;line-height:1.45}
+.orall li .dim{display:block;font-size:13px;line-height:1.5;margin-top:5px}
+.orala{margin-top:7px}
+.orala summary{display:inline-block;cursor:pointer;font-size:13px;font-weight:600;
+  color:var(--accink);background:var(--sunken);border:1px solid var(--line);
+  border-radius:9px;padding:5px 11px;list-style:none}
+.orala summary::-webkit-details-marker{display:none}
+.orala summary:hover{border-color:var(--acc)}
+.orala[open] summary{color:var(--faint)}
+.orala pre{margin:8px 0 0;padding:10px 12px;border-radius:10px;background:var(--okbg);
+  border:1px solid var(--okline);color:var(--okink);
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;white-space:pre-wrap}
+
+/* ---------- четыре больших блока ----------
+   «Надо выделить важное большими блоками, чтобы бросалось в глаза» — указание
+   фаундера 06.09.2026. Отличаются от обычных карточек тремя вещами разом:
+   размером значка, размером заголовка и подложкой-градиентом. Иначе большой
+   блок читается как просто ещё одна карточка, и весь смысл теряется.
+   ⚠️ Их ровно четыре и больше быть не должно: пять «самых важных» вещей —
+   это ноль важных вещей. */
+.bigs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.big{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:20px;
+  background:linear-gradient(160deg,var(--panel),var(--panel2));padding:24px 26px;
+  box-shadow:var(--sh);transition:.18s}
+.big:hover{transform:translateY(-2px);border-color:var(--line2)}
+/* Значок крупный и приподнят над заголовком: он и есть то, что «бросается». */
+.big .bigem{display:block;font-size:34px;line-height:1;margin-bottom:12px}
+.big b{display:block;font-size:21px;line-height:1.2;letter-spacing:-.01em;margin-bottom:8px}
+.big p{margin:0;color:var(--soft);font-size:14.5px;line-height:1.6}
+.big p b{display:inline;font-size:inherit;margin:0;color:var(--ink)}
+/* Строчка «почему это важно» отбита чертой: это вывод, а не продолжение
+   описания, и читать её должны отдельно от него. */
+.bigwhy{display:block;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);
+  font-size:13px;line-height:1.5;color:var(--accink)}
+@media (max-width:820px){ .bigs{grid-template-columns:1fr} }
+
+/* ---------- вкладки внутри страницы ----------
+   Главный инструмент против длины. Восемь карточек «Взрослому» и два раздела
+   подряд («как проходит урок» + «не только язык») занимали три экрана;
+   вкладками то же содержание занимает один, и каждый читает только своё.
+   ⚠️ Это НЕ вкладки верхней панели (.tab): тех ровно три, за этим следит
+   тест, и путать их нельзя ни классом, ни видом. */
+.ltabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ltab{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  background:var(--panel);border-radius:13px;padding:9px 14px;font:inherit;
+  font-size:14.5px;font-weight:600;color:var(--soft);cursor:pointer;transition:.16s;
+  text-align:left}
+.ltab:hover{border-color:var(--line2);color:var(--ink)}
+.ltab.on{border-color:transparent;background:var(--acc);color:var(--onacc);
+  box-shadow:0 10px 22px -12px var(--acc)}
+.ltab .lte{font-size:17px;line-height:1}
+/* Вкладки миров красятся в цвет своего мира — тот же приём, что на дороге
+   курса: пять одинаковых кнопок не читаются как пять разных миров.
+   ⚠️ Модификатор называется .wld, а не .world, и это не вкусовщина: `.world`
+   в этом файле давно занят карточкой мира на карте курса (градиент, рамка,
+   отступы), и вкладки молча получали её фон — белую плашку вокруг всего
+   ряда. Любой новый класс вывески сначала проверяется на столкновение с
+   тем, что уже есть в style.css. */
+.ltabs.wld .ltab.on{background:var(--wc);box-shadow:0 10px 22px -12px var(--wc)}
+.ltabs.wld .ltab .ltt{display:flex;flex-direction:column;line-height:1.25}
+.ltabs.wld .ltab .ltt i{font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;opacity:.72}
+.ltabs.wld .ltab .ltt b{font-size:14.5px;font-weight:700}
+/* Мелкий ряд — это ПЕРЕКЛЮЧАТЕЛЬ ВНУТРИ вкладки, а не вторые вкладки рядом.
+   Жалоба фаундера: два одинаковых ряда пилюль подряд читаются как один
+   перенесённый ряд, и непонятно, что чему подчинено. Поэтому здесь другой
+   вид: подпись слева, кнопки в одной обойме, без тени и без заливки
+   акцентом — выбранная просто светлее фона обоймы. */
+.ltabs.ltsm{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;
+  background:var(--sunken);border:1px solid var(--line);border-radius:12px;
+  padding:4px 4px 4px 11px;margin-bottom:14px}
+.ltabs.ltsm .ltlbl{font-size:12px;color:var(--faint);margin-right:4px;white-space:nowrap}
+.ltabs.ltsm .ltab{padding:5px 11px;font-size:13px;border-radius:9px;border-color:transparent;
+  background:transparent;box-shadow:none;color:var(--soft)}
+.ltabs.ltsm .ltab:hover{background:var(--panel2);border-color:transparent;color:var(--ink)}
+.ltabs.ltsm .ltab.on{background:var(--panel);border-color:var(--line2);color:var(--accink);
+  box-shadow:0 1px 2px rgba(28,35,80,.08)}
+.ltabs.ltsm .ltab .lte{font-size:15px}
+.ldpane{min-height:60px}
+.ldpanefoot{margin:12px 0 0;font-size:13px;color:var(--faint)}
+
+/* Приписка к шагам урока: то, что живёт внутри урока, но шагом не является.
+   Отбита рамкой, чтобы не читалась пятым шагом. */
+.instep{border:1px solid var(--line);border-radius:16px;background:var(--panel);
+  padding:16px 18px;margin-top:16px}
+.instepl{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:10px}
+
+/* ---------- живые блоки: черепашка и разминка ----------
+   Пожелание фаундера 06.09.2026: «чтобы люди игрались, нажимали, и что-то
+   оживало». Обе штуки работают настоящим движком, как и окно в шапке, —
+   скриншотов и записанных гифок здесь нет и не будет. */
+.drawwin{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;
+  align-items:start}
+.drawc{width:100%;display:block;border:1px solid var(--line);border-radius:16px;
+  background:var(--board)}
+.drawside{display:flex;flex-direction:column;gap:10px;min-width:0}
+.drawside .dwcode{border:1px solid var(--line);border-radius:14px;background:var(--code);
+  overflow:hidden}
+.drawside .dwbtn{align-self:flex-start}
+.livenote{margin:0;font-size:12.5px;color:var(--faint);line-height:1.5}
+.warmask{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:18px;
+  align-items:start}
+.warmask .dwcode{border:1px solid var(--line);border-radius:14px;background:var(--code);
+  overflow:hidden}
+.warmans{display:flex;flex-direction:column;gap:8px;min-width:0}
+.warmans label{font-size:14px;font-weight:600}
+.warmans textarea{width:100%;box-sizing:border-box;border:1px solid var(--line2);
+  border-radius:12px;background:var(--panel);color:var(--ink);padding:10px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.6;resize:vertical}
+.warmans textarea:focus{outline:none;border-color:var(--acc)}
+.warmans .dwbar{background:none;border:none;padding:0}
+.warmres{display:none;border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55}
+.warmres.show{display:block}
+.warmres b{display:block;margin-bottom:3px}
+.warmres.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
+.warmres.ok b{color:var(--ok)}
+.warmres.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
+.warmres.bad b{color:var(--bad)}
+.warmres.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
+/* Расхождение двумя колонками — ровно так его показывает урок: не «неверно»,
+   а «вот твоё, вот нужное», рядом и построчно. */
+.warmdiff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.warmdiff i{display:block;font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;opacity:.75;margin-bottom:3px}
+.warmdiff pre{margin:0;padding:8px 10px;border-radius:9px;background:var(--sunken);
+  color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12.5px;
+  line-height:1.5;overflow-x:auto}
+.warmwhy{display:block;color:var(--soft);font-size:13px;line-height:1.55}
+
+/* ---------- витрина проектов ---------- */
+.showwin{border:1px solid var(--line);border-radius:18px;background:var(--panel);
+  overflow:hidden}
+.shhead{display:flex;gap:14px;align-items:center;padding:13px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel2)}
+.shico{width:44px;height:44px;border-radius:14px;background:var(--wcbg);flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:22px}
+.shttl{min-width:0}
+.shkick{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--wc);
+  font-weight:700}
+.shttl b{font-size:17px}
+.shttl p{margin:1px 0 0;color:var(--soft);font-size:13.5px;line-height:1.45}
+/* Вывод ограничен по высоте и прокручивается внутри: «Свой сайт» печатает
+   шестьдесят строк, и без потолка одна вкладка растянула бы страницу на
+   пол-экрана — то, чего быть не должно. */
+/* Результат и код рядом: вывод узкий, и на всю ширину страницы он выглядел
+   пустой коробкой (жалоба фаундера). Обе колонки одной высоты и прокручиваются
+   каждая в себе — «Свой сайт» печатает шестьдесят строк. */
+.shbody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  border-top:1px solid var(--line)}
+.shcol{min-width:0;display:flex;flex-direction:column}
+.shcol + .shcol{border-left:1px solid var(--line)}
+.shlbl{padding:9px 16px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint);background:var(--panel2);border-bottom:1px solid var(--line)}
+.ldout{margin:0;padding:14px 16px;height:270px;overflow:auto;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;
+  color:var(--outink);white-space:pre;background:var(--res)}
+.ldcode{background:var(--code);height:270px;overflow:auto}
+.ldcode .dwcode{border:none}
+@media (max-width:760px){
+  .shbody{grid-template-columns:1fr}
+  .shcol + .shcol{border-left:none;border-top:1px solid var(--line)}
+  .ldout,.ldcode{height:200px}
+}
+
+/* ---------- взрослому: три роли ---------- */
+.rolepane{border:1px solid var(--line);border-radius:18px;background:var(--panel);
+  padding:18px 20px}
+.rolein{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:22px;
+  align-items:start}
+.rolein.one{grid-template-columns:minmax(0,1fr)}
+.rolehow{display:inline-block;font-size:12px;color:var(--acc2);font-weight:600;
+  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:5px 11px;margin-bottom:10px}
+.rolelede{margin:0 0 14px;color:var(--soft);font-size:14.5px;line-height:1.55}
+/* Строки, а не карточки: восемь карточек фаундер прочитать не смог, и он
+   прав — карточка обещает отдельную мысль, а здесь их пять от одного лица. */
+.rolelist{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.rolelist li{display:flex;gap:11px;align-items:flex-start;font-size:14px;line-height:1.55;
+  color:var(--soft)}
+.rolelist .rlem{flex:none;width:26px;text-align:center;font-size:17px;line-height:1.4}
+.rolelist b{color:var(--ink)}
+.roledemo{border:1px solid var(--line);border-radius:15px;background:var(--panel2);
+  padding:14px 16px}
+.rdhead{font-size:12.5px;color:var(--faint);line-height:1.5;margin-bottom:10px}
+.hwtop{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.hwem{font-size:22px;line-height:1}
+.hwtop b{display:block;font-size:15px}
+.hwtop i{font-style:normal;font-size:12px;color:var(--faint)}
+.hwtop .dwbtn{margin-left:auto;flex:none}
+.hwgoal{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--soft)}
+.hwans{border-top:1px dashed var(--line);padding-top:9px}
+.hwans i{display:block;font-style:normal;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.hwans pre{margin:0;font-family:'JetBrains Mono',monospace;font-size:13px;
+  line-height:1.5;color:var(--ink);white-space:pre-wrap}
+@media (max-width:900px){
+  .drawwin,.warmask,.rolein{grid-template-columns:1fr}
+}
+
+/* ---------- вход ----------
+   Последний экран повторяет первый по фону: страница закрывается тем же
+   жестом, каким открылась, и кнопка входа стоит на самом заметном месте
+   страницы, а не на белом фоне между двумя разделами. */
+/* Границы обещания и вход стоят В ОДНОМ блоке и рядом, а не двумя разделами
+   подряд: раньше страница заканчивалась дважды и была на экран длиннее.
+   Порядок внутри блока сохранён — границы слева, вход справа: обещание и его
+   край читаются вместе, а не «сначала продали, потом оговорились». */
+.landend{position:relative;overflow:hidden;border:1px solid var(--line);
+  border-radius:26px;background:var(--panel);padding:32px 34px;box-shadow:var(--shbig)}
+.landend > *:not(.lhaur){position:relative}
+.endin{position:relative;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+  gap:30px;align-items:start}
+.landend h2{margin:0 0 14px;font-size:26px;line-height:1.15;letter-spacing:-.015em}
+.landend .lede{margin:0 0 18px;font-size:15.5px}
+.landend .landsub{margin:16px 0 0}
+.endright{border-left:1px solid var(--line);padding-left:30px}
+@media (max-width:860px){
+  .endin{grid-template-columns:1fr;gap:24px}
+  .endright{border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:24px}
+}
+
+@media (max-width:980px){
+  .lhin{grid-template-columns:1fr;gap:28px}
+  .landhero h1{font-size:42px}
+  .landnums{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:620px){
+  .land{gap:40px}
+  .landhero{padding:28px 20px 26px;border-radius:20px}
+  .landhero h1{font-size:32px}
+  .landlede{font-size:16px}
+  .landsect h2{font-size:24px}
+  .landend h2{font-size:26px}
+  .landend{padding:28px 20px}
+  .landcta .bigbtn{width:100%}
+  .landworld{grid-template-columns:44px minmax(0,1fr);gap:13px;padding:16px 16px 16px 18px}
+  .landworld .lwico{width:44px;height:44px;border-radius:14px;font-size:22px}
+  .lwno{font-size:56px;right:10px}
+  .landnum{padding:14px 16px}
+  .landnum b{font-size:28px}
+  .dwhead .dwtag{display:none}
+}
 /* Подвал детской главной: дверь на вывеску для взрослого, взявшего планшет.
    Нарочно тихая — кнопка, а не карточка: ребёнку она не адресована. */
 .landfoot{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);text-align:center}
@@ -10740,8 +11226,680 @@ window.ALGO = [
     "Сумма не делится на 3 из-за остатка r — убрать его можно, выбросив НАИМЕНЬШЕЕ число с тем же остатком.",
     "Второй путь — выбросить ДВА числа с остатком `3 - r`: их остатки в сумме дают тройку. Посчитай оба варианта и возьми тот, где сумма осталась больше."
   ]
+},
+
+{
+  id: "oge-digit-sum-7",
+  group: "oge",
+  emoji: "🔢",
+  title: "Сумма цифр кратна 7",
+  tag: "формат ОГЭ",
+  intro: "Внутри обычного перебора прячется второй цикл: разобрать число на цифры.",
+  goal: "Напиши программу, которая в последовательности натуральных чисел определяет " +
+        "количество элементов, у которых сумма цифр кратна 7. Если таких элементов нет, " +
+        "программа должна вывести «NO».",
+  list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
+         "Вывести одно число — сколько нашлось, или NO, если не нашлось ни одного",
+         "Сумму цифр накапливай циклом while: бери последнюю цифру и отрезай её"],
+  sample: { in:["6","12","16","25","43","70","8"], out:"4" },
+  stdin: ["6", "12", "16", "25", "43", "70", "8"],
+  sets: [["5","5","11","34","43","52"], ["4","12","21","35","49"]],
+  starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
+  solution: "n = int(input())\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    s = 0\n" +
+            "    while x > 0:\n" +
+            "        s = s + x % 10\n" +
+            "        x = x // 10\n" +
+            "    if s % 7 == 0:\n" +
+            "        count = count + 1\n" +
+            "if count == 0:\n" +
+            "    print(\"NO\")\n" +
+            "else:\n" +
+            "    print(count)\n",
+  check: { kind:"output" },
+  note: "Здесь два цикла, и важно не путать их роли: внешний перебирает числа, " +
+        "а внутренний разбирает одно число на цифры. Сумма цифр копится в s, и только " +
+        "после выхода из while проверяется её остаток. Отдельный случай — «NO»: не " +
+        "забывай, что счётчик может остаться нулём.",
+  hints: [
+    "Сумму цифр числа копи в переменной `s`: бери последнюю цифру как `x % 10`, прибавляй её, затем отрезай цифру через `x // 10`.",
+    "Повторяй это в цикле `while x > 0:` — когда цифры кончатся, x станет нулём и цикл остановится.",
+    "Условие кратности — `s % 7 == 0`. Проверяй его после того, как посчитана вся сумма.",
+    "После внешнего цикла не забудь про случай `if count == 0:` — тогда нужно вывести NO."
+  ]
+},
+
+{
+  id: "oge-min-even-three-digit",
+  group: "oge",
+  emoji: "🥇",
+  title: "Минимальное чётное трёхзначное",
+  tag: "формат ОГЭ",
+  intro: "Поиск минимума с условием — приём, без которого не обходится почти ни одна экзаменационная задача.",
+  goal: "Напиши программу, которая в последовательности натуральных чисел определяет " +
+        "минимальное чётное трёхзначное число. Если таких чисел нет, программа должна " +
+        "вывести «NO».",
+  list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
+         "Вывести одно число — минимальное чётное трёхзначное, или NO, если таких чисел нет",
+         "Трёхзначное — это число от 100 до 999; чётность проверяй остатком от деления на 2"],
+  sample: { in:["6","12","304","555","108","98","1000"], out:"108" },
+  stdin: ["6", "12", "304", "555", "108", "98", "1000"],
+  sets: [
+    ["5","12","18","24","98","1000"],
+    ["4","101","103","222","555"],
+    ["7","999","998","100","5000","600","450","250"]
+  ],
+  starter: "n = int(input())\nbest = 1000\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
+  solution: "n = int(input())\n" +
+            "best = 1000\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    if 100 <= x <= 999 and x % 2 == 0:\n" +
+            "        if x < best:\n" +
+            "            best = x\n" +
+            "if best == 1000:\n" +
+            "    print(\"NO\")\n" +
+            "else:\n" +
+            "    print(best)\n",
+  check: { kind:"output" },
+  note: "Здесь важны два условия одновременно: число должно быть трёхзначным (от 100 до 999) " +
+        "и чётным (x % 2 == 0). Чтобы найти минимум, заводим переменную best с запасом 1000 " +
+        "и уменьшаем её каждый раз, когда встречаем подходящее число поменьше. Если best так " +
+        "и осталась 1000 — подходящих чисел не было, и тогда по условию нужно вывести NO.",
+  hints: [
+    "Трёхзначное число — это `100 <= x <= 999`, а чётное — `x % 2 == 0`. Оба условия должны выполняться одновременно.",
+    "Заведи до цикла переменную `best = 1000`. Внутри цикла, если число подходит и оно меньше best, делай `best = x`.",
+    "После цикла проверь: если `best == 1000`, подходящих чисел не было — выведи NO, иначе выведи `best`."
+  ]
+},
+
+{
+  id: "ege-neighbor-sum-k",
+  group: "ege",
+  emoji: "🔗",
+  title: "Соседняя сумма, кратная K",
+  tag: "соседние пары",
+  intro: "Считаем не все пары подряд, а только соседние — базовый проход по последовательности.",
+  goal: "На вход даются число N, число K и последовательность из N натуральных чисел. " +
+        "Найди, сколько пар СОСЕДНИХ чисел дают сумму, кратную K, и выведи это количество. " +
+        "Если таких пар нет, выведи «NO».",
+  list: ["Первая строка — N (3 ≤ N ≤ 10 000), вторая — K (2 ≤ K ≤ 100)",
+         "Затем N натуральных чисел, каждое в отдельной строке (числа ≤ 30 000)",
+         "Пара — это два соседних числа: i-е и (i+1)-е. Считать нужно все такие пары",
+         "Вывод — одно число: количество подходящих пар. Если их нет, выведи NO"],
+  sample: { in:["5","3","1","2","4","5","1"], out:"4" },
+  stdin: ["5", "3", "1", "2", "4", "5", "1"],
+  sets: [["6","4","2","2","6","10","14","6"], ["4","7","3","4","5","2"], ["4","10","1","2","3","4"]],
+  starter: "n = int(input())\nk = int(input())\ncount = 0\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "k = int(input())\n" +
+            "count = 0\n" +
+            "prev = int(input())\n" +
+            "for i in range(1, n):\n" +
+            "    x = int(input())\n" +
+            "    if (prev + x) % k == 0:\n" +
+            "        count = count + 1\n" +
+            "    prev = x\n" +
+            "print(count if count > 0 else \"NO\")\n",
+  check: { kind:"output" },
+  note: "Один проход по последовательности: держим предыдущее число, читаем следующее и сразу " +
+        "проверяем сумму. Никакого вложенного цикла и хранения всего списка — время O(N). " +
+        "На экзамене такой приём экономит и память, и шаги.",
+  hints: [
+    "До цикла прочитай первое число в переменную prev: оно будет левым соседом первой пары.",
+    "В цикле от 1 до N-1 читай следующее число, проверяй `(prev + x) % k == 0` и только потом делай `prev = x`.",
+    "Если count так и остался 0 — подходящих пар нет, печатай NO. Иначе печатай сам count."
+  ]
+},
+
+{
+  id: "ege-longest-up-run",
+  group: "ege",
+  emoji: "📈",
+  title: "Наибольшая возрастающая цепочка",
+  tag: "цепочка",
+  intro: "Ищем самый длинный подряд идущий рост в последовательности — один проход без вложенных циклов.",
+  goal: "На вход даётся число N и последовательность из N натуральных чисел. " +
+        "Найди длину наибольшей цепочки ПОДРЯД ИДУЩИХ чисел, в которой каждое следующее число " +
+        "больше предыдущего, и выведи эту длину. Если в последовательности нет ни одной такой " +
+        "возрастающей пары, выведи «NO».",
+  list: ["Первая строка — N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, каждое в отдельной строке (числа ≤ 30 000)",
+         "Возрастающая цепочка — это два или более подряд идущих числа, где каждое следующее больше предыдущего",
+         "Вывод — одно число: длина самой длинной такой цепочки. Если её нет, выведи NO"],
+  sample: { in:["6","3","1","2","5","4","6"], out:"3" },
+  stdin: ["6", "3", "1", "2", "5", "4", "6"],
+  sets: [["4","9","7","5","2"], ["6","10","1","2","3","4","8"]],
+  starter: "n = int(input())\nprev = int(input())\ncur = 1\nmax_len = 0\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "max_len = 0\n" +
+            "cur = 1\n" +
+            "prev = int(input())\n" +
+            "for i in range(1, n):\n" +
+            "    x = int(input())\n" +
+            "    if x > prev:\n" +
+            "        cur = cur + 1\n" +
+            "    else:\n" +
+            "        if cur > max_len:\n" +
+            "            max_len = cur\n" +
+            "        cur = 1\n" +
+            "    prev = x\n" +
+            "if cur > max_len:\n" +
+            "    max_len = cur\n" +
+            "print(max_len if max_len >= 2 else \"NO\")\n",
+  check: { kind:"output" },
+  note: "Один проход по последовательности: переменная cur хранит длину текущей цепочки, " +
+        "prev — предыдущее число. Если следующее число больше prev, цепочка продолжается, " +
+        "иначе обрывается и начинается новая. Время O(N), и не нужно хранить всю последовательность.",
+  hints: [
+    "Заведи переменную cur — длину текущей цепочки. Сначала она равна 1: одно число уже есть.",
+    "Сравнивай каждое следующее число с prev: если x > prev, делай cur = cur + 1, иначе цепочка оборвалась и cur снова равен 1.",
+    "Обновляй max_len и внутри цикла, и после него: самая длинная цепочка может закончиться последним числом. Если max_len меньше 2 — печатай NO."
+  ]
+},
+
+{
+  id: "ege-binary-two-ones",
+  group: "ege",
+  emoji: "🔢",
+  title: "Ровно две единицы в двоичной записи",
+  tag: "двоичная запись",
+  intro: "Переводим числа в двоичную запись и считаем единицы — классический признак через систему счисления.",
+  goal: "На вход даётся число N и последовательность из N натуральных чисел. " +
+        "Найди, сколько из этих чисел в двоичной записи содержат ровно две единицы, " +
+        "и выведи это количество. Если таких чисел нет, выведи «NO».",
+  list: ["Первая строка — N (3 ≤ N ≤ 10 000)",
+         "Затем N натуральных чисел, каждое в отдельной строке (числа ≤ 30 000)",
+         "Двоичная запись рассматривается без ведущих нулей",
+         "Вывод — одно число: сколько чисел имеют ровно две единицы. Если таких нет, выведи NO"],
+  sample: { in:["6","1","2","3","4","5","6"], out:"3" },
+  stdin: ["6","1","2","3","4","5","6"],
+  sets: [["5","7","10","15","17","8"], ["4","1","4","8","16"]],
+  starter: "n = int(input())\ncount = 0\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    ones = 0\n" +
+            "    while x > 0:\n" +
+            "        ones = ones + (x % 2)\n" +
+            "        x = x // 2\n" +
+            "    if ones == 2:\n" +
+            "        count = count + 1\n" +
+            "print(count if count > 0 else \"NO\")\n",
+  check: { kind:"output" },
+  note: "Каждое число переводим в двоичную систему счисления и считаем единицы. " +
+        "Внутренний цикл работает, пока x больше нуля: x % 2 — это последний двоичный разряд, " +
+        "а x // 2 — сдвиг числа вправо. Можно было бы использовать bin(x).count(\"1\"), " +
+        "но ручной подсчёт помогает увидеть, как устроена двоичная запись.",
+  hints: [
+    "Пока x > 0, последний двоичный разряд равен x % 2. Если это 1, увеличивай ones, затем делай x = x // 2.",
+    "Заведи внешний счётчик count и увеличивай его, когда у числа оказалось ровно две единицы: if ones == 2.",
+    "Не забудь сбрасывать ones в 0 для каждого нового числа. Если count остался нулём — выведи NO, иначе print(count)."
+  ]
+},
+
+{
+  id: "ege-max-remainder",
+  group: "ege",
+  emoji: "🧮",
+  title: "Наибольший остаток от деления",
+  tag: "остаток",
+  intro: "Ищем наибольший остаток и подсчитываем, сколько раз он встретился, за один проход.",
+  goal: "На вход даются N, D и N натуральных чисел. " +
+        "Найди наибольший ненулевой остаток от деления этих чисел на D. " +
+        "Выведи сам остаток и количество чисел, которые его дают, через пробел. " +
+        "Если все числа делятся на D без остатка, выведи «NO».",
+  list: [
+    "Первая строка — N (3 ≤ N ≤ 10 000)",
+    "Вторая строка — D (2 ≤ D ≤ 1 000)",
+    "Затем N натуральных чисел, каждое в отдельной строке (числа ≤ 30 000)",
+    "Вывод — одна строка: остаток, пробел, количество. Если все числа делятся на D нацело, выведи NO"
+  ],
+  sample: { in: ["6","7","10","21","30","44","7","17"], out: "3 2" },
+  stdin: ["6","7","10","21","30","44","7","17"],
+  sets: [
+    ["5","5","10","15","20","25","30"],
+    ["4","6","9","14","19","26"],
+    ["7","4","8","3","11","6","15","1","9"]
+  ],
+  starter: "n = int(input())\nd = int(input())\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "d = int(input())\n" +
+            "best = 0\n" +
+            "count = 0\n" +
+            "for i in range(n):\n" +
+            "    x = int(input())\n" +
+            "    r = x % d\n" +
+            "    if r > best:\n" +
+            "        best = r\n" +
+            "        count = 1\n" +
+            "    elif r == best and best > 0:\n" +
+            "        count = count + 1\n" +
+            "print(\"NO\" if best == 0 else f\"{best} {count}\")\n",
+  check: { kind: "output" },
+  note: "Один проход по последовательности: остаток x % d сразу сравниваем с текущим максимумом. " +
+        "Хранить все остатки не нужно. Если остаток больше best — обновляем best и начинаем счёт заново с единицы; " +
+        "если равен best — увеличиваем счётчик. Когда best после цикла остался нулём, все числа разделились на D нацело, " +
+        "и по условию печатаем NO.",
+  hints: [
+    "Остаток от деления числа x на d считается как x % d.",
+    "Держи best для наибольшего остатка и count для количества. Если остаток больше best, обнови best и поставь count = 1.",
+    "Если остаток равен best и best больше нуля, увеличь count на 1.",
+    "В конце: если best == 0, печатай NO, иначе собери ответ f-строкой: f\"{best} {count}\"."
+  ]
+},
+
+{
+  id: "ege-max-triple-sum",
+  group: "ege",
+  emoji: "🔢",
+  title: "Максимальная сумма трёх подряд",
+  tag: "скользящее окно",
+  intro: "Скользящее окно: сумма трёх соседних чисел обновляется за один шаг, без повторного сложения.",
+  goal: "На вход даётся N и N натуральных чисел. " +
+        "Найди максимальную сумму трёх подряд идущих чисел и выведи её одним числом.",
+  list: [
+    "Первая строка — N (3 ≤ N ≤ 10 000)",
+    "Затем N натуральных чисел, каждое в отдельной строке (1 ≤ число ≤ 30 000)",
+    "Вывод — одна строка с одним числом: наибольшая сумма трёх подряд идущих чисел",
+    "N не меньше трёх, поэтому хотя бы одна тройка есть всегда"
+  ],
+  sample: { in: ["5","1","2","3","4","5"], out: "12" },
+  stdin: ["5","1","2","3","4","5"],
+  sets: [
+    ["7","3","1","4","1","5","9","2"],
+    ["4","10","10","10","1"],
+    ["6","5","5","5","5","5","5"]
+  ],
+  starter: "n = int(input())\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "a = [int(input()) for _ in range(n)]\n" +
+            "best = a[0] + a[1] + a[2]\n" +
+            "s = best\n" +
+            "for i in range(3, n):\n" +
+            "    s = s - a[i - 3] + a[i]\n" +
+            "    if s > best:\n" +
+            "        best = s\n" +
+            "print(best)\n",
+  check: { kind: "output" },
+  note: "Первая тройка считается один раз, дальше окно скользит: из текущей суммы вычитаем число, " +
+        "которое ушло слева, и прибавляем новое число справа. Так сумма следующей тройки получается " +
+        "за два действия, а не за три сложения заново. Это и есть приём «скользящее окно»: он не даёт " +
+        "лишней работы при движении по последовательности.",
+  hints: [
+    "Сначала собери все числа в список: `a = [int(input()) for _ in range(n)]`.",
+    "Первая тройка — `a[0] + a[1] + a[2]`. Запомни её и как `best`, и как текущую сумму `s`.",
+    "Двигай окно: для `i` от 3 до `n - 1` делай `s = s - a[i - 3] + a[i]`.",
+    "Если `s` стало больше `best`, обнови `best`. В конце выведи `print(best)`."
+  ]
+},
+
+{
+  id: "ege-product-of-two-primes",
+  group: "ege",
+  emoji: "✖️",
+  title: "Произведение двух простых",
+  tag: "простые множители",
+  intro: "Разложение на простые множители: считаем числа, у которых ровно два простых множителя.",
+  goal: "На вход даётся N и N натуральных чисел. " +
+        "Посчитай, сколько из них можно представить как произведение ровно двух простых множителей " +
+        "(простые могут совпадать), и выведи это количество. Если таких чисел нет, выведи «NO».",
+  list: [
+    "Первая строка — N (3 ≤ N ≤ 10 000)",
+    "Затем N натуральных чисел, каждое в отдельной строке (1 ≤ число ≤ 30 000)",
+    "Число подходит, если в его разложении ровно два простых множителя: 6 = 2 · 3 и 4 = 2 · 2 подходят, а 12 = 2 · 2 · 3 — нет",
+    "Вывод — одна строка: количество подходящих чисел или NO, если их нет"
+  ],
+  sample: { in: ["5", "6", "10", "12", "15", "7"], out: "3" },
+  stdin: ["5", "6", "10", "12", "15", "7"],
+  sets: [
+    ["5", "2", "3", "5", "7", "11"],
+    ["4", "4", "9", "16", "21"],
+    ["3", "1", "4", "6"]
+  ],
+  starter: "n = int(input())\n# твой код\n",
+  solution: "n = int(input())\n" +
+            "count = 0\n" +
+            "for _ in range(n):\n" +
+            "    x = int(input())\n" +
+            "    k = 0\n" +
+            "    d = 2\n" +
+            "    while d * d <= x:\n" +
+            "        while x % d == 0:\n" +
+            "            k += 1\n" +
+            "            x //= d\n" +
+            "        d += 1\n" +
+            "    if x > 1:\n" +
+            "        k += 1\n" +
+            "    if k == 2:\n" +
+            "        count += 1\n" +
+            "print(count if count > 0 else 'NO')\n",
+  check: { kind: "output" },
+  note: "Каждое число раскладываем на простые множители пробным делением до корня: " +
+        "пока число делится на d, делим его и увеличиваем счётчик — так учитываются повторные простые " +
+        "множители. Если после цикла остался множитель больше единицы, добавляем его к счётчику. " +
+        "Число подходит, когда множителей ровно два. Делители ходят парами, поэтому перебираем d только до корня, " +
+        "а не до самого числа.",
+  hints: [
+    "Для каждого числа заведи счётчик простых множителей k и пробуй делить число на d = 2, 3, 4, ... пока d * d <= x.",
+    "Когда x делится на d, дели его на d несколько раз подряд и каждый раз увеличивай k — так учитываются повторные множители, например 4 = 2 · 2.",
+    "После цикла, если остался x > 1, это последний простой множитель: добавь 1 к k.",
+    "Число подходит, если k == 2. В конце выведи количество или NO, если оно равно нулю."
+  ]
 }
 ];
+
+</script>
+
+<script>
+/* ============================================================
+   Экзамен: темы информатики, которые НЕ про массивы.
+
+   ⚠️ Почему отдельный файл, а не продолжение js/algo.js. Две причины, и обе
+   содержательные, а не технические. Первая: там лежат задачи одного рода —
+   «дана последовательность чисел, посчитай подходящие». Здесь другой род:
+   кодирование информации, логика, графы. Это разные темы кодификатора, и
+   держать их в одном списке значит потерять границу между ними. Вторая:
+   `js/algo.js` растёт задачами формата ОГЭ и ЕГЭ, и растёт часто; новые темы
+   не должны с этим ростом пересекаться ни в одной строке.
+
+   ЗАЧЕМ ЭТО ЗАВЕДЕНО. До 1.77.0 на вывеске стояла оговорка: «кодирование
+   информации, таблицы и работа с файлами сюда не входят». Это была
+   единственная строка оговорки, которая прямо противоречила собственной
+   вывеске: мы называемся «информатикой», а давали из предмета только
+   программирование и алгоритмику (разбор — `docs/golos-i-produkty-2026-09-06.md`
+   § 1.1). Здесь эта дыра закрывается тремя темами.
+
+   ⚠️ ЧЕГО ЗДЕСЬ ПО-ПРЕЖНЕМУ НЕТ, и это остаётся в оговорке: электронные
+   таблицы. Их проверять нечем — наш судья умеет запускать Python, а не
+   считать формулы Excel. Обещать «закрываем экзамен целиком» нельзя и после
+   этого файла.
+
+   ⚠️ Каждая тема здесь решается ПРОГРАММОЙ, а не формулой в тетради, и это
+   не уловка ради движка. На экзамене эти задания и правда решают программой
+   всё чаще, а главное — у нас есть судья, который умеет проверить только
+   программу. Задача, которую наш судья не проверит, ребёнку не помогает: он
+   останется наедине со своим «вроде правильно».
+
+   ⚠️ Номера заданий не называем — по той же причине, что в js/algo.js:
+   нумерация между годами меняется.
+
+   Устройство записи — как в js/algo.js, поле в поле. Список склеивается с
+   тем, что уже лежит в window.ALGO, поэтому файл обязан подключаться ПОСЛЕ
+   него (index.html, build.js, sw.js).
+   ============================================================ */
+window.ALGO = (window.ALGO || []).concat([
+
+/* ---------- кодирование информации ---------- */
+{
+  id: "info-count", group: "info", emoji: "🔢",
+  title: "Сколько бит на номер",
+  tag: "кодирование информации",
+  intro: "Самая частая формула экзамена, и она выводится, а не заучивается.",
+  goal: "В классе N человек, и каждому надо выдать номер в двоичном виде — одинаковой длины для всех. " +
+        "Напиши программу, которая по числу N печатает наименьшее число бит, которого хватит на все номера.",
+  list: [
+    "На вход одно число N (1 ≤ N ≤ 1 000 000)",
+    "Вывести одно число — сколько бит нужно",
+    "Формулу с логарифмом писать не надо: удваивай двойку, пока не хватит"
+  ],
+  sample: { in: ["300"], out: "9" },
+  stdin: ["300"],
+  sets: [["1"], ["2"], ["64"], ["65"], ["1000000"]],
+  starter: "n = int(input())\n# удваивай, пока не хватит\nprint(0)\n",
+  solution: "n = int(input())\nbits = 0\npower = 1\nwhile power < n:\n    power = power * 2\n    bits = bits + 1\nprint(bits)\n",
+  check: { kind: "output" },
+  note: "Тут видно, откуда берётся «формула 2 в степени i больше либо равно N»: " +
+        "мы её не вспоминаем, а выполняем шагами. Заодно понятно, почему на 64 варианта хватает " +
+        "6 бит, а на 65 нужно уже 7: бит добавляется целиком, половинок не бывает.",
+  hints: [
+    "Заведи две переменные: `power` — сколько вариантов уже покрыто (начинается с 1) и `bits` — сколько бит на это ушло.",
+    "Пока покрытых вариантов меньше, чем нужно, удваивай: `power = power * 2` и прибавляй единицу к счётчику бит.",
+    "Проверь себя на N = 1: цикл не выполнится ни разу, и ответ 0 бит — одному человеку номер не нужен."
+  ]
+},
+{
+  id: "info-alphabet", group: "info", emoji: "🔤",
+  title: "Объём сообщения",
+  tag: "кодирование информации",
+  intro: "Мощность алфавита, биты на символ и байты — вся цепочка целиком.",
+  goal: "В алфавите N различных символов, и сообщение состоит из K символов. " +
+        "Напиши программу, которая печатает объём этого сообщения в байтах.",
+  list: [
+    "На вход два числа, каждое в отдельной строке: N (2 ≤ N ≤ 100 000) и K (1 ≤ K ≤ 100 000)",
+    "На каждый символ уходит одинаковое целое число бит — наименьшее, которого хватает на N символов",
+    "Вывести одно число — объём в байтах, округляя вверх до целого байта"
+  ],
+  sample: { in: ["32", "100"], out: "63" },
+  stdin: ["32", "100"],
+  sets: [["2", "8"], ["256", "1000"], ["33", "10"], ["100000", "1"]],
+  starter: "n = int(input())\nk = int(input())\n# сначала биты на символ, потом всего бит, потом байты\nprint(0)\n",
+  solution: "n = int(input())\nk = int(input())\nbits = 0\npower = 1\nwhile power < n:\n    power = power * 2\n    bits = bits + 1\ntotal = bits * k\nbytes_count = total // 8\nif total % 8 != 0:\n    bytes_count = bytes_count + 1\nprint(bytes_count)\n",
+  check: { kind: "output" },
+  note: "Округление вверх — не придирка, а физика: половину байта на диск не записать. " +
+        "Приём «делим нацело, и если остаток есть, прибавляем один» пригодится ещё много раз.",
+  hints: [
+    "Число бит на символ считается так же, как в задаче про номера: удваивай, пока не хватит.",
+    "Всего бит — это биты на символ, умноженные на количество символов.",
+    "Округление вверх без math: `целых = всего // 8`, и если `всего % 8` не ноль — прибавь единицу. Например, 20 бит это 3 байта, а не 2."
+  ]
+},
+{
+  id: "info-image", group: "info", emoji: "🖼",
+  title: "Объём картинки",
+  tag: "кодирование информации",
+  intro: "Та же цепочка, но про изображение: ширина, высота и палитра.",
+  goal: "Растровое изображение шириной W и высотой H точек хранится с палитрой из C цветов. " +
+        "Напиши программу, которая печатает объём этого изображения в байтах.",
+  list: [
+    "На вход три числа, каждое в отдельной строке: W, H и C (1 ≤ W, H ≤ 10 000; 2 ≤ C ≤ 16 777 216)",
+    "На каждую точку уходит наименьшее целое число бит, которого хватает на C цветов",
+    "Вывести одно число — объём в байтах"
+  ],
+  sample: { in: ["640", "480", "256"], out: "307200" },
+  stdin: ["640", "480", "256"],
+  sets: [["8", "8", "2"], ["100", "100", "16"], ["1024", "768", "16777216"]],
+  starter: "w = int(input())\nh = int(input())\ncolors = int(input())\n# точек, бит на точку, байты\nprint(0)\n",
+  solution: "w = int(input())\nh = int(input())\ncolors = int(input())\nbits = 0\npower = 1\nwhile power < colors:\n    power = power * 2\n    bits = bits + 1\ntotal = w * h * bits\nprint(total // 8)\n",
+  check: { kind: "output" },
+  note: "Отсюда становится видно, почему фотография в 16 миллионов цветов тяжелее той же картинки " +
+        "в 256 цветов ровно в три раза: 24 бита на точку против 8. Это не «фотки много весят», " +
+        "а посчитанное число.",
+  hints: [
+    "Точек в картинке — ширина, умноженная на высоту.",
+    "Бит на точку считается той же дудкой, что и раньше: удваивай двойку, пока не покроешь число цветов.",
+    "Здесь всего бит всегда делится на 8 нацело, потому что бит на точку — 1, 2, 4, 8, 16 или 24, а точек много; отдельное округление не нужно."
+  ]
+},
+
+/* ---------- логика ---------- */
+{
+  id: "logic-table", group: "logic", emoji: "🔀",
+  title: "Таблица истинности",
+  tag: "логика",
+  intro: "Таблицу истинности можно не чертить руками — её печатает программа.",
+  goal: "Напечатай все наборы значений A, B и C, при которых выражение «(A или B) и не C» истинно, " +
+        "а последней строкой — сколько таких наборов.",
+  list: [
+    "Ввода нет: перебери все восемь наборов сам",
+    "Каждый подходящий набор печатай отдельной строкой: три числа через пробел, в порядке A B C",
+    "Наборы перебирай по возрастанию: сначала 0 0 0, потом 0 0 1, и так далее",
+    "Последняя строка — «всего:» и число"
+  ],
+  sample: { in: [], out: "0 1 0\n1 0 0\n1 1 0\nвсего: 3" },
+  stdin: [],
+  sets: [],
+  starter: "for a in range(2):\n    for b in range(2):\n        for c in range(2):\n            # проверь выражение\n            pass\n",
+  solution: "count = 0\nfor a in range(2):\n    for b in range(2):\n        for c in range(2):\n            znachenie = ((a == 1) or (b == 1)) and (not (c == 1))\n            if znachenie:\n                print(a, b, c)\n                count = count + 1\nprint(\"всего:\", count)\n",
+  check: { kind: "output" },
+  note: "Три вложенных цикла по range(2) — это и есть перебор всех наборов из трёх переменных. " +
+        "Переменных четыре — добавь четвёртый цикл; таблица вырастет с восьми строк до шестнадцати, " +
+        "а программа — на две строки.",
+  hints: [
+    "Ноль и единица — это ещё не «ложь» и «истина». Сравни: `a == 1` даёт настоящее логическое значение.",
+    "Скобки тут решают всё: `(a or b) and not c` — сначала «или», потом «и». Без скобок Python посчитает по своим правилам, и выйдет другое выражение.",
+    "Счётчик заводи ДО циклов, иначе он будет обнуляться на каждом шаге."
+  ]
+},
+{
+  id: "logic-count", group: "logic", emoji: "➡️",
+  title: "Импликация: «если — то»",
+  tag: "логика",
+  intro: "Самая непонятная операция школьной логики, и понятнее всего она на числах.",
+  goal: "Напиши программу, которая считает, для скольких чисел x от 1 до N истинно высказывание " +
+        "«если x делится на A, то x делится на B».",
+  list: [
+    "На вход три числа, каждое в отдельной строке: A, B и N (1 ≤ A, B ≤ 100; 1 ≤ N ≤ 10 000)",
+    "Вывести одно число — сколько подходящих x нашлось",
+    "«Если P, то Q» — это то же самое, что «не P или Q»"
+  ],
+  sample: { in: ["3", "6", "30"], out: "25" },
+  stdin: ["3", "6", "30"],
+  sets: [["2", "4", "20"], ["5", "5", "50"], ["1", "2", "10"], ["7", "3", "100"]],
+  starter: "a = int(input())\nb = int(input())\nn = int(input())\ncount = 0\nfor x in range(1, n + 1):\n    # твой код\n    pass\nprint(count)\n",
+  solution: "a = int(input())\nb = int(input())\nn = int(input())\ncount = 0\nfor x in range(1, n + 1):\n    delitsya_a = (x % a == 0)\n    delitsya_b = (x % b == 0)\n    if (not delitsya_a) or delitsya_b:\n        count = count + 1\nprint(count)\n",
+  check: { kind: "output" },
+  note: "Главная странность импликации в том, что она ИСТИННА, когда левая часть ложна. " +
+        "На числах это видно сразу: x = 4 не делится на 3, значит обещание «если делится на 3, " +
+        "то делится на 6» никто не нарушил — и набор засчитан. Ложным высказывание бывает " +
+        "ровно в одном случае: левое верно, а правое нет.",
+  hints: [
+    "Заведи две переменные с логическими значениями — так выражение станет читаемым: `krasnyy = (x % 2 == 0)`.",
+    "«Если P, то Q» переписывается механически: `(not P) or Q`. Другого способа записать импликацию в Python нет — своей операции для неё не завезли.",
+    "Проверь себя на A = B: тогда высказывание истинно для всех x, и ответ равен N."
+  ]
+},
+{
+  id: "logic-find", group: "logic", emoji: "🎯",
+  title: "Найти наименьшее A",
+  tag: "логика",
+  intro: "Типовой ход экзамена: перебрать параметр, а не решать неравенство в уме.",
+  goal: "Найди наименьшее натуральное A, при котором высказывание «если x делится на A, то x делится на 6» " +
+        "истинно для всех x от 1 до 99.",
+  list: [
+    "На вход одно число N — до какого A перебирать (1 ≤ N ≤ 1 000)",
+    "Вывести одно число — наименьшее подходящее A, или «NO», если такого нет",
+    "Значения x проверяй от 1 до 99"
+  ],
+  sample: { in: ["20"], out: "6" },
+  stdin: ["20"],
+  sets: [["5"], ["6"], ["100"], ["1000"]],
+  starter: "n = int(input())\n# перебирай A и проверяй все x\nprint(\"NO\")\n",
+  solution: "n = int(input())\notvet = 0\nfor a in range(1, n + 1):\n    podhodit = True\n    for x in range(1, 100):\n        levo = (x % a == 0)\n        pravo = (x % 6 == 0)\n        if levo and (not pravo):\n            podhodit = False\n    if podhodit:\n        otvet = a\n        break\nif otvet == 0:\n    print(\"NO\")\nelse:\n    print(otvet)\n",
+  check: { kind: "output" },
+  note: "Приём называется «перебор параметра», и он закрывает целый класс заданий: вместо того чтобы " +
+        "рассуждать, какое A подойдёт, мы просто проверяем все подряд и берём первое. " +
+        "Обрати внимание на `break`: как только нашли, дальше искать незачем.",
+  hints: [
+    "Внешний цикл идёт по кандидатам A, внутренний — по всем x. Это цикл в цикле, и порядок тут важен.",
+    "Заведи флаг: `podhodit = True` перед внутренним циклом, и сбрасывай его в `False`, как только нашёлся x-нарушитель.",
+    "Нарушитель — это x, у которого левая часть верна, а правая нет: `levo and (not pravo)`."
+  ]
+},
+
+/* ---------- графы ---------- */
+{
+  id: "graph-reach", group: "graph", emoji: "🗺",
+  title: "Куда можно добраться",
+  tag: "графы",
+  intro: "Граф — это просто «кто с кем связан». Первый вопрос к нему — куда ведут дороги.",
+  goal: "Дороги односторонние. Напиши программу, которая считает, до скольких городов можно добраться " +
+        "из города 1, включая его сам.",
+  list: [
+    "В первой строке — число городов N (2 ≤ N ≤ 100), во второй — число дорог M",
+    "Далее 2·M строк: для каждой дороги сначала откуда, потом куда",
+    "Вывести одно число — сколько городов достижимо из первого"
+  ],
+  sample: { in: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"], out: "5" },
+  stdin: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"],
+  sets: [
+    ["3", "1", "1", "2"],
+    ["4", "2", "2", "3", "3", "4"],
+    ["6", "4", "1", "2", "2", "3", "4", "5", "5", "6"]
+  ],
+  starter: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\n# читай дороги, потом обходи\nprint(1)\n",
+  solution: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\nfor i in range(m):\n    a = int(input())\n    b = int(input())\n    svyazi[a].append(b)\nnaydeno = [1]\nochered = [1]\nwhile len(ochered) > 0:\n    v = ochered.pop(0)\n    for sosed in svyazi[v]:\n        if sosed not in naydeno:\n            naydeno.append(sosed)\n            ochered.append(sosed)\nprint(len(naydeno))\n",
+  check: { kind: "output" },
+  note: "Это обход в ширину, и он весь укладывается в одну идею: держим очередь городов, до которых " +
+        "уже дошли, и по очереди смотрим их соседей. Проверка `not in naydeno` — не мелочь: без неё " +
+        "программа зациклится на первой же кольцевой дороге.",
+  hints: [
+    "Словарь списков — удобная запись графа: `svyazi[1] = [2, 3]` значит «из первого города ведут дороги во второй и третий».",
+    "Списки для всех городов заведи заранее пустыми, иначе `svyazi[a].append(b)` упадёт на городе, из которого ещё не читали дорог.",
+    "`ochered.pop(0)` забирает первый элемент — именно первый, а не последний: тогда обход идёт слоями, от ближних к дальним."
+  ]
+},
+{
+  id: "graph-short", group: "graph", emoji: "📏",
+  title: "Кратчайший путь",
+  tag: "графы",
+  intro: "Тот же обход, но теперь считаем, за сколько шагов доходим.",
+  goal: "Дороги двусторонние. Напиши программу, которая печатает наименьшее число дорог на пути " +
+        "из города 1 в город N, или «NO», если пути нет.",
+  list: [
+    "В первой строке — число городов N (2 ≤ N ≤ 100), во второй — число дорог M",
+    "Далее 2·M строк: концы каждой дороги. Дорога работает в обе стороны",
+    "Вывести одно число — сколько дорог в кратчайшем пути, или NO"
+  ],
+  sample: { in: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"], out: "3" },
+  stdin: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"],
+  sets: [
+    ["2", "1", "1", "2"],
+    ["4", "2", "1", "2", "3", "4"],
+    ["6", "5", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6"]
+  ],
+  starter: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\n# дорога двусторонняя — записывай оба направления\nprint(\"NO\")\n",
+  solution: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\nfor i in range(m):\n    a = int(input())\n    b = int(input())\n    svyazi[a].append(b)\n    svyazi[b].append(a)\nshag = {1: 0}\nochered = [1]\nwhile len(ochered) > 0:\n    v = ochered.pop(0)\n    for sosed in svyazi[v]:\n        if sosed not in shag:\n            shag[sosed] = shag[v] + 1\n            ochered.append(sosed)\nif n in shag:\n    print(shag[n])\nelse:\n    print(\"NO\")\n",
+  check: { kind: "output" },
+  note: "Один и тот же обход в ширину отвечает и на «куда можно дойти», и на «за сколько шагов». " +
+        "Разница только в том, что вместо списка найденных мы держим словарь «город → расстояние». " +
+        "Работает это потому, что очередь выдаёт города строго по возрастанию расстояния.",
+  hints: [
+    "Двусторонняя дорога — это две записи: `svyazi[a].append(b)` и `svyazi[b].append(a)`. Забудешь вторую — путь найдётся не всегда.",
+    "Словарь `shag` служит сразу двум делам: хранит расстояние и отвечает на вопрос «мы тут уже были?» через `not in`.",
+    "Расстояние до соседа — это расстояние до текущего города плюс один. Начальный город стоит на нуле."
+  ]
+},
+{
+  id: "graph-paths", group: "graph", emoji: "🔀",
+  title: "Сколько всего путей",
+  tag: "графы",
+  intro: "Классика экзамена: посчитать пути из А в Б, когда дороги односторонние.",
+  goal: "Дороги односторонние и ведут только от меньшего города к большему. " +
+        "Напиши программу, которая считает, сколькими разными путями можно попасть из города 1 в город N.",
+  list: [
+    "В первой строке — число городов N (2 ≤ N ≤ 100), во второй — число дорог M",
+    "Далее 2·M строк: для каждой дороги сначала откуда, потом куда. Всегда «откуда» меньше, чем «куда»",
+    "Вывести одно число — сколько разных путей"
+  ],
+  sample: { in: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"], out: "2" },
+  stdin: ["5", "5", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5"],
+  sets: [
+    ["3", "2", "1", "2", "2", "3"],
+    ["4", "4", "1", "2", "1", "3", "2", "4", "3", "4"],
+    ["6", "7", "1", "2", "1", "3", "2", "4", "3", "4", "4", "5", "4", "6", "5", "6"]
+  ],
+  starter: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\n# путей в город 1 — один: остаться на месте\nprint(0)\n",
+  solution: "n = int(input())\nm = int(input())\nsvyazi = {}\nfor v in range(1, n + 1):\n    svyazi[v] = []\nfor i in range(m):\n    a = int(input())\n    b = int(input())\n    svyazi[a].append(b)\nputi = {}\nfor v in range(1, n + 1):\n    puti[v] = 0\nputi[1] = 1\nfor v in range(1, n + 1):\n    for sosed in svyazi[v]:\n        puti[sosed] = puti[sosed] + puti[v]\nprint(puti[n])\n",
+  check: { kind: "output" },
+  note: "Приём тот же, что на бумаге: в каждый город столько путей, сколько суммарно в те города, " +
+        "откуда в него ведут дороги. Города обходим по возрастанию номера — тогда к моменту, когда " +
+        "мы смотрим город, все пути в него уже посчитаны. Именно поэтому в условии оговорено, что " +
+        "дороги ведут от меньшего к большему.",
+  hints: [
+    "Начальное условие важнее самой формулы: `puti[1] = 1` — в первый город есть ровно один путь, никуда не идти.",
+    "Идти надо по городам в порядке номеров, а внутри — по дорогам, которые из города выходят: каждая дорога переносит накопленное число путей дальше.",
+    "Проверь на маленьком: три города и дороги 1→2, 2→3. Ответ должен быть 1."
+  ]
+}
+
+]);
 
 </script>
 
@@ -11577,6 +12735,476 @@ window.HOMEWORK = [
   starter: "class Geroy:\n    def __init__(self, hp):\n        self.hp = hp\n\n# создай героя и бей\n",
   hints: ["Внутри `__init__` значение запоминают на объекте через self: `self.hp = hp` — иначе оно пропадёт после создания.",
           "Метод меняет то же самое поле: `self.hp -= sila` — и герой у каждого свой, чужой hp не тронется."]
+},
+
+{
+  id: "hw-math-quest",
+  after: "math-random",
+  emoji: "🎮",
+  title: "Сколько заданий до цели",
+  tag: "модуль math",
+  params: [{ k:"need", min:80, max:240, step:20 }, { k:"step", min:15, max:45, step:5 }],
+  goal: function(v){
+    return "В игре герою нужно накопить " + v.need + " монет. За одно задание он получает " +
+           v.step + " монет. Напечатай одним числом, сколько заданий нужно выполнить, чтобы монет стало не меньше " +
+           v.need + ". Используй модуль math.";
+  },
+  list: function(){ return ["Печатается ровно одна строка — целое число, без слов",
+                            "Число заданий считает программа, а не ты в уме"]; },
+  code: function(v){
+    return "import math\n" +
+           "need = " + v.need + "\n" +
+           "step = " + v.step + "\n" +
+           "print(math.ceil(need / step))\n";
+  },
+  need: ["import math", "math.ceil"],
+  needMsg: "Задание про модуль math: импортируй его и округли вверх через math.ceil.",
+  starter: "import math\nneed = 0\nstep = 0\n# напечатай, сколько заданий нужно выполнить\n",
+  hints: ["Обычное деление `/` даёт дробное число, но выполнить часть задания нельзя — результат нужно округлить вверх.",
+          "Функция `math.ceil(...)` из модуля math поднимает дробное число до ближайшего целого сверху."]
+},
+
+{
+  id: "hw-json-robot",
+  after: "json",
+  emoji: "🤖",
+  title: "Очки робота из JSON",
+  tag: "модуль json",
+  params: [{ k:"hp", min:30, max:120, step:10 }, { k:"mp", min:20, max:80, step:10 }],
+  goal: function(v){
+    return 'Робот-помощник хранит свои характеристики в JSON-строке: {"hp": ' + v.hp + ', "mp": ' + v.mp + '}. Напечатай одним числом, сколько всего очков у робота (hp + mp). Используй модуль json.';
+  },
+  list: function(){ return ["Печатается ровно одна строка — целое число, без слов",
+                            "Сумму считает программа, а не ты в уме"]; },
+  code: function(v){
+    return 'import json\n' +
+           'data = json.loads(\'{"hp": ' + v.hp + ', "mp": ' + v.mp + '}\')\n' +
+           'print(data["hp"] + data["mp"])\n';
+  },
+  need: ["import json", "json.loads"],
+  needMsg: "Задание про JSON: импортируй модуль json и разбери строку через json.loads.",
+  starter: "# дана JSON-строка с hp и mp робота\n# разбери её и напечатай сумму очков\n",
+  hints: ["Модуль json умеет превращать строку в словарь: `json.loads(...)`. Внутри скобок будет словарь с ключами `\"hp\"` и `\"mp\"`.",
+          "После разбора возьми значения по ключам `data[\"hp\"]` и `data[\"mp\"]`, а затем сложи их внутри `print(...)`."]
+},
+
+{
+  id: "hw-csv-game",
+  after: "csv",
+  emoji: "📊",
+  title: "Сумма очков из CSV",
+  tag: "CSV и таблицы",
+  params: [{ k:"s1", min:10, max:50, step:5 }, { k:"s2", min:10, max:50, step:5 }, { k:"s3", min:10, max:50, step:5 }],
+  goal: function(v){
+    return "В переменной text лежит CSV-таблица с результатами игры:\n" +
+           "player,score\n" +
+           "leo," + v.s1 + "\n" +
+           "mia," + v.s2 + "\n" +
+           "max," + v.s3 + "\n" +
+           "Напечатай одним числом сумму очков из столбца score.";
+  },
+  list: function(){ return ["Печатается ровно одна строка — целое число, без слов",
+                            "Сумму считает программа, а не ты в уме"]; },
+  code: function(v){
+    return "text = \"player,score\\nleo," + v.s1 + "\\nmia," + v.s2 + "\\nmax," + v.s3 + "\"\n" +
+           "total = 0\n" +
+           "for line in text.split(\"\\n\")[1:]:\n" +
+           "    total += int(line.split(\",\")[1])\n" +
+           "print(total)\n";
+  },
+  need: ["for ", ".split"],
+  needMsg: "Задание на CSV: используй цикл for по строкам и разбей строки по запятой методом .split(\",\").",
+  starter: "text = \"player,score\\nleo,0\\nmia,0\\nmax,0\"\ntotal = 0\n# разбей строки по запятой и сложи очки\n",
+  hints: ["Сначала разбей текст на строки: text.split(\"\\n\") — получится список, где первый элемент заголовок. Его можно пропустить срезом [1:].",
+          "В цикле по строкам разбей каждую строку по запятой: line.split(\",\"). Очки лежат под индексом 1 — преврати их в число через int(...) и прибавь к сумме."]
+},
+
+{
+  id: "hw-dice-frequent",
+  after: "collections",
+  emoji: "🎲",
+  title: "Самая частая цифра на кубике",
+  tag: "подсчёт частоты",
+  params: [
+    { k:"n1", min:1, max:2 },
+    { k:"n2", min:3, max:4 },
+    { k:"n3", min:5, max:6 },
+    { k:"c1", min:3, max:4 },
+    { k:"c2", min:1, max:2 },
+    { k:"c3", min:1, max:2 }
+  ],
+  goal: function(v){
+    var s = "";
+    for (var i = 0; i < v.c2; i++) s += v.n2;
+    for (var i = 0; i < v.c1; i++) s += v.n1;
+    for (var i = 0; i < v.c3; i++) s += v.n3;
+    return "В переменной rolls лежит строка с результатами бросков игрового кубика (без пробелов): \"" + s + "\".\n" +
+           "Посчитай, сколько раз встречается каждая цифра, и напечатай одной строкой, какая цифра выпадала чаще всего.";
+  },
+  list: function(){
+    return [
+      "Печатается ровно одна строка — только сама цифра, без слов",
+      "Частоту считает программа: пройдись по строке и посчитай каждую цифру"
+    ];
+  },
+  code: function(v){
+    var s = "";
+    for (var i = 0; i < v.c2; i++) s += v.n2;
+    for (var i = 0; i < v.c1; i++) s += v.n1;
+    for (var i = 0; i < v.c3; i++) s += v.n3;
+    return "rolls = \"" + s + "\"\n" +
+           "counts = {}\n" +
+           "for x in rolls:\n" +
+           "    counts[x] = counts.get(x, 0) + 1\n" +
+           "best = rolls[0]\n" +
+           "for x in counts:\n" +
+           "    if counts[x] > counts[best]:\n" +
+           "        best = x\n" +
+           "print(best)\n";
+  },
+  need: ["for ", ".get"],
+  needMsg: "Задание на подсчёт: используй цикл for по строке и метод .get(...), чтобы накапливать счётчик.",
+  starter: "rolls = \"\"  # положи сюда строку из условия\ncounts = {}\n# посчитай частоту каждой цифры и напечатай самую частую\n",
+  hints: [
+    "Заведи пустой словарь counts. В цикле по rolls для каждой цифры x увеличивай счётчик: counts[x] = counts.get(x, 0) + 1 — если цифры ещё нет, .get вернёт 0.",
+    "Чтобы найти самую частую цифру, заведи переменную best и сравни counts[x] с counts[best] для всех цифр из counts."
+  ]
+},
+
+{
+  id: "hw-tournament-pairs",
+  after: "itertools",
+  emoji: "🏓",
+  title: "Все пары в турнире",
+  tag: "комбинации",
+  params: [{ k: "n", min: 3, max: 6 }],
+  goal: function(v){
+    var nums = [];
+    for (var i = 1; i <= v.n; i++) nums.push(i);
+    return "В турнире по настольному теннису участвуют " + v.n + " " + ru(v.n, "игрок", "игрока", "игроков") + " с номерами " + nums.join(", ") + ".\n" +
+           "Каждый должен сыграть с каждым ровно один раз — пара «1 2» и пара «2 1» это одна и та же пара.\n" +
+           "Напечатай каждую пару на отдельной строке через пробел (например: 1 2), а последней строкой — сколько всего матчей получилось.";
+  },
+  list: function(){
+    return [
+      "Печатается по одной паре на строку, а в конце — число матчей",
+      "Пары считает программа: без пары игрока с самим собой и без повторов"
+    ];
+  },
+  code: function(v){
+    return "n = " + v.n + "\n" +
+           "count = 0\n" +
+           "for i in range(1, n + 1):\n" +
+           "    for j in range(i + 1, n + 1):\n" +
+           "        print(i, j)\n" +
+           "        count += 1\n" +
+           "print(count)\n";
+  },
+  need: ["for ", "range"],
+  needMsg: "Задание на комбинации: перебери все пары вложенными циклами for по range.",
+  starter: "n = 0\n# напечатай все пары игроков, а затем число матчей\n",
+  hints: [
+    "Внешний цикл бери первого игрока от 1 до n, а внутренний — второго от i + 1 до n: так каждая пара встретится ровно один раз.",
+    "Заведи счётчик count до циклов, увеличивай его на 1 внутри пары и напечатай после обоих циклов."
+  ]
+},
+
+{
+  id: "hw-piggy-bank",
+  after: "generators",
+  emoji: "🐷",
+  title: "Копилка",
+  tag: "генераторы",
+  params: [{ k: "money", min: 5, max: 20, step: 5 }, { k: "days", min: 3, max: 6 }],
+  goal: function(v){
+    return "Ты копишь на мечту и каждый день кладёшь в копилку " + v.money + " " + ru(v.money, "рубль", "рубля", "рублей") + ".\n" +
+           "Напечатай, сколько всего денег уже накоплено после каждого из " + v.days + " " + ru(v.days, "день", "дня", "дней") + ": по одному числу на строку.";
+  },
+  list: function(){
+    return ["На каждой строке — сумма после очередного дня",
+            "Накопленную сумму считает программа, а не ты в уме"];
+  },
+  code: function(v){
+    return "def savings(money, days):\n" +
+           "    total = 0\n" +
+           "    for day in range(days):\n" +
+           "        total += money\n" +
+           "        yield total\n" +
+           "\n" +
+           "for s in savings(" + v.money + ", " + v.days + "):\n" +
+           "    print(s)\n";
+  },
+  need: ["def", "yield"],
+  needMsg: "Задание на генераторы: оформи выдачу накоплений функцией с def и yield, а затем пройди по ней циклом.",
+  starter: "def savings(money, days):\n    # напиши генератор: отдавай накопленную сумму\n    pass\n\n# пройди по генератору и напечатай каждое значение\n",
+  hints: [
+    "Генератор запоминает своё состояние между yield: заведи переменную-копилку до цикла, внутри цикла прибавляй к ней взнос и отдавай новое значение через yield.",
+    "После того как генератор готов, пройди по нему обычным циклом for и напечатай каждое полученное число."
+  ]
+},
+
+{
+  id: "hw-coin-boost",
+  after: "decorators",
+  emoji: "🪙",
+  title: "Бонус за монеты",
+  tag: "декораторы",
+  params: [{ k: "coins", min: 3, max: 9 }, { k: "bonus", min: 2, max: 4 }],
+  goal: function(v){
+    return "В игре герой собрал " + v.coins + " " + ru(v.coins, "монету", "монеты", "монет") +
+           ". На них действует бонус: результат нужно умножить на " + v.bonus + ".\n" +
+           "Напиши декоратор boost — он должен умножать результат функции на этот бонус. " +
+           "Примени его к функции collected, которая возвращает число собранных монет. " +
+           "Напечатай одной строкой одно число — сколько монет засчитано после бонуса.";
+  },
+  list: function(){
+    return ["Печатается ровно одна строка — одно число, без слов",
+            "Умножение выполняет декоратор, а не отдельный print с готовым ответом"];
+  },
+  code: function(v){
+    return "BONUS = " + v.bonus + "\n" +
+           "\n" +
+           "def boost(func):\n" +
+           "    def wrapper():\n" +
+           "        return func() * BONUS\n" +
+           "    return wrapper\n" +
+           "\n" +
+           "@boost\n" +
+           "def collected():\n" +
+           "    return " + v.coins + "\n" +
+           "\n" +
+           "print(collected())\n";
+  },
+  need: ["def", "def", "@"],
+  needMsg: "Задание на декораторы: оформи умножение обёрткой внутри boost (два def) и примени декоратор к функции через @.",
+  starter: "BONUS = 0\n" +
+           "\n" +
+           "def boost(func):\n" +
+           "    # напиши обёртку: она должна возвращать результат func, умноженный на BONUS\n" +
+           "    pass\n" +
+           "\n" +
+           "# создай функцию collected, примени к ней декоратор boost\n" +
+           "# и напечатай результат\n",
+  hints: [
+    "Внутри boost заведи вторую функцию-обёртку. Она должна вызвать переданную функцию и вернуть её результат, изменённый по правилу из условия. Затем верни саму обёртку (без скобок), а не результат её вызова.",
+    "Чтобы декоратор применился, над функцией collected поставь строку с @ и именем декоратора. После этого вызов collected() сам вернёт уже обработанное число."
+  ]
+},
+
+{
+  id: "hw-sale-discount",
+  after: "context",
+  emoji: "🛒",
+  title: "Скидка в игровом магазине",
+  tag: "контекстные менеджеры",
+  params: [{ k: "price", min: 100, max: 500, step: 50 }, { k: "discount", min: 10, max: 30, step: 5 }],
+  goal: function(v){
+    return "В игровом магазине меч стоит " + v.price + " монет. Сейчас на него действует скидка " + v.discount + " процентов.\n" +
+           "Напиши контекстный менеджер sale: метод __enter__ должен возвращать размер скидки в процентах. " +
+           "Используй sale в конструкции with, получи скидку через as и напечатай одной строкой итоговую цену в монетах (целое число, округляй вниз).";
+  },
+  list: function(){
+    return ["Печатается ровно одна строка — итоговая цена, без слов",
+            "Скидку считает программа внутри with, а не заранее в уме"];
+  },
+  code: function(v){
+    return "price = " + v.price + "\n" +
+           "discount = " + v.discount + "\n" +
+           "\n" +
+           "class sale:\n" +
+           "    def __enter__(self):\n" +
+           "        return discount\n" +
+           "    def __exit__(self, *args):\n" +
+           "        pass\n" +
+           "\n" +
+           "with sale() as d:\n" +
+           "    print(price * (100 - d) // 100)\n";
+  },
+  need: ["__enter__", "__exit__", "with"],
+  needMsg: "Задание на контекстные менеджеры: в классе sale должны быть методы __enter__ и __exit__, а использоваться он должен через with.",
+  starter: "price = 0\n" +
+           "discount = 0\n" +
+           "\n" +
+           "class sale:\n" +
+           "    def __enter__(self):\n" +
+           "        # верни размер скидки\n" +
+           "        pass\n" +
+           "\n" +
+           "# допиши класс: нужен ещё метод выхода из контекста\n" +
+           "# затем используй контекстный менеджер и напечатай итоговую цену\n",
+  hints: [
+    "В `__enter__` контекстный менеджер готовит данные для блока. Верни из него скидку — тогда переменная после `as` в строке `with sale() as d:` получит именно это число.",
+    "Скидка в `discount` процентов означает, что от цены остаётся `100 - discount` процентов. Умножь цену на оставшиеся проценты и подели нацело на 100 через `//`."
+  ]
+},
+
+{
+  id: "hw-inventory-battle",
+  after: "quest-3",
+  emoji: "🎒",
+  title: "Инвентарь героя после боя",
+  tag: "словари",
+  params: [
+    { k: "potions", min: 5, max: 10 },
+    { k: "used", min: 1, max: 4 },
+    { k: "coins", min: 20, max: 80, step: 10 },
+    { k: "found", min: 5, max: 30, step: 5 }
+  ],
+  goal: function(v) {
+    return "Герой вернулся из боя. В его инвентаре было " + v.potions + " " + ru(v.potions, "зелье", "зелья", "зелий") +
+           " и " + v.coins + " " + ru(v.coins, "монета", "монеты", "монет") + ". " +
+           "В бою он выпил " + v.used + " " + ru(v.used, "зелье", "зелья", "зелий") +
+           ", а затем нашёл " + v.found + " " + ru(v.found, "монета", "монеты", "монет") + ".\n" +
+           "Заведи словарь inventory с ключами \"potions\" и \"coins\", измени в нём значения после боя и напечатай одной строкой через пробел: сначала сколько зелий осталось, затем сколько монет стало.";
+  },
+  list: function() {
+    return [
+      "Печатается ровно одна строка — два числа через пробел: зелья, затем монеты",
+      "Числа должны получиться изменением словаря inventory, а не отдельными print с готовыми ответами"
+    ];
+  },
+  code: function(v) {
+    return "potions = " + v.potions + "\n" +
+           "coins = " + v.coins + "\n" +
+           "used = " + v.used + "\n" +
+           "found = " + v.found + "\n" +
+           "\n" +
+           "inventory = {\"potions\": potions, \"coins\": coins}\n" +
+           "inventory[\"potions\"] = inventory[\"potions\"] - used\n" +
+           "inventory[\"coins\"] = inventory[\"coins\"] + found\n" +
+           "print(inventory[\"potions\"], inventory[\"coins\"])\n";
+  },
+  need: ["inventory = {", "inventory["],
+  needMsg: "Задание на словари: создай словарь с именем inventory и меняй его значения по ключам (inventory[...]).",
+  starter: "potions = 0\n" +
+           "coins = 0\n" +
+           "used = 0\n" +
+           "found = 0\n" +
+           "\n" +
+           "inventory = {\"potions\": potions, \"coins\": coins}\n" +
+           "# измени значения в словаре и напечатай одной строкой два числа\n",
+  hints: [
+    "Сначала положи все четыре числа из условия в переменные potions, coins, used и found — числа бери прямо из текста задачи.",
+    "Чтобы изменить число в словаре, возьми его по ключу, например `inventory[\"potions\"]`, выполни действие и положи результат обратно в этот же ключ. Для монет вместо вычитания будет сложение."
+  ]
+},
+
+{
+  id: "hw-data-steps-clean",
+  after: "data-2",
+  emoji: "⌚",
+  title: "Чистка записей шагомера",
+  tag: "чистка данных",
+  params: [
+    { k: "steps1", min: 100, max: 900, step: 100 },
+    { k: "steps2", min: 100, max: 900, step: 100 },
+    { k: "steps3", min: 100, max: 900, step: 100 }
+  ],
+  goal: function(v) {
+    return "Фитнес-браслет весь день записывал, сколько шагов сделано за час. Три записи сохранились: " +
+           v.steps1 + " " + ru(v.steps1, "шаг", "шага", "шагов") + ", " +
+           v.steps2 + " " + ru(v.steps2, "шаг", "шага", "шагов") + " и " +
+           v.steps3 + " " + ru(v.steps3, "шаг", "шага", "шагов") + ". " +
+           "Остальные записи испортились: вместо числа там пропуск (None) или мусор (слово \"мусор\").\n" +
+           "Очисти список data: напечатай только настоящие числа, каждое с новой строки, без пропусков и мусора.";
+  },
+  list: function() {
+    return [
+      "Печатается по одной строке на каждое настоящее число",
+      "Пропуски (None) и мусор (\"мусор\") в выводе появляться не должны",
+      "Настоящие числа нужно отобрать циклом for и условием if, а не печатать готовые значения"
+    ];
+  },
+  code: function(v) {
+    return "steps1 = " + v.steps1 + "\n" +
+           "steps2 = " + v.steps2 + "\n" +
+           "steps3 = " + v.steps3 + "\n" +
+           "\n" +
+           "data = [steps1, None, steps2, \"мусор\", steps3, None, \"мусор\"]\n" +
+           "for x in data:\n" +
+           "    if x is not None and x != \"мусор\":\n" +
+           "        print(x)\n";
+  },
+  need: ["for", "if"],
+  needMsg: "Задание на чистку данных: перебери список data циклом for и отбери настоящие числа условием if.",
+  starter: "steps1 = 0\n" +
+           "steps2 = 0\n" +
+           "steps3 = 0\n" +
+           "\n" +
+           "data = [steps1, None, steps2, \"мусор\", steps3, None, \"мусор\"]\n" +
+           "# напечатай только настоящие числа, каждое с новой строки\n",
+  hints: [
+    "Перебери список data обычным циклом `for x in data:`. На каждом шаге x — очередная запись.",
+    "Внутри цикла отличи настоящие числа от пропусков и мусора: соедини две проверки словом and, чтобы один if отбрасывал и None, и \"мусор\"."
+  ]
+},
+
+{
+  id: "hw-robot-points",
+  after: "data-3",
+  emoji: "🤖",
+  title: "Очки команд на турнире",
+  tag: "группировка данных",
+  params: [
+    { k: "a1", min: 1, max: 9 },
+    { k: "a2", min: 1, max: 9 },
+    { k: "o1", min: 1, max: 9 },
+    { k: "o2", min: 1, max: 9 },
+    { k: "s1", min: 1, max: 9 },
+    { k: "s2", min: 1, max: 9 }
+  ],
+  goal: function(v) {
+    return "Робот-судья на школьном турнире по робофутболу записывал, сколько очков заработала команда в каждом матче. Записи идут подряд: Акулы — " +
+      v.a1 + " " + ru(v.a1, "очко", "очка", "очков") + ", Орлы — " +
+      v.o1 + " " + ru(v.o1, "очко", "очка", "очков") + ", Соколы — " +
+      v.s1 + " " + ru(v.s1, "очко", "очка", "очков") + ", снова Акулы — " +
+      v.a2 + " " + ru(v.a2, "очко", "очка", "очков") + ", снова Соколы — " +
+      v.s2 + " " + ru(v.s2, "очко", "очка", "очков") + " и снова Орлы — " +
+      v.o2 + " " + ru(v.o2, "очко", "очка", "очков") + ". " +
+      "Сложи очки каждой команды и напечатай тремя строками: сначала сумму Акул, потом Орлов, потом Соколов.";
+  },
+  list: function() {
+    return [
+      "Печатается ровно три строки: суммы Акул, Орлов и Соколов — именно в этом порядке",
+      "Каждая строка — одно число, без слов и названий команд",
+      "Суммы считает программа: перебери записи циклом for и накопи очки в словаре"
+    ];
+  },
+  code: function(v) {
+    return "a1 = " + v.a1 + "\n" +
+      "a2 = " + v.a2 + "\n" +
+      "o1 = " + v.o1 + "\n" +
+      "o2 = " + v.o2 + "\n" +
+      "s1 = " + v.s1 + "\n" +
+      "s2 = " + v.s2 + "\n" +
+      "\n" +
+      "results = [(\"Акулы\", a1), (\"Орлы\", o1), (\"Соколы\", s1), (\"Акулы\", a2), (\"Соколы\", s2), (\"Орлы\", o2)]\n" +
+      "totals = {}\n" +
+      "for team, points in results:\n" +
+      "    if team in totals:\n" +
+      "        totals[team] += points\n" +
+      "    else:\n" +
+      "        totals[team] = points\n" +
+      "\n" +
+      "print(totals[\"Акулы\"])\n" +
+      "print(totals[\"Орлы\"])\n" +
+      "print(totals[\"Соколы\"])\n";
+  },
+  need: ["for", "if", "{"],
+  needMsg: "Задание на группировку: заведи словарь через {}, перебери записи циклом for и накапливай суммы с помощью if.",
+  starter: "a1 = 0  # очки Акул в первом матче\n" +
+    "a2 = 0  # очки Акул во втором матче\n" +
+    "o1 = 0  # очки Орлов в первом матче\n" +
+    "o2 = 0  # очки Орлов во втором матче\n" +
+    "s1 = 0  # очки Соколов в первом матче\n" +
+    "s2 = 0  # очки Соколов во втором матче\n" +
+    "\n" +
+    "results = [(\"Акулы\", a1), (\"Орлы\", o1), (\"Соколы\", s1), (\"Акулы\", a2), (\"Соколы\", s2), (\"Орлы\", o2)]\n" +
+    "# сложи очки каждой команды и напечатай тремя строками: Акулы, Орлы, Соколы\n",
+  hints: [
+    "Заведи пустой словарь `totals = {}`. Ключ — название команды, значение — сколько очков она уже накопила.",
+    "Пройди по записям циклом `for team, points in results:`. Если `team` уже есть в словаре — прибавь `points` к старому значению, иначе запиши `points` как первое значение."
+  ]
 }
 ];
 
@@ -23111,7 +24739,16 @@ var ALGO_GROUPS = [
   { id:"oge",    em:"📄", title:"Формат ОГЭ",
     why:"Каркас снят с открытого банка ФИПИ: признак через систему счисления, обязательное «NO», ограничения числами." },
   { id:"ege",    em:"🎓", title:"Типы ЕГЭ",
-    why:"Свои формулировки по духу экзамена — только те типы, где надо написать программу: последовательности, делители, строки, системы счисления." }
+    why:"Свои формулировки по духу экзамена — только те типы, где надо написать программу: последовательности, делители, строки, системы счисления." },
+  /* Три темы, которых до 1.77.0 не было вовсе, и ровно про них стояла оговорка
+     «кодирование информации сюда не входит». Задачи лежат в js/algo-exam.js —
+     почему отдельным файлом, написано в его шапке. */
+  { id:"info",   em:"📦", title:"Кодирование информации",
+    why:"Биты, байты и объём файла. Формулу здесь не заучивают, а выполняют шагами — и видно, откуда она берётся." },
+  { id:"logic",  em:"🔀", title:"Логика",
+    why:"Таблицы истинности и импликация. Самая непонятная часть школьной логики становится понятной на числах." },
+  { id:"graph",  em:"🗺", title:"Графы",
+    why:"Кто с кем связан, куда можно дойти и сколькими путями. Один обход в ширину закрывает три разных вопроса." }
 ];
 function algoList(){ return (window.ALGO || []); }
 function algoById(id){
@@ -23129,19 +24766,22 @@ function screenAlgo(){
     '<h1>🧮 Алгоритмы, ОГЭ и ЕГЭ</h1></div>' +
     '<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
     '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
-    'сортировка, цена алгоритма и типовые задания экзамена. Заходить можно с любого места ' +
-    'курса — всё, что нужно, объясняется прямо в задании.</p>';
+    'сортировка, цена алгоритма, кодирование информации, логика, графы и типовые задания ' +
+    'экзамена. Заходить можно с любого места курса — всё, что нужно, объясняется прямо ' +
+    'в задании.</p>';
 
   /* ⚠️ Граница обещания стоит ДО заданий, а не мелким шрифтом внизу. */
   h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
     '<li><b>Закрываем ту часть, где надо написать программу</b> (в кодификаторе — КЭС 3.2) ' +
     'и алгоритмику. Каркас заданий снят с открытого банка ФИПИ: формулировки наши, структура их.</li>' +
-    '<li><b>Не закрываем экзамен целиком.</b> В ОГЭ пятнадцать заданий, и большинство про ' +
-    'кодирование информации, таблицы и файлы. Это не программирование, и мы этого не умеем.</li>' +
+    '<li><b>Не закрываем экзамен целиком.</b> С 1.77.0 добавлены кодирование информации, ' +
+    'логика и графы — их тут решают программой, и наш судья их проверяет. Чего по-прежнему нет: ' +
+    '<b>электронные таблицы</b>. Их проверять нечем — движок умеет запускать Python, а не считать ' +
+    'формулы Excel.</li>' +
     '<li><b>Номер задания не называем.</b> Нумерация между годами меняется, а сверить её ' +
     'по спецификации мы пока не смогли — она лежит архивом. Поэтому «в формате ОГЭ», а не «задание №».</li>' +
-    '<li><b>Типы ЕГЭ — свои формулировки по духу экзамена.</b> Мы берём только те типы, ' +
-    'где надо написать программу; кодирование информации и задания с файлами — не наши. ' +
+    '<li><b>Типы ЕГЭ — свои формулировки по духу экзамена.</b> Мы берём те типы, ' +
+    'где ответ считает программа; электронные таблицы — не наши. ' +
     'На настоящем экзамене — настоящий Python: то, что ты пишешь здесь, там работает так же.</li>' +
     '<li><b>Проверка гоняет программу и на скрытых данных.</b> Совпасть должен способ, ' +
     'а не один напечатанный ответ — ровно как на экзамене.</li>' +
@@ -29051,6 +30691,439 @@ function wireAboutFoot(box){
     b.onclick = screenAbout;
   });
 }
+/* ---- живое окно редактора на вывеске ----
+   Единственная «картинка» первого экрана — и она не картинка. У всех
+   конкурентов там фотография ребёнка за ноутбуком; снимать нам некого, а
+   сток выглядит как сток. Зато мы умеем то, чего не умеет ни один из них:
+   показать сам продукт прямо на витрине, потому что продукт — это и есть
+   страница в браузере.
+
+   ⚠️ Код здесь выполняется НАСТОЯЩИМ движком через Runtime, как в уроке.
+   Это не украшение, а страховка от вранья: скриншот живёт своей жизнью и
+   через полгода показывает то, чего в продукте уже нет, а это окно сломается
+   вместе с движком — то есть никогда не соврёт.
+
+   Две кнопки — два обещания вывески. «Запустить» доказывает «код работает
+   сразу», «А если ошибиться» доказывает «ошибки объясняются словами»: то же
+   самое расхождение, тем же русским текстом, что увидит ребёнок в уроке. */
+var LAND_DEMO_OK =
+  'звёзд = 5\n' +
+  '\n' +
+  'for i in range(1, звёзд + 1):\n' +
+  '    print("★" * i)\n' +
+  '\n' +
+  'print("Готово!")';
+/* Сломанная версия отличается ровно одним знаком — пропущенным двоеточием.
+   Так и задумано: родитель должен увидеть, что тренажёр ловит не «что-то
+   пошло не так», а конкретную опечатку в конкретной строке. */
+var LAND_DEMO_BAD = LAND_DEMO_OK.replace("звёзд + 1):", "звёзд + 1)");
+
+function landCodeHTML(code){
+  var lines = code.split("\n"), nums = "";
+  for (var i = 0; i < lines.length; i++) nums += (i + 1) + (i < lines.length - 1 ? "\n" : "");
+  return '<div class="dwnums">' + nums + '</div><pre><code>' + hl(code) + '</code></pre>';
+}
+/* Вывод печатается построчно, а не появляется целиком: программа у нас
+   действительно выполняется по строкам, и глаз должен успеть связать строку
+   кода со строкой вывода. Кому мельтешение мешает — системная настройка
+   «меньше движения» выключает эффект целиком. */
+function landRun(code, out, instant){
+  var r = Runtime.get("mini").run(code, {});
+  if (r.error){
+    out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
+    return;
+  }
+  var lines = (r.output || "").replace(/\n+$/, "").split("\n");
+  var calm = false;
+  try { calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){}
+  /* Построчная печать продаёт «код выполняется прямо сейчас», но только пока
+     строк мало. На шестидесяти строках проекта она превращается в десять
+     секунд ожидания результата, за которые со страницы уходят: там вывод
+     показывается сразу. */
+  if (instant || lines.length > 16 || calm || typeof setInterval !== "function"){
+    out.textContent = lines.join("\n");
+    return;
+  }
+  var i = 0;
+  out.innerHTML = '<span class="dwcaret"></span>';
+  var t = setInterval(function(){
+    /* Экран мог смениться, пока строки печатались: тогда таймер пишет в
+       выброшенный из документа узел, и его надо снять, а не оставить тикать. */
+    if (!out.isConnected && !(document.body && document.body.contains(out))) return clearInterval(t);
+    i++;
+    out.innerHTML = esc(lines.slice(0, i).join("\n")) +
+      (i < lines.length ? '<span class="dwcaret"></span>' : "");
+    if (i >= lines.length) clearInterval(t);
+  }, 160);
+}
+function landDemoHTML(){
+  return '<figure class="demowin" id="landdemo">' +
+    '<figcaption class="dwhead"><span class="dwdots"><i></i><i></i><i></i></span>' +
+      '<b>Урок 11 · Цикл for</b>' +
+      '<span class="dwtag">это не картинка — код правда работает</span></figcaption>' +
+    '<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
+    '<div class="dwbar">' +
+      '<button class="dwbtn go" data-dw="run">▶ Запустить</button>' +
+      '<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
+      '<span class="dwhint">можно нажимать сколько угодно</span>' +
+    '</div>' +
+    '<div class="dwout" aria-live="polite"><span class="dwwait">Нажми «▶ Запустить» — программа выполнится прямо здесь.</span></div>' +
+  '</figure>' +
+  '<p class="dwnote">Так выглядит любой пример в уроке: нажал — увидел результат. ' +
+  'Ни установки Python, ни редактора, ни командной строки.</p>';
+}
+function wireLandDemo(){
+  var win = document.getElementById("landdemo");
+  if (!win) return;
+  var codeBox = win.querySelector(".dwcode"),
+      out     = win.querySelector(".dwout"),
+      runBtn  = win.querySelector('[data-dw="run"]'),
+      brkBtn  = win.querySelector('[data-dw="break"]'),
+      hint    = win.querySelector(".dwhint"),
+      broken  = false;
+
+  runBtn.onclick = function(){ landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out); };
+  brkBtn.onclick = function(){
+    broken = !broken;
+    codeBox.innerHTML = landCodeHTML(broken ? LAND_DEMO_BAD : LAND_DEMO_OK);
+    brkBtn.textContent = broken ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
+    hint.textContent = broken
+      ? "убрали двоеточие в третьей строке"
+      : "можно нажимать сколько угодно";
+    landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out);
+  };
+  /* Первый запуск делаем сами. Вывеску читают, а не изучают: если ждать
+     нажатия, большая часть посетителей уйдёт со страницы, так и не увидев
+     единственное доказательство, которое у нас есть. */
+  landRun(LAND_DEMO_OK, out);
+}
+/* ---- появление блоков при прокрутке ----
+   Страница длинная: восемь разделов подряд одинаковой плотности сливаются в
+   сплошной текст. Сдвиг на десяток пикселей в момент, когда раздел въезжает
+   в экран, говорит глазу «начался новый кусок» без единого лишнего слова.
+   Без IntersectionObserver (и в тестовом jsdom) всё просто показывается. */
+function wireReveal(root){
+  var els = (root || document).querySelectorAll(".rv");
+  if (typeof IntersectionObserver !== "function"){
+    els.forEach(function(e){ e.classList.add("in"); });
+    return;
+  }
+  var io = new IntersectionObserver(function(list){
+    list.forEach(function(e){
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      io.unobserve(e.target);
+    });
+  }, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 });
+  els.forEach(function(e){ io.observe(e); });
+}
+/* ---- вкладки на вывеске ----
+   Заведены по жалобе фаундера 06.09.2026 на раздел «Взрослому»: там стояло
+   восемь одинаковых карточек, и «их не будет читать никто, слишком много».
+   Он прав, и это не про размер шрифта. Восемь равных карточек — это отказ
+   выбирать за читателя: родителю показывают ключ наставника, репетитору —
+   потолок экранного времени, и каждый читает семь восьмых чужого.
+   Вкладка спрашивает «а вы кто» и показывает только своё.
+   ⚠️ Это НЕ вкладки верхней панели. Тех ровно три и станет больше не может
+   (за этим следит тест); эти живут внутри страницы и к навигации сайта
+   отношения не имеют — отсюда свой класс .ltab. */
+function landTabsHTML(items, cls, label){
+  var h = '<div class="ltabs' + (cls ? " " + cls : "") + '" role="tablist">' +
+    (label ? '<span class="ltlbl">' + label + '</span>' : "");
+  items.forEach(function(t, i){
+    h += '<button class="ltab' + (i ? "" : " on") + '" role="tab" data-lt="' + i + '"' +
+      (t.vars ? ' style="' + t.vars + '"' : "") +
+      ' aria-selected="' + (i ? "false" : "true") + '">' + t.label + '</button>';
+  });
+  return h + '</div>';
+}
+/* Одно место, где вкладки оживают, и одно правило: показана ровно одна.
+   Обработчик зовёт render(i) — что нарисовать, знает вызывающий. */
+function wireLandTabs(box, render){
+  if (!box) return;
+  var tabs = box.querySelectorAll(".ltab");
+  tabs.forEach(function(b){
+    b.onclick = function(){
+      tabs.forEach(function(x){
+        x.classList.remove("on");
+        x.setAttribute("aria-selected", "false");
+      });
+      b.classList.add("on");
+      b.setAttribute("aria-selected", "true");
+      render(+b.getAttribute("data-lt"));
+    };
+  });
+  render(0);
+}
+/* ---- витрина: что ребёнок соберёт сам ----
+   Вторая вещь на вывеске, которую конкуренты показать не могут. У Айтигенио
+   есть страница «что создают ученики» — карусель СКРИНШОТОВ с подписями. У
+   нас работ настоящих учеников пока нет и выдумывать их нельзя, зато есть
+   пять проектов курса, и каждый — законченная программа, которая печатает
+   результат. Она тут же и выполняется: родитель видит не картинку итога, а
+   итог.
+   ⚠️ Код берётся из решения ПОСЛЕДНЕГО шага проекта, а не переписан рядом:
+   переписанный разошёлся бы с курсом на первой же правке. Игры-проекты
+   (kind:"game") отсюда выброшены — они спрашивают ходы через input(), и без
+   человека у них нет вывода. */
+function landShowcase(){
+  return (window.PROJECTS || []).filter(function(p){
+    return p.kind !== "game" && p.world >= 1 && p.world <= 5 && p.steps && p.steps.length;
+  }).sort(function(a, b){ return a.world - b.world; });
+}
+function landShowcaseHTML(){
+  var list = landShowcase();
+  if (!list.length) return "";
+  return '<div class="showcase" id="showcase">' +
+    landTabsHTML(list.map(function(p){
+      return { vars: landWorldVars(p.world),
+               label: '<span class="lte">' + p.emoji + '</span>' +
+                      '<span class="ltt"><i>Мир ' + p.world + '</i><b>' + esc(p.title) + '</b></span>' };
+    }), "wld") +
+    '<div class="showwin" id="showwin"></div></div>';
+}
+function landShowcaseRender(i){
+  var p = landShowcase()[i], box = document.getElementById("showwin");
+  if (!p || !box) return;
+  var code = p.steps[p.steps.length - 1].solution || "";
+  var rows = code.split("\n").length;
+  box.setAttribute("style", landWorldVars(p.world));
+  /* Код и результат стоят РЯДОМ, а не код под кнопкой. Жалоба фаундера
+     06.09.2026: «окно большое в горизонталь, а код справа кусочек» — вывод
+     программы узкий (тридцать знаков в строке), и на всю ширину страницы он
+     выглядел как пустая коробка. Две колонки заполняют ширину и заодно
+     отвечают на главный вопрос родителя без единого нажатия: вот что
+     получилось и вот сколькими строками. */
+  box.innerHTML =
+    '<div class="shhead"><span class="shico">' + p.emoji + '</span>' +
+      '<div class="shttl"><div class="shkick">Мир ' + p.world + ' · проект в конце мира</div>' +
+      '<b>' + esc(p.title) + '</b><p>' + esc(p.tagline || "") + '</p></div></div>' +
+    '<div class="shbody">' +
+      '<div class="shcol"><div class="shlbl">Что печатает программа</div>' +
+        '<div class="ldout" id="shout" aria-live="polite"></div></div>' +
+      '<div class="shcol"><div class="shlbl">Код, который собрал ребёнок · ' + rows + ' ' +
+        plural(rows, "строка", "строки", "строк") + '</div>' +
+        '<div class="ldcode"><div class="dwcode">' + landCodeHTML(code) + '</div></div></div>' +
+    '</div>' +
+    '<div class="dwbar"><button class="dwbtn go" data-sh="run">▶ Запустить заново</button>' +
+      '<span class="dwhint">программа выполняется настоящим движком, а не показывает ' +
+      'записанный результат</span></div>';
+  var out = box.querySelector(".ldout");
+  box.querySelector('[data-sh="run"]').onclick = function(){ landRun(code, out, true); };
+  landRun(code, out, true);
+}
+/* ---- взрослому: три роли вкладками ----
+   ⚠️ Дверей в продукте ДВЕ, а не три: родитель входит по коду ребёнка,
+   наставник и администратор — одним паролем в «Панель наставника». Ролей при
+   этом три, потому что дела за одной дверью разные: репетитор смотрит группу,
+   а администратор снимает замки и подключает сервер. Врать про третью дверь
+   нельзя, поэтому у каждой вкладки прямо написано, как в неё попадают. */
+var LAND_ROLES = [
+  { em:"👨‍👩‍👦", tab:"Родителю", how:"вход по коду ребёнка или по ссылке от учителя",
+    lede:"Видно, чем ребёнок занят прямо сейчас, и что было за неделю. Проверять код " +
+         "руками не нужно — всё проверил движок; ваше дело посмотреть, с кем поговорить.",
+    items:[
+      /* ⚠️ Первой строкой — «сейчас», и это указание фаундера 06.09.2026:
+         «очень важно». Он прав: вопрос, с которым родитель открывает кабинет,
+         звучит не «сколько часов за неделю», а «он сейчас занимается или в
+         игры играет». Всё считается из обычного снимка прогресса, ребёнок
+         ничего дополнительного не отправляет (presenceDetailHTML). */
+      ["🟢","Видно прямо сейчас","открыт ли тренажёр и на каком уроке ребёнок сидит в эту минуту, что он уже сдал сегодня и идёт ли занятие. Строка обновляется сама, пока кабинет открыт."],
+      ["📺","Его экран — только с его согласия","сам код и вывод показываются, когда ребёнок нажал «Показать экран». Подглядывать через плечо тренажёр не умеет и уметь не будет: он всегда показывает ребёнку, что его видят."],
+      ["📅","Отчёт за неделю","сколько времени, какие уроки, где застрял. Точное время в минутах и секундах, а не «занимался / не занимался»."],
+      ["💬","О чём спросить за ужином","готовый вопрос по тому, что ребёнок сегодня делал, — чтобы разговор был не «ну как, позанимался?»."],
+      ["⏱","Занятие, а не поток уроков","20, 30 или 45 минут: тренажёр сам собирает план, зовёт на перерыв, сжимает план, если время уходит, и меряет, сколько занятие заняло на самом деле."],
+      ["🗓","Расписание и потолок дня","в какие дни занимаемся и по сколько; сколько минут в день. Жёсткий запрет включается отдельно и никогда не обрывает начатый урок."],
+      ["📝","Задание ребёнку","выбрать задачи и отдать их — он увидит их на Главном рядом с «Продолжить»."]
+    ] },
+  { em:"👨‍🏫", tab:"Репетитору и учителю", how:"вход по паролю, «Панель наставника»",
+    demo:"Домашка, которую не спишешь: одна задача — у каждого свои числа. " +
+         "Нажмите «другой ученик».",
+    lede:"Всё, что есть у родителя, плюс группа. Это рабочее место, а не витрина: " +
+         "оно отвечает на вопрос «с кем сегодня поговорить».",
+    items:[
+      ["👥","Группа","у каждого ученика своя ссылка и свой код. Видно, кто где идёт и кто затих, отчёты по всем сразу одной таблицей."],
+      ["📺","Живое занятие","пока ребёнок занимается, видно, что происходит прямо сейчас — но только если он сам нажал «Показать экран наставнику». Скрытого наблюдения здесь нет."],
+      ["📝","Домашка","банк задач-близнецов: у каждого свои числа, ответ считает движок. Выдаётся одному или всей группе, видно, кто сдал."],
+      ["⚖️","Это не табель","«посмотреть в первую очередь» — приглашение поговорить, а не список отстающих. Вывод делаете вы, мы его за вас не выносим."],
+      ["🔐","Имён детей на сервере нет","там код и результаты. Подпись «Петя, 5 класс» стоит у вас на устройстве и никуда не уходит."]
+    ] },
+  { em:"🛠", tab:"Администратору", how:"тому, кто ставит тренажёр себе, семье или кружку",
+    lede:"Тренажёр — статический сайт: его можно просто открыть по ссылке, а можно " +
+         "поставить себе целиком.",
+    items:[
+      ["🔓","Снять замки","открыть все уроки разом, если ребёнок идёт не с начала. Звёзды при этом не ставятся: решать он всё равно будет сам."],
+      ["♻️","Зачесть или сбросить","отметить уже сделанное на три звезды или обнулить прогресс — это настройка устройства, на сервер она не уходит."],
+      ["💾","Перенос файлом","прогресс выгружается и загружается файлом. Это запасной путь на случай, когда сервера нет вовсе."],
+      ["☁️","Свой сервер за полчаса","одна функция в Яндекс Облаке, один файл без единой библиотеки. Адрес правится в одном месте — <code>js/cloud-config.js</code>."],
+      ["📵","И без сервера тоже всё работает","без него тренажёр остаётся полностью рабочим: прогресс лежит в браузере, а сайт ставится иконкой на домашний экран и открывается без сети."]
+    ] }
+];
+function landRolesHTML(){
+  return '<div class="roles" id="roles">' +
+    landTabsHTML(LAND_ROLES.map(function(r){
+      return { label: '<span class="lte">' + r.em + '</span>' + r.tab };
+    })) +
+    '<div class="rolepane" id="rolepane"></div></div>';
+}
+function landRolesRender(i){
+  var r = LAND_ROLES[i], box = document.getElementById("rolepane");
+  if (!r || !box) return;
+  box.innerHTML =
+    '<div class="rolein' + (r.demo ? "" : " one") + '"><div class="roleleft">' +
+      '<div class="rolehow">🔑 ' + esc(r.how) + '</div>' +
+      '<p class="rolelede">' + r.lede + '</p>' +
+      '<ul class="rolelist">' + r.items.map(function(it){
+        return '<li><span class="rlem">' + it[0] + '</span>' +
+          '<span class="rltx"><b>' + it[1] + '</b> — ' + it[2] + '</span></li>';
+      }).join("") + '</ul></div>' +
+      /* Живой пример стоит только там, где он ЕСТЬ по-настоящему. Придумывать
+         родителю отчёт про несуществующего ребёнка на витрине нельзя: это
+         ровно тот сорт вранья, от которого продукт отказывается внутри
+         (в панели наставника имён детей нет). У репетитора же демонстрировать
+         нечего выдумывать — задача-близнец собирается настоящим генератором,
+         числа из семени, ответ считает движок. */
+      (r.demo ? '<div class="roledemo"><div class="rdhead">' + r.demo + '</div>' +
+        '<div id="hwdemo"></div></div>' : "") +
+    '</div>';
+  if (r.demo) landHwRender();
+}
+/* Цвет мира. Пять серых карточек не читаются как ПУТЬ: «Мир 3» отличается от
+   «Мира 4» только цифрой, а должен отличаться местом, куда ты идёшь. Оттенки
+   объявлены в css/style.css рядом с вывеской и живут по обеим темам. */
+function landWorldVars(n){
+  var i = ((n - 1) % 5) + 1;
+  return '--wc:var(--w' + i + ');--wcbg:var(--w' + i + 'bg)';
+}
+/* ---- живое: черепашка рисует ----
+   Самое красивое, что умеет продукт, и на вывеске его не было вовсе. Здесь
+   оно к тому же несёт довод: под каждым рисунком лежит пять-шесть строк, и
+   их видно кнопкой. Родитель, который «в программировании не понимает»,
+   по этим шести строкам понимает, что задача ребёнку по силам. */
+var LAND_DRAW = [
+  { em:"⭐", name:"Звезда",
+    code:'color("yellow")\nwidth(4)\nfor i in range(5):\n    forward(190)\n    right(144)\n' },
+  { em:"🌸", name:"Цветок",
+    code:'color("pink")\nwidth(2)\nfor i in range(36):\n    for j in range(4):\n        forward(80)\n        right(90)\n    right(10)\n' },
+  { em:"🌈", name:"Радуга",
+    code:'width(3)\ncvet = ["red", "orange", "yellow", "green", "cyan", "blue", "purple"]\nfor i in range(80):\n    color(cvet[i % 7])\n    forward(i * 2.6)\n    right(59)\n' }
+];
+function landDrawHTML(){
+  return '<div class="ldlive" id="draw">' +
+    landTabsHTML(LAND_DRAW.map(function(d){
+      return { label: '<span class="lte">' + d.em + '</span>' + d.name };
+    }), "ltsm", "Что рисуем:") +
+    '<div class="drawwin"><canvas id="drawc" class="drawc"></canvas>' +
+      '<div class="drawside"><div class="dwcode" id="drawcode"></div>' +
+      '<button class="dwbtn go" id="drawgo">▶ Нарисовать заново</button>' +
+      '<p class="livenote">Столько строк — и весь рисунок. Это одиннадцатый урок первого мира.</p>' +
+    '</div></div></div>';
+}
+function landDrawRender(i){
+  var d = LAND_DRAW[i], c = document.getElementById("drawc"),
+      box = document.getElementById("drawcode"), go = document.getElementById("drawgo");
+  if (!d || !c || !box) return;
+  box.innerHTML = landCodeHTML(d.code.replace(/\n$/, ""));
+  function run(){
+    var eng = Runtime.get("mini"), t = eng.newTurtle ? eng.newTurtle() : null;
+    if (!t) return;
+    eng.run(d.code, { turtle:t });
+    animateTurtle(c, t);
+  }
+  if (go) go.onclick = run;
+  run();
+}
+/* ---- живое: угадай вывод ----
+   Разминка из продукта, слово в слово. Здесь она показывает главную механику
+   курса целиком: посетитель пишет ответ, движок выполняет программу и
+   показывает РАСХОЖДЕНИЕ — не «неверно», а чем одно отличается от другого.
+   Ровно это ребёнок видит по кнопке «✓ Проверить». */
+var LAND_WARM_IDS = ["predict-strings", "predict-loop", "predict-order"];
+function landWarms(){
+  var by = {};
+  (window.WARMUPS || []).forEach(function(w){ by[w.id] = w; });
+  return LAND_WARM_IDS.map(function(id){ return by[id]; }).filter(Boolean);
+}
+function landWarmHTML(){
+  var list = landWarms();
+  if (!list.length) return "";
+  return '<div class="ldlive" id="warm">' +
+    landTabsHTML(list.map(function(w, i){
+      return { label: '<span class="lte">' + w.emoji + '</span>' + "Задача " + (i + 1) };
+    }), "ltsm", "Разминка:") +
+    '<div class="warmwin" id="warmwin"></div></div>';
+}
+function landWarmRender(i){
+  var w = landWarms()[i], box = document.getElementById("warmwin");
+  if (!w || !box) return;
+  var want = ((Runtime.get("mini").run(w.code, {}) || {}).output || "").replace(/\n+$/, "");
+  box.innerHTML =
+    '<div class="warmask"><div class="dwcode">' + landCodeHTML(w.code.replace(/\n$/, "")) + '</div>' +
+      '<div class="warmans"><label for="warmin">Что напечатает программа?</label>' +
+      '<textarea id="warmin" rows="' + Math.max(2, want.split("\n").length) + '" spellcheck="false" ' +
+        'placeholder="по строке на каждый print"></textarea>' +
+      '<div class="dwbar"><button class="dwbtn go" id="warmgo">✓ Проверить</button>' +
+        '<button class="dwbtn" id="warmshow">Показать ответ</button></div>' +
+      '<div class="warmres" id="warmres" aria-live="polite"></div></div></div>';
+  var ta = box.querySelector("#warmin"), res = box.querySelector("#warmres");
+  function norm(s){
+    return String(s || "").replace(/\r/g, "").split("\n")
+      .map(function(l){ return l.trim(); }).join("\n").replace(/\n+$/, "");
+  }
+  box.querySelector("#warmgo").onclick = function(){
+    var mine = norm(ta.value);
+    if (!mine){ res.className = "warmres show warn"; res.textContent = "Сначала напиши ответ — хоть одну строку."; return; }
+    if (mine === norm(want)){
+      res.className = "warmres show ok";
+      res.innerHTML = '<b>Сошлось ✓</b>' + esc(w.note || "");
+      return;
+    }
+    /* Показываем не «неверно», а расхождение — это и есть механика продукта. */
+    res.className = "warmres show bad";
+    res.innerHTML = '<b>Не сошлось</b>' +
+      '<div class="warmdiff"><div><i>у тебя</i><pre>' + esc(mine) + '</pre></div>' +
+      '<div><i>а печатает</i><pre>' + esc(want) + '</pre></div></div>' +
+      '<span class="warmwhy">' + esc(w.note || "") + '</span>';
+  };
+  box.querySelector("#warmshow").onclick = function(){
+    ta.value = want;
+    res.className = "warmres show ok";
+    res.innerHTML = '<b>Вот что печатает программа</b>' + esc(w.note || "");
+  };
+}
+/* ---- живое: задача-близнец для репетитора ----
+   Механика, которую репетитор покупает сам по себе: домашка, которую нельзя
+   списать у соседа, потому что у соседа другие числа. Здесь она работает
+   по-настоящему — числа из семени, а правильный ответ считает движок,
+   прогоняя эталонную программу. Никто не вводит ответ руками, в том числе и
+   мы на этой странице. */
+var landHwSeed = 1;
+function landHwRender(){
+  var box = document.getElementById("hwdemo");
+  if (!box || !window.HW) return;
+  var item = HW.byId("hw-konfety") || (window.HOMEWORK || [])[0];
+  if (!item) return;
+  var b = HW.build(item, landHwSeed, function(code){ return Runtime.get("mini").run(code, {}); });
+  if (!b || b.error) return;
+  box.innerHTML =
+    '<div class="hwtop"><span class="hwem">' + item.emoji + '</span>' +
+      '<div><b>' + esc(b.title) + '</b><i>ученик №' + landHwSeed + '</i></div>' +
+      '<button class="dwbtn" id="hwnext">🎲 Другой ученик</button></div>' +
+    '<p class="hwgoal">' + esc(b.goal) + '</p>' +
+    '<div class="hwans"><i>правильный ответ движок уже посчитал</i><pre>' +
+      esc(b.lines.join("\n")) + '</pre></div>';
+  box.querySelector("#hwnext").onclick = function(){ landHwSeed++; landHwRender(); };
+}
+/* Шапка раздела в ДВЕ колонки: слева указатель и заголовок, справа лид.
+   Жалоба фаундера 06.09.2026: лид обрывался на 720 px при колонке в 1080 и
+   читался как сломанная вёрстка. Узкая строка нужна (длинную не читают), но
+   она обязана выглядеть решением, а не обрезкой, — поэтому справа от неё не
+   пустота, а заголовок слева. На узком экране колонки складываются. */
+function secHead(kick, title, lede){
+  return '<div class="secthead"><div class="sechl"><span class="seckick">' + kick + '</span>' +
+    '<h2>' + title + '</h2></div><p class="lede">' + lede + '</p></div>';
+}
+/* ================= вывеска ================= */
 function screenAbout(){
   enterScreen("home", "about");
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -29062,26 +31135,45 @@ function screenAbout(){
 
   var h = '<div class="land">';
 
-  h += '<div class="landhero">' +
-    '<div class="landkick">информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
-    '<h1>Информатика без репетитора</h1>' +
-    '<p class="landlede">' + c.lessons + ' ' + plural(c.lessons, "урок", "урока", "уроков") +
-      ' программирования на Python прямо в браузере. Код запускается сразу, ошибки ' +
-      'объясняются словами, а взрослый раз в неделю видит, занимался ребёнок или нет.</p>' +
-    '<div class="landcta">' +
-      (started
-        ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
-          '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-        : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
-          '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
-    '</div>' +
-    '<p class="landsub">Ничего не надо устанавливать: тренажёр целиком работает в браузере ' +
-    'на компьютере, планшете и телефоне. Python внутри свой — он не грузится из сети ' +
-    'и работает без интернета.</p>' +
-  '</div>';
+  /* --- первый экран: обещание слева, доказательство справа --- */
+  h += '<section class="landhero rv">' +
+    '<div class="lhaur" aria-hidden="true"></div>' +
+    '<div class="lhin"><div class="lhtext">' +
+      '<div class="landkick"><i></i>информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
+      '<h1>Информатика <span class="hlite">без репетитора</span></h1>' +
+      '<p class="landlede">' + c.lessons + ' ' + plural(c.lessons, "урок", "урока", "уроков") +
+        ' программирования на Python прямо в браузере. Код запускается сразу, ошибки ' +
+        'объясняются словами, а взрослый раз в неделю видит, занимался ребёнок или нет.</p>' +
+      '<div class="landcta">' +
+        (started
+          ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+          : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
+            '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
+      '</div>' +
+      /* Возражения, которые родитель проговаривает про себя, пока читает
+         заголовок. Отвечать на них абзацем ниже поздно — до абзаца он не
+         дойдёт, а до строчки фишек глаз доезжает за секунду.
+         ⚠️ «Сейчас бесплатно» — первая: у всех конкурентов ответ про деньги
+         стоит на первом экране, а молчание про них читается тревожнее любой
+         цены. Формулировка ровно та, что правда сегодня (docs/vyveska.md § 4:
+         оплаты в продукте нет вовсе), и ничего не обещает про завтра. */
+      '<ul class="landtrust">' +
+        '<li>🆓 Сейчас бесплатно</li>' +
+        '<li>⚡ Ничего не устанавливать</li>' +
+        '<li>✈️ Работает без интернета</li>' +
+        '<li>🔐 Ни почты, ни телефона</li>' +
+      '</ul>' +
+      /* Прямая дорога взрослому. Вывеску читает чаще всего он, а не ребёнок,
+         и вопрос «а мне-то что с этого» у него возникает на первом же экране.
+         Раньше ответ лежал за четырьмя разделами вниз, и фаундер дважды его
+         не нашёл — значит не найдёт и родитель. */
+      '<p class="landjump">Вы родитель, учитель или репетитор? ' +
+      '<button class="linkjump" data-land="adults">Что вы получите со своей стороны →</button></p>' +
+    '</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
+  '</section>';
 
-  /* --- продукт в числах. Строка длинная нарочно: это единственное место, где
-         объём курса виден целиком и сразу, без хождения по разделам. --- */
+  /* --- продукт в числах --- */
   var nums = [
     [c.lessons,  plural(c.lessons,  "урок", "урока", "уроков"),            "по порядку, от первой команды до своей программы"],
     [c.worlds,   plural(c.worlds,   "мир", "мира", "миров"),               "по двадцать уроков на одну большую тему"],
@@ -29093,179 +31185,174 @@ function screenAbout(){
     [c.games,    plural(c.games,    "игра", "игры", "игр"),                "и у каждой виден код"],
     [c.cheat,    plural(c.cheat,    "команда", "команды", "команд"),       "шпаргалка открывается поверх урока"]
   ];
-  h += '<div class="landnums">';
+  h += '<div class="landnums rv">';
   nums.forEach(function(n){
     h += '<div class="landnum"><b>' + n[0] + '</b><span>' + n[1] + '</span>' +
       '<i>' + esc(n[2]) + '</i></div>';
   });
   h += '</div>';
 
-  /* --- как проходит урок --- */
-  h += '<div class="landsect"><h2>Как проходит урок</h2>' +
-    '<p class="lede">Пятнадцать–двадцать минут, и всё внутри одной страницы. ' +
-    'Ни установки Python, ни редактора, ни командной строки.</p>' +
-    '<ol class="landsteps">' +
-    '<li><b>Читаешь объяснение</b><span>Короткая теория, а к ней живые примеры: ' +
-      'у каждого кнопка «▶ Запустить пример» — код срабатывает тут же, на месте.</span></li>' +
-    '<li><b>Решаешь задачу</b><span>Задача стоит списком требований, а не одной фразой: ' +
-      'видно, что именно должна делать программа.</span></li>' +
-    '<li><b>Запускаешь свой код</b><span>Сколько угодно раз, это ничего не стоит. Рядом со ' +
-      'строками написано, что каждая из них сделала.</span></li>' +
-    '<li><b>Жмёшь «✓ Проверить»</b><span>Не сошлось — тренажёр покажет, чем твой ответ ' +
-      'отличается от нужного. Подсказки идут по шагам: от намёка к ответу, а не сразу решение.</span></li>' +
-    '</ol>' +
-    '<div class="note"><b>Ошибка здесь — не ругань</b>Красный текст Python переведён на русский: ' +
-    'написано, в какой строке и что именно не сошлось. А если код работает не так, как думал, — ' +
-    'визуализатор пройдёт программу по шагам и покажет, что лежит в памяти.</div></div>';
+  /* --- четыре больших блока: то, чего нет у конкурентов ---
+         Заведены по указанию фаундера 06.09.2026: «надо выделить важное
+         большими блоками, чтобы бросалось в глаза». Он прав в том, что до
+         этого сильнейшие вещи продукта лежали строчками внутри карточек и
+         вкладок — их читал только тот, кто и так уже заинтересовался.
+         ⚠️ Отбор жёсткий: сюда идёт только то, чего у конкурентов НЕТ ни у
+         кого (офлайн, доказательство авторства, живой присмотр, чтение
+         вслух). Всё, что «как у всех», остаётся во вкладках ниже: большой
+         блок под общее место обесценивает и остальные три. */
+  h += '<div class="landsect rv">' +
+    secHead("Чего нет у других", "Четыре вещи, ради которых это и делалось",
+      "Курсов программирования для детей много, и почти всё в них устроено одинаково: " +
+      "живой преподаватель, расписание, интернет. Здесь по-другому в четырёх местах, и " +
+      "каждое из них — не обещание, а то, что уже работает.") +
+    '<div class="bigs">' +
 
-  /* --- направления. Отдельным разделом, а не карточкой в общей сетке.
-         Жалоба фаундера 06.09.2026: «мы же сделали и другие направления, и
-         ЕГЭ» — и он прав: экзамены, ИИ и проекты стояли одной строкой среди
-         разминок и игр, то есть выглядели развлечением рядом с уроками.
-         Вывеска, которая называется «информатика», обязана показать предмет
-         целиком, иначе она остаётся вывеской «Python для детей». --- */
-  h += '<div class="landsect"><h2>Не только язык</h2>' +
-    '<p class="lede">Python — ядро курса, но не весь он. Рядом стоят ещё три ' +
-    'направления, и каждое доведено до задач, а не до оглавления.</p>' +
-    '<div class="landgrid">' +
-    '<div class="landcard wide"><span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
-      '<p>Поиск, сортировка, системы счисления — и типовые задания обоих экзаменов: ' +
-      '<b>' + c.oge + '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. ' +
-      'Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами — ' +
-      'движок и так их считает, поэтому «837 шагов против 11» видно числом на экране.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">🤖</span><b>Ты и ИИ</b>' +
-      '<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
-      ' не про то, как попросить нейросеть, а про то, как принять её работу: прочитать ответ, ' +
-      'найти, где машина уверенно врёт, и доказать это проверкой. Рядом — <b>' + c.specs + '</b> ' +
-      plural(c.specs, "работа", "работы", "работ") + ' на приёмку: ребёнок пишет не код, ' +
-      'а что должно быть верно, и движок проверяет чужой код по его правилам.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">🏗</span><b>Проекты</b>' +
-      '<p><b>' + c.projects + '</b> больших ' + plural(c.projects, "программы", "программы", "программ") +
-      ' в несколько шагов: карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. ' +
-      'Собранное остаётся у ребёнка и его можно запустить и показать.</p></div>' +
-    '</div>' +
-    '<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
-    'Мы закрываем ту часть ОГЭ и ЕГЭ, где надо написать программу, и алгоритмику. ' +
-    'Кодирование информации, таблицы и работа с файлами сюда не входят. Номера заданий ' +
-    'не называем: нумерация между годами меняется.</div></div>';
+    '<div class="big"><span class="bigem">✈️</span>' +
+      '<b>Интернет не нужен вообще</b>' +
+      '<p>Python внутри свой: он не грузится из сети и не ставится на компьютер. ' +
+      'Весь курс со всеми уроками весит меньше двух мегабайт, ставится иконкой на ' +
+      'домашний экран и открывается в самолёте, на даче и в метро. Прогресс копится ' +
+      'на устройстве и догоняет сервер, когда сеть появится.</p>' +
+      '<span class="bigwhy">У курсов с живым преподавателем без сети занятия просто нет.</span></div>' +
+
+    '<div class="big"><span class="bigem">🔎</span>' +
+      '<b>Тренажёр не верит на слово</b>' +
+      '<p>Он записывает, <b>как шла работа</b>: сам ребёнок набирал решение или вставил ' +
+      'готовое, сколько раз запускал, где споткнулся. Плюс проверка понимания — ребёнка ' +
+      'просят предсказать, что напечатает <b>его собственная</b> программа. Само решение ' +
+      'сверяет движок, в том числе скрытыми проверками, которых в условии не видно.</p>' +
+      '<span class="bigwhy">Отсюда взрослый знает не «сделано», а «понял или списал».</span></div>' +
+
+    '<div class="big"><span class="bigem">👀</span>' +
+      '<b>Взрослый видит и настраивает всё</b>' +
+      '<p>Видно прямо сейчас: открыт ли тренажёр и на каком уроке ребёнок в эту минуту. ' +
+      'А в кабинете ставится рамка: дни недели, длина занятия 20/30/45 минут, ' +
+      '<b>каникулы</b> отрезками дат, потолок экранного времени на день и дата, к которой ' +
+      'надо успеть. Тренажёр сам собирает план под эту рамку.</p>' +
+      '<span class="bigwhy">Экран ребёнка — только с его согласия: он всегда видит, когда его видят.</span></div>' +
+
+    '<div class="big"><span class="bigem">🔊</span>' +
+      '<b>Читает вслух</b>' +
+      '<p>У каждой карточки урока есть кнопка 🔊 — она прочитает объяснение вслух. ' +
+      'Отдельно включается автоматическое чтение: тогда разбор ошибки читается сам, ' +
+      'и ребёнку не надо разбирать красный текст глазами. Звуковые сигналы синтезируются ' +
+      'на лету, файлов нет вовсе — поэтому звук работает и без сети.</p>' +
+      '<span class="bigwhy">Помогает тем, кто читает медленно, и младшим. Голос берётся у ' +
+      'браузера — есть не везде, и это честно сказано в самом тренажёре.</span></div>' +
+
+    '</div></div>';
+
+  /* --- как это работает: четыре вкладки вместо трёх разделов подряд.
+         Раньше «Как проходит урок» и «Не только язык» стояли отдельными
+         разделами и вместе занимали два экрана. Вкладки убирают высоту и
+         заодно дают место живому: черепашке и разминке, которых на вывеске
+         не было вовсе. --- */
+  h += '<div class="landsect rv">' +
+    secHead("Изнутри", "Как это работает",
+      "Урок — пятнадцать–двадцать минут внутри одной страницы. Ни установки Python, " +
+      "ни редактора, ни командной строки. Две средние вкладки можно потрогать прямо сейчас: " +
+      "там работает тот же движок, что и в уроке.") +
+    landTabsHTML([
+      { label:'<span class="lte">📘</span>Как проходит урок' },
+      { label:'<span class="lte">🐢</span>Код рисует' },
+      { label:'<span class="lte">🔮</span>Угадай вывод' },
+      { label:'<span class="lte">🧭</span>Не только Python' }
+    ], "how") +
+    '<div class="ldpane" id="howpane"></div></div>';
+
+  /* --- взрослому: три роли вкладками. Раньше здесь стояли восемь одинаковых
+         карточек, и это был отказ выбирать за читателя: родителю показывали
+         ключ наставника, репетитору — потолок экранного времени.
+         ⚠️ Стоит ТРЕТЬИМ блоком, а не предпоследним. Вывеску читает взрослый,
+         и его вопрос «а мне-то что» идёт сразу за «как это работает», а не
+         после четырёх разделов про ребёнка. Фаундер дважды не нашёл эти
+         вкладки внизу — значит не нашёл бы и родитель. --- */
+  h += '<div class="landsect rv" id="adults">' +
+    secHead("Кабинет взрослого", "Взрослому",
+      "У взрослого свой кабинет, отдельно от тренажёра ребёнка: ребёнок в него не " +
+      "заходит и ничего в нём не меняет. Выберите, кто вы, — покажем только ваше.") +
+    landRolesHTML() + '</div>';
 
   /* --- программа курса, прочитанная из CURRICULUM --- */
-  h += '<div class="landsect"><h2>Программа: ' + c.worlds + ' ' +
-    plural(c.worlds, "мир", "мира", "миров") + ', ' + c.lessons + ' ' +
-    plural(c.lessons, "урок", "урока", "уроков") + '</h2>' +
-    '<p class="lede">Уроки идут по порядку: следующий открывается, когда сдан предыдущий. ' +
-    'В конце каждого мира — босс, проект и сертификат.</p><div class="landworlds">';
+  h += '<div class="landsect rv">' +
+    secHead("Курс целиком", "Программа: " + c.worlds + " " +
+      plural(c.worlds, "мир", "мира", "миров") + ", " + c.lessons + " " +
+      plural(c.lessons, "урок", "урока", "уроков"),
+      "Уроки идут по порядку: следующий открывается, когда сдан предыдущий. " +
+      "В конце каждого мира — босс, проект и сертификат.") +
+    '<div class="landworlds">';
   CURRICULUM.forEach(function(w){
-    var names = w.lessons.slice(0, 5).map(function(l){ return l.title; }).join(" · ");
-    h += '<div class="landworld"><span class="lwico">' + w.icon + '</span>' +
+    var shown = w.lessons.slice(0, 4),
+        rest  = w.lessons.length - shown.length,
+        boss  = w.lessons.filter(function(l){ return l.boss; })[0];
+    h += '<div class="landworld" style="' + landWorldVars(w.n) + '">' +
+      '<span class="lwno">' + w.n + '</span>' +
+      '<span class="lwico">' + w.icon + '</span>' +
       '<div class="lwbody"><div class="lwkick">Мир ' + w.n + ' · ' + w.lessons.length + ' ' +
-        plural(w.lessons.length, "урок", "урока", "уроков") + '</div>' +
+        plural(w.lessons.length, "урок", "урока", "уроков") +
+        (boss ? ' · босс: ' + esc(boss.title) : "") + '</div>' +
       '<b>' + esc(w.title) + '</b>' +
       '<p>' + esc(w.desc) + '</p>' +
-      '<span class="lwlist">' + esc(names) + ' …</span></div></div>';
+      '<div class="lwlist">' +
+        shown.map(function(l){ return '<span>' + esc(l.title) + '</span>'; }).join("") +
+        (rest > 0 ? '<span class="more">и ещё ' + rest + '</span>' : "") +
+      '</div></div></div>';
   });
   h += '</div></div>';
 
-  /* --- всё, что вокруг сотни уроков. Список берётся из trainCards(), то есть
-         из того же места, откуда его берёт сам раздел «Тренировки»: две копии
-         разошлись бы на первой же правке. --- */
-  h += '<div class="landsect"><h2>Когда на урок нет сил</h2>' +
-    '<p class="lede">Сюда заходят между уроками, по настроению. Звёзд тут не дают ' +
-    'и по порядку проходить не надо, но день занятий засчитывается и здесь.</p>' +
-    '<div class="landgrid">';
-  /* Направления («Ты и ИИ», алгоритмы) отсюда выброшены нарочно: они стоят
-     выше отдельным разделом, а второй раз тем же шрифтом — это уже реклама. */
-  trainCards().filter(function(t){ return t.id !== "ai" && t.id !== "algo"; }).forEach(function(t){
-    h += '<div class="landcard"><span class="lcem">' + t.em + '</span>' +
-      '<b>' + esc(t.title) + '</b><p>' + esc(t.why) + '</p></div>';
-  });
-  h += '</div></div>';
+  /* --- витрина: что ребёнок соберёт сам. Вкладками, а не пятью карточками
+         подряд, — и каждая программа тут же выполняется. --- */
+  var showc = landShowcaseHTML();
+  if (showc){
+    h += '<div class="landsect rv">' +
+      secHead("Что получается", "Пять программ, которые ребёнок унесёт с собой",
+        "В конце каждого мира — проект: программа в несколько шагов, которую собирают " +
+        "за четыре урока. Ниже не картинка результата, а сам результат: программа " +
+        "выполняется прямо здесь, у вас в браузере.") + showc + '</div>';
+  }
 
-  /* --- что остаётся на руках. Раздел заведён по прямому указанию фаундера
-         06.09.2026 («не пропусти часть нашей работы»): портфолио, сертификаты,
-         своё задание, игра по ссылке и мастерская — это годы работы, и на
-         вывеске их не было вовсе. Для родителя это к тому же единственный
-         ответ на вопрос «а что он за это получит, кроме экранного времени». --- */
-  h += '<div class="landsect"><h2>Что остаётся на руках</h2>' +
-    '<p class="lede">Тренажёр, из которого нечего унести, — это игра. Отсюда уносят ' +
-    'собранные программы, распечатанные листы и задачи, которые ребёнок придумал сам.</p>' +
-    '<div class="landgrid">' +
-    '<div class="landcard"><span class="lcem">🎒</span><b>Портфолио и сертификаты</b>' +
-      '<p>Все собранные программы в одном месте и <b>' + c.certs + '</b> ' +
-      plural(c.certs, "сертификат", "сертификата", "сертификатов") +
-      ' — за каждый мир, за разделы и за курс целиком. Печатаются на бумагу или в PDF.</p></div>' +
-    '<div class="landcard"><span class="lcem">🖼</span><b>Рисунки и файлы .py</b>' +
-      '<p>Что нарисовала черепашка — уезжает в галерею. Любую свою программу можно ' +
-      'выгрузить настоящим файлом .py и открыть во взрослом Python.</p></div>' +
-    '<div class="landcard"><span class="lcem">✍️</span><b>Своё задание</b>' +
-      '<p>Ребёнок сам придумывает задачу, движок считает по ней правильный ответ, ' +
-      'а задание уезжает ссылкой другу — или взрослому: пусть теперь он решает.</p></div>' +
-    '<div class="landcard"><span class="lcem">🎮</span><b>Своя игра по ссылке</b>' +
-      '<p>Собранную игру отправляют одной ссылкой. Тот, кому её прислали, играет ' +
-      'сразу в браузере и может заглянуть в код — ничего не устанавливая.</p></div>' +
-    '<div class="landcard"><span class="lcem">🧰</span><b>Мастерская</b>' +
-      '<p>Куски своих программ складываются на полку деталей, а на верстаке из них ' +
-      'собирается новая — своя, а не по заданию.</p></div>' +
-    '<div class="landcard"><span class="lcem">🔁</span><b>Повторить</b>' +
-      '<p>Уроки, которые дались тяжело, возвращаются сами через несколько дней. ' +
-      'Рядом — бестиарий: каждая ошибка, которую ребёнок победил, с её именем.</p></div>' +
-    '</div></div>';
+  /* --- кроме уроков: две вкладки вместо двух разделов --- */
+  h += '<div class="landsect rv">' +
+    secHead("Кроме уроков", "Между делом и на память",
+      "Сотня уроков — не всё. Слева то, куда заходят по настроению, справа — то, " +
+      "что ребёнок унесёт с собой на бумаге и файлами.") +
+    landTabsHTML([
+      { label:'<span class="lte">🎯</span>Когда на урок нет сил' },
+      { label:'<span class="lte">🎒</span>Что остаётся на руках' }
+    ], "how") +
+    '<div class="ldpane" id="elsepane"></div></div>';
 
-  /* --- взрослому. Отдельным разделом, потому что вывеску читает чаще всего
-         именно он, а не ребёнок. --- */
-  h += '<div class="landsect"><h2>Взрослому: родителю, учителю, репетитору</h2>' +
-    '<p class="lede">У взрослого свой кабинет под паролем, отдельно от тренажёра ребёнка. ' +
-    'Ребёнок в него не заходит и ничего в нём не меняет. Проверять код руками не нужно — ' +
-    'всё проверил движок; ваше дело посмотреть, с кем поговорить.</p><div class="landgrid">' +
-    '<div class="landcard wide"><span class="lcem">⏱</span><b>Занятие, а не поток уроков</b>' +
-      '<p>Единица здесь — занятие на 20, 30 или 45 минут: тренажёр сам собирает на него план, ' +
-      'зовёт на перерыв, сжимает план, если время уходит, и меряет, сколько занятие ' +
-      'заняло на самом деле. Порядок уроков при этом ваш не трогает: команда объясняется ' +
-      'раньше, чем понадобится, и перестановка ломает именно это.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">👨‍🏫</span><b>Рабочее место наставника</b>' +
-      '<p>Если учеников несколько — своя панель: у каждого своя ссылка и свой код, видно ' +
-      'кто где идёт и кто затих, отчёты по всем сразу. Плюс живое занятие: пока ребёнок ' +
-      'занимается, взрослому видно, что происходит прямо сейчас.</p></div>' +
-    '<div class="landcard"><span class="lcem">📅</span><b>Расписание</b>' +
-      '<p>В какие дни занимаемся и по сколько. Тренажёр сам напомнит ребёнку в учебный день.</p></div>' +
-    '<div class="landcard"><span class="lcem">📊</span><b>Отчёт за неделю</b>' +
-      '<p>Сколько времени, какие уроки, где застрял. Точное время, а не «занимался/не занимался».</p></div>' +
-    '<div class="landcard"><span class="lcem">📝</span><b>Домашка</b>' +
-      '<p>Можно выбрать задачи и отдать их ребёнку — он увидит их на Главном рядом с «Продолжить».</p></div>' +
-    '<div class="landcard"><span class="lcem">⏱</span><b>Потолок экранного времени</b>' +
-      '<p>Сколько минут в день. По умолчанию тренажёр только напоминает; жёсткий запрет включается отдельно ' +
-      'и никогда не обрывает начатый урок.</p></div>' +
-    '<div class="landcard"><span class="lcem">🖼</span><b>Витрина работ</b>' +
-      '<p>Что ребёнок собрал своими руками: программы, рисунки, проекты. Их можно запустить и показать.</p></div>' +
-    '<div class="landcard"><span class="lcem">🔗</span><b>Код ученика</b>' +
-      '<p>По нему прогресс виден на другом устройстве и в кабинете. Один код — один ребёнок.</p></div>' +
-    '</div></div>';
-
-  /* --- границы обещания. Стоит перед кнопкой входа сознательно. --- */
-  h += '<div class="landsect"><h2>Честно про границы</h2>' +
-    '<ul class="landhonest">' +
-    '<li><b>Язык один — Python.</b> Ни Scratch, ни HTML с JavaScript здесь нет. ' +
-      'Даже урок про сайт в пятом мире пишется на Python.</li>' +
-    '<li><b>Экзамены закрываем не целиком.</b> Мы берём ту часть ОГЭ и ЕГЭ, где надо ' +
-      'написать программу, и алгоритмику. Кодирование информации, таблицы и работа с файлами ' +
-      'сюда не входят.</li>' +
-    '<li><b>Проверяет программа, а не человек.</b> Живого учителя, разбора кода взрослым ' +
-      'и оценок тут нет: решение сверяет движок, а объясняет — сам урок.</li>' +
-    '<li><b>Прогресс лежит в браузере.</b> На этом устройстве он никуда не уходит и работает ' +
-      'без сети. Чтобы он был виден на втором устройстве и в кабинете взрослого, нужен код ученика.</li>' +
-    '</ul></div>';
-
-  /* --- вход. Три двери, но уже после того, как сказано, куда они ведут. --- */
-  h += '<div class="landsect landend"><h2>С чего начать</h2>' +
-    '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона мы не спрашиваем: ' +
-    'спрашивать их некому, сервера с личными данными у нас нет.</p>' +
-    '<div class="landcta">' +
-      (started ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' : '') +
-      '<button class="bigbtn' + (started ? ' ghost' : '') + '" data-land="in">' +
-        (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
-    '</div>' +
-    '<p class="landsub">Дальше спросим, кто вы: ученик, родитель или администратор. ' +
-    'На своём личном устройстве этот вопрос задаётся один раз.</p></div>';
+  /* --- границы обещания и вход одним блоком. Раньше это были два раздела
+         подряд, и страница заканчивалась дважды. Границы стоят ПЕРЕД
+         кнопкой сознательно: вывеска — обещание, и его край честнее
+         показать до входа, а не в мае перед экзаменом. --- */
+  h += '<section class="landend rv"><div class="lhaur" aria-hidden="true"></div>' +
+    '<div class="endin"><div class="endleft">' +
+      '<span class="seckick">Чего здесь нет</span><h2>Честно про границы</h2>' +
+      '<ul class="landhonest">' +
+      '<li><b>Язык один — Python.</b> Ни Scratch, ни HTML с JavaScript. Даже урок про сайт ' +
+        'в пятом мире пишется на Python.</li>' +
+      '<li><b>Экзамены закрываем не целиком.</b> Берём то, что решается программой: ' +
+        'алгоритмику, кодирование информации, логику и графы. <b>Электронные таблицы сюда ' +
+        'не входят</b> — их нечем проверить: наш судья умеет запускать Python, а не считать ' +
+        'формулы Excel.</li>' +
+      '<li><b>Проверяет программа, а не человек.</b> Живого учителя и оценок тут нет: ' +
+        'решение сверяет движок, а объясняет сам урок.</li>' +
+      '<li><b>Прогресс лежит в браузере.</b> Чтобы он был виден на втором устройстве ' +
+        'и в кабинете взрослого, нужен код ученика.</li>' +
+      '</ul></div>' +
+    '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
+      '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона мы не спрашиваем: ' +
+      'спрашивать их некому, сервера с личными данными у нас нет.</p>' +
+      '<div class="landcta">' +
+        (started ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' : '') +
+        '<button class="bigbtn' + (started ? ' ghost' : '') + '" data-land="in">' +
+          (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
+      '</div>' +
+      '<p class="landsub"><b>Сегодня доступ бесплатный.</b> Это не акция и не пробный период: ' +
+      'платить тут негде — оплаты в продукте нет вовсе, он ещё наполняется. Появится платная ' +
+      'часть — будет написано здесь же.</p></div></div></section>';
 
   h += '</div>';
   app.innerHTML = h;
@@ -29275,11 +31362,154 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      if (k === "adults"){
+        var a = document.getElementById("adults");
+        if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
+        return;
+      }
       screenRoles();
     };
   });
+  wireLandDemo();
+  wireLandTabs(app.querySelector(".ltabs.how"), landHowRender);
+  wireLandTabs(app.querySelectorAll(".ltabs.how")[1], landElseRender);
+  wireLandTabs(document.getElementById("showcase"), landShowcaseRender);
+  wireLandTabs(document.getElementById("roles"), landRolesRender);
+  wireReveal(app);
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
+}
+/* Содержимое вкладок «Как это работает». Вынесено из screenAbout, потому что
+   рисуется не один раз при отрисовке страницы, а каждый раз при переключении. */
+function landHowRender(i){
+  var box = document.getElementById("howpane");
+  if (!box) return;
+  var c = aboutCounts();
+  if (i === 0){
+    box.innerHTML =
+      '<ol class="landsteps">' +
+      '<li><b>Читаешь объяснение</b><span>Короткая теория, а к ней живые примеры: у каждого ' +
+        'кнопка «▶ Запустить пример» — код срабатывает тут же, на месте.</span></li>' +
+      '<li><b>Решаешь задачу</b><span>Задача стоит списком требований, а не одной фразой: ' +
+        'видно, что именно должна делать программа.</span></li>' +
+      '<li><b>Запускаешь свой код</b><span>Сколько угодно раз, это ничего не стоит. Рядом со ' +
+        'строками написано, что каждая из них сделала.</span></li>' +
+      '<li><b>Жмёшь «✓ Проверить»</b><span>Не сошлось — тренажёр покажет, чем твой ответ ' +
+        'отличается от нужного. Подсказки идут по шагам: от намёка к ответу.</span></li>' +
+      '</ol>' +
+      /* Две вещи, которые живут ВНУТРИ урока и которых нет ни у кого рядом.
+         Строками, а не большими блоками: большой блок под каждую находку —
+         и большие блоки перестают быть большими (решение фаундера). */
+      '<div class="instep"><div class="instepl">И ещё две вещи прямо в уроке</div>' +
+      '<ul class="rolelist">' +
+      '<li><span class="rlem">💬</span><span class="rltx"><b>Спроси</b> — четыре кнопки ' +
+        'рядом с задачей: «Что тут нового?», «Что надо сделать?», «Почему ошибка?», ' +
+        '«Покажи пример». Тренажёр отвечает текстом и читает ответ вслух. Ни микрофона, ' +
+        'ни нейросети: он отвечает только про этот урок и решить задачу за ребёнка ' +
+        'не может — именно поэтому так и сделано.</span></li>' +
+      '<li><span class="rlem">🧹</span><span class="rltx"><b>Ревью кода</b> — кнопка под ' +
+        'редактором. Программа уже работает, а тренажёр разбирает её по дереву и говорит, ' +
+        'что можно написать чище, и объясняет почему. Советует только про то, что уже ' +
+        'проходили, и звёзд за это не отнимает.</span></li>' +
+      '</ul></div>' +
+      '<div class="note"><b>Ошибка здесь — не ругань</b>Красный текст Python переведён на ' +
+      'русский: написано, в какой строке и что именно не сошлось. А если код работает не так, ' +
+      'как думал, — визуализатор пройдёт программу по шагам и покажет, что лежит в памяти.</div>';
+    return;
+  }
+  if (i === 1){
+    box.innerHTML = landDrawHTML();
+    wireLandTabs(document.getElementById("draw"), landDrawRender);
+    return;
+  }
+  if (i === 2){
+    box.innerHTML = landWarmHTML() ||
+      '<p class="dim">Разминки не загрузились.</p>';
+    wireLandTabs(document.getElementById("warm"), landWarmRender);
+    return;
+  }
+  box.innerHTML =
+    '<div class="landgrid g3">' +
+    '<div class="landcard dir" style="' + landWorldVars(3) + '">' +
+      '<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
+      '<p>Поиск, сортировка, системы счисления, кодирование информации, логика и графы — ' +
+      'и типовые задания обоих экзаменов: <b>' + c.oge + '</b> в формате ОГЭ и <b>' + c.ege +
+      '</b> в формате ЕГЭ. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, ' +
+      'а считают шагами — «837 шагов против 11» видно числом на экране.</p></div>' +
+    '<div class="landcard dir" style="' + landWorldVars(4) + '">' +
+      '<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
+      '<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
+      ' не про то, как попросить нейросеть, а про то, как принять её работу: найти, где машина ' +
+      'уверенно врёт, и доказать это проверкой. Рядом — <b>' + c.specs + '</b> ' +
+      plural(c.specs, "работа", "работы", "работ") + ' на приёмку.</p></div>' +
+    '<div class="landcard dir" style="' + landWorldVars(5) + '">' +
+      '<span class="lcem">🏗</span><b>Проекты</b>' +
+      '<p><b>' + c.projects + '</b> больших ' + plural(c.projects, "программы", "программы", "программ") +
+      ' в несколько шагов: карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. ' +
+      'Собранное остаётся у ребёнка.</p></div>' +
+    '</div>' +
+    '<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
+    'Мы закрываем то, что решается программой, и с 1.77.0 это уже не только алгоритмика: ' +
+    'добавлены кодирование информации, логика и графы. Электронные таблицы не закрываем — ' +
+    'их нечем проверить. Номера заданий не называем: нумерация между годами меняется.</div>';
+}
+/* Содержимое вкладок «Кроме уроков». Список тренировок берётся из
+   trainCards() — из того же места, откуда его берёт сам раздел «Тренировки»:
+   две копии разошлись бы на первой же правке. */
+function landElseRender(i){
+  var box = document.getElementById("elsepane"), c = aboutCounts();
+  if (!box) return;
+  if (i === 0){
+    var h = '<div class="landgrid g4">';
+    /* Направления («Ты и ИИ», алгоритмы) отсюда выброшены нарочно: они стоят
+       выше своей вкладкой, а второй раз тем же шрифтом — это уже реклама. */
+    trainCards().filter(function(t){ return t.id !== "ai" && t.id !== "algo"; }).forEach(function(t){
+      h += '<div class="landcard"><span class="lcem">' + t.em + '</span>' +
+        '<b>' + esc(t.title) + '</b><p>' + esc(t.why) + '</p></div>';
+    });
+    /* ⚠️ Стрик на вывеске описан ЩИТОМ, а не числом дней подряд, и это не
+       вкусовщина. В списке задач висит пункт 4.4 — «огонёк → уговор»: убрать
+       число серии из шапки, потому что «страх потерять серию» записан в
+       красные линии продукта. Продавать на витрине то, что внутри собираются
+       смягчать, нельзя; поэтому здесь главное — что пропуск прощается, а не
+       что серию страшно оборвать. */
+    box.innerHTML = h + '</div>' +
+      '<div class="instep"><div class="instepl">Каждый день — одна маленькая задача</div>' +
+      '<ul class="rolelist">' +
+      '<li><span class="rlem">🎯</span><span class="rltx"><b>Задача дня</b> — одна разминка ' +
+        'на сегодня, до полуночи одна и та же и на планшете, и на компьютере. Берётся ' +
+        'только из уже открытого: задачу на то, чего ещё не проходили, тренажёр не даст.</span></li>' +
+      '<li><span class="rlem">🔥</span><span class="rltx"><b>Дни подряд и щит</b> — считаются ' +
+        'дни, когда ребёнок занимался. Пропуск счёт не обнуляет: за каждые пять дней ' +
+        'занятий копится щит, и он закрывает один пропущенный день. Щит срабатывает в ' +
+        'тот момент, когда ребёнок вернулся, — он награждает возвращение, а не ' +
+        'отсутствие.</span></li>' +
+      '</ul></div>' +
+      '<p class="ldpanefoot">Звёзд тут не дают и по порядку проходить не надо, ' +
+      'но день занятий засчитывается и здесь.</p>';
+    return;
+  }
+  box.innerHTML = '<div class="landgrid g3">' +
+    '<div class="landcard"><span class="lcem">🎒</span><b>Портфолио и сертификаты</b>' +
+      '<p>Все собранные программы в одном месте и <b>' + c.certs + '</b> ' +
+      plural(c.certs, "сертификат", "сертификата", "сертификатов") +
+      ' — за каждый мир, за разделы и за курс целиком. Печатаются на бумагу или в PDF.</p></div>' +
+    '<div class="landcard"><span class="lcem">🖼</span><b>Рисунки и файлы .py</b>' +
+      '<p>Что нарисовала черепашка — уезжает в галерею. Любую свою программу можно выгрузить ' +
+      'настоящим файлом .py и открыть во взрослом Python.</p></div>' +
+    '<div class="landcard"><span class="lcem">✍️</span><b>Своё задание</b>' +
+      '<p>Ребёнок сам придумывает задачу, движок считает по ней правильный ответ, а задание ' +
+      'уезжает ссылкой другу — или взрослому: пусть теперь он решает.</p></div>' +
+    '<div class="landcard"><span class="lcem">🎮</span><b>Своя игра по ссылке</b>' +
+      '<p>Собранную игру отправляют одной ссылкой. Тот, кому её прислали, играет сразу ' +
+      'в браузере и может заглянуть в код — ничего не устанавливая.</p></div>' +
+    '<div class="landcard"><span class="lcem">🧰</span><b>Мастерская</b>' +
+      '<p>Куски своих программ складываются на полку деталей, а на верстаке из них собирается ' +
+      'новая — своя, а не по заданию.</p></div>' +
+    '<div class="landcard"><span class="lcem">🔁</span><b>Повторить</b>' +
+      '<p>Уроки, которые дались тяжело, возвращаются сами через несколько дней. Рядом — ' +
+      'бестиарий: каждая ошибка, которую ребёнок победил, с её именем.</p></div>' +
+    '</div>';
 }
 
 /* ===== выбор роли на ОБЩЕМ компьютере =====
@@ -29614,7 +31844,7 @@ function kidRender(savedNote){
        (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
   h += hwGiveHTML(st);
   if (!kidTarget.fresh){
-    h += parentReportCardHTML() + askCardHTML(st);
+    h += parentReportCardHTML() + askCardHTML(st) + oralCardHTML(st);
     h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
   }
   box.innerHTML = h;
@@ -30254,6 +32484,84 @@ function bindParentReport(st){
    Готовит наставника к разговору за минуту: три вопроса из недели ученика.
    Не тест и не допрос — темы для разговора, у каждой написано, откуда она
    взялась и какой ответ считать хорошим. */
+/* ================= устный ответ: спросить вслух про СВОЮ программу =================
+   Первый этаж голоса (docs/golos-i-produkty-2026-09-06.md § 3.3), и он
+   намеренно сделан БЕЗ распознавания речи: никакого микрофона, никакой
+   модели, ничего не грузится и всё работает офлайн.
+
+   Зачем это вообще. Замер `foresight-2027.md` § 16.1: «как объяснить ребенку
+   программирование» — 14 показов в месяц, «ребенок не хочет учиться» —
+   16 383. Голос, который ОБЪЯСНЯЕТ, никому не нужен. Работает голос, который
+   СПРАШИВАЕТ, — и движок спрашивает лучше репетитора: репетитор помнит, что
+   видел, а движок знает, что программа печатает и что будет, если поменять
+   в ней число.
+
+   Чем это отличается от «вопроса за ужином» (askCardHTML). Тот вопрос — про
+   пройденную КОМАНДУ из шпаргалки. Этот — про программу, которую ребёнок
+   написал сам час назад, и ответ на него посчитан движком. Родителю не надо
+   знать Python: правильный ответ у него в руках, а спрятан он под кнопку,
+   чтобы не проговориться раньше времени.
+
+   ⚠️ Третий вопрос НАРОЧНО без правильного ответа. Первые два проверяют, что
+   ребёнок умеет читать код, а «объясни своими словами» — единственный, на
+   котором видно понимание, и машине его проверять нечем. Врать родителю
+   галочкой «верно/неверно» тут нельзя, поэтому вместо ответа стоит подсказка,
+   ЧТО слушать.
+
+   ⚠️ Программа берётся из `S.zan[...].progs` — их кладёт zanKeepProg победой
+   урока. Это те же данные, на которых работает проверка понимания в занятии,
+   и ничего нового ребёнок не отправляет. */
+function oralPick(st){
+  var all = (st && st.zan) || {}, keys = Object.keys(all).sort();
+  for (var i = keys.length - 1; i >= 0; i--){
+    var progs = (all[keys[i]] || {}).progs || [];
+    for (var j = progs.length - 1; j >= 0; j--){
+      var p = progs[j];
+      if (!p || !p.code) continue;
+      var out = myPredRun(p.code);
+      if (!out) continue;                       /* падает или молчит — не спросишь */
+      return { id: p.id, code: p.code, out: out, mut: myPredictMake(p.code) };
+    }
+  }
+  return null;
+}
+function oralCardHTML(st){
+  var pick = oralPick(st);
+  if (!pick) return "";
+  var l = CURRICULUM.byId(pick.id);
+  var qs = [];
+  qs.push({
+    q: "Прочитай программу вслух и скажи, что она напечатает.",
+    a: pick.out,
+    why: "Проверяет, умеет ли он читать свой код, а не только писать."
+  });
+  if (pick.mut) qs.push({
+    q: "А если поменять " + pick.mut.from + " на " + pick.mut.to + " — что напечатает тогда?",
+    a: pick.mut.out,
+    why: "Проверяет, понял ли он, за что это число отвечает."
+  });
+  qs.push({
+    q: "Объясни своими словами, что эта программа делает.",
+    a: null,
+    why: "Правильного ответа тут нет и быть не может. Слушайте, говорит ли он, ЧТО " +
+         "программа делает («считает и печатает»), или пересказывает, КАК написано " +
+         "(«тут print, потом for»). Первое — понял, второе — выучил вид."
+  });
+  return '<div class="card oral"><h3>🗣 Спросите вслух — три минуты</h3>' +
+    '<p class="dim">Это программа, которую он написал сам' +
+      (l ? ' в уроке «' + esc(l.title) + '»' : '') + '. Читайте вопросы вслух, ' +
+      'пусть отвечает голосом. Знать Python не нужно: ответы уже посчитаны, ' +
+      'они спрятаны под кнопкой — чтобы не проговориться раньше него.</p>' +
+    '<pre class="oralcode"><code>' + hl(pick.code.replace(/\n+$/, "")) + '</code></pre>' +
+    '<ol class="orall">' + qs.map(function(x){
+      return '<li><b>«' + esc(x.q) + '»</b>' +
+        (x.a === null
+          ? '<span class="dim">' + esc(x.why) + '</span>'
+          : '<details class="orala"><summary>Показать правильный ответ</summary>' +
+            '<pre>' + esc(x.a) + '</pre></details>' +
+            '<span class="dim">' + esc(x.why) + '</span>');
+    }).join("") + '</ol></div>';
+}
 function askCardHTML(st){
   var f = weekFacts(st);
   var qs = [];
