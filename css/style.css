@@ -1688,3 +1688,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   .landcta .bigbtn{width:100%}
   .landworld{gap:12px;padding:14px 15px}
 }
+/* Карточка направления шире обычной: у неё внутри абзац с числами, а не
+   строка-подпись. На узкой сетке она бы резалась на четыре слова в строку. */
+.landcard.wide{grid-column:span 2}
+@media (max-width:760px){ .landcard.wide{grid-column:span 1} }
