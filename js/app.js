@@ -1504,6 +1504,39 @@ function refreshTop(){
     /* Вывеска — тоже не детский экран: «0 XP», «★ 0» и ранг «Новичок» рядом
        с описанием продукта показывают гостю его несуществующий прогресс. */
     curPlace === "about";
+  /* ===== вкладка «вход в свой кабинет» =====
+     Показывается ровно там, где нет трёх детских вкладок: на вывеске и на
+     взрослых экранах. На детских она не нужна — там и вкладки, и 👤 рядом.
+     ⚠️ На самих экранах входа (выбор роли, ввод кода, заведение кабинета)
+     она спрятана: вести в кабинет с экрана входа в кабинет — это кнопка,
+     которая никуда не ведёт. */
+  var lk = document.getElementById("tab-lk");
+  if (lk){
+    var gate = !adminScreen ||                 /* на детских экранах есть свои вкладки и 👤 */
+      curPlace === "roles" || curPlace === "kidlogin" ||
+      curPlace === "parentlogin" || curPlace === "adminsetup" || curPlace === "adminlogin";
+    /* ⚠️ Обработчики завёрнуты в function, а не переданы именем: onclick
+       отдаёт первым доводом СОБЫТИЕ, и screenParent(code) принимал его за код
+       ученика — в заголовке кабинета вместо имени печаталось
+       «ученик [object PointerEvent]». Ловушка молчаливая: остальные три
+       экрана доводов не берут, и три роли из четырёх работали бы верно. */
+    var role = isAdminDevice()
+        ? { em:"🛠", lbl:"Кабинет наставника", go: function(){ screenAdminHome(); } }
+      : isParentDevice()
+        ? { em:"👨‍👩‍👦", lbl:"Кабинет родителя", go: function(){ screenParent(); } }
+      : (myCode() || S.name)
+        ? { em:"🎒", lbl:"Мои уроки", go: function(){ screenWorlds(); } }
+        : { em:"👤", lbl:"Войти", go: function(){ screenRoles(); }, go1: 1 };
+    lk.hidden = gate;
+    if (!gate){
+      lk.innerHTML = role.em + ' <span class="lbl">' + role.lbl + "</span>";
+      lk.title = role.lbl;
+      /* Гостю вход — главное действие, ему акцент; остальным это просто
+         дорога домой, и кричать ей незачем. */
+      lk.classList.toggle("go", !!role.go1);
+      lk.onclick = role.go;
+    }
+  }
   var lg = document.getElementById("logo");
   if (lg) lg.title = isAdminDevice() ? "В кабинет наставника"
     : (isParentDevice() ? "В кабинет родителя"

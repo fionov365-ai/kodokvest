@@ -1698,3 +1698,18 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .linkbtn{background:none;border:none;padding:6px 10px;cursor:pointer;font:inherit;
   font-size:13.5px;color:var(--faint);border-radius:9px}
 .linkbtn:hover{color:var(--accink);background:var(--sunken)}
+/* ===== вход в свой кабинет: вкладка в шапке =====
+   Выглядит как вкладка, но живёт снаружи .tabs — иначе её прятало бы
+   правило .adminui .tabs, а нужна она именно там. Место — справа, рядом
+   с «?»: на любом сайте вход ищут в правом верхнем углу, и спорить с этой
+   привычкой дороже, чем ей подчиниться. */
+.lktab{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+  border-radius:11px;padding:7px 13px;font-size:13.5px;font-weight:600;
+  cursor:pointer;transition:.15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.lktab:hover{border-color:var(--acc);background:var(--panel2)}
+.lktab[hidden]{display:none}
+/* Гостю вход — главное действие на экране, поэтому он не серый, а акцентный:
+   у гостя в шапке всего две кнопки, и одна из них не должна теряться. */
+.lktab.go{background:var(--acc);border-color:transparent;color:var(--onacc)}
+.lktab.go:hover{background:var(--acc-lt);border-color:transparent}
+@media (max-width:640px){ .lktab .lbl{display:none} .lktab{padding:7px 10px} }

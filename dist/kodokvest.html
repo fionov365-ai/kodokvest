@@ -22,7 +22,15 @@
      Слова совпадают с вывеской (screenAbout в js/app.js) намеренно: обещание
      в превью и обещание на странице обязаны быть одним обещанием.
      Однофайловая сборка эти строки не вырезает, в отличие от манифеста: они
-     ничего не грузят, их вообще не читает браузер — только робот. -->
+     ничего не грузят, их вообще не читает браузер — только робот.
+
+     ⚠️ ПЕРЕЕЗД НА СВОЙ ДОМЕН (Яндекс). Это ЕДИНСТВЕННОЕ место во всём
+     проекте, где адрес площадки прошит намертво, — три строки ниже. Всё
+     остальное переезжает само: ссылки ученикам и родителям строятся из
+     location.origin + location.pathname прямо в браузере, манифест ходит
+     по «.», service worker — по «./», стили и скрипты подключены
+     относительно. Поменять при переезде: три строки здесь и адрес в
+     og/make.js, если он там появится. Полный список — в README. -->
 <link rel="canonical" href="https://fionov365-ai.github.io/kodokvest/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Кодоквест">
@@ -1744,6 +1752,21 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .linkbtn{background:none;border:none;padding:6px 10px;cursor:pointer;font:inherit;
   font-size:13.5px;color:var(--faint);border-radius:9px}
 .linkbtn:hover{color:var(--accink);background:var(--sunken)}
+/* ===== вход в свой кабинет: вкладка в шапке =====
+   Выглядит как вкладка, но живёт снаружи .tabs — иначе её прятало бы
+   правило .adminui .tabs, а нужна она именно там. Место — справа, рядом
+   с «?»: на любом сайте вход ищут в правом верхнем углу, и спорить с этой
+   привычкой дороже, чем ей подчиниться. */
+.lktab{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+  border-radius:11px;padding:7px 13px;font-size:13.5px;font-weight:600;
+  cursor:pointer;transition:.15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.lktab:hover{border-color:var(--acc);background:var(--panel2)}
+.lktab[hidden]{display:none}
+/* Гостю вход — главное действие на экране, поэтому он не серый, а акцентный:
+   у гостя в шапке всего две кнопки, и одна из них не должна теряться. */
+.lktab.go{background:var(--acc);border-color:transparent;color:var(--onacc)}
+.lktab.go:hover{background:var(--acc-lt);border-color:transparent}
+@media (max-width:640px){ .lktab .lbl{display:none} .lktab{padding:7px 10px} }
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -1789,6 +1812,17 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
       <button class="tab" id="tab-train" data-tab="train">🎯 Тренировки</button>
       <button class="tab" id="tab-mine" data-tab="mine">🎒 Моё</button>
     </nav>
+    <!-- Вход в свой кабинет — вкладкой в шапке, а не только ссылкой внутри
+         страницы. Жалоба фаундера 06.09.2026, третья подряд про одно и то же:
+         с вывески и из кабинета не было видно, куда идти. Внутренние двери
+         («?», подвал, профиль) он находил не сразу, потому что вход на сайте
+         ищут ГЛАЗАМИ В ШАПКЕ СПРАВА, а не в тексте страницы.
+         ⚠️ Это НЕ четвёртая детская вкладка. Три вкладки — «Главное»,
+         «Тренировки», «Моё» — это мир ребёнка, и трогать их нельзя. Эта
+         кнопка живёт СНАРУЖИ .tabs и показывается ровно там, где детских
+         вкладок нет: на вывеске, в кабинете родителя и наставника. Что на
+         ней написано и куда она ведёт — решает роль (refreshTop). -->
+    <button class="lktab" id="tab-lk" hidden></button>
     <div class="xpbox">
       <span class="lvlchip" id="rank">Новичок</span>
       <div class="xpbar"><i id="xpfill"></i></div>
@@ -17579,6 +17613,39 @@ function refreshTop(){
     /* Вывеска — тоже не детский экран: «0 XP», «★ 0» и ранг «Новичок» рядом
        с описанием продукта показывают гостю его несуществующий прогресс. */
     curPlace === "about";
+  /* ===== вкладка «вход в свой кабинет» =====
+     Показывается ровно там, где нет трёх детских вкладок: на вывеске и на
+     взрослых экранах. На детских она не нужна — там и вкладки, и 👤 рядом.
+     ⚠️ На самих экранах входа (выбор роли, ввод кода, заведение кабинета)
+     она спрятана: вести в кабинет с экрана входа в кабинет — это кнопка,
+     которая никуда не ведёт. */
+  var lk = document.getElementById("tab-lk");
+  if (lk){
+    var gate = !adminScreen ||                 /* на детских экранах есть свои вкладки и 👤 */
+      curPlace === "roles" || curPlace === "kidlogin" ||
+      curPlace === "parentlogin" || curPlace === "adminsetup" || curPlace === "adminlogin";
+    /* ⚠️ Обработчики завёрнуты в function, а не переданы именем: onclick
+       отдаёт первым доводом СОБЫТИЕ, и screenParent(code) принимал его за код
+       ученика — в заголовке кабинета вместо имени печаталось
+       «ученик [object PointerEvent]». Ловушка молчаливая: остальные три
+       экрана доводов не берут, и три роли из четырёх работали бы верно. */
+    var role = isAdminDevice()
+        ? { em:"🛠", lbl:"Кабинет наставника", go: function(){ screenAdminHome(); } }
+      : isParentDevice()
+        ? { em:"👨‍👩‍👦", lbl:"Кабинет родителя", go: function(){ screenParent(); } }
+      : (myCode() || S.name)
+        ? { em:"🎒", lbl:"Мои уроки", go: function(){ screenWorlds(); } }
+        : { em:"👤", lbl:"Войти", go: function(){ screenRoles(); }, go1: 1 };
+    lk.hidden = gate;
+    if (!gate){
+      lk.innerHTML = role.em + ' <span class="lbl">' + role.lbl + "</span>";
+      lk.title = role.lbl;
+      /* Гостю вход — главное действие, ему акцент; остальным это просто
+         дорога домой, и кричать ей незачем. */
+      lk.classList.toggle("go", !!role.go1);
+      lk.onclick = role.go;
+    }
+  }
   var lg = document.getElementById("logo");
   if (lg) lg.title = isAdminDevice() ? "В кабинет наставника"
     : (isParentDevice() ? "В кабинет родителя"
