@@ -1504,6 +1504,10 @@ function refreshTop(){
     /* Вывеска — тоже не детский экран: «0 XP», «★ 0» и ранг «Новичок» рядом
        с описанием продукта показывают гостю его несуществующий прогресс. */
     curPlace === "about";
+  var lg = document.getElementById("logo");
+  if (lg) lg.title = isAdminDevice() ? "В кабинет наставника"
+    : (isParentDevice() ? "В кабинет родителя"
+    : ((myCode() || S.name) ? "На главную: уроки" : "На главную страницу"));
   document.body.classList.toggle("adminui", adminScreen);
   if (adminScreen) return;                    /* детские счётчики не трогаем */
   document.querySelectorAll(".tabs .tab").forEach(function(b){
@@ -4407,8 +4411,20 @@ function screenWorlds(){
   });
   h += '</div>';
 
+  /* ⚠️ Подвал — для ВЗРОСЛОГО, который взял устройство ребёнка. Жалоба
+     фаундера 06.09.2026: «нажимаю на логотип и остаюсь в профиле ученика».
+     Логотип исправен — он ведёт домой, а дома человек уже стоял. Дыра была
+     в том, что у вывески не было двери изнутри: адрес #about знает только
+     тот, кто его написал. Ставим ссылку туда, где на любом сайте её и ищут —
+     в самый низ, дим-строкой. Ребёнку она не мешает: он до неё не долистает
+     и ничего не теряет, а взрослый ищет именно внизу. */
+  h += '<div class="landfoot"><button class="linkbtn" id="go-about">🐍 О тренажёре: ' +
+    'что это, сколько уроков и что видит взрослый</button></div>';
+
   app.innerHTML = installTipHTML() + h;
   wireInstallTip(app);
+  var gab = document.getElementById("go-about");
+  if (gab) gab.onclick = screenAbout;
 
   var goNext = document.getElementById("go-next");
   if (goNext) goNext.onclick = function(){
@@ -6109,6 +6125,10 @@ function screenAccount(){
     '<p class="dim">Если за устройство сел родитель или наставник — можно перейти в свой кабинет ' +
     'без набора адресов.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gorole">⇄ Сменить роль</button></div></div>' +
+    '<div class="card"><h3>Что это за тренажёр</h3>' +
+    '<p class="dim">Витрина: чему тут учат, сколько это уроков, что видит взрослый и чего ' +
+    'здесь нет. Её же показывают тому, кто открыл ссылку впервые.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="goabout">🐍 О тренажёре</button></div></div>' +
     '<div class="card"><h3>Портфолио</h3>' +
     '<p class="dim">Готовые программы и сертификаты в одном месте — то, что можно показать.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gofolio">🎒 Открыть портфолио</button></div></div>' +
@@ -6162,6 +6182,7 @@ function screenAccount(){
   var cl = document.getElementById("copylink");
   if (cl) cl.onclick = function(){ copyText(link, cl); };
   wireInstallTip(app);
+  document.getElementById("goabout").onclick = screenAbout;
   document.getElementById("gofolio").onclick = screenFolio;
   document.getElementById("goguide").onclick = screenGuide;
   var paintTheme = function(){
@@ -15804,12 +15825,23 @@ function helpRender(){
       '<button data-theme-set="dark"' + (th === "dark" ? ' class="on"' : '') + '>🌙 Тёмная</button>' +
     '</div>' +
     '<div class="helprow">' +
+      /* ⚠️ Дверь на вывеску стоит именно здесь, потому что «?» есть на КАЖДОМ
+         экране. Жалоба фаундера 06.09.2026: «нажимаю на логотип и остаюсь в
+         профиле ученика». Логотип не виноват — он ведёт домой, а дома человек
+         уже стоял, и нажатие выглядело как сломанная кнопка. Настоящая дыра
+         была в другом: у вывески не было ни одной двери изнутри продукта,
+         только адрес #about, которого никто не знает. Логотип при этом
+         трогать нельзя: у ребёнка дом — уроки, и уводить его на витрину
+         продукта каждым нажатием значит ломать 1.65.0 с другого конца. */
+      '<button class="rbtn sec" id="help-about">🐍 О тренажёре</button>' +
       '<button class="rbtn sec" id="help-guide">📕 Полная инструкция</button>' +
       '<button class="rbtn sec" id="help-sheet">📖 Шпаргалка</button>' +
     '</div>';
   body.querySelectorAll("[data-theme-set]").forEach(function(b){
     b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); };
   });
+  var ab = document.getElementById("help-about");
+  if (ab) ab.onclick = function(){ closeHelp(); screenAbout(); };
   var g = document.getElementById("help-guide");
   if (g) g.onclick = function(){ closeHelp(); screenGuide(); };
   var s = document.getElementById("help-sheet");

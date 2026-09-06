@@ -1692,3 +1692,9 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    строка-подпись. На узкой сетке она бы резалась на четыре слова в строку. */
 .landcard.wide{grid-column:span 2}
 @media (max-width:760px){ .landcard.wide{grid-column:span 1} }
+/* Подвал детской главной: дверь на вывеску для взрослого, взявшего планшет.
+   Нарочно тихая — кнопка, а не карточка: ребёнку она не адресована. */
+.landfoot{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);text-align:center}
+.linkbtn{background:none;border:none;padding:6px 10px;cursor:pointer;font:inherit;
+  font-size:13.5px;color:var(--faint);border-radius:9px}
+.linkbtn:hover{color:var(--accink);background:var(--sunken)}
