@@ -1927,6 +1927,29 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   font-weight:700;color:var(--warn)}
 .landhonest li b{color:var(--ink)}
 
+/* ---------- четыре больших блока ----------
+   «Надо выделить важное большими блоками, чтобы бросалось в глаза» — указание
+   фаундера 06.09.2026. Отличаются от обычных карточек тремя вещами разом:
+   размером значка, размером заголовка и подложкой-градиентом. Иначе большой
+   блок читается как просто ещё одна карточка, и весь смысл теряется.
+   ⚠️ Их ровно четыре и больше быть не должно: пять «самых важных» вещей —
+   это ноль важных вещей. */
+.bigs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.big{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:20px;
+  background:linear-gradient(160deg,var(--panel),var(--panel2));padding:24px 26px;
+  box-shadow:var(--sh);transition:.18s}
+.big:hover{transform:translateY(-2px);border-color:var(--line2)}
+/* Значок крупный и приподнят над заголовком: он и есть то, что «бросается». */
+.big .bigem{display:block;font-size:34px;line-height:1;margin-bottom:12px}
+.big b{display:block;font-size:21px;line-height:1.2;letter-spacing:-.01em;margin-bottom:8px}
+.big p{margin:0;color:var(--soft);font-size:14.5px;line-height:1.6}
+.big p b{display:inline;font-size:inherit;margin:0;color:var(--ink)}
+/* Строчка «почему это важно» отбита чертой: это вывод, а не продолжение
+   описания, и читать её должны отдельно от него. */
+.bigwhy{display:block;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);
+  font-size:13px;line-height:1.5;color:var(--accink)}
+@media (max-width:820px){ .bigs{grid-template-columns:1fr} }
+
 /* ---------- вкладки внутри страницы ----------
    Главный инструмент против длины. Восемь карточек «Взрослому» и два раздела
    подряд («как проходит урок» + «не только язык») занимали три экрана;
@@ -2029,11 +2052,25 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 /* Вывод ограничен по высоте и прокручивается внутри: «Свой сайт» печатает
    шестьдесят строк, и без потолка одна вкладка растянула бы страницу на
    пол-экрана — то, чего быть не должно. */
-.ldout{margin:0;padding:14px 18px;max-height:250px;overflow:auto;
+/* Результат и код рядом: вывод узкий, и на всю ширину страницы он выглядел
+   пустой коробкой (жалоба фаундера). Обе колонки одной высоты и прокручиваются
+   каждая в себе — «Свой сайт» печатает шестьдесят строк. */
+.shbody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  border-top:1px solid var(--line)}
+.shcol{min-width:0;display:flex;flex-direction:column}
+.shcol + .shcol{border-left:1px solid var(--line)}
+.shlbl{padding:9px 16px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint);background:var(--panel2);border-bottom:1px solid var(--line)}
+.ldout{margin:0;padding:14px 16px;height:270px;overflow:auto;
   font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;
-  color:var(--outink);white-space:pre-wrap;word-break:break-word;background:var(--res)}
-.ldcode{border-top:1px solid var(--line);background:var(--code);max-height:320px;overflow:auto}
+  color:var(--outink);white-space:pre;background:var(--res)}
+.ldcode{background:var(--code);height:270px;overflow:auto}
 .ldcode .dwcode{border:none}
+@media (max-width:760px){
+  .shbody{grid-template-columns:1fr}
+  .shcol + .shcol{border-left:none;border-top:1px solid var(--line)}
+  .ldout,.ldcode{height:200px}
+}
 
 /* ---------- взрослому: три роли ---------- */
 .rolepane{border:1px solid var(--line);border-radius:18px;background:var(--panel);
