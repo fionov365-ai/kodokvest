@@ -6109,8 +6109,13 @@ function checkEncoding(){
       const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
       if (/getElementById\("logo"\)\.onclick = screenWorlds/.test(src))
         bad("[домой] логотип по-прежнему ведёт в детский экран мимо ролей");
-      if (!/getElementById\("logo"\)\.onclick = goHome/.test(src))
-        bad("[домой] логотип не привязан к goHome");
+      /* ⚠️ С 1.84.0 логотип зовёт goLogo, а не goHome, и это НЕ откат к
+         прежней ошибке: goLogo ведёт взрослого на страницу сайта, а ребёнка —
+         тем же goHome. Раньше взрослый жал на логотип и не получал ничего.
+         Требование осталось прежним по сути: логотип обязан идти через роль,
+         а не звать детский экран напрямую. */
+      if (!/getElementById\("logo"\)\.onclick = goLogo/.test(src))
+        bad("[домой] логотип не привязан к goLogo — он снова пойдёт мимо ролей");
       if (/onclick = screenWorlds;/.test(src))
         bad("[домой] осталась кнопка «домой», ведущая в детский экран мимо ролей");
     }
@@ -6389,6 +6394,60 @@ function checkEncoding(){
     }
 
     if (problems.length === p0) aiPackChecked++;
+  }
+
+  /* --- 12а. логотип: дорога на страницу сайта --- */
+  let logoChecked = 0;
+  if (typeof g.goLogo === "function"){
+    const p0 = problems.length;
+    const wasAdmin = !!(g.state.admin && g.state.admin.isAdmin);
+    const wasParent = (g.state.admin && g.state.admin.parentOf) || "";
+
+    /* ⚠️ Жалоба фаундера 07.09.2026: в кабинете наставника логотип не делал
+       НИЧЕГО. Он вёл «домой по роли», а дом наставника — тот же кабинет, где
+       он уже стоит. Выход на общую страницу оставался только ссылкой в самом
+       низу, до которой мало кто долистывает. */
+    g.state.admin = g.state.admin || {};
+    g.state.admin.isAdmin = true;
+    g.state.admin.parentOf = "";
+    g.screenAdminHome(); await tick();
+    g.goLogo(); await tick();
+    if (!/О тренажёре|Информатика без репетитора|Кодоквест — что это/i.test(doc.getElementById("app").textContent))
+      bad("[логотип] из кабинета наставника логотип не вывел на страницу сайта");
+    /* и обратно в кабинет — кнопкой в шапке, она обязана остаться видимой */
+    const lk = doc.getElementById("tab-lk");
+    if (!lk || lk.hidden) bad("[логотип] с вывески не видно кнопки возврата в кабинет");
+    else if (!/Кабинет наставника/.test(lk.textContent))
+      bad("[логотип] кнопка возврата ведёт не в кабинет наставника: " + lk.textContent);
+
+    /* ⚠️ Взрослый, попавший на урок с вывески, обязан видеть, где он и как
+       выйти: детская навигация в шапке подменяет взрослую, и кабинет из урока
+       не виден вовсе. Жалоба фаундера 07.09.2026 — «падаю в тренажёр и вообще
+       могу все уроки проходить». */
+    g.openLesson("print-first"); await tick(); await tick();
+    {
+      const bar = doc.querySelector(".peekbar");
+      if (!bar) bad("[просмотр] взрослый на уроке не видит, что это просмотр");
+      else if (!doc.getElementById("peekout"))
+        bad("[просмотр] из урока взрослому некуда вернуться");
+    }
+
+    /* У ребёнка логотип по-прежнему ведёт к урокам, а не на вывеску:
+       у него главная — это и есть уроки. */
+    g.state.admin.isAdmin = false;
+    g.state.name = g.state.name || "Проверка";
+    /* и наоборот: ребёнку эта полоска на уроке не нужна и не показывается */
+    g.openLesson("print-first"); await tick(); await tick();
+    if (doc.querySelector(".peekbar"))
+      bad("[просмотр] ребёнку показали полоску «вы смотрите глазами ребёнка»");
+    g.goLogo(); await tick();
+    if (!/Уроки/.test(doc.getElementById("app").textContent))
+      bad("[логотип] у ребёнка логотип увёл не на его главную");
+
+    g.state.admin.isAdmin = wasAdmin;
+    g.state.admin.parentOf = wasParent;
+    if (problems.length === p0) logoChecked++;
+    viewReset(g);
   }
 
   /* --- 12б. карта пути --- */
@@ -6771,6 +6830,7 @@ function checkEncoding(){
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
   console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
+  console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);

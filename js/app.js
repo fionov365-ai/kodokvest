@@ -1473,6 +1473,20 @@ function syncBack(){
    экране. Раньше это чинили по одной кнопке за раз («На главную» в кабинете,
    выброс из кабинета при регистрации); теперь дом считается из роли в одном
    месте, и все кнопки «домой» зовут его. */
+/* ⚠️ Логотип и «домой» — РАЗНЫЕ вещи, и это выяснилось жалобой фаундера
+   07.09.2026. Для ребёнка они совпадают: его главная и есть уроки. А взрослый,
+   стоя в кабинете, жал на логотип и не получал НИЧЕГО — goHome честно
+   возвращал его на тот самый кабинет, где он уже стоял. Выйти на общую
+   страницу сайта можно было только ссылкой в самом низу («О тренажёре»),
+   до которой мало кто долистывает.
+   Поэтому логотип ведёт на главную страницу САЙТА. Кабинет при этом никуда
+   не делся: он остался отдельной кнопкой в шапке справа — той самой, где
+   написано «Кабинет наставника». Две дороги, обе видны. */
+function goLogo(){
+  if (isAdminDevice() || isParentDevice()) return screenAbout();
+  return goHome();
+}
+
 function goHome(){
   if (isAdminDevice()) return screenAdminHome();
   if (parentOf()) return screenParent();
@@ -1538,9 +1552,9 @@ function refreshTop(){
     }
   }
   var lg = document.getElementById("logo");
-  if (lg) lg.title = isAdminDevice() ? "В кабинет наставника"
-    : (isParentDevice() ? "В кабинет родителя"
-    : ((myCode() || S.name) ? "На главную: уроки" : "На главную страницу"));
+  if (lg) lg.title = (isAdminDevice() || isParentDevice())
+    ? "На главную страницу сайта"
+    : ((myCode() || S.name) ? "На главную: уроки" : "На главную страницу");
   document.body.classList.toggle("adminui", adminScreen);
   if (adminScreen) return;                    /* детские счётчики не трогаем */
   document.querySelectorAll(".tabs .tab").forEach(function(b){
@@ -4881,7 +4895,18 @@ function openLesson(id){
        ⚠️ Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в список уроков. Иначе
        кнопка уносит мимо плана ровно так же, как это делало «Дальше →» в
        победной карточке до правки 1.41.0. */
-    var head = '<div class="crumbs">' +
+    /* ⚠️ Взрослый на уроке — это ПРОСМОТР, и об этом надо сказать прямо.
+       Жалоба фаундера 07.09.2026: с вывески он нажал «Посмотреть первый урок»,
+       провалился в детский тренажёр и обнаружил, что может проходить всё
+       подряд, а дороги обратно в кабинет нет — детская навигация подменила
+       взрослую. Урок ему по-прежнему открыт (наставнику полезно видеть ровно
+       то, что видит ребёнок), но теперь он видит и где находится, и как выйти. */
+    var peek = (isAdminDevice() || isParentDevice())
+      ? '<div class="peekbar">👀 Вы смотрите урок <b>глазами ребёнка</b>. ' +
+        'Проходить его не нужно: прогресс этого устройства никому не показывается. ' +
+        '<button class="rbtn sec" id="peekout">← Вернуться в кабинет</button></div>'
+      : "";
+    var head = peek + '<div class="crumbs">' +
       '<span data-go="worlds">Главное</span> › <span data-go="world">' + w.icon + ' ' + w.title + '</span></div>' +
       '<div class="lvlhead"><div><div class="idx">' + (l.boss ? "Босс мира " + w.n : "Урок " + l.num + " из 100") + '</div>' +
       '<h1>' + l.title + '</h1></div><div class="right">' +
@@ -5188,6 +5213,8 @@ function openLesson(id){
         if (g === "worlds") screenWorlds(); else screenWorld(l.world);
       };
     });
+    var pk = document.getElementById("peekout");
+    if (pk) pk.onclick = goHome;      /* «домой по роли» — то есть в кабинет */
     app.querySelectorAll("[data-open]").forEach(function(b){
       b.onclick = function(){ openLesson(b.getAttribute("data-open")); };
     });
@@ -13286,6 +13313,13 @@ function landCodeHTML(code){
    кода со строкой вывода. Кому мельтешение мешает — системная настройка
    «меньше движения» выключает эффект целиком. */
 function landRun(code, out, instant){
+  /* ⚠️ Прошлая печать обязана быть остановлена ПЕРВОЙ строкой. Вывод набирается
+     по строке в такт таймеру, и если запустить программу второй раз, пока идёт
+     первая, старый таймер продолжит дописывать своё поверх нового результата:
+     на экране окажется вывод программы, которой там уже нет. Раньше это ловилось
+     только двойным нажатием, а с редактируемым кодом (1.84.0) запуск идёт после
+     каждой правки — то есть постоянно. */
+  if (out && out._landT){ clearInterval(out._landT); out._landT = null; }
   var r = Runtime.get("mini").run(code, {});
   if (r.error){
     out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
@@ -13304,31 +13338,32 @@ function landRun(code, out, instant){
   }
   var i = 0;
   out.innerHTML = '<span class="dwcaret"></span>';
-  var t = setInterval(function(){
+  var t = out._landT = setInterval(function(){
     /* Экран мог смениться, пока строки печатались: тогда таймер пишет в
        выброшенный из документа узел, и его надо снять, а не оставить тикать. */
     if (!out.isConnected && !(document.body && document.body.contains(out))) return clearInterval(t);
     i++;
     out.innerHTML = esc(lines.slice(0, i).join("\n")) +
       (i < lines.length ? '<span class="dwcaret"></span>' : "");
-    if (i >= lines.length) clearInterval(t);
+    if (i >= lines.length){ clearInterval(t); if (out._landT === t) out._landT = null; }
   }, 160);
 }
 function landDemoHTML(){
   return '<figure class="demowin" id="landdemo">' +
     '<figcaption class="dwhead"><span class="dwdots"><i></i><i></i><i></i></span>' +
       '<b>Урок 11 · Цикл for</b>' +
-      '<span class="dwtag">это не картинка — код правда работает</span></figcaption>' +
+      '<span class="dwtag">это не картинка — код можно править прямо здесь</span></figcaption>' +
     '<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
     '<div class="dwbar">' +
       '<button class="dwbtn go" data-dw="run">▶ Запустить</button>' +
       '<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
-      '<span class="dwhint">можно нажимать сколько угодно</span>' +
+      '<span class="dwhint">поменяй любое число — вывод изменится</span>' +
     '</div>' +
     '<div class="dwout" aria-live="polite"><span class="dwwait">Нажми «▶ Запустить» — программа выполнится прямо здесь.</span></div>' +
   '</figure>' +
-  '<p class="dwnote">Так выглядит любой пример в уроке: нажал — увидел результат. ' +
-  'Ни установки Python, ни редактора, ни командной строки.</p>';
+  '<p class="dwnote">Это настоящий редактор — тот же, что откроется ребёнку на уроке. ' +
+  'Поменяйте число звёзд, сломайте строку, запустите снова: ни установки Python, ' +
+  'ни командной строки для этого не нужно.</p>';
 }
 function wireLandDemo(){
   var win = document.getElementById("landdemo");
@@ -13337,18 +13372,45 @@ function wireLandDemo(){
       out     = win.querySelector(".dwout"),
       runBtn  = win.querySelector('[data-dw="run"]'),
       brkBtn  = win.querySelector('[data-dw="break"]'),
-      hint    = win.querySelector(".dwhint"),
-      broken  = false;
+      hint    = win.querySelector(".dwhint");
 
-  runBtn.onclick = function(){ landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out); };
+  /* ⚠️ Код на вывеске РЕДАКТИРУЕМЫЙ, и это идея фаундера 07.09.2026:
+     «было бы интересно, если бы люди могли поменять что-то в коде и от этого
+     менялся вывод». Он прав, и это меняет весь смысл блока: раньше посетитель
+     смотрел на доказательство, теперь он его проверяет руками. Поменял пятёрку
+     на восьмёрку — лесенка выросла. Никакие слова так не работают.
+
+     Редактор берём НАСТОЯЩИЙ, тот же makeEditor, что открывается ребёнку на
+     уроке. Не ради экономии: родитель, потрогавший его на вывеске, узнаёт
+     то же окно потом — и не думает, что ему показали рекламный макет.
+     Сломать страницу этим нельзя: движок ловит ошибку и объясняет её словами,
+     а кнопка «Вернуть рабочий код» возвращает исходный. */
+  var ed = makeEditor(LAND_DEMO_OK, "попробуй поменять число");
+  ed.classList.add("dwed");
+  if (codeBox && codeBox.parentNode) codeBox.parentNode.replaceChild(ed, codeBox);
+
+  function прогон(){ landRun(ed.getCode(), out, true); }
+  var ждём = null;
+  /* Печатают по знаку, а запуск после каждого знака показывал бы ошибку на
+     недописанной строке. Ждём, пока рука остановится. */
+  ed.onEdit = function(){
+    hint.textContent = "это твой код — он выполняется по-настоящему";
+    brkBtn.textContent = "↩ Вернуть рабочий код";
+    if (ждём) clearTimeout(ждём);
+    ждём = setTimeout(прогон, 400);
+  };
+  runBtn.onclick = прогон;
   brkBtn.onclick = function(){
-    broken = !broken;
-    codeBox.innerHTML = landCodeHTML(broken ? LAND_DEMO_BAD : LAND_DEMO_OK);
-    brkBtn.textContent = broken ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
-    hint.textContent = broken
+    /* Одна кнопка на два дела, и они не путаются: пока код нетронутый — она
+       предлагает его сломать, как только он изменён — вернуть исходный. */
+    var сейчас = ed.getCode();
+    var сломать = сейчас === LAND_DEMO_OK;
+    ed.setCode(сломать ? LAND_DEMO_BAD : LAND_DEMO_OK);
+    brkBtn.textContent = сломать ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
+    hint.textContent = сломать
       ? "убрали двоеточие в третьей строке"
-      : "можно нажимать сколько угодно";
-    landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out);
+      : "поменяй любое число — вывод изменится";
+    прогон();
   };
   /* Первый запуск делаем сами. Вывеску читают, а не изучают: если ждать
      нажатия, большая часть посетителей уйдёт со страницы, так и не увидев
@@ -13461,13 +13523,29 @@ function landShowcaseRender(i){
         '<div class="ldout" id="shout" aria-live="polite"></div></div>' +
       '<div class="shcol"><div class="shlbl">Код, который собрал ребёнок · ' + rows + ' ' +
         plural(rows, "строка", "строки", "строк") + '</div>' +
-        '<div class="ldcode"><div class="dwcode">' + landCodeHTML(code) + '</div></div></div>' +
+        /* ⚠️ Здесь код БЕЗ колонки номеров и с переносом длинных строк.
+           Жалоба фаундера 07.09.2026: «код не влазит в окно». Он и правда не
+           влезал: строка уезжала вправо под невидимую полосу прокрутки, и
+           родитель видел обрубок. Колонка номеров мешала перенести строки —
+           при переносе номера разъезжаются и начинают врать. Но нужна она тут
+           не была: сколько строк в программе, написано в заголовке над кодом. */
+        '<div class="ldcode wrap"><div class="dwcode"><pre><code>' + hl(code) +
+        '</code></pre></div></div></div>' +
     '</div>' +
     '<div class="dwbar"><button class="dwbtn go" data-sh="run">▶ Запустить заново</button>' +
       '<span class="dwhint">программа выполняется настоящим движком, а не показывает ' +
       'записанный результат</span></div>';
   var out = box.querySelector(".ldout");
-  box.querySelector('[data-sh="run"]').onclick = function(){ landRun(code, out, true); };
+  /* ⚠️ Кнопка выглядела мёртвой, и жалоба фаундера 07.09.2026 справедлива:
+     программа детерминированная, вывод у неё каждый раз тот же самый, и на
+     экране после нажатия НИЧЕГО не менялось. Работала она при этом честно.
+     Поэтому показываем сам факт работы: гасим панель, говорим «выполняется»,
+     и только потом печатаем результат. Кнопка, по которой не видно, что она
+     сработала, — это сломанная кнопка, даже если код за ней исправен. */
+  box.querySelector('[data-sh="run"]').onclick = function(){
+    out.innerHTML = '<span class="dwwait">выполняется…</span>';
+    setTimeout(function(){ landRun(code, out, true); }, 260);
+  };
   landRun(code, out, true);
 }
 /* ---- взрослому: три роли вкладками ----
@@ -17128,7 +17206,7 @@ function screenGuide(){
    огонёк дня, шпаргалка, профиль, фокус.
    Старые кнопки (Миры, Разминка, Игры…) убраны из панели, но экраны и адреса
    остались: на них ведут карточки с экранов и хэши вроде #games. */
-document.getElementById("logo").onclick = goHome;
+document.getElementById("logo").onclick = goLogo;
 (function(){
   var byTab = { home: goHome, train: screenTrain, mine: screenFolio };
   var nav = document.querySelector(".tabs");
@@ -17425,6 +17503,7 @@ window.__game = {
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
+  goLogo: goLogo,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,

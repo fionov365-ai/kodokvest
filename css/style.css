@@ -1072,6 +1072,15 @@ body.focus .lede{display:none}
 .gamecard.locked:hover{transform:none}
 
 /* ---------- галерея рисунков ---------- */
+/* ---------- полоска «вы смотрите глазами ребёнка» ----------
+   Взрослый, попавший на урок с вывески, обязан видеть, где он и как выйти:
+   детская навигация в шапке подменяет взрослую, и кабинет из урока не виден. */
+.peekbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;
+  padding:10px 15px;border:1px dashed var(--acc2);border-radius:12px;
+  background:rgba(0,224,184,.08);font-size:13.5px;color:var(--soft)}
+.peekbar b{color:var(--ink)}
+.peekbar .rbtn{margin-left:auto}
+
 /* ---------- карта пути: сто уроков одной дорогой ----------
    Кружки, а не список: список из ста строк читается как перечень дел, а
    дорога — как расстояние. Ряд на мир, в конце ряда веха-проект. */
@@ -1814,6 +1823,15 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .dwnums{flex:none;padding:14px 10px;background:var(--gut);color:var(--gutink);
   text-align:right;user-select:none;white-space:pre;font-size:12.5px;line-height:1.65}
 .dwcode pre{margin:0;padding:14px 16px;overflow-x:auto;flex:1;min-width:0;color:var(--codeink)}
+/* Живой редактор внутри окна вывески. Своей рамки и своей «шапки» с точками
+   ему тут не нужно: рамку и точки даёт само окно (.demowin, .dwhead), а два
+   заголовка подряд читались бы как две разные штуки. */
+.dwed{border:none;border-radius:0;background:var(--code)}
+.dwed .ehead{display:none}
+.dwed .edit-area{border:none;border-radius:0}
+.dwed .runbar{display:none}
+.dwed .edit-scroll{min-height:150px}
+
 .dwbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:11px 14px;
   background:var(--dwbar);border-top:1px solid var(--line)}
 .dwbtn{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
@@ -2152,6 +2170,10 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   color:var(--outink);white-space:pre;background:var(--res)}
 .ldcode{background:var(--code);height:270px;overflow:auto}
 .ldcode .dwcode{border:none}
+/* Витрина показывает чужую готовую программу, а не редактор: читать её надо
+   глазами и целиком. Поэтому длинные строки переносятся, а не уезжают вправо
+   под полосу прокрутки, которую в macOS ещё и не видно. */
+.ldcode.wrap pre{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:visible}
 @media (max-width:760px){
   .shbody{grid-template-columns:1fr}
   .shcol + .shcol{border-left:none;border-top:1px solid var(--line)}
