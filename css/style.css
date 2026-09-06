@@ -1927,6 +1927,27 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   font-weight:700;color:var(--warn)}
 .landhonest li b{color:var(--ink)}
 
+/* ---------- устный ответ в кабинете взрослого ----------
+   Карточка, по которой родитель спрашивает ребёнка вслух. Правильный ответ
+   спрятан в <details> НЕ ради красоты: родитель читает вопрос с экрана, и
+   если ответ лежит рядом открытым, он его проговаривает раньше ребёнка. */
+.card.oral .oralcode{margin:12px 0;padding:12px 14px;border:1px solid var(--line);
+  border-radius:12px;background:var(--code);color:var(--codeink);overflow-x:auto;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6}
+.orall{margin:0;padding-left:22px;display:grid;gap:14px}
+.orall li b{display:block;font-size:15px;line-height:1.45}
+.orall li .dim{display:block;font-size:13px;line-height:1.5;margin-top:5px}
+.orala{margin-top:7px}
+.orala summary{display:inline-block;cursor:pointer;font-size:13px;font-weight:600;
+  color:var(--accink);background:var(--sunken);border:1px solid var(--line);
+  border-radius:9px;padding:5px 11px;list-style:none}
+.orala summary::-webkit-details-marker{display:none}
+.orala summary:hover{border-color:var(--acc)}
+.orala[open] summary{color:var(--faint)}
+.orala pre{margin:8px 0 0;padding:10px 12px;border-radius:10px;background:var(--okbg);
+  border:1px solid var(--okline);color:var(--okink);
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;white-space:pre-wrap}
+
 /* ---------- четыре больших блока ----------
    «Надо выделить важное большими блоками, чтобы бросалось в глаза» — указание
    фаундера 06.09.2026. Отличаются от обычных карточек тремя вещами разом:
