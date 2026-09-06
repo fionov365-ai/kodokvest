@@ -1072,6 +1072,52 @@ body.focus .lede{display:none}
 .gamecard.locked:hover{transform:none}
 
 /* ---------- галерея рисунков ---------- */
+/* ---------- карта пути: сто уроков одной дорогой ----------
+   Кружки, а не список: список из ста строк читается как перечень дел, а
+   дорога — как расстояние. Ряд на мир, в конце ряда веха-проект. */
+.pathlink{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
+.pathlink .tip{font-size:12.5px;color:var(--faint)}
+.pathnow{margin:14px 0;padding:12px 16px;border:1px dashed var(--line2);border-radius:12px;
+  background:rgba(0,224,184,.06);font-size:14px;color:var(--soft);line-height:1.55}
+.pathnow b{color:var(--ink)}
+.pathmap{display:flex;flex-direction:column;gap:18px;margin:16px 0}
+.prow{border:1px solid var(--line);border-radius:14px;padding:13px 15px;background:var(--panel)}
+.phead{display:flex;align-items:center;gap:9px;margin:0 0 10px;font-size:14px;color:var(--ink)}
+.phead .pico{font-size:19px}
+.phead .pcnt{margin-left:auto;font-size:12.5px;color:var(--faint);white-space:nowrap}
+/* Запас сверху и между рядами — под флажок «ты здесь». Он висит над кружком,
+   и без промежутка налезал бы на заголовок ряда или на кружки строкой выше:
+   на узком экране двадцать кружков переносятся, и «ты здесь» может оказаться
+   на любой строке. */
+.pdots{display:flex;flex-wrap:wrap;gap:20px 6px;padding-top:18px}
+.pstep{position:relative;width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);
+  background:var(--sunken);color:var(--faint);font-size:12px;font-weight:600;cursor:pointer;
+  padding:0;transition:.15s;font-variant-numeric:tabular-nums}
+.pstep.done{background:var(--acc);border-color:transparent;color:var(--onacc)}
+.pstep.open{background:var(--panel2);border-color:var(--acc2);color:var(--ink)}
+.pstep.lock,.pstep.soon{opacity:.45;cursor:default}
+.pstep.soon{border-style:dashed}
+.pstep:not(:disabled):hover{transform:translateY(-2px);border-color:var(--acc)}
+.pstep.here{box-shadow:0 0 0 3px rgba(0,224,184,.35)}
+.pflag{position:absolute;left:50%;top:-17px;transform:translateX(-50%);
+  font-size:10.5px;font-weight:700;color:var(--acc2);white-space:nowrap;letter-spacing:.2px}
+.pmile{display:flex;align-items:center;gap:12px;width:100%;margin:12px 0 0;text-align:left;
+  padding:11px 14px;border:1px dashed var(--line2);border-radius:12px;background:var(--sunken);
+  color:var(--soft);cursor:pointer;transition:.15s}
+.pmile.done{border-style:solid;border-color:var(--acc);background:rgba(0,224,184,.07)}
+.pmile.open{border-style:solid}
+.pmile:disabled{opacity:.5;cursor:default}
+.pmile:not(:disabled):hover{border-color:var(--acc)}
+.pmile .pmem{font-size:26px;line-height:1}
+.pmile .pmbody{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pmile .pmkick{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint)}
+.pmile b{color:var(--ink);font-size:14.5px}
+.pmile .pmbody>span:last-child{font-size:12.5px;color:var(--faint)}
+@media (max-width:520px){
+  .pstep{width:27px;height:27px;font-size:11px}
+  .pdots{gap:5px}
+}
+
 /* ---------- карточка «движок» в песочнице ----------
    Тяжёлый контур включается человеком, и переключатель обязан выглядеть
    как выбор, а не как реклама: обычная карточка, кнопка и честный текст. */

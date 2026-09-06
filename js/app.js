@@ -4330,6 +4330,11 @@ function screenWorlds(){
     'На руках остаются шесть собранных проектов и сертификаты — то, что можно показать.</p>' +
     /* Поиск по урокам. Сто уроков лежат в пяти мирах, и «где было про словари»
        раньше искалось только глазами по пяти экранам подряд. */
+    /* Дорога целиком — отдельным экраном, а не здесь: пять карточек ниже
+       отвечают «что внутри мира», а карта — «где я и сколько до вехи».
+       Складывать сто кружков на Главное значило бы удлинить его вдвое. */
+    '<div class="pathlink"><button class="rbtn" id="go-path">🗺 Показать всю дорогу</button>' +
+    '<span class="tip">сто уроков одной картой: где ты стоишь, что впереди и сколько занятий до проекта</span></div>' +
     '<div class="lsearch"><input type="search" id="lq" autocomplete="off" spellcheck="false" ' +
     'placeholder="Найти урок: словари, черепашка, цикл, 42…"></div>' +
     '<div class="lsfound" id="lsfound" hidden></div>' +
@@ -4464,6 +4469,8 @@ function screenWorlds(){
   wireInstallTip(app);
   wireAboutFoot(app);
 
+  var pathBtn = document.getElementById("go-path");
+  if (pathBtn) pathBtn.onclick = screenPath;
   var goNext = document.getElementById("go-next");
   if (goNext) goNext.onclick = function(){
     if (next) openLesson(next.id); else screenWorld(1);
@@ -5757,6 +5764,159 @@ function pyCardWire(seq, studio, real, waking){
   if (on && !waking) on.onclick = start;
   /* Выбор уже сделан раньше, страницу просто перезагрузили: поднимаем молча. */
   if (waking) start();
+}
+
+/* ================= карта пути =================
+   Сто уроков одной дорогой. Зачем это отдельным экраном, если на Главном
+   уже есть пять карточек миров: карточки отвечают на вопрос «что внутри»,
+   а карта — на другой, и он для ребёнка важнее: «сколько ещё и до чего».
+   Пять карточек по двадцать уроков этого не показывают — из них не видно
+   ни где ты, ни что впереди веха, ни как она близко.
+
+   Это детская половина того, что на вывеске уже сделано для взрослого:
+   родителю там показывают путь целиком, а ребёнку до сих пор показывали
+   только следующий шаг.
+
+   ⚠️ Ни одного процента и ни одного «осталось N дней». Расстояние меряется
+   ЗАНЯТИЯМИ — той единицей, которую ребёнок чувствует, — и считается по его
+   собственному темпу (frame().perLesson), как и всё остальное в продукте. */
+function pathZan(left){
+  return Math.max(1, Math.ceil(left / zanSlotsFor(frame().len || 30)));
+}
+/* Ближайшая веха: проект того мира, в котором ребёнок сейчас.
+   null — если весь курс пройден или ни один мир ещё не начат. */
+function pathAhead(){
+  var next = nextLesson();
+  if (!next) return null;
+  var w = CURRICULUM.world(next.world);
+  if (!w) return null;
+  var left = 0;
+  w.lessons.forEach(function(l){ if (!solved(l.id)) left++; });
+  return { world: w, next: next, left: left, zan: pathZan(left),
+           project: projectOfWorld(w.n) };
+}
+/* Состояние шага на карте. Отдельной функцией, потому что его читают и
+   разметка, и подпись, и тест. */
+function pathState(l){
+  if (solved(l.id)) return "done";
+  if (!lessonBody(l)) return "soon";
+  return lessonOpen(l) ? "open" : "lock";
+}
+
+function screenPath(){
+  var seq = enterScreen("home", "path");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  allWorldsContent().then(function(){
+    if (screenStale(seq)) return;
+    var done = Object.keys(S.stars).length;
+    var next = nextLesson();
+    var ah = pathAhead();
+
+    var h = '<div class="crumbs"><span data-go="home">🏠 Главное</span> › 🗺 Карта пути</div>' +
+      '<div class="lvlhead"><div><div class="idx">весь курс одной дорогой</div>' +
+      '<h1>🗺 Карта пути</h1></div>' +
+      '<div class="right"><span class="tag">' + done + ' из ' + CURRICULUM.total + '</span></div></div>' +
+      '<p class="lede">Сто уроков по порядку и пять вех: в конце каждого мира — проект, ' +
+      'который ты собираешь сам и уносишь с собой. Нажми на любой открытый кружок — откроется тот урок.</p>';
+
+    /* Строка «ты здесь». Она же отвечает на вопрос, который ребёнок задаёт
+       чаще всего: «сколько ещё до чего-то большого». */
+    h += '<div class="pathnow">';
+    if (!next){
+      h += '<b>🏁 Весь курс пройден.</b> Дорога кончилась, но тренировки, игры и своя песочница остались.';
+    } else {
+      h += '<b>📍 Ты здесь: урок ' + next.num + ' — «' + esc(next.title) + '».</b> ';
+      if (ah && ah.project){
+        h += 'До вехи «' + esc(ah.project.title) + '» — ' + ah.left + ' ' +
+             plural(ah.left, "урок", "урока", "уроков") + ', примерно ' + ah.zan + ' ' +
+             plural(ah.zan, "занятие", "занятия", "занятий") + '.';
+      }
+      /* Карта длинная, и у того, кто дошёл до пятого мира, «ты здесь» уходит
+         далеко вниз. Кнопка, а не автопрокрутка: прыгать самому по экрану
+         сразу после открытия — значит унести ребёнка от строки, которую он
+         только начал читать. */
+      h += ' <button class="rbtn sec" id="p-where">Показать, где я</button>';
+    }
+    h += '</div>';
+
+    h += '<div class="pathmap">';
+    CURRICULUM.forEach(function(w){
+      var wdone = 0;
+      w.lessons.forEach(function(l){ if (solved(l.id)) wdone++; });
+      var pj = projectOfWorld(w.n);
+      h += '<div class="prow">' +
+        '<div class="phead"><span class="pico">' + w.icon + '</span>' +
+        '<b>Мир ' + w.n + ' · ' + esc(w.title) + '</b>' +
+        '<span class="pcnt">' + wdone + ' из ' + w.lessons.length + '</span></div>' +
+        '<div class="pdots">';
+      w.lessons.forEach(function(l){
+        var st = pathState(l);
+        var here = next && l.id === next.id;
+        var подпись = "Урок " + l.num + ": " + l.title +
+          (st === "done" ? " — пройден" : st === "soon" ? " — ещё не готов"
+            : st === "lock" ? " — откроется позже" : " — можно открыть");
+        h += '<button class="pstep ' + st + (here ? " here" : "") + '"' +
+          (st === "done" || st === "open" ? ' data-lesson="' + l.id + '"' : ' disabled') +
+          ' title="' + esc(подпись) + '" aria-label="' + esc(подпись) + '">' +
+          l.pos + (here ? '<span class="pflag">ты здесь</span>' : '') + '</button>';
+      });
+      h += '</div>';
+      if (pj){
+        var pdone = projectDone(pj.id), popen = projectOpen(pj);
+        h += '<button class="pmile' + (pdone ? " done" : popen ? " open" : "") + '"' +
+          (popen ? ' data-proj="' + pj.id + '"' : ' disabled') + '>' +
+          '<span class="pmem">' + pj.emoji + '</span>' +
+          '<span class="pmbody"><span class="pmkick">веха мира ' + w.n +
+            (pdone ? " · собрана ✓" : popen ? " · открыта" : " · закрыта") + '</span>' +
+          '<b>' + esc(pj.title) + '</b>' +
+          '<span>' + esc(pj.tagline) + '</span></span></button>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+
+    h += '<p class="dim">Кружок с цифрой — урок, его номер внутри мира. ' +
+      'Закрашенный — пройденный, светлый — открытый, тусклый — ещё закрыт. ' +
+      'Внутри мира уроки открываются по одному: сдал — открылся следующий. ' +
+      'А первый урок КАЖДОГО мира открыт сразу — можно заглянуть вперёд, ' +
+      'не проходя всё подряд.</p>' +
+      '<div class="pager"><button class="bigbtn" id="p-next">▶ ' +
+      (next ? "Продолжить: урок " + next.num : "К тренировкам") + '</button>' +
+      '<button class="bigbtn ghost" data-go="home">← На главную</button></div>';
+
+    app.innerHTML = h;
+    app.querySelectorAll(".pstep[data-lesson]").forEach(function(b){
+      b.onclick = function(){ openLesson(b.getAttribute("data-lesson")); };
+    });
+    app.querySelectorAll(".pmile[data-proj]").forEach(function(b){
+      b.onclick = function(){ openProject(b.getAttribute("data-proj")); };
+    });
+    app.querySelectorAll('[data-go="home"]').forEach(function(b){
+      b.onclick = goHome;
+    });
+    document.getElementById("p-next").onclick = function(){
+      if (next) openLesson(next.id); else screenTrain();
+    };
+    var where = document.getElementById("p-where");
+    if (where) where.onclick = function(){
+      var here = app.querySelector(".pstep.here");
+      if (!here) return;
+      try { here.scrollIntoView({ block:"center", behavior:"smooth" }); } catch(e){}
+      /* ⚠️ Есть браузеры, которые МОЛЧА игнорируют behavior:"smooth" — не
+         ошибка, не исключение, просто ничего не происходит. Замечено 07.09.2026
+         на встроенной панели предпросмотра. Поэтому смотрим глазами: если
+         кружок так и не попал в окно, доводим прокрутку без анимации.
+         Кнопка, которая иногда не работает, хуже кнопки без анимации. */
+      setTimeout(function(){
+        var r;
+        try { r = here.getBoundingClientRect(); } catch(e){ return; }
+        if (r.top < 0 || r.bottom > (window.innerHeight || 0))
+          try { here.scrollIntoView({ block:"center" }); } catch(e){}
+      }, 400);
+    };
+    refreshTop();
+    window.scrollTo({ top:0, behavior:"smooth" });
+  });
 }
 
 /* ================= экран: игры =================
@@ -16419,6 +16579,24 @@ function themeSet(t){
 var curPlace = "home";
 
 var HELP = {
+  path: { t:"🗺 Карта пути — где ты и что впереди", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Весь курс одной дорогой: сто уроков по порядку и пять вех. ' +
+    'Веха — это проект в конце мира, который ты собираешь сам и уносишь с собой.</p>' +
+    '<h4>Как читать</h4>' +
+    '<ul><li><b>Кружок с цифрой</b> — урок. Цифра — его номер внутри мира.</li>' +
+    '<li><b>Закрашенный</b> — пройден, <b>светлый</b> — открыт и ждёт, <b>тусклый</b> — ещё закрыт.</li>' +
+    '<li>Внутри мира уроки открываются по одному, но <b>первый урок каждого мира открыт сразу</b>: ' +
+    'если интересно, что там дальше, — можно заглянуть, ничего не сломается.</li>' +
+    '<li><b>«ты здесь»</b> стоит на том уроке, до которого ты дошёл. ' +
+    'Кнопка <b>«Показать, где я»</b> наверху прокрутит карту прямо к нему.</li></ul>' +
+    '<h4>Что делать</h4>' +
+    '<p>Нажми на любой светлый или закрашенный кружок — откроется тот урок. ' +
+    'Пройденный можно перерешать: звёзды при этом не отнимаются.</p>' +
+    '<h4>Про «примерно N занятий»</h4>' +
+    '<p>Это не обещание и не срок. Тренажёр смотрит, сколько уроков ты успеваешь за занятие, ' +
+    'и считает по твоему темпу. Будешь заниматься быстрее — число уменьшится само.</p>' },
+
   home: { t:"🏠 Главное — с чего начать", h:
     '<h4>Что это за экран</h4>' +
     '<p>Отсюда начинается всё. Сверху написано, <b>что делать прямо сейчас</b>, ' +
@@ -17246,6 +17424,7 @@ window.__game = {
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
+  screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,

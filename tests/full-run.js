@@ -3831,7 +3831,7 @@ function checkEncoding(){
     /* у каждого экрана есть свой текст, и он не пустой */
     const places = ["home","world","lesson","train","sand","games","game","today","warm","warmup",
                     "review","ai","ailesson","project","projectdone","folio","mytasks","friendtask",
-                    "viz","account","register","guide","admin","stars","worlds","tools"];
+                    "viz","account","register","guide","admin","stars","worlds","tools","path"];
     places.forEach(k => {
       const e = g.HELP[k];
       if (!e) return bad("[помощь] нет текста для места «" + k + "»");
@@ -6391,6 +6391,69 @@ function checkEncoding(){
     if (problems.length === p0) aiPackChecked++;
   }
 
+  /* --- 12б. карта пути --- */
+  let pathChecked = 0;
+  if (typeof g.screenPath === "function"){
+    const p0 = problems.length;
+    /* Ставим правдоподобный прогресс: мир 1 пройден, во втором семь уроков. */
+    g.state.stars = {};
+    /* ⚠️ К этому месту прогона мог остаться включённым админский «открыть всё»
+       (его щупают проверки выше). С ним заперт никто, и замок на карте нечем
+       проверить. Снимаем на время своей проверки и возвращаем как было. */
+    const adminWas = g.state.admin && g.state.admin.unlockAll;
+    if (g.state.admin) g.state.admin.unlockAll = 0;
+    const CURP = w.CURRICULUM;
+    CURP.forEach(x => x.lessons.forEach(l => { if (l.num <= 27) g.state.stars[l.id] = 3; }));
+    g.screenPath(); await tick(); await tick();
+    const app = doc.getElementById("app");
+
+    const steps = [...doc.querySelectorAll(".pstep")];
+    if (steps.length !== CURP.total)
+      bad(`[карта] кружков ${steps.length}, а уроков ${CURP.total} — карта показывает не весь курс`);
+    if (doc.querySelectorAll(".pmile").length !== CURP.length)
+      bad("[карта] вех не по одной на мир: " + doc.querySelectorAll(".pmile").length);
+
+    /* «ты здесь» — ровно одно место, и оно на следующем уроке. Иначе карта
+       отвечает не на тот вопрос, ради которого её открыли. */
+    const here = [...doc.querySelectorAll(".pstep.here")];
+    if (here.length !== 1) bad("[карта] «ты здесь» показано " + here.length + " раз вместо одного");
+    const next = g.nextLesson();
+    if (here.length === 1 && next && here[0].getAttribute("data-lesson") !== next.id)
+      bad("[карта] «ты здесь» стоит не на том уроке, который откроет «Продолжить»");
+    if (!/Ты здесь: урок 28/.test(app.textContent))
+      bad("[карта] строка «ты здесь» не называет номер урока: " + (app.textContent.match(/Ты здесь[^.]*/) || ""));
+
+    /* Расстояние меряется занятиями, а не процентами и не днями: проценты
+       ребёнку ничего не говорят, а дни мы обещать не вправе. */
+    if (!/занятия|занятий|занятие/.test(app.textContent))
+      bad("[карта] до вехи не сказано, сколько занятий");
+    if (/%/.test(app.textContent)) bad("[карта] на карте появились проценты — они ребёнку ничего не говорят");
+
+    /* Закрытый урок нельзя открыть с карты, пройденный и открытый — можно. */
+    const locked = steps.filter(b => b.disabled);
+    if (!locked.length) bad("[карта] закрытых уроков нет вовсе — замок не работает");
+    if (locked.some(b => b.getAttribute("data-lesson")))
+      bad("[карта] у закрытого кружка есть ссылка на урок — его можно открыть в обход");
+    const openable = steps.filter(b => !b.disabled);
+    if (openable.length < 21) bad("[карта] открытых кружков подозрительно мало: " + openable.length);
+
+    /* Веха закрытого мира не открывается, собранная — помечена. */
+    const miles = [...doc.querySelectorAll(".pmile")];
+    if (!miles[1] || !miles[1].disabled)
+      bad("[карта] веха недопройденного мира открыта");
+
+    /* Кружок ведёт в свой урок, а не в какой попало. */
+    const first = openable[0];
+    if (first){
+      first.click(); await tick();
+      if (!/Первая команда/.test(doc.getElementById("app").textContent))
+        bad("[карта] кружок урока 1 открыл не тот урок");
+    }
+    if (g.state.admin && adminWas) g.state.admin.unlockAll = adminWas;
+    if (problems.length === p0) pathChecked++;
+    viewReset(g);
+  }
+
   /* --- 13. алгоритмы и формат ОГЭ --- */
   if (typeof g.algoList === "function"){
     const p0 = problems.length;
@@ -6707,6 +6770,7 @@ function checkEncoding(){
   console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
+  console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
