@@ -1638,6 +1638,78 @@ body.focus .toTop{display:none}
    отступы говорят ей не прятать поле под шапку и не прижимать к клавиатуре. */
 html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 
+/* ================= вывеска: первый экран для гостя =================
+   Единственный экран сайта, который читают, а не проходят, — и это диктует
+   вёрстку. Строка здесь длиннее обычной (720px против сплошной колонки):
+   на витрине читают абзацами, а не сканируют список уроков. Числа стоят
+   отдельной полосой, потому что объём курса — главный аргумент, и он должен
+   схватываться глазом раньше, чем человек начнёт читать.
+   ⚠️ Ни одного своего цвета: всё на переменных темы. Вывеска обязана быть
+   такой же в тёмной теме, иначе на первом же экране сайт выглядит чужим. */
+.land{display:flex;flex-direction:column;gap:34px}
+.landhero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;
+  padding:34px 30px;box-shadow:var(--sh)}
+.landkick{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:8px}
+.landhero h1{margin:0 0 12px;font-size:38px;line-height:1.12}
+.landlede{margin:0;font-size:17.5px;line-height:1.55;color:var(--soft);max-width:720px}
+.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 0}
+.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:720px}
+/* Числа: auto-fit, а не фиксированные колонки, — их восемь, и на любой ширине
+   они обязаны разложиться без дырки в конце строки. */
+.landnums{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.landnum{border:1px solid var(--line);border-radius:14px;background:var(--panel);
+  padding:14px 16px;display:flex;flex-direction:column;gap:1px}
+.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:30px;line-height:1.05;color:var(--acc)}
+.landnum span{font-size:14px;font-weight:600}
+.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:3px}
+.landsect h2{margin:0 0 6px;font-size:25px}
+.landsect .lede{margin:0 0 16px;max-width:720px}
+/* Шаги урока — нумерованные, но номер рисуем сами: у списка по умолчанию он
+   мелкий и серый, а здесь это опора взгляда. */
+.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;display:grid;gap:10px}
+.landsteps li{counter-increment:ls;position:relative;padding:14px 16px 14px 56px;
+  border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.landsteps li::before{content:counter(ls);position:absolute;left:16px;top:13px;
+  width:26px;height:26px;border-radius:9px;background:var(--acc);color:var(--onacc);
+  font-family:'Fredoka','Inter',sans-serif;font-size:15px;display:flex;
+  align-items:center;justify-content:center}
+.landsteps li b{display:block;font-size:16px}
+.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.5;margin-top:2px}
+.landworlds{display:grid;gap:12px}
+.landworld{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--panel);padding:16px 18px}
+.landworld .lwico{font-size:30px;line-height:1.1;flex:none}
+.lwbody{min-width:0}
+.lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700}
+.lwbody b{font-size:18px}
+.lwbody p{margin:2px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5}
+/* Названия уроков — намеренно мелкие и приглушённые: это доказательство, что
+   программа настоящая, а не список, который читают целиком. */
+.lwlist{display:block;margin-top:7px;font-size:12.5px;color:var(--faint);line-height:1.5}
+.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  padding:16px 18px;display:flex;flex-direction:column;gap:3px}
+.landcard .lcem{font-size:26px;line-height:1.1}
+.landcard b{font-size:16.5px}
+.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.5}
+/* Границы обещания. Рамка предупреждения, а не обычная карточка: это место
+   человек обязан заметить, а не пролистать (docs/vyveska.md § 0). */
+.landhonest{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.landhonest li{border:1px solid var(--warnline);background:var(--warnbg);color:var(--warnink);
+  border-radius:13px;padding:12px 15px;font-size:14.5px;line-height:1.55}
+.landhonest li b{color:var(--ink)}
+.landend{border-top:1px solid var(--line);padding-top:26px}
+@media (max-width:620px){
+  .landhero{padding:26px 20px;border-radius:18px}
+  .landhero h1{font-size:29px}
+  .landlede{font-size:16px}
+  .landsect h2{font-size:22px}
+  .landcta .bigbtn{width:100%}
+  .landworld{gap:12px;padding:14px 15px}
+}
+
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
      это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
@@ -17374,7 +17446,14 @@ function backTarget(){
     case "kid": return { label:"К ученикам", go: screenKids };
     /* Выбор роли на общем компьютере и кабинет родителя. Экран выбора и сам
        кабинет — вершины (назад некуда), а формы входа возвращают к выбору. */
-    case "roles": case "parent": return null;
+    /* Вывеска — вершина: назад с неё некуда, это и есть начало сайта.
+       А вот с выбора роли назад ЕСТЬ куда, пока устройство ничьё: человек
+       мог открыть двери просто чтобы посмотреть, и должен уметь вернуться
+       к описанию. На закреплённом устройстве возврат не нужен — там на том
+       же экране стоит «← Остаться как есть». */
+    case "about": case "parent": return null;
+    case "roles": return (isAdminDevice() || isParentDevice() || myCode() || S.name)
+      ? null : { label:"О тренажёре", go: screenAbout };
     case "kidlogin": case "parentlogin": return { label:"К выбору", go: screenRoles };
 
     case "lesson": {
@@ -17454,7 +17533,10 @@ function refreshTop(){
     curPlace === "adminsetup" || curPlace === "adminlogin" ||
     curPlace === "kids" || curPlace === "kid" ||
     curPlace === "roles" || curPlace === "kidlogin" ||
-    curPlace === "parentlogin" || curPlace === "parent";
+    curPlace === "parentlogin" || curPlace === "parent" ||
+    /* Вывеска — тоже не детский экран: «0 XP», «★ 0» и ранг «Новичок» рядом
+       с описанием продукта показывают гостю его несуществующий прогресс. */
+    curPlace === "about";
   document.body.classList.toggle("adminui", adminScreen);
   if (adminScreen) return;                    /* детские счётчики не трогаем */
   document.querySelectorAll(".tabs .tab").forEach(function(b){
@@ -28403,6 +28485,7 @@ var HASH_SCREENS = {
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
   "#algo":    function(){ screenAlgo(); },
+  "#about":   function(){ screenAbout(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
 };
@@ -28778,6 +28861,203 @@ function screenAdminHome(){
   becomeAdmin();                 /* войти админом = сделать админа активной ролью */
   return screenKids();
 }
+/* ================= вывеска: что это за тренажёр =================
+   Первый экран для того, кто открыл ссылку и ещё ничей.
+
+   Заводится не ради красоты. До 1.69.0 незакреплённое устройство открывалось
+   сразу выбором роли — «я ученик / я родитель / я администратор». Три двери и
+   ни слова о том, куда они ведут: родитель, впервые открывший ссылку, не мог
+   ответить ни на один свой вопрос — чему тут учат, сколько это уроков, с
+   какого возраста, как выглядит урок — и обязан был выбрать дверь, чтобы это
+   выяснить. Дверь была, вывески не было.
+
+   ⚠️ Числа здесь НЕ пишутся руками. «Сто уроков» ещё можно проверить глазами,
+   а «21 разминка» — уже нет: список меняется, цифра на вывеске остаётся, и
+   через месяц вывеска врёт. Поэтому всё считается из самих данных при каждой
+   отрисовке (aboutCounts), и разойтись с продуктом не может.
+
+   ⚠️ Программа курса читается из CURRICULUM, а не переписана рядом. По той же
+   причине: переписанное название мира живёт своей жизнью.
+
+   ⚠️ Раздел «Честно» стоит ДО кнопки входа, а не после. Вывеска — это
+   обещание (docs/vyveska.md § 0), и границы обещания родитель обязан увидеть
+   до того, как заведёт ребёнку профиль, а не в мае перед экзаменом.
+
+   Слова заголовка — вариант А из docs/vyveska.md: рынок ищет школьный предмет,
+   а не язык программирования. Заголовок вкладки и meta description в
+   index.html уже стояли по этому варианту — теперь то же самое написано и для
+   человека, а не только для поисковика. */
+function aboutCounts(){
+  var cheat = 0;
+  (window.CHEATSHEET || []).forEach(function(s){ cheat += (s.items || []).length; });
+  return {
+    lessons:  CURRICULUM.total,
+    worlds:   CURRICULUM.length,
+    warm:     (window.WARMUPS  || []).length,
+    games:    (window.GAMES    || []).length,
+    ai:       (window.AILAB    || []).length,
+    specs:    (window.SPECS    || []).length,
+    algo:     (window.ALGO     || []).length,
+    projects: (window.PROJECTS || []).length,
+    cheat:    cheat
+  };
+}
+function screenAbout(){
+  enterScreen("home", "about");
+  session = { id:null, attempts:0, hints:0, shown:false };
+  var c = aboutCounts();
+  /* На это устройство мог уже кто-то заходить и что-то пройти, не заводя имени
+     (посмотрел урок с этой же вывески и решил его). Тогда первая кнопка — не
+     «начать», а «продолжить»: иначе сделанное выглядит потерянным. */
+  var started = Object.keys(S.stars).length;
+
+  var h = '<div class="land">';
+
+  h += '<div class="landhero">' +
+    '<div class="landkick">информатика · 5–11 класс</div>' +
+    '<h1>Информатика без репетитора</h1>' +
+    '<p class="landlede">' + c.lessons + ' ' + plural(c.lessons, "урок", "урока", "уроков") +
+      ' программирования на Python прямо в браузере. Код запускается сразу, ошибки ' +
+      'объясняются словами, а взрослый раз в неделю видит, занимался ребёнок или нет.</p>' +
+    '<div class="landcta">' +
+      (started
+        ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
+          '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+        : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
+          '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
+    '</div>' +
+    '<p class="landsub">Ничего не надо устанавливать: тренажёр целиком работает в браузере ' +
+    'на компьютере, планшете и телефоне. Python внутри свой — он не грузится из сети ' +
+    'и работает без интернета.</p>' +
+  '</div>';
+
+  /* --- продукт в числах. Строка длинная нарочно: это единственное место, где
+         объём курса виден целиком и сразу, без хождения по разделам. --- */
+  var nums = [
+    [c.lessons,  plural(c.lessons,  "урок", "урока", "уроков"),            "по порядку, от первой команды до своей программы"],
+    [c.worlds,   plural(c.worlds,   "мир", "мира", "миров"),               "по двадцать уроков на одну большую тему"],
+    [c.projects, plural(c.projects, "проект", "проекта", "проектов"),      "большая программа в несколько шагов"],
+    [c.algo,     plural(c.algo,     "задача", "задачи", "задач"),          "алгоритмы и формат ОГЭ и ЕГЭ"],
+    [c.warm,     plural(c.warm,     "разминка", "разминки", "разминок"),   "пять минут, когда на урок нет сил"],
+    [c.ai,       plural(c.ai,       "упражнение", "упражнения", "упражнений"), "как принимать работу у нейросети"],
+    [c.games,    plural(c.games,    "игра", "игры", "игр"),                "и у каждой виден код"],
+    [c.cheat,    plural(c.cheat,    "команда", "команды", "команд"),       "шпаргалка открывается поверх урока"]
+  ];
+  h += '<div class="landnums">';
+  nums.forEach(function(n){
+    h += '<div class="landnum"><b>' + n[0] + '</b><span>' + n[1] + '</span>' +
+      '<i>' + esc(n[2]) + '</i></div>';
+  });
+  h += '</div>';
+
+  /* --- как проходит урок --- */
+  h += '<div class="landsect"><h2>Как проходит урок</h2>' +
+    '<p class="lede">Пятнадцать–двадцать минут, и всё внутри одной страницы. ' +
+    'Ни установки Python, ни редактора, ни командной строки.</p>' +
+    '<ol class="landsteps">' +
+    '<li><b>Читаешь объяснение</b><span>Короткая теория, а к ней живые примеры: ' +
+      'у каждого кнопка «▶ Запустить пример» — код срабатывает тут же, на месте.</span></li>' +
+    '<li><b>Решаешь задачу</b><span>Задача стоит списком требований, а не одной фразой: ' +
+      'видно, что именно должна делать программа.</span></li>' +
+    '<li><b>Запускаешь свой код</b><span>Сколько угодно раз, это ничего не стоит. Рядом со ' +
+      'строками написано, что каждая из них сделала.</span></li>' +
+    '<li><b>Жмёшь «✓ Проверить»</b><span>Не сошлось — тренажёр покажет, чем твой ответ ' +
+      'отличается от нужного. Подсказки идут по шагам: от намёка к ответу, а не сразу решение.</span></li>' +
+    '</ol>' +
+    '<div class="note"><b>Ошибка здесь — не ругань</b>Красный текст Python переведён на русский: ' +
+    'написано, в какой строке и что именно не сошлось. А если код работает не так, как думал, — ' +
+    'визуализатор пройдёт программу по шагам и покажет, что лежит в памяти.</div></div>';
+
+  /* --- программа курса, прочитанная из CURRICULUM --- */
+  h += '<div class="landsect"><h2>Программа: ' + c.worlds + ' ' +
+    plural(c.worlds, "мир", "мира", "миров") + ', ' + c.lessons + ' ' +
+    plural(c.lessons, "урок", "урока", "уроков") + '</h2>' +
+    '<p class="lede">Уроки идут по порядку: следующий открывается, когда сдан предыдущий. ' +
+    'В конце каждого мира — босс, проект и сертификат.</p><div class="landworlds">';
+  CURRICULUM.forEach(function(w){
+    var names = w.lessons.slice(0, 5).map(function(l){ return l.title; }).join(" · ");
+    h += '<div class="landworld"><span class="lwico">' + w.icon + '</span>' +
+      '<div class="lwbody"><div class="lwkick">Мир ' + w.n + ' · ' + w.lessons.length + ' ' +
+        plural(w.lessons.length, "урок", "урока", "уроков") + '</div>' +
+      '<b>' + esc(w.title) + '</b>' +
+      '<p>' + esc(w.desc) + '</p>' +
+      '<span class="lwlist">' + esc(names) + ' …</span></div></div>';
+  });
+  h += '</div></div>';
+
+  /* --- всё, что вокруг сотни уроков. Список берётся из trainCards(), то есть
+         из того же места, откуда его берёт сам раздел «Тренировки»: две копии
+         разошлись бы на первой же правке. --- */
+  h += '<div class="landsect"><h2>Кроме уроков</h2>' +
+    '<p class="lede">Сюда заходят между уроками, по настроению. Звёзд тут не дают ' +
+    'и по порядку проходить не надо.</p><div class="landgrid">';
+  trainCards().forEach(function(t){
+    h += '<div class="landcard"><span class="lcem">' + t.em + '</span>' +
+      '<b>' + esc(t.title) + '</b><p>' + esc(t.why) + '</p></div>';
+  });
+  h += '</div></div>';
+
+  /* --- взрослому. Отдельным разделом, потому что вывеску читает чаще всего
+         именно он, а не ребёнок. --- */
+  h += '<div class="landsect"><h2>Что видит взрослый</h2>' +
+    '<p class="lede">У взрослого свой кабинет под паролем, отдельно от тренажёра ребёнка. ' +
+    'Ребёнок в него не заходит и ничего в нём не меняет.</p><div class="landgrid">' +
+    '<div class="landcard"><span class="lcem">📅</span><b>Расписание</b>' +
+      '<p>В какие дни занимаемся и по сколько. Тренажёр сам напомнит ребёнку в учебный день.</p></div>' +
+    '<div class="landcard"><span class="lcem">📊</span><b>Отчёт за неделю</b>' +
+      '<p>Сколько времени, какие уроки, где застрял. Точное время, а не «занимался/не занимался».</p></div>' +
+    '<div class="landcard"><span class="lcem">📝</span><b>Домашка</b>' +
+      '<p>Можно выбрать задачи и отдать их ребёнку — он увидит их на Главном рядом с «Продолжить».</p></div>' +
+    '<div class="landcard"><span class="lcem">⏱</span><b>Потолок экранного времени</b>' +
+      '<p>Сколько минут в день. По умолчанию тренажёр только напоминает; жёсткий запрет включается отдельно ' +
+      'и никогда не обрывает начатый урок.</p></div>' +
+    '<div class="landcard"><span class="lcem">🖼</span><b>Витрина работ</b>' +
+      '<p>Что ребёнок собрал своими руками: программы, рисунки, проекты. Их можно запустить и показать.</p></div>' +
+    '<div class="landcard"><span class="lcem">🔗</span><b>Код ученика</b>' +
+      '<p>По нему прогресс виден на другом устройстве и в кабинете. Один код — один ребёнок.</p></div>' +
+    '</div></div>';
+
+  /* --- границы обещания. Стоит перед кнопкой входа сознательно. --- */
+  h += '<div class="landsect"><h2>Честно про границы</h2>' +
+    '<ul class="landhonest">' +
+    '<li><b>Язык один — Python.</b> Ни Scratch, ни HTML с JavaScript здесь нет. ' +
+      'Даже урок про сайт в пятом мире пишется на Python.</li>' +
+    '<li><b>Экзамены закрываем не целиком.</b> Мы берём ту часть ОГЭ и ЕГЭ, где надо ' +
+      'написать программу, и алгоритмику. Кодирование информации, таблицы и работа с файлами ' +
+      'сюда не входят.</li>' +
+    '<li><b>Проверяет программа, а не человек.</b> Живого учителя, разбора кода взрослым ' +
+      'и оценок тут нет: решение сверяет движок, а объясняет — сам урок.</li>' +
+    '<li><b>Прогресс лежит в браузере.</b> На этом устройстве он никуда не уходит и работает ' +
+      'без сети. Чтобы он был виден на втором устройстве и в кабинете взрослого, нужен код ученика.</li>' +
+    '</ul></div>';
+
+  /* --- вход. Три двери, но уже после того, как сказано, куда они ведут. --- */
+  h += '<div class="landsect landend"><h2>С чего начать</h2>' +
+    '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона мы не спрашиваем: ' +
+    'спрашивать их некому, сервера с личными данными у нас нет.</p>' +
+    '<div class="landcta">' +
+      (started ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' : '') +
+      '<button class="bigbtn' + (started ? ' ghost' : '') + '" data-land="in">' +
+        (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
+    '</div>' +
+    '<p class="landsub">Дальше спросим, кто вы: ученик, родитель или администратор. ' +
+    'На своём личном устройстве этот вопрос задаётся один раз.</p></div>';
+
+  h += '</div>';
+  app.innerHTML = h;
+
+  app.querySelectorAll("[data-land]").forEach(function(b){
+    b.onclick = function(){
+      var k = b.getAttribute("data-land");
+      if (k === "on") return screenWorlds();
+      if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      screenRoles();
+    };
+  });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* ===== выбор роли на ОБЩЕМ компьютере =====
    На личных устройствах этот экран не нужен: планшет ребёнка открывается по
    своей ссылке в тренажёр, мак взрослого — в кабинет, телефон родителя — в свой.
@@ -31207,6 +31487,20 @@ var HELP = {
     '<p>Кнопка <b>🔥 Сегодня</b> наверху считает дни подряд. Один урок или одна разминка ' +
     'в день — и серия не оборвётся.</p>' },
 
+  /* Вывеска — единственный экран, где «?» отвечает не ребёнку, а гостю:
+     ребёнок сюда попадает разве что случайно, а взрослый — всегда первым. */
+  about: { t:"🐍 Кодоквест — что это", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Витрина: что тут есть, из чего состоит курс и что видит взрослый. ' +
+    'Это единственный экран, где ничего не надо решать, — его просто читают.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>«Посмотреть первый урок»</b> открывает настоящий урок без всякой регистрации — ' +
+    'самый быстрый способ понять, подходит ли это вам.</li>' +
+    '<li><b>«Начать заниматься»</b> спросит, кто вы: ученик, родитель или администратор.</li>' +
+    '<li>Раздел <b>«Честно про границы»</b> читать обязательно: там написано, чего тут нет.</li></ul>' +
+    '<h4>Как сюда вернуться</h4>' +
+    '<p>Добавьте к адресу сайта <b>#about</b> — вывеска откроется с любого экрана.</p>' },
+
   world: { t:"🗺 Мир — двадцать уроков подряд", h:
     '<h4>Что это за экран</h4>' +
     '<p>Один мир — это двадцать уроков на одну большую тему. Они открываются ' +
@@ -31907,7 +32201,10 @@ function bootRender(){
       if (isAdminDevice()) screenAdminHome();
       else if (isParentDevice()) screenParent();
       else if (myCode() || S.name) screenWorlds();
-      else screenRoles();
+      /* ⚠️ Незакреплённое устройство встречает ВЫВЕСКА, а не выбор роли.
+         Раньше здесь стоял screenRoles(), и первым, что видел человек по
+         ссылке, были три двери без единого слова о том, куда они ведут. */
+      else screenAbout();
     }
   } catch(e){
     bootFallback(e);
@@ -32096,6 +32393,7 @@ window.__game = {
   isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
   parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,
   becomeKid: becomeKid,
+  screenAbout: screenAbout, aboutCounts: aboutCounts,
   screenRoles: screenRoles, screenParent: screenParent,
   screenKidLogin: screenKidLogin, screenParentLogin: screenParentLogin,
   adultFieldProblem: adultFieldProblem, adultTplById: adultTplById,

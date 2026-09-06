@@ -1616,3 +1616,75 @@ body.focus .toTop{display:none}
 /* Автопрокрутка браузера к сфокусированному полю метит в край экрана:
    отступы говорят ей не прятать поле под шапку и не прижимать к клавиатуре. */
 html{scroll-padding-top:84px;scroll-padding-bottom:140px}
+
+/* ================= вывеска: первый экран для гостя =================
+   Единственный экран сайта, который читают, а не проходят, — и это диктует
+   вёрстку. Строка здесь длиннее обычной (720px против сплошной колонки):
+   на витрине читают абзацами, а не сканируют список уроков. Числа стоят
+   отдельной полосой, потому что объём курса — главный аргумент, и он должен
+   схватываться глазом раньше, чем человек начнёт читать.
+   ⚠️ Ни одного своего цвета: всё на переменных темы. Вывеска обязана быть
+   такой же в тёмной теме, иначе на первом же экране сайт выглядит чужим. */
+.land{display:flex;flex-direction:column;gap:34px}
+.landhero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;
+  padding:34px 30px;box-shadow:var(--sh)}
+.landkick{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:8px}
+.landhero h1{margin:0 0 12px;font-size:38px;line-height:1.12}
+.landlede{margin:0;font-size:17.5px;line-height:1.55;color:var(--soft);max-width:720px}
+.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 0}
+.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:720px}
+/* Числа: auto-fit, а не фиксированные колонки, — их восемь, и на любой ширине
+   они обязаны разложиться без дырки в конце строки. */
+.landnums{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.landnum{border:1px solid var(--line);border-radius:14px;background:var(--panel);
+  padding:14px 16px;display:flex;flex-direction:column;gap:1px}
+.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:30px;line-height:1.05;color:var(--acc)}
+.landnum span{font-size:14px;font-weight:600}
+.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:3px}
+.landsect h2{margin:0 0 6px;font-size:25px}
+.landsect .lede{margin:0 0 16px;max-width:720px}
+/* Шаги урока — нумерованные, но номер рисуем сами: у списка по умолчанию он
+   мелкий и серый, а здесь это опора взгляда. */
+.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;display:grid;gap:10px}
+.landsteps li{counter-increment:ls;position:relative;padding:14px 16px 14px 56px;
+  border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.landsteps li::before{content:counter(ls);position:absolute;left:16px;top:13px;
+  width:26px;height:26px;border-radius:9px;background:var(--acc);color:var(--onacc);
+  font-family:'Fredoka','Inter',sans-serif;font-size:15px;display:flex;
+  align-items:center;justify-content:center}
+.landsteps li b{display:block;font-size:16px}
+.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.5;margin-top:2px}
+.landworlds{display:grid;gap:12px}
+.landworld{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--panel);padding:16px 18px}
+.landworld .lwico{font-size:30px;line-height:1.1;flex:none}
+.lwbody{min-width:0}
+.lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700}
+.lwbody b{font-size:18px}
+.lwbody p{margin:2px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5}
+/* Названия уроков — намеренно мелкие и приглушённые: это доказательство, что
+   программа настоящая, а не список, который читают целиком. */
+.lwlist{display:block;margin-top:7px;font-size:12.5px;color:var(--faint);line-height:1.5}
+.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  padding:16px 18px;display:flex;flex-direction:column;gap:3px}
+.landcard .lcem{font-size:26px;line-height:1.1}
+.landcard b{font-size:16.5px}
+.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.5}
+/* Границы обещания. Рамка предупреждения, а не обычная карточка: это место
+   человек обязан заметить, а не пролистать (docs/vyveska.md § 0). */
+.landhonest{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.landhonest li{border:1px solid var(--warnline);background:var(--warnbg);color:var(--warnink);
+  border-radius:13px;padding:12px 15px;font-size:14.5px;line-height:1.55}
+.landhonest li b{color:var(--ink)}
+.landend{border-top:1px solid var(--line);padding-top:26px}
+@media (max-width:620px){
+  .landhero{padding:26px 20px;border-radius:18px}
+  .landhero h1{font-size:29px}
+  .landlede{font-size:16px}
+  .landsect h2{font-size:22px}
+  .landcta .bigbtn{width:100%}
+  .landworld{gap:12px;padding:14px 15px}
+}
