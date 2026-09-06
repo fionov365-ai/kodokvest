@@ -1726,7 +1726,12 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    про себя, пока читает заголовок: «опять что-то ставить», «опять интернет»,
    «опять телефон оставлять». Отвечать на них абзацем поздно — он до абзаца
    не дойдёт. */
-.landtrust{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.landjump{margin:18px 0 0;font-size:13.5px;color:var(--faint)}
+.linkjump{background:none;border:none;padding:0;font:inherit;font-size:13.5px;
+  font-weight:600;color:var(--accink);cursor:pointer;text-decoration:underline;
+  text-underline-offset:3px;text-decoration-thickness:1px}
+.linkjump:hover{text-decoration-thickness:2px}
+.landtrust{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .landtrust li{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--soft);
   background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:7px 12px}
 .landtrust b{font-weight:600;color:var(--ink)}
@@ -1949,7 +1954,21 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .ltabs.wld .ltab .ltt i{font-style:normal;font-size:11px;letter-spacing:.05em;
   text-transform:uppercase;opacity:.72}
 .ltabs.wld .ltab .ltt b{font-size:14.5px;font-weight:700}
-.ltabs.ltsm .ltab{padding:7px 12px;font-size:13.5px;border-radius:11px}
+/* Мелкий ряд — это ПЕРЕКЛЮЧАТЕЛЬ ВНУТРИ вкладки, а не вторые вкладки рядом.
+   Жалоба фаундера: два одинаковых ряда пилюль подряд читаются как один
+   перенесённый ряд, и непонятно, что чему подчинено. Поэтому здесь другой
+   вид: подпись слева, кнопки в одной обойме, без тени и без заливки
+   акцентом — выбранная просто светлее фона обоймы. */
+.ltabs.ltsm{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;
+  background:var(--sunken);border:1px solid var(--line);border-radius:12px;
+  padding:4px 4px 4px 11px;margin-bottom:14px}
+.ltabs.ltsm .ltlbl{font-size:12px;color:var(--faint);margin-right:4px;white-space:nowrap}
+.ltabs.ltsm .ltab{padding:5px 11px;font-size:13px;border-radius:9px;border-color:transparent;
+  background:transparent;box-shadow:none;color:var(--soft)}
+.ltabs.ltsm .ltab:hover{background:var(--panel2);border-color:transparent;color:var(--ink)}
+.ltabs.ltsm .ltab.on{background:var(--panel);border-color:var(--line2);color:var(--accink);
+  box-shadow:0 1px 2px rgba(28,35,80,.08)}
+.ltabs.ltsm .ltab .lte{font-size:15px}
 .ldpane{min-height:60px}
 .ldpanefoot{margin:12px 0 0;font-size:13px;color:var(--faint)}
 
@@ -1966,7 +1985,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   overflow:hidden}
 .drawside .dwbtn{align-self:flex-start}
 .livenote{margin:0;font-size:12.5px;color:var(--faint);line-height:1.5}
-.warmask{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;
+.warmask{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:18px;
   align-items:start}
 .warmask .dwcode{border:1px solid var(--line);border-radius:14px;background:var(--code);
   overflow:hidden}
