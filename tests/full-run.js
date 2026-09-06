@@ -6396,6 +6396,51 @@ function checkEncoding(){
     if (problems.length === p0) aiPackChecked++;
   }
 
+  /* --- 11в. витрина проектов на вывеске --- */
+  let showcaseChecked = 0;
+  if (typeof g.screenAbout === "function" && typeof g.landNums === "function"){
+    const p0 = problems.length;
+    g.screenAbout(); await tick(); await tick();
+    const win = doc.getElementById("showwin");
+    if (!win) bad("[витрина] блока с проектами нет");
+    else {
+      /* Код слева, вывод справа: причина раньше следствия. Указание фаундера
+         07.09.2026 — до этого глаз натыкался на результат раньше программы. */
+      const labels = [...win.querySelectorAll(".shcol .shlbl")].map(x => x.textContent);
+      if (!/Код/.test(labels[0] || "") || !/печатает/.test(labels[1] || ""))
+        bad("[витрина] колонки не в том порядке: " + labels.join(" | "));
+      /* ⚠️ Кнопки «Запустить заново» тут быть не должно. Программа
+         детерминированная, нажатие не меняло ничего — кнопка изображала
+         работу вместо того, чтобы её делать. Вопрос фаундера 07.09.2026. */
+      if (win.querySelector('[data-sh="run"]'))
+        bad("[витрина] вернулась кнопка «Запустить заново», которая ничего не меняет");
+      /* Числа в коде — живые: их можно поменять, и программа напечатает другое. */
+      const ins = [...win.querySelectorAll(".numin")];
+      if (ins.length < 3) bad("[витрина] числа в коде не сделаны живыми: полей " + ins.length);
+      const out = win.querySelector(".ldout");
+      const было = out ? out.textContent : "";
+      if (ins.length && out){
+        ins[0].value = String((+ins[0].value || 1) + 7);
+        ins[0].oninput();
+        await new Promise(r => setTimeout(r, 500));
+        if (out.textContent === было)
+          bad("[витрина] число поменяли, а вывод остался прежним — интерактив не работает");
+        const back = doc.getElementById("shback");
+        if (!back || back.hidden) bad("[витрина] после правки не предложено вернуть числа как были");
+        else {
+          back.click(); await tick();
+          if (out.textContent !== было) bad("[витрина] «вернуть числа» не вернуло исходный вывод");
+        }
+      }
+      /* Длинные строки переносятся, а не прячутся под полосу прокрутки. */
+      const code = win.querySelector(".ldcode");
+      if (code && !/\bwrap\b/.test(code.className))
+        bad("[витрина] код снова уезжает вправо вместо переноса");
+    }
+    if (problems.length === p0) showcaseChecked++;
+    viewReset(g);
+  }
+
   /* --- 12а. логотип: дорога на страницу сайта --- */
   let logoChecked = 0;
   if (typeof g.goLogo === "function"){
@@ -6829,6 +6874,7 @@ function checkEncoding(){
   console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
+  console.log(`витрина проектов: ${showcaseChecked ? "да" : "нет"}`);
   console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
