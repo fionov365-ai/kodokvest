@@ -12942,6 +12942,132 @@ function wireAboutFoot(box){
     b.onclick = screenAbout;
   });
 }
+/* ---- живое окно редактора на вывеске ----
+   Единственная «картинка» первого экрана — и она не картинка. У всех
+   конкурентов там фотография ребёнка за ноутбуком; снимать нам некого, а
+   сток выглядит как сток. Зато мы умеем то, чего не умеет ни один из них:
+   показать сам продукт прямо на витрине, потому что продукт — это и есть
+   страница в браузере.
+
+   ⚠️ Код здесь выполняется НАСТОЯЩИМ движком через Runtime, как в уроке.
+   Это не украшение, а страховка от вранья: скриншот живёт своей жизнью и
+   через полгода показывает то, чего в продукте уже нет, а это окно сломается
+   вместе с движком — то есть никогда не соврёт.
+
+   Две кнопки — два обещания вывески. «Запустить» доказывает «код работает
+   сразу», «А если ошибиться» доказывает «ошибки объясняются словами»: то же
+   самое расхождение, тем же русским текстом, что увидит ребёнок в уроке. */
+var LAND_DEMO_OK =
+  'звёзд = 5\n' +
+  '\n' +
+  'for i in range(1, звёзд + 1):\n' +
+  '    print("★" * i)\n' +
+  '\n' +
+  'print("Готово!")';
+/* Сломанная версия отличается ровно одним знаком — пропущенным двоеточием.
+   Так и задумано: родитель должен увидеть, что тренажёр ловит не «что-то
+   пошло не так», а конкретную опечатку в конкретной строке. */
+var LAND_DEMO_BAD = LAND_DEMO_OK.replace("звёзд + 1):", "звёзд + 1)");
+
+function landCodeHTML(code){
+  var lines = code.split("\n"), nums = "";
+  for (var i = 0; i < lines.length; i++) nums += (i + 1) + (i < lines.length - 1 ? "\n" : "");
+  return '<div class="dwnums">' + nums + '</div><pre><code>' + hl(code) + '</code></pre>';
+}
+/* Вывод печатается построчно, а не появляется целиком: программа у нас
+   действительно выполняется по строкам, и глаз должен успеть связать строку
+   кода со строкой вывода. Кому мельтешение мешает — системная настройка
+   «меньше движения» выключает эффект целиком. */
+function landRun(code, out){
+  var r = Runtime.get("mini").run(code, {});
+  if (r.error){
+    out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
+    return;
+  }
+  var lines = (r.output || "").replace(/\n+$/, "").split("\n");
+  var calm = false;
+  try { calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){}
+  if (calm || typeof setInterval !== "function"){ out.textContent = lines.join("\n"); return; }
+  var i = 0;
+  out.innerHTML = '<span class="dwcaret"></span>';
+  var t = setInterval(function(){
+    /* Экран мог смениться, пока строки печатались: тогда таймер пишет в
+       выброшенный из документа узел, и его надо снять, а не оставить тикать. */
+    if (!out.isConnected && !(document.body && document.body.contains(out))) return clearInterval(t);
+    i++;
+    out.innerHTML = esc(lines.slice(0, i).join("\n")) +
+      (i < lines.length ? '<span class="dwcaret"></span>' : "");
+    if (i >= lines.length) clearInterval(t);
+  }, 160);
+}
+function landDemoHTML(){
+  return '<figure class="demowin" id="landdemo">' +
+    '<figcaption class="dwhead"><span class="dwdots"><i></i><i></i><i></i></span>' +
+      '<b>Урок 11 · Цикл for</b>' +
+      '<span class="dwtag">это не картинка — код правда работает</span></figcaption>' +
+    '<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
+    '<div class="dwbar">' +
+      '<button class="dwbtn go" data-dw="run">▶ Запустить</button>' +
+      '<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
+      '<span class="dwhint">можно нажимать сколько угодно</span>' +
+    '</div>' +
+    '<div class="dwout" aria-live="polite"><span class="dwwait">Нажми «▶ Запустить» — программа выполнится прямо здесь.</span></div>' +
+  '</figure>' +
+  '<p class="dwnote">Так выглядит любой пример в уроке: нажал — увидел результат. ' +
+  'Ни установки Python, ни редактора, ни командной строки.</p>';
+}
+function wireLandDemo(){
+  var win = document.getElementById("landdemo");
+  if (!win) return;
+  var codeBox = win.querySelector(".dwcode"),
+      out     = win.querySelector(".dwout"),
+      runBtn  = win.querySelector('[data-dw="run"]'),
+      brkBtn  = win.querySelector('[data-dw="break"]'),
+      hint    = win.querySelector(".dwhint"),
+      broken  = false;
+
+  runBtn.onclick = function(){ landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out); };
+  brkBtn.onclick = function(){
+    broken = !broken;
+    codeBox.innerHTML = landCodeHTML(broken ? LAND_DEMO_BAD : LAND_DEMO_OK);
+    brkBtn.textContent = broken ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
+    hint.textContent = broken
+      ? "убрали двоеточие в третьей строке"
+      : "можно нажимать сколько угодно";
+    landRun(broken ? LAND_DEMO_BAD : LAND_DEMO_OK, out);
+  };
+  /* Первый запуск делаем сами. Вывеску читают, а не изучают: если ждать
+     нажатия, большая часть посетителей уйдёт со страницы, так и не увидев
+     единственное доказательство, которое у нас есть. */
+  landRun(LAND_DEMO_OK, out);
+}
+/* ---- появление блоков при прокрутке ----
+   Страница длинная: восемь разделов подряд одинаковой плотности сливаются в
+   сплошной текст. Сдвиг на десяток пикселей в момент, когда раздел въезжает
+   в экран, говорит глазу «начался новый кусок» без единого лишнего слова.
+   Без IntersectionObserver (и в тестовом jsdom) всё просто показывается. */
+function wireReveal(root){
+  var els = (root || document).querySelectorAll(".rv");
+  if (typeof IntersectionObserver !== "function"){
+    els.forEach(function(e){ e.classList.add("in"); });
+    return;
+  }
+  var io = new IntersectionObserver(function(list){
+    list.forEach(function(e){
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      io.unobserve(e.target);
+    });
+  }, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 });
+  els.forEach(function(e){ io.observe(e); });
+}
+/* Цвет мира. Пять серых карточек не читаются как ПУТЬ: «Мир 3» отличается от
+   «Мира 4» только цифрой, а должен отличаться местом, куда ты идёшь. Оттенки
+   объявлены в css/style.css рядом с вывеской и живут по обеим темам. */
+function landWorldVars(n){
+  var i = ((n - 1) % 5) + 1;
+  return '--wc:var(--w' + i + ');--wcbg:var(--w' + i + 'bg)';
+}
 function screenAbout(){
   enterScreen("home", "about");
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -12953,23 +13079,33 @@ function screenAbout(){
 
   var h = '<div class="land">';
 
-  h += '<div class="landhero">' +
-    '<div class="landkick">информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
-    '<h1>Информатика без репетитора</h1>' +
-    '<p class="landlede">' + c.lessons + ' ' + plural(c.lessons, "урок", "урока", "уроков") +
-      ' программирования на Python прямо в браузере. Код запускается сразу, ошибки ' +
-      'объясняются словами, а взрослый раз в неделю видит, занимался ребёнок или нет.</p>' +
-    '<div class="landcta">' +
-      (started
-        ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
-          '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-        : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
-          '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
-    '</div>' +
-    '<p class="landsub">Ничего не надо устанавливать: тренажёр целиком работает в браузере ' +
-    'на компьютере, планшете и телефоне. Python внутри свой — он не грузится из сети ' +
-    'и работает без интернета.</p>' +
-  '</div>';
+  /* --- первый экран: обещание слева, доказательство справа --- */
+  h += '<section class="landhero rv">' +
+    '<div class="lhaur" aria-hidden="true"></div>' +
+    '<div class="lhin"><div class="lhtext">' +
+      '<div class="landkick"><i></i>информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
+      '<h1>Информатика <span class="hlite">без репетитора</span></h1>' +
+      '<p class="landlede">' + c.lessons + ' ' + plural(c.lessons, "урок", "урока", "уроков") +
+        ' программирования на Python прямо в браузере. Код запускается сразу, ошибки ' +
+        'объясняются словами, а взрослый раз в неделю видит, занимался ребёнок или нет.</p>' +
+      '<div class="landcta">' +
+        (started
+          ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+          : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
+            '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
+      '</div>' +
+      /* Четыре возражения, которые родитель проговаривает про себя, пока
+         читает заголовок. Отвечать на них абзацем ниже поздно — до абзаца он
+         не дойдёт, а до строчки фишек глаз доезжает за секунду. */
+      '<ul class="landtrust">' +
+        '<li>⚡ Ничего не устанавливать</li>' +
+        '<li>📶 Работает без интернета</li>' +
+        '<li>🔐 Ни почты, ни телефона</li>' +
+        '<li>💻 Компьютер, планшет, телефон</li>' +
+      '</ul>' +
+    '</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
+  '</section>';
 
   /* --- продукт в числах. Строка длинная нарочно: это единственное место, где
          объём курса виден целиком и сразу, без хождения по разделам. --- */
@@ -12984,7 +13120,7 @@ function screenAbout(){
     [c.games,    plural(c.games,    "игра", "игры", "игр"),                "и у каждой виден код"],
     [c.cheat,    plural(c.cheat,    "команда", "команды", "команд"),       "шпаргалка открывается поверх урока"]
   ];
-  h += '<div class="landnums">';
+  h += '<div class="landnums rv">';
   nums.forEach(function(n){
     h += '<div class="landnum"><b>' + n[0] + '</b><span>' + n[1] + '</span>' +
       '<i>' + esc(n[2]) + '</i></div>';
@@ -12992,7 +13128,7 @@ function screenAbout(){
   h += '</div>';
 
   /* --- как проходит урок --- */
-  h += '<div class="landsect"><h2>Как проходит урок</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Изнутри</span><h2>Как проходит урок</h2>' +
     '<p class="lede">Пятнадцать–двадцать минут, и всё внутри одной страницы. ' +
     'Ни установки Python, ни редактора, ни командной строки.</p>' +
     '<ol class="landsteps">' +
@@ -13015,22 +13151,25 @@ function screenAbout(){
          разминок и игр, то есть выглядели развлечением рядом с уроками.
          Вывеска, которая называется «информатика», обязана показать предмет
          целиком, иначе она остаётся вывеской «Python для детей». --- */
-  h += '<div class="landsect"><h2>Не только язык</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Направления</span><h2>Не только язык</h2>' +
     '<p class="lede">Python — ядро курса, но не весь он. Рядом стоят ещё три ' +
     'направления, и каждое доведено до задач, а не до оглавления.</p>' +
-    '<div class="landgrid">' +
-    '<div class="landcard wide"><span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
+    '<div class="landgrid g3">' +
+    '<div class="landcard dir" style="--wc:var(--w3);--wcbg:var(--w3bg)">' +
+      '<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
       '<p>Поиск, сортировка, системы счисления — и типовые задания обоих экзаменов: ' +
       '<b>' + c.oge + '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. ' +
       'Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами — ' +
       'движок и так их считает, поэтому «837 шагов против 11» видно числом на экране.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">🤖</span><b>Ты и ИИ</b>' +
+    '<div class="landcard dir" style="--wc:var(--w4);--wcbg:var(--w4bg)">' +
+      '<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
       '<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
       ' не про то, как попросить нейросеть, а про то, как принять её работу: прочитать ответ, ' +
       'найти, где машина уверенно врёт, и доказать это проверкой. Рядом — <b>' + c.specs + '</b> ' +
       plural(c.specs, "работа", "работы", "работ") + ' на приёмку: ребёнок пишет не код, ' +
       'а что должно быть верно, и движок проверяет чужой код по его правилам.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">🏗</span><b>Проекты</b>' +
+    '<div class="landcard dir" style="--wc:var(--w5);--wcbg:var(--w5bg)">' +
+      '<span class="lcem">🏗</span><b>Проекты</b>' +
       '<p><b>' + c.projects + '</b> больших ' + plural(c.projects, "программы", "программы", "программ") +
       ' в несколько шагов: карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. ' +
       'Собранное остаётся у ребёнка и его можно запустить и показать.</p></div>' +
@@ -13041,29 +13180,40 @@ function screenAbout(){
     'не называем: нумерация между годами меняется.</div></div>';
 
   /* --- программа курса, прочитанная из CURRICULUM --- */
-  h += '<div class="landsect"><h2>Программа: ' + c.worlds + ' ' +
+  h += '<div class="landsect rv"><span class="seckick">Курс целиком</span>' +
+    '<h2>Программа: ' + c.worlds + ' ' +
     plural(c.worlds, "мир", "мира", "миров") + ', ' + c.lessons + ' ' +
     plural(c.lessons, "урок", "урока", "уроков") + '</h2>' +
     '<p class="lede">Уроки идут по порядку: следующий открывается, когда сдан предыдущий. ' +
     'В конце каждого мира — босс, проект и сертификат.</p><div class="landworlds">';
   CURRICULUM.forEach(function(w){
-    var names = w.lessons.slice(0, 5).map(function(l){ return l.title; }).join(" · ");
-    h += '<div class="landworld"><span class="lwico">' + w.icon + '</span>' +
+    var shown = w.lessons.slice(0, 5),
+        rest  = w.lessons.length - shown.length,
+        boss  = w.lessons.filter(function(l){ return l.boss; })[0];
+    h += '<div class="landworld" style="' + landWorldVars(w.n) + '">' +
+      '<span class="lwno">' + w.n + '</span>' +
+      '<span class="lwico">' + w.icon + '</span>' +
       '<div class="lwbody"><div class="lwkick">Мир ' + w.n + ' · ' + w.lessons.length + ' ' +
         plural(w.lessons.length, "урок", "урока", "уроков") + '</div>' +
       '<b>' + esc(w.title) + '</b>' +
       '<p>' + esc(w.desc) + '</p>' +
-      '<span class="lwlist">' + esc(names) + ' …</span></div></div>';
+      '<div class="lwlist">' +
+        shown.map(function(l){ return '<span>' + esc(l.title) + '</span>'; }).join("") +
+        (rest > 0 ? '<span class="more">и ещё ' + rest + '</span>' : "") +
+      '</div>' +
+      (boss ? '<div class="lwend">🏁 Босс мира: ' + esc(boss.title) + ' · 🎓 сертификат</div>' : "") +
+      '</div></div>';
   });
   h += '</div></div>';
 
   /* --- всё, что вокруг сотни уроков. Список берётся из trainCards(), то есть
          из того же места, откуда его берёт сам раздел «Тренировки»: две копии
          разошлись бы на первой же правке. --- */
-  h += '<div class="landsect"><h2>Когда на урок нет сил</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Между уроками</span>' +
+    '<h2>Когда на урок нет сил</h2>' +
     '<p class="lede">Сюда заходят между уроками, по настроению. Звёзд тут не дают ' +
     'и по порядку проходить не надо, но день занятий засчитывается и здесь.</p>' +
-    '<div class="landgrid">';
+    '<div class="landgrid g4">';
   /* Направления («Ты и ИИ», алгоритмы) отсюда выброшены нарочно: они стоят
      выше отдельным разделом, а второй раз тем же шрифтом — это уже реклама. */
   trainCards().filter(function(t){ return t.id !== "ai" && t.id !== "algo"; }).forEach(function(t){
@@ -13077,10 +13227,11 @@ function screenAbout(){
          своё задание, игра по ссылке и мастерская — это годы работы, и на
          вывеске их не было вовсе. Для родителя это к тому же единственный
          ответ на вопрос «а что он за это получит, кроме экранного времени». --- */
-  h += '<div class="landsect"><h2>Что остаётся на руках</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Результат</span>' +
+    '<h2>Что остаётся на руках</h2>' +
     '<p class="lede">Тренажёр, из которого нечего унести, — это игра. Отсюда уносят ' +
     'собранные программы, распечатанные листы и задачи, которые ребёнок придумал сам.</p>' +
-    '<div class="landgrid">' +
+    '<div class="landgrid g3">' +
     '<div class="landcard"><span class="lcem">🎒</span><b>Портфолио и сертификаты</b>' +
       '<p>Все собранные программы в одном месте и <b>' + c.certs + '</b> ' +
       plural(c.certs, "сертификат", "сертификата", "сертификатов") +
@@ -13104,19 +13255,21 @@ function screenAbout(){
 
   /* --- взрослому. Отдельным разделом, потому что вывеску читает чаще всего
          именно он, а не ребёнок. --- */
-  h += '<div class="landsect"><h2>Взрослому: родителю, учителю, репетитору</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Кабинет взрослого</span>' +
+    '<h2>Взрослому: родителю, учителю, репетитору</h2>' +
     '<p class="lede">У взрослого свой кабинет под паролем, отдельно от тренажёра ребёнка. ' +
     'Ребёнок в него не заходит и ничего в нём не меняет. Проверять код руками не нужно — ' +
-    'всё проверил движок; ваше дело посмотреть, с кем поговорить.</p><div class="landgrid">' +
-    '<div class="landcard wide"><span class="lcem">⏱</span><b>Занятие, а не поток уроков</b>' +
+    'всё проверил движок; ваше дело посмотреть, с кем поговорить.</p><div class="landgrid g2">' +
+    '<div class="landcard"><span class="lcem">⏱</span><b>Занятие, а не поток уроков</b>' +
       '<p>Единица здесь — занятие на 20, 30 или 45 минут: тренажёр сам собирает на него план, ' +
       'зовёт на перерыв, сжимает план, если время уходит, и меряет, сколько занятие ' +
       'заняло на самом деле. Порядок уроков при этом ваш не трогает: команда объясняется ' +
       'раньше, чем понадобится, и перестановка ломает именно это.</p></div>' +
-    '<div class="landcard wide"><span class="lcem">👨‍🏫</span><b>Рабочее место наставника</b>' +
+    '<div class="landcard"><span class="lcem">👨‍🏫</span><b>Рабочее место наставника</b>' +
       '<p>Если учеников несколько — своя панель: у каждого своя ссылка и свой код, видно ' +
       'кто где идёт и кто затих, отчёты по всем сразу. Плюс живое занятие: пока ребёнок ' +
-      'занимается, взрослому видно, что происходит прямо сейчас.</p></div>' +
+      'занимается, взрослому видно, что происходит прямо сейчас.</p></div></div>' +
+    '<div class="landgrid g3" style="margin-top:14px">' +
     '<div class="landcard"><span class="lcem">📅</span><b>Расписание</b>' +
       '<p>В какие дни занимаемся и по сколько. Тренажёр сам напомнит ребёнку в учебный день.</p></div>' +
     '<div class="landcard"><span class="lcem">📊</span><b>Отчёт за неделю</b>' +
@@ -13133,7 +13286,10 @@ function screenAbout(){
     '</div></div>';
 
   /* --- границы обещания. Стоит перед кнопкой входа сознательно. --- */
-  h += '<div class="landsect"><h2>Честно про границы</h2>' +
+  h += '<div class="landsect rv"><span class="seckick">Чего здесь нет</span>' +
+    '<h2>Честно про границы</h2>' +
+    '<p class="lede">Вывеска — это обещание, и границы обещания честнее показать до входа, ' +
+    'а не в мае перед экзаменом.</p>' +
     '<ul class="landhonest">' +
     '<li><b>Язык один — Python.</b> Ни Scratch, ни HTML с JavaScript здесь нет. ' +
       'Даже урок про сайт в пятом мире пишется на Python.</li>' +
@@ -13147,7 +13303,8 @@ function screenAbout(){
     '</ul></div>';
 
   /* --- вход. Три двери, но уже после того, как сказано, куда они ведут. --- */
-  h += '<div class="landsect landend"><h2>С чего начать</h2>' +
+  h += '<section class="landend rv"><div class="lhaur" aria-hidden="true"></div>' +
+    '<span class="seckick">Вход</span><h2>С чего начать</h2>' +
     '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона мы не спрашиваем: ' +
     'спрашивать их некому, сервера с личными данными у нас нет.</p>' +
     '<div class="landcta">' +
@@ -13156,7 +13313,7 @@ function screenAbout(){
         (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
     '</div>' +
     '<p class="landsub">Дальше спросим, кто вы: ученик, родитель или администратор. ' +
-    'На своём личном устройстве этот вопрос задаётся один раз.</p></div>';
+    'На своём личном устройстве этот вопрос задаётся один раз.</p></section>';
 
   h += '</div>';
   app.innerHTML = h;
@@ -13169,6 +13326,8 @@ function screenAbout(){
       screenRoles();
     };
   });
+  wireLandDemo();
+  wireReveal(app);
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }

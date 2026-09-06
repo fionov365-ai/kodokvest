@@ -1620,78 +1620,330 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 /* ================= вывеска: первый экран для гостя =================
    Единственный экран сайта, который читают, а не проходят, — и это диктует
    вёрстку. Строка здесь длиннее обычной (720px против сплошной колонки):
-   на витрине читают абзацами, а не сканируют список уроков. Числа стоят
-   отдельной полосой, потому что объём курса — главный аргумент, и он должен
-   схватываться глазом раньше, чем человек начнёт читать.
-   ⚠️ Ни одного своего цвета: всё на переменных темы. Вывеска обязана быть
-   такой же в тёмной теме, иначе на первом же экране сайт выглядит чужим. */
-.land{display:flex;flex-direction:column;gap:34px}
-.landhero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;
-  padding:34px 30px;box-shadow:var(--sh)}
-.landkick{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--acc2);font-weight:700;margin-bottom:8px}
-.landhero h1{margin:0 0 12px;font-size:38px;line-height:1.12}
-.landlede{margin:0;font-size:17.5px;line-height:1.55;color:var(--soft);max-width:720px}
-.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 0}
-.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:720px}
-/* Числа: auto-fit, а не фиксированные колонки, — их восемь, и на любой ширине
-   они обязаны разложиться без дырки в конце строки. */
-.landnums{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.landnum{border:1px solid var(--line);border-radius:14px;background:var(--panel);
-  padding:14px 16px;display:flex;flex-direction:column;gap:1px}
-.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:30px;line-height:1.05;color:var(--acc)}
+   на витрине читают абзацами, а не сканируют список уроков.
+
+   Оформление переписано 06.09.2026 после разбора конкурентов
+   (docs/vyveska.md § 7). Коротко, что оттуда взято и что нет:
+
+   • У всех российских школ на первом экране ФОТОГРАФИЯ ребёнка за ноутбуком
+     (Алгоритмика, Пиксель, Айтигенио). Снимать нам некого, покупать сток —
+     значит выглядеть как все. Поэтому первый экран показывает не ребёнка,
+     а САМ ПРОДУКТ: живое окно редактора, где код действительно запускается
+     нашим движком. Ни один конкурент так не может — у них обучение живёт за
+     логином, у нас оно и есть страница.
+   • У Codédex (лучший по картинке из всех) первый экран — это МИР, в который
+     заходишь. Метафора совпадает с нашей («квест», пять миров, боссы),
+     поэтому программа курса нарисована дорогой с узлами, а не серым списком.
+   • Чего не берём: 3D-глянец, всплывающие окна с «оставьте телефон» и
+     обратный отсчёт. Продукт продаёт понятность, и вывеска обязана быть
+     такой же.
+
+   ⚠️ Ни одного своего цвета в правилах: всё на переменных темы. Вывеска
+   обязана одинаково жить в светлой и тёмной, иначе на первом же экране сайт
+   выглядит чужим. Переменные, которые нужны только здесь, объявлены ниже
+   двумя блоками — светлым и тёмным, — и больше нигде не используются. */
+:root{
+  /* Пять миров — пять цветов. Нужны затем, что пятёрка одинаковых серых
+     карточек не читается как ПУТЬ: глазу не за что зацепиться, и «Мир 3»
+     от «Мира 4» отличается только цифрой. Оттенки взяты из уже имеющейся
+     палитры подсветки кода, чтобы вывеска не завела на сайте второй набор
+     цветов. */
+  --w1:#0e7a55; --w2:#9a6a00; --w3:#1f56c8; --w4:#6d3fd6; --w5:#b8365f;
+  --w1bg:#e4f4ee; --w2bg:#faf0dc; --w3bg:#e6ecfd; --w4bg:#eee8fd; --w5bg:#fce9ef;
+  /* Свечение первого экрана. Три пятна, а не градиент в две точки: градиент
+     на широком мониторе виден полосой, пятна — нет. */
+  --lg1:rgba(124,92,255,.26); --lg2:rgba(0,168,140,.20); --lg3:rgba(255,168,64,.16);
+  --lgrid:rgba(26,31,61,.055);
+  --dwbar:#eef1fa;
+}
+:root[data-theme="dark"]{
+  --w1:#4fd8a0; --w2:#ffc964; --w3:#82aaff; --w4:#b79bff; --w5:#ff87ac;
+  --w1bg:rgba(79,216,160,.11); --w2bg:rgba(255,201,100,.11); --w3bg:rgba(130,170,255,.11);
+  --w4bg:rgba(183,155,255,.11); --w5bg:rgba(255,135,172,.11);
+  --lg1:rgba(124,92,255,.30); --lg2:rgba(0,224,184,.14); --lg3:rgba(255,168,64,.10);
+  --lgrid:rgba(255,255,255,.045);
+  --dwbar:#101632;
+}
+.land{display:flex;flex-direction:column;gap:52px}
+
+/* ---------- появление при прокрутке ----------
+   Не украшение: на длинной странице сдвиг на десяток пикселей говорит глазу
+   «сюда пришёл новый блок» и разбивает восемь разделов подряд на порции.
+   Класс вешает наблюдатель в js/app.js; без JS всё видно сразу, потому что
+   начальное состояние ставится ТОЛЬКО вместе с классом .rv. */
+.rv{opacity:0;transform:translateY(14px)}
+.rv.in{opacity:1;transform:none;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.3,1)}
+@media (prefers-reduced-motion:reduce){
+  .rv,.rv.in{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- первый экран ---------- */
+.landhero{position:relative;overflow:hidden;border:1px solid var(--line);
+  border-radius:26px;background:var(--panel);box-shadow:var(--shbig);
+  padding:44px 40px 40px}
+/* Фон рисуется отдельным слоем, а не фоном самой карточки: слоёв три
+   (сетка + три пятна), и в одном свойстве background они дрались бы за
+   background-size друг с другом. aria-hidden стоит в разметке. */
+.lhaur{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(600px 360px at 10% -12%, var(--lg1), transparent 72%),
+    radial-gradient(560px 340px at 94% 6%,   var(--lg2), transparent 70%),
+    radial-gradient(500px 320px at 58% 112%, var(--lg3), transparent 72%)}
+/* Сетка лежит ОТДЕЛЬНЫМ слоем поверх пятен и гасится маской к краям: без
+   маски карточка выглядит миллиметровкой, а если гасить не маской, а
+   накрывающей плашкой цвета панели, — вместе с сеткой гаснут и сами пятна,
+   и первый экран становится белым листом. */
+.lhaur::after{content:"";position:absolute;inset:0;
+  background:
+    linear-gradient(0deg,var(--lgrid) 1px,transparent 1px) 0 0/100% 34px,
+    linear-gradient(90deg,var(--lgrid) 1px,transparent 1px) 0 0/34px 100%;
+  -webkit-mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%);
+  mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%)}
+.lhin{position:relative;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);
+  gap:34px;align-items:center}
+.lhtext{min-width:0}
+/* Плашка над заголовком. Точка перед текстом — не декор: она держит взгляд
+   на строке, набранной капителью, которая иначе читается как подпись. */
+.landkick{display:inline-flex;align-items:center;gap:8px;
+  font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:14px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:6px 13px 6px 10px}
+.landkick i{width:7px;height:7px;border-radius:50%;background:var(--acc2);flex:none}
+.landhero h1{margin:0 0 14px;font-size:52px;line-height:1.04;letter-spacing:-.02em}
+/* Подчёркивание под ключевыми словами. Рисуется фоном, а не border-bottom:
+   нужна толстая мягкая полоса ПОД буквами, не задевающая хвосты «р» и «у». */
+.hlite{position:relative;white-space:nowrap;
+  background:linear-gradient(var(--acc-lt),var(--acc-lt)) 0 96%/100% .14em no-repeat}
+:root[data-theme="dark"] .hlite{background-image:linear-gradient(var(--acc-lt),var(--acc-lt))}
+.landlede{margin:0;font-size:18px;line-height:1.55;color:var(--soft);max-width:640px}
+.landcta{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0}
+/* Главная кнопка на вывеске светится. Единственное место на сайте, где это
+   уместно: у гостя на экране два десятка карточек и одно действие. */
+.landcta .bigbtn:first-child{box-shadow:0 10px 30px -10px var(--acc)}
+.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:640px}
+/* Четыре факта строкой. Это ответ на возражения, которые родитель проговаривает
+   про себя, пока читает заголовок: «опять что-то ставить», «опять интернет»,
+   «опять телефон оставлять». Отвечать на них абзацем поздно — он до абзаца
+   не дойдёт. */
+.landtrust{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.landtrust li{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--soft);
+  background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:7px 12px}
+.landtrust b{font-weight:600;color:var(--ink)}
+
+/* ---------- живое окно редактора на первом экране ----------
+   Главный аргумент вывески и единственная её «картинка». Никакого скриншота:
+   внутри работает тот же движок, что и в уроке, поэтому окно не может
+   разойтись с продуктом — если сломается движок, сломается и витрина. */
+.lhdemo{min-width:0}
+.demowin{margin:0;border:1px solid var(--line2);border-radius:18px;overflow:hidden;
+  background:var(--code);box-shadow:var(--shbig)}
+.dwhead{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--dwbar);border-bottom:1px solid var(--line);font-size:12.5px;color:var(--soft)}
+.dwdots{display:flex;gap:5px;flex:none}
+.dwdots i{width:9px;height:9px;border-radius:50%;background:var(--dot)}
+.dwhead b{color:var(--ink);font-size:12.5px;white-space:nowrap}
+.dwhead .dwtag{margin-left:auto;color:var(--acc2);font-weight:600;white-space:nowrap}
+/* Код с колонкой номеров — ровно как в редакторе урока. Это не украшение:
+   родитель, увидевший на вывеске то же окно, что потом откроет ребёнок,
+   узнаёт его и не думает, что ему показали рекламный макет. */
+.dwcode{display:flex;font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.65}
+.dwnums{flex:none;padding:14px 10px;background:var(--gut);color:var(--gutink);
+  text-align:right;user-select:none;white-space:pre;font-size:12.5px;line-height:1.65}
+.dwcode pre{margin:0;padding:14px 16px;overflow-x:auto;flex:1;min-width:0;color:var(--codeink)}
+.dwbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:11px 14px;
+  background:var(--dwbar);border-top:1px solid var(--line)}
+.dwbtn{border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+  border-radius:10px;padding:7px 13px;font:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;transition:.15s}
+.dwbtn:hover{border-color:var(--acc);color:var(--accink)}
+.dwbtn.go{background:var(--acc);border-color:transparent;color:var(--onacc)}
+.dwbtn.go:hover{background:var(--acc-lt);color:var(--onacc)}
+.dwhint{margin-left:auto;font-size:12px;color:var(--faint)}
+/* Окно вывода. Высота задана снизу, а не сверху: без min-height окно
+   подпрыгивает на высоту шести строк в тот момент, когда на него смотрят. */
+.dwout{padding:14px 16px;min-height:132px;background:var(--res);
+  border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;
+  font-size:13.5px;line-height:1.6;color:var(--outink);white-space:pre-wrap;
+  word-break:break-word}
+.dwout .dwwait{color:var(--faint);font-family:'Inter',sans-serif;font-size:13.5px}
+.dwout .dwcaret{display:inline-block;width:8px;height:16px;vertical-align:-3px;
+  background:var(--acc);animation:dwblink 1s steps(1) infinite}
+@keyframes dwblink{50%{opacity:0}}
+/* Плашка ошибки — та же, что видит ребёнок в уроке (класс .msg.bad там же). */
+.dwerr{border:1px solid var(--badline);background:var(--badbg);color:var(--badink);
+  border-radius:12px;padding:10px 13px;font-family:'Inter',sans-serif;font-size:13.5px;
+  line-height:1.5;white-space:normal}
+.dwerr b{display:block;color:var(--bad);margin-bottom:2px}
+.dwnote{margin:12px 2px 0;font-size:13px;color:var(--faint);line-height:1.5}
+
+/* ---------- полоса чисел ----------
+   Восемь чисел, и все восемь — про объём. Раньше они стояли восемью
+   одинаковыми карточками, то есть восемью прямоугольниками с рамками:
+   такое читается как сетка ссылок, а не как «вот сколько тут всего».
+   Теперь это одна полоса с волосяными разделителями. */
+.landnums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+  border:1px solid var(--line);border-radius:20px;background:var(--line);
+  overflow:hidden;box-shadow:var(--sh)}
+.landnum{padding:18px 20px;display:flex;flex-direction:column;gap:1px;background:var(--panel)}
+.landnum b{font-family:'Fredoka','Inter',sans-serif;font-size:34px;line-height:1.05;
+  color:var(--acc);letter-spacing:-.01em}
 .landnum span{font-size:14px;font-weight:600}
-.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:3px}
-.landsect h2{margin:0 0 6px;font-size:25px}
-.landsect .lede{margin:0 0 16px;max-width:720px}
-/* Шаги урока — нумерованные, но номер рисуем сами: у списка по умолчанию он
-   мелкий и серый, а здесь это опора взгляда. */
-.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;display:grid;gap:10px}
-.landsteps li{counter-increment:ls;position:relative;padding:14px 16px 14px 56px;
-  border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-.landsteps li::before{content:counter(ls);position:absolute;left:16px;top:13px;
-  width:26px;height:26px;border-radius:9px;background:var(--acc);color:var(--onacc);
-  font-family:'Fredoka','Inter',sans-serif;font-size:15px;display:flex;
-  align-items:center;justify-content:center}
-.landsteps li b{display:block;font-size:16px}
-.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.5;margin-top:2px}
-.landworlds{display:grid;gap:12px}
-.landworld{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--line);
-  border-radius:var(--r);background:var(--panel);padding:16px 18px}
-.landworld .lwico{font-size:30px;line-height:1.1;flex:none}
+.landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:4px}
+
+/* ---------- заголовки разделов ----------
+   Надпись-указатель над заголовком отвечает на «что это за кусок страницы»
+   раньше, чем человек прочтёт сам заголовок. На странице восемь разделов —
+   без указателей они сливаются в один длинный текст. */
+.landsect{scroll-margin-top:90px}
+.seckick{display:block;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--acc2);font-weight:700;margin-bottom:7px}
+.landsect h2{margin:0 0 8px;font-size:30px;line-height:1.15;letter-spacing:-.015em}
+.landsect .lede{margin:0 0 20px;max-width:720px;font-size:15.5px}
+
+/* ---------- четыре шага урока ----------
+   Дорожка с узлами, а не список: у шагов есть порядок, и линия между ними
+   говорит это без слова «затем». */
+.landsteps{list-style:none;counter-reset:ls;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0}
+.landsteps li{counter-increment:ls;position:relative;padding:0 20px 0 0;background:none;border:none}
+.landsteps li::before{content:counter(ls);display:flex;align-items:center;justify-content:center;
+  width:40px;height:40px;border-radius:14px;background:var(--acc);color:var(--onacc);
+  font-family:'Fredoka','Inter',sans-serif;font-size:20px;margin-bottom:12px;
+  box-shadow:0 8px 20px -10px var(--acc);position:relative;z-index:1}
+/* Линия идёт от узла вправо и обрывается у последнего: рисуем её на самом
+   узле, а у последнего гасим. */
+.landsteps li::after{content:"";position:absolute;left:40px;top:19px;right:0;height:2px;
+  background:linear-gradient(90deg,var(--line2),var(--line))}
+.landsteps li:last-child::after{display:none}
+.landsteps li b{display:block;font-size:16.5px}
+.landsteps li span{display:block;color:var(--soft);font-size:14px;line-height:1.55;margin-top:4px}
+@media (max-width:900px){
+  .landsteps{grid-template-columns:1fr;gap:14px}
+  .landsteps li{padding:0 0 0 56px}
+  .landsteps li::before{position:absolute;left:0;top:0;margin:0}
+  .landsteps li::after{left:19px;top:40px;right:auto;bottom:-14px;width:2px;height:auto;
+    background:linear-gradient(180deg,var(--line2),var(--line))}
+}
+
+/* ---------- программа курса: дорога из пяти миров ----------
+   Слева вертикальный рельс с узлами — тот же приём, что у шагов урока, и по
+   той же причине: пять миров проходят ПО ПОРЯДКУ, и порядок должен быть
+   виден, а не подразумеваться. Рельс выдерживает любую ширину, в отличие от
+   ломаной дороги по диагонали, которая на телефоне превращается в кашу. */
+.landworlds{display:grid;gap:14px;position:relative;padding-left:0}
+.landworld{position:relative;display:grid;grid-template-columns:56px minmax(0,1fr);
+  gap:18px;align-items:start;border:1px solid var(--line);border-radius:20px;
+  background:var(--panel);padding:20px 22px;overflow:hidden;transition:.18s}
+.landworld:hover{border-color:var(--wc);transform:translateY(-2px);box-shadow:var(--sh)}
+/* Цветная полоса слева — единственное, чем миры отличаются друг от друга
+   на расстоянии вытянутой руки. */
+.landworld::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--wc)}
+/* Крупная цифра мира призраком в углу: она не для чтения, а для того, чтобы
+   пятая карточка не выглядела такой же, как первая. */
+.lwno{position:absolute;right:16px;top:2px;font-family:'Fredoka','Inter',sans-serif;
+  font-size:76px;line-height:1;color:var(--wc);opacity:.13;pointer-events:none}
+.landworld .lwico{width:56px;height:56px;border-radius:18px;background:var(--wcbg);
+  display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
 .lwbody{min-width:0}
 .lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--acc2);font-weight:700}
-.lwbody b{font-size:18px}
-.lwbody p{margin:2px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5}
-/* Названия уроков — намеренно мелкие и приглушённые: это доказательство, что
-   программа настоящая, а не список, который читают целиком. */
-.lwlist{display:block;margin-top:7px;font-size:12.5px;color:var(--faint);line-height:1.5}
-.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
-  padding:16px 18px;display:flex;flex-direction:column;gap:3px}
-.landcard .lcem{font-size:26px;line-height:1.1}
-.landcard b{font-size:16.5px}
-.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.5}
-/* Границы обещания. Рамка предупреждения, а не обычная карточка: это место
-   человек обязан заметить, а не пролистать (docs/vyveska.md § 0). */
-.landhonest{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.landhonest li{border:1px solid var(--warnline);background:var(--warnbg);color:var(--warnink);
-  border-radius:13px;padding:12px 15px;font-size:14.5px;line-height:1.55}
-.landhonest li b{color:var(--ink)}
-.landend{border-top:1px solid var(--line);padding-top:26px}
-@media (max-width:620px){
-  .landhero{padding:26px 20px;border-radius:18px}
-  .landhero h1{font-size:29px}
-  .landlede{font-size:16px}
-  .landsect h2{font-size:22px}
-  .landcta .bigbtn{width:100%}
-  .landworld{gap:12px;padding:14px 15px}
+  color:var(--wc);font-weight:700}
+.lwbody b{font-size:20px}
+.lwbody p{margin:3px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5;max-width:640px}
+/* Названия уроков — фишками, а не строкой через точку. Строка читалась как
+   один длинный текст, из которого не видно, что это перечень тем. */
+.lwlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.lwlist span{font-size:12px;color:var(--soft);background:var(--sunken);
+  border:1px solid var(--line);border-radius:8px;padding:4px 9px}
+.lwlist span.more{color:var(--faint);background:none;border-style:dashed}
+/* Хвост карточки: чем мир заканчивается. Отдельной строкой, потому что это
+   одинаково у всех пяти и повторять это в описании каждого — шум. */
+.lwend{display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:11px;
+  border-top:1px dashed var(--line);font-size:12.5px;color:var(--faint)}
+
+/* ---------- карточки ---------- */
+.landgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+/* Число колонок задаётся разделом, а не подбирается автоматически. Причина
+   простая и видная глазом: auto-fit при шести карточках раскладывает их
+   4 + 2, и раздел заканчивается дырой в пол-экрана. Колонка, на которую
+   делится КОНКРЕТНЫЙ список, известна заранее — её и ставим. */
+.landgrid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.landgrid.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.landgrid.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){
+  .landgrid.g2,.landgrid.g3,.landgrid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+@media (max-width:600px){
+  .landgrid.g2,.landgrid.g3,.landgrid.g4{grid-template-columns:minmax(0,1fr)}
+}
+.landcard{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  padding:20px;display:flex;flex-direction:column;gap:4px;transition:.18s}
+.landcard:hover{border-color:var(--line2);transform:translateY(-2px);box-shadow:var(--sh)}
+/* Значок на подложке, а не голой эмодзи. Голая эмодзи в потоке текста
+   выглядит опечаткой; плитка делает из неё значок и заодно выравнивает
+   карточки между собой — эмодзи у разных наборов разной высоты. */
+.landcard .lcem{width:44px;height:44px;border-radius:14px;background:var(--panel2);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:8px}
+.landcard b{font-size:16.5px}
+.landcard p{margin:0;color:var(--soft);font-size:14px;line-height:1.55}
 /* Карточка направления шире обычной: у неё внутри абзац с числами, а не
    строка-подпись. На узкой сетке она бы резалась на четыре слова в строку. */
 .landcard.wide{grid-column:span 2}
 @media (max-width:760px){ .landcard.wide{grid-column:span 1} }
+/* Направления — единственные карточки с цветом: они отвечают на «а это точно
+   не курсы питона для малышей», и им разрешено быть заметнее остальных. */
+.landcard.dir{background:linear-gradient(160deg,var(--panel),var(--panel2))}
+.landcard.dir .lcem{background:var(--wcbg);border-color:transparent;color:var(--wc)}
+.landcard.dir b{color:var(--wc)}
+
+/* ---------- границы обещания ----------
+   Раньше это были четыре жёлтых полосы подряд — экран аварийного щита. Читать
+   их страшно, а написано там честное и полезное. Теперь это один документ:
+   рамка одна, а строки внутри помечены знаком «этого здесь нет». */
+.landhonest{border:1px solid var(--warnline);background:var(--warnbg);border-radius:20px;
+  padding:8px 22px;list-style:none;margin:0}
+.landhonest li{position:relative;padding:15px 0 15px 32px;font-size:14.5px;line-height:1.6;
+  color:var(--warnink);border-bottom:1px solid var(--warnline)}
+.landhonest li:last-child{border-bottom:none}
+.landhonest li::before{content:"—";position:absolute;left:6px;top:15px;
+  font-weight:700;color:var(--warn)}
+.landhonest li b{color:var(--ink)}
+
+/* ---------- вход ----------
+   Последний экран повторяет первый по фону: страница закрывается тем же
+   жестом, каким открылась, и кнопка входа стоит на самом заметном месте
+   страницы, а не на белом фоне между двумя разделами. */
+.landend{position:relative;overflow:hidden;border:1px solid var(--line);
+  border-radius:26px;background:var(--panel);padding:40px;text-align:center;
+  box-shadow:var(--shbig)}
+.landend > *:not(.lhaur){position:relative}
+.landend h2{font-size:32px}
+.landend .lede{margin:0 auto 22px;max-width:620px}
+.landend .landcta{justify-content:center}
+.landend .landsub{margin:18px auto 0;max-width:620px}
+
+@media (max-width:980px){
+  .lhin{grid-template-columns:1fr;gap:28px}
+  .landhero h1{font-size:42px}
+  .landnums{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:620px){
+  .land{gap:40px}
+  .landhero{padding:28px 20px 26px;border-radius:20px}
+  .landhero h1{font-size:32px}
+  .landlede{font-size:16px}
+  .landsect h2{font-size:24px}
+  .landend h2{font-size:26px}
+  .landend{padding:28px 20px}
+  .landcta .bigbtn{width:100%}
+  .landworld{grid-template-columns:44px minmax(0,1fr);gap:13px;padding:16px 16px 16px 18px}
+  .landworld .lwico{width:44px;height:44px;border-radius:14px;font-size:22px}
+  .lwno{font-size:56px;right:10px}
+  .landnum{padding:14px 16px}
+  .landnum b{font-size:28px}
+  .dwhead .dwtag{display:none}
+}
 /* Подвал детской главной: дверь на вывеску для взрослого, взявшего планшет.
    Нарочно тихая — кнопка, а не карточка: ребёнку она не адресована. */
 .landfoot{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);text-align:center}
