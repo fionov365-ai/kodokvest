@@ -7618,6 +7618,74 @@ function checkEncoding(){
     viewReset(g);
   } else bad("[кабинет] функции atHome нет");
 
+  /* --- 11д. приборная панель: один вид на вывеске и в кабинете ---
+     Жалоба фаундера 08.09.2026: «слишком много текста, столько обычно не
+     читают». Список из семи строк «что видит родитель» заменён макетом самого
+     кабинета — те же вещи плитками. Стережём три правила разом: макет на
+     вывеске есть, он МЁРТВЫЙ и БЕЗ ЧИСЕЛ, а в кабинете те же плитки живые. */
+  let dashChecked = 0;
+  if (typeof g.screenAbout === "function" && typeof g.screenKids === "function"){
+    const p0 = problems.length;
+    g.screenAbout(); await tick(); await tick();
+
+    const mock = doc.querySelector("#rolepane .lkmock");
+    if (!mock) bad("[панель] на вывеске нет макета кабинета — «Взрослому» снова список строк");
+    else {
+      const tiles = [...mock.querySelectorAll(".lktile")];
+      if (tiles.length < 4) bad("[панель] в макете кабинета плиток " + tiles.length);
+      /* ⚠️ Ни одного крупного значения. Выдуманный отчёт про несуществующего
+         ребёнка — ровно то враньё, от которого продукт отказывается внутри
+         (в панели наставника имён детей нет). Числа рисует только живая
+         плитка, и только настоящие. */
+      if (mock.querySelector(".lkval"))
+        bad("[панель] в макете кабинета на вывеске появилось число — это выдуманный отчёт");
+      /* Макет не кликается: нажимать на витрине нечего, а кнопка это обещает. */
+      if (mock.querySelector("button"))
+        bad("[панель] плитки макета на вывеске стали кнопками — нажимать там нечего");
+      /* Подпись плитки — два-три слова. Длиннее — это снова абзац, только
+         разложенный по клеткам. */
+      tiles.forEach(function(t){
+        const hint = t.querySelectorAll("span");
+        const tx = hint.length ? hint[hint.length - 1].textContent : "";
+        if (tx.length > 34)
+          bad("[панель] подпись плитки длиннее 34 знаков (" + tx.length + "): " + tx);
+      });
+    }
+    /* Шаги урока: под каждым ровно одна строка. Сама дорожка с номерами уже
+       говорит «одно за другим», абзац под ней пересказывал её словами. */
+    [...doc.querySelectorAll(".landsteps li span")].forEach(function(sp){
+      if (sp.textContent.length > 80)
+        bad("[вывеска] подпись шага снова абзац (" + sp.textContent.length + " знаков)");
+    });
+
+    /* --- те же плитки, но живые --- */
+    g.adminPassSet("1234"); g.becomeAdmin(); g.adminUnlock();
+    g.screenKids(); await tick();
+    if (doc.querySelectorAll(".lkgrid.live button.lktile").length < 4)
+      bad("[панель] в кабинете нет плиток-инструментов — они снова строчки в подвале");
+    const nav = [...doc.querySelectorAll(".roomnav button")].map(b => b.textContent);
+    if (nav.length !== 3)
+      bad("[панель] в навигации кабинета не три экрана: " + nav.join(" | "));
+    /* ⚠️ Сама беда, из-за которой это заведено: до 1.103.0 попасть в «Группу»
+       можно было только набрав адрес с #group. */
+    if (!nav.some(t => /Группа/.test(t)))
+      bad("[панель] из кабинета снова нет дороги в «Группу»: " + nav.join(" | "));
+    if (!doc.querySelector(".roomnav button.on"))
+      bad("[панель] навигация кабинета не показывает, где ты сейчас");
+    g.screenGroup(); await tick();
+    if (!doc.querySelector(".roomnav")) bad("[панель] на экране группы нет навигации кабинета");
+    g.screenAdmin(); await tick();
+    if (!doc.querySelector(".roomnav")) bad("[панель] в панели наставника нет навигации кабинета");
+    /* Плитка-указатель обязана вести к существующему месту на странице. */
+    [...doc.querySelectorAll('[data-act="jump"]')].forEach(function(b){
+      if (!doc.getElementById(b.getAttribute("data-to")))
+        bad("[панель] плитка ведёт в никуда: " + b.getAttribute("data-to"));
+    });
+    g.becomeKid();
+    if (problems.length === p0) dashChecked++;
+    viewReset(g);
+  }
+
   /* --- 12а. логотип: дорога на страницу сайта --- */
   let logoChecked = 0;
   if (typeof g.goLogo === "function"){
@@ -8203,6 +8271,7 @@ function checkEncoding(){
   console.log(`лестница выхода из затыка: ${ladderChecked ? "да" : "нет"}`);
   console.log(`заметка наставника к уроку: ${noteChecked ? "да" : "нет"}`);
   console.log(`кабинеты: место отдельно от роли: ${roomChecked ? "да" : "нет"}`);
+  console.log(`приборная панель: макет на вывеске и плитки в кабинете: ${dashChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
   console.log(`клавиатура планшета: ${kbChecked ? "да" : "нет"}`);

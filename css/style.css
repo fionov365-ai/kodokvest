@@ -2470,6 +2470,50 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   .drawwin,.warmask,.rolein{grid-template-columns:1fr}
 }
 
+/* ---------- приборная панель: один вид в двух местах ----------
+   На вывеске это НЕРАБОЧИЙ макет («вот как выглядит ваш кабинет»), в самом
+   кабинете — те же плитки, но кнопки. Классы общие нарочно: посетитель,
+   дошедший до кабинета, обязан узнать то, что видел на витрине.
+   ⚠️ Макет на вывеске не показывает НИКАКИХ чисел. Выдуманный отчёт про
+   несуществующего ребёнка — ровно то враньё, от которого продукт
+   отказывается внутри (в панели наставника имён детей нет).
+   ⚠️ Плитка не ниже 76 px: это цель для пальца (docs/pravila-sajta.md § 8). */
+.lkmock{border:1px solid var(--line);border-radius:16px;background:var(--panel2);overflow:hidden}
+.lkbar{display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--sunken);
+  border-bottom:1px solid var(--line);font-size:12.5px;color:var(--faint);flex-wrap:wrap}
+.lkdots{display:flex;gap:4px;flex:none}
+.lkdots i{width:8px;height:8px;border-radius:99px;background:var(--line2);display:block}
+.lkbar b{font-size:12.5px;color:var(--soft);font-weight:600}
+.lkbar .tag{margin-left:auto}
+.lkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;padding:13px}
+.lkgrid.live{padding:0;background:none;margin:0 0 18px}
+.lktile{display:flex;flex-direction:column;gap:2px;text-align:left;min-height:76px;
+  border:1px solid var(--line);border-radius:13px;background:var(--panel);
+  padding:11px 13px;color:inherit;font-family:inherit}
+.lktile .lke{font-size:19px;line-height:1.1}
+.lktile b{font-size:14.5px;line-height:1.25}
+.lktile span{font-size:12.5px;color:var(--faint);line-height:1.4}
+.lktile .lkval{font-family:'Fredoka','Inter',sans-serif;font-size:27px;line-height:1.05;
+  color:var(--acc2);margin-top:auto}
+button.lktile{cursor:pointer;transition:.15s}
+button.lktile:hover{border-color:var(--acc);background:var(--panel2);transform:translateY(-2px)}
+button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+@media (max-width:520px){
+  .lkgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}
+  .lktile{min-height:70px;padding:10px}
+  .lktile b{font-size:13.5px}
+}
+
+/* ---------- одна навигация на все экраны кабинета ----------
+   Экранов у наставника три — ученики, группа, панель, — и попасть в «Группу»
+   можно было только набрав адрес с #group: ссылки на неё не было ни на одном
+   экране. Полоса стоит на всех трёх и всегда показывает, где ты сейчас. */
+.roomnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}
+.roomnav button{border:1px solid var(--line2);background:var(--panel);color:var(--soft);
+  border-radius:11px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
+.roomnav button:hover{color:var(--ink);border-color:var(--acc)}
+.roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте
