@@ -497,7 +497,12 @@ button{font-family:inherit}
 
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
 .card h3{margin:0 0 8px;font-size:17px}
-.card p{margin:0 0 10px;max-width:70ch}
+/* ⚠️ БЕЗ потолка ширины, и это жёсткое правило (docs § 14): в одной карточке
+   плашки и кнопки занимают всю её ширину, и абзац, обрезанный на 70 знаках
+   рядом с ними, читается как «сверху широко, ниже почему-то узко» — жалоба
+   фаундера 08.09.2026. Потолок ширины разрешён только отдельно стоящей
+   строке (лид), а не тексту среди широких соседей. */
+.card p{margin:0 0 10px}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
 /* pre-wrap, а не обычный перенос: внутри <code> в условиях иногда стоят
@@ -1227,7 +1232,8 @@ body.focus .lede{display:none}
   padding:10px 15px;border:1px dashed var(--acc2);border-radius:12px;
   background:rgba(0,224,184,.08);font-size:13.5px;color:var(--soft)}
 .peekbar b{color:var(--ink)}
-.peekbar .rbtn{margin-left:auto}
+.peekbar .pktx{flex:1 1 300px;min-width:0}
+.peekbar .rbtn{margin-left:auto;flex:none}
 
 /* ---------- выпускной мира ----------
    Список умений — не украшенная похвала, а перечень, по которому ходят
@@ -23045,8 +23051,9 @@ function openLesson(id){
      
      
     var peek = (isAdminDevice() || isParentDevice())
-      ? '<div class="peekbar">👀 Вы смотрите урок <b>глазами ребёнка</b>. ' +
-        'Проходить его не нужно: прогресс этого устройства никому не показывается. ' +
+       
+      ? '<div class="peekbar"><span class="pktx">👀 Вы смотрите урок <b>глазами ребёнка</b>. ' +
+        'Проходить его не нужно: прогресс этого устройства никому не показывается.</span> ' +
         '<button class="rbtn sec" id="peekout">← Вернуться в кабинет</button></div>'
       : "";
     var head = peek + '<div class="crumbs">' +
@@ -31576,19 +31583,6 @@ function lkTileHTML(t){
     '<b>' + esc(t[1]) + '</b><span>' + esc(t[2]) + '</span></div>';
 }
  
-function lkBtnHTML(attr, act, em, name, hint, val){
-  return '<button class="lktile" data-' + attr + '="' + act + '">' +
-    '<span class="lke">' + em + '</span><b>' + esc(name) + '</b>' +
-    '<span>' + esc(hint) + '</span>' +
-    (val == null ? "" : '<span class="lkval">' + esc(String(val)) + '</span>') +
-    '</button>';
-}
- 
-function lkJumpHTML(to, em, name, hint){
-  return '<button class="lktile" data-act="jump" data-to="' + to + '">' +
-    '<span class="lke">' + em + '</span><b>' + esc(name) + '</b>' +
-    '<span>' + esc(hint) + '</span></button>';
-}
  
 var ROOM_TABS = [["kids","👥 Ученики"], ["group","👨‍🏫 Группа"], ["admin","🔐 Панель"]];
 function roomNavHTML(cur){
@@ -32221,15 +32215,6 @@ function screenKids(){
          'Без него ученики не смогут заниматься на своих устройствах.</p>';
 
    
-  h += '<div class="lkgrid live">' +
-    lkBtnHTML("kact", "tolist", "👥", "Ученики", kids.length ? "отчёт и расписание" : "пока никого",
-      kids.length || null) +
-    lkBtnHTML("kact", "toadd", "➕", "Завести ученика", "имя → код и ссылка") +
-    lkBtnHTML("kact", "group", "👨‍🏫", "Группа", "кто как шёл, все сразу") +
-    lkBtnHTML("kact", "panel", "🔐", "Панель наставника", "замки, перенос, сервер") +
-    lkBtnHTML("kact", "about", "🐍", "О тренажёре", "что видит ребёнок") +
-    '</div>';
-
   h += '<div class="card" id="kidadd"><h3>Добавить ученика</h3>' +
     '<p class="dim">Впишите имя — тренажёр придумает код и даст ссылку. Ссылку отправьте ребёнку: ' +
     'открыв её, он сразу окажется в тренажёре под своим именем.</p>' +
@@ -32274,22 +32259,11 @@ function screenKids(){
           msg.innerHTML = "<b>Нужно имя</b>Хотя бы две буквы — по нему вы будете узнавать ученика в списке.";
           return;
         }
-        return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она ниже.");
+        return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она уже открыта.");
       }
       if (act === "open") return screenKid(code);
       if (act === "leave") return leaveRoom();
       if (act === "role") return screenRoles();
-      if (act === "about") return screenAbout();
-      if (act === "group"){ location.hash = "#group"; return screenGroup(); }
-      if (act === "panel"){ location.hash = "#panel"; return screenAdmin(); }
-       
-      if (act === "tolist" || act === "toadd"){
-        var to = document.getElementById(act === "tolist" && kids.length ? "kidlist" : "kidadd");
-        if (to && to.scrollIntoView) to.scrollIntoView({ behavior:"smooth", block:"start" });
-        var inp = document.getElementById("kidname");
-        if (act === "toadd" && inp) inp.focus();
-        return;
-      }
       if (act === "link") return copyText(kidLink(code), b);
       if (act === "drop"){
         var k = kidGet(code);
@@ -32317,29 +32291,15 @@ function screenKid(code, note){
   var k = kidGet(code);
   if (!k) return screenKids();
   kidTarget = { code: code, name: k.name, data: null, dirty: false };
+   
+  kidTab = note ? "link" : "";
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">ученик</div><h1>' + esc(k.name || code) + '</h1></div></div>' +
     (note ? '<div class="note"><b>Готово</b>' + esc(note) + '</div>' : "") +
-    '<div class="card"><h3>Ссылка для ребёнка</h3>' +
-      '<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
-      'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
-      '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
-      '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
-      '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
-      '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
-      'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
-      '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
-      '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
-      '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-kd="back">← К списку учеников</button></div>';
-  app.querySelectorAll("[data-kd]").forEach(function(b){
-    b.onclick = function(){
-      var a = b.getAttribute("data-kd");
-      if (a === "copy") return copyText(kidLink(code), b);
-      if (a === "pcopy") return copyText(parentLink(code, (kidGet(code) || {}).name), b);
-      if (a === "back"){ kidTarget = null; return screenKids(); }
-    };
+    '<div class="pager"><button class="bigbtn ghost" data-kback="1">← К списку учеников</button></div>';
+  app.querySelectorAll("[data-kback]").forEach(function(b){
+    b.onclick = function(){ kidTarget = null; screenKids(); };
   });
   refreshTop();
   kidLoad(code);
@@ -32368,28 +32328,96 @@ function kidLoad(code){
       esc(err.message || err) + '</p>';
   });
 }
+ 
+var KID_TABS = [
+  ["rep",   "📊", "Отчёт"],
+  ["frame", "🗓", "Расписание"],
+  ["hw",    "📮", "Домашка"],
+  ["note",  "✍️", "Заметка"],
+  ["link",  "🔗", "Доступ"]    
+];
+var kidTab = "";
+function kidPaneHTML(id, inner){
+  return '<div class="kpane" data-kpane="' + id + '"' + (kidTab === id ? "" : " hidden") + '>' +
+    inner + '</div>';
+}
+ 
+function kidLinksHTML(code){
+  var k = kidGet(code) || {};
+  return '<div class="card"><h3>Ссылка для ребёнка</h3>' +
+    '<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
+    'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
+    '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
+    '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
+    '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
+    '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+    'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
+    '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
+    '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
+    '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>';
+}
 function kidRender(savedNote){
   var box = document.getElementById("kidbody");
   if (!box || !kidTarget || !kidTarget.data) return;
   var st = kidTarget.data;
+  var mentor = (curPlace === "kid");
+  var tabs = KID_TABS.filter(function(t){ return t[0] !== "link" || mentor; });
+   
+  if (!tabs.some(function(t){ return t[0] === kidTab; }))
+    kidTab = kidTarget.fresh ? "frame" : "rep";
+
   var h = "";
    
   h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</div>';
   if (kidTarget.fresh)
     h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
          'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
-  h += '<h3 class="sect">🗓 Расписание</h3>' + frameEditorHTML(frame()) +
-       '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
-       '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
-        
-       (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
-  h += hwGiveHTML(st);
-  h += noteGiveHTML(st);
-  if (!kidTarget.fresh){
-    h += parentReportCardHTML() + askCardHTML(st) + oralCardHTML(st);
-    h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
-  }
+
+  h += '<div class="ltabs kidnav" role="tablist">' + tabs.map(function(t){
+    return '<button class="ltab' + (t[0] === kidTab ? " on" : "") + '" role="tab" data-ktab="' + t[0] + '"' +
+      ' aria-selected="' + (t[0] === kidTab ? "true" : "false") + '">' +
+      '<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+  }).join("") + '</div>';
+
+  h += kidPaneHTML("rep",
+    kidTarget.fresh
+      ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
+      : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
+        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
+
+  h += kidPaneHTML("frame",
+    frameEditorHTML(frame()) +
+    '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
+    '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
+     
+    (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
+
+  h += kidPaneHTML("hw", hwGiveHTML(st));
+  h += kidPaneHTML("note", noteGiveHTML(st));
+  if (mentor) h += kidPaneHTML("link", kidLinksHTML(kidTarget.code));
+
   box.innerHTML = h;
+   
+  box.querySelectorAll("[data-ktab]").forEach(function(b){
+    b.onclick = function(){
+      kidTab = b.getAttribute("data-ktab");
+      box.querySelectorAll("[data-ktab]").forEach(function(x){
+        var on = x.getAttribute("data-ktab") === kidTab;
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      box.querySelectorAll("[data-kpane]").forEach(function(p){
+        p.hidden = p.getAttribute("data-kpane") !== kidTab;
+      });
+    };
+  });
+  box.querySelectorAll("[data-kd]").forEach(function(b){
+    b.onclick = function(){
+      var a = b.getAttribute("data-kd");
+      if (a === "copy") return copyText(kidLink(kidTarget.code), b);
+      if (a === "pcopy") return copyText(parentLink(kidTarget.code, (kidGet(kidTarget.code) || {}).name), b);
+    };
+  });
   bindFrameEditor(function(){ kidRender(); });
   bindHwGive();
   bindNoteGive();
@@ -32775,6 +32803,7 @@ function screenParent(code){
   if (!code) return screenRoles();
   enterScreen("home", "parent");
   kidTarget = { code: code, name: parentLabel(), data: null, dirty: false };
+  kidTab = "";
   var who = parentLabel() || ("ученик " + code);
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">кабинет родителя</div><h1>' + esc(who) + '</h1></div></div>' +
@@ -33873,6 +33902,17 @@ function screenGroup(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+var ADM_TABS = [
+  ["over", "📊", "Обзор"],
+  ["srv",  "☁️", "Сервер"],
+  ["les",  "📚", "Уроки и звёзды"],
+  ["file", "💾", "Перенос"]
+];
+var admTab = "over";
+function admPane(id, inner){
+  return '<div class="apane" data-apane="' + id + '"' + (admTab === id ? "" : " hidden") + '>' +
+    inner + '</div>';
+}
 function screenAdmin(){
    
   curPlace = "admin";
@@ -33903,22 +33943,26 @@ function screenAdmin(){
       '<p class="lede">' + (cloudEnabled()
         ? 'Прогресс синхронизируется с сервером — его видно с любого устройства.'
         : 'Прогресс лежит в памяти <b>этого</b> браузера. Чтобы видеть его с другого устройства, ' +
-          'подключите сервер или выгрузите файл внизу страницы.') + '</p>';
+          'подключите сервер или перенесите файлом — вкладки ниже.') + '</p>';
 
      
-    h += '<div class="lkgrid live">' +
-      lkBtnHTML("act", "toadult", "👨‍👩‍👦", "Кабинет взрослого", "рамка, отчёт, задание") +
-      lkJumpHTML("admserver", "☁️", "Сервер", cloudEnabled() ? "подключён" : "не подключён") +
-      lkJumpHTML("admfast", "🔓", "Замки и звёзды", S.admin.unlockAll ? "все уроки открыты" : "открыть все уроки") +
-      lkJumpHTML("admtable", "📋", "Таблица уроков", "по одному уроку") +
-      lkJumpHTML("admfile", "💾", "Перенос файлом", "когда сервера нет") +
-      '</div>';
+    if (!ADM_TABS.some(function(t){ return t[0] === admTab; })) admTab = "over";
+    h += '<div class="ltabs admnav" role="tablist">' + ADM_TABS.map(function(t){
+      return '<button class="ltab' + (t[0] === admTab ? " on" : "") + '" role="tab" data-atab="' + t[0] + '"' +
+        ' aria-selected="' + (t[0] === admTab ? "true" : "false") + '">' +
+        '<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+    }).join("") + '</div>';
 
-    h += statsGridHTML(S);
-    h += weekReportHTML(S);
-    h += '<div id="admserver">' + serverCardHTML() + '</div>';
+    h += admPane("over",
+      statsGridHTML(S) + weekReportHTML(S) +
+      '<div class="card"><h3>👨‍👩‍👦 Кабинет взрослого этого устройства</h3>' +
+      '<p class="dim">Рамка занятий, отчёт и задание для ребёнка, который занимается ' +
+      'прямо на этом устройстве.</p><div class="admrow">' +
+      '<button class="rbtn check" data-act="toadult">Открыть →</button></div></div>');
 
-    h += '<div class="card" id="admfast"><h3>Быстрые действия</h3><div class="admrow">' +
+    h += admPane("srv", serverCardHTML());
+
+    var lesPane = '<div class="card" id="admfast"><h3>Быстрые действия</h3><div class="admrow">' +
       '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
         (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
       '<button class="rbtn sec" data-act="passready">Зачесть все готовые на 3★</button>' +
@@ -33926,7 +33970,7 @@ function screenAdmin(){
       '</div><p class="dim">«Открыть все уроки» только снимает замки, звёзды не ставит. ' +
       'Настройка этого устройства, на сервер не уходит.</p></div>';
 
-    h += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
+    lesPane += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
       '<label class="admlbl">XP <input type="number" id="xpin" value="' + S.xp + '" min="0" step="25"></label>' +
       '<button class="rbtn sec" data-act="setxp">Записать</button></div>' +
       '<div class="admbadges">' +
@@ -33937,9 +33981,10 @@ function screenAdmin(){
       }).join("") +
       '</div><p class="dim">Нажатие на бейдж выдаёт его или отбирает.</p></div>';
 
-    h += '<div id="admtable">' + lessonTableHTML(S, true) + '</div>';
+    lesPane += lessonTableHTML(S, true);
+    h += admPane("les", lesPane);
 
-    h += '<div class="card" id="admfile"><h3>Перенос прогресса файлом</h3>' +
+    h += admPane("file", '<div class="card" id="admfile"><h3>Перенос прогресса файлом</h3>' +
       '<div class="admrow">' +
         '<button class="rbtn sec" data-act="download">↓ Скачать файл прогресса</button>' +
         '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
@@ -33948,7 +33993,7 @@ function screenAdmin(){
       'устройстве. ⚠️ Загрузка файла <b>заменяет</b> прогресс целиком, а не сливает.</p>' +
       '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
       '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
-      '<div class="msg" id="admmsg"></div></div>';
+      '<div class="msg" id="admmsg"></div></div>');
 
     h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← На главную</button>' +
       '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
@@ -33959,6 +34004,19 @@ function screenAdmin(){
   var box = document.getElementById("adm");
   box.innerHTML = h;
   wireRoomNav(box);
+  box.querySelectorAll("[data-atab]").forEach(function(b){
+    b.onclick = function(){
+      admTab = b.getAttribute("data-atab");
+      box.querySelectorAll("[data-atab]").forEach(function(x){
+        var on = x.getAttribute("data-atab") === admTab;
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      box.querySelectorAll("[data-apane]").forEach(function(p){
+        p.hidden = p.getAttribute("data-apane") !== admTab;
+      });
+    };
+  });
 
   function say(cls, html){
     var m = document.getElementById("admmsg");
@@ -33974,11 +34032,7 @@ function screenAdmin(){
     if (!b) return;
     var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
 
-    if (act === "jump"){
-      var to = document.getElementById(b.getAttribute("data-to"));
-      if (to && to.scrollIntoView) to.scrollIntoView({ behavior:"smooth", block:"start" });
-    }
-    else if (act === "tomap"){ viewState = null; screenWorlds(); }
+    if (act === "tomap"){ viewState = null; screenWorlds(); }
     else if (act === "myown"){ viewState = null; screenAdmin(); }
     else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
     else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }

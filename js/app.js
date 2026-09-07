@@ -5081,8 +5081,13 @@ function openLesson(id){
        взрослую. Урок ему по-прежнему открыт (наставнику полезно видеть ровно
        то, что видит ребёнок), но теперь он видит и где находится, и как выйти. */
     var peek = (isAdminDevice() || isParentDevice())
-      ? '<div class="peekbar">👀 Вы смотрите урок <b>глазами ребёнка</b>. ' +
-        'Проходить его не нужно: прогресс этого устройства никому не показывается. ' +
+      /* ⚠️ Текст обёрнут в span. Плашка — flex, и без обёртки каждый кусок
+         текста вокруг <b> становился отдельным флекс-элементом: между
+         «глазами ребёнка» и точкой вставал gap, а кнопка уезжала на вторую
+         строку под текст. Жалоба фаундера 08.09.2026: «кнопка ниже текста,
+         текст обрезан». */
+      ? '<div class="peekbar"><span class="pktx">👀 Вы смотрите урок <b>глазами ребёнка</b>. ' +
+        'Проходить его не нужно: прогресс этого устройства никому не показывается.</span> ' +
         '<button class="rbtn sec" id="peekout">← Вернуться в кабинет</button></div>'
       : "";
     var head = peek + '<div class="crumbs">' +
@@ -14932,23 +14937,12 @@ function lkTileHTML(t){
   return '<div class="lktile"><span class="lke">' + t[0] + '</span>' +
     '<b>' + esc(t[1]) + '</b><span>' + esc(t[2]) + '</span></div>';
 }
-/* Живая плитка кабинета: та же разметка, что на вывеске, только кнопка.
-   ⚠️ Значение (крупное число) рисуется ТОЛЬКО здесь. На вывеске чисел нет
-   и быть не может — там нечего считать. */
-function lkBtnHTML(attr, act, em, name, hint, val){
-  return '<button class="lktile" data-' + attr + '="' + act + '">' +
-    '<span class="lke">' + em + '</span><b>' + esc(name) + '</b>' +
-    '<span>' + esc(hint) + '</span>' +
-    (val == null ? "" : '<span class="lkval">' + esc(String(val)) + '</span>') +
-    '</button>';
-}
-/* Плитка-указатель: не действие, а дорога к карточке ниже на этой же
-   странице. Нужна там, где экран длинный и нужное лежит под сгибом. */
-function lkJumpHTML(to, em, name, hint){
-  return '<button class="lktile" data-act="jump" data-to="' + to + '">' +
-    '<span class="lke">' + em + '</span><b>' + esc(name) + '</b>' +
-    '<span>' + esc(hint) + '</span></button>';
-}
+/* ⚠️ Живых плиток-кнопок в кабинете больше нет — они прожили один день
+   (1.103.0). Плитки дублировали навигацию и карточки на тех же экранах, а
+   плитки-указатели не убирали прокрутку, только удлиняли её на себя. Экраны
+   кабинета разложены по вкладкам (admnav, kidnav), плитки остались только
+   МАКЕТОМ на вывеске (lkMockHTML): там они показывают, что кабинет умеет.
+   Разбор — docs/pravila-sajta.md § 13. */
 /* ===== одна навигация на все экраны кабинета =====
    Экранов у наставника три — «Ученики», «Группа», «Панель», — и до 1.103.0
    попасть в «Группу» можно было только набрав адрес с #group: ссылки на неё
@@ -15703,19 +15697,11 @@ function screenKids(){
     h += '<p class="warnline">⚠️ Сервер не подключён: адрес не указан в <code>js/cloud-config.js</code>. ' +
          'Без него ученики не смогут заниматься на своих устройствах.</p>';
 
-  /* Приборная панель: те же плитки, что нарисованы на вывеске в разделе
-     «Вот ваш кабинет», только живые. Инструменты стоят рядом и подписаны
-     одним словом — до этого «Группа» вообще не имела кнопки, а «Панель»
-     пряталась третьей строчкой в подвале. */
-  h += '<div class="lkgrid live">' +
-    lkBtnHTML("kact", "tolist", "👥", "Ученики", kids.length ? "отчёт и расписание" : "пока никого",
-      kids.length || null) +
-    lkBtnHTML("kact", "toadd", "➕", "Завести ученика", "имя → код и ссылка") +
-    lkBtnHTML("kact", "group", "👨‍🏫", "Группа", "кто как шёл, все сразу") +
-    lkBtnHTML("kact", "panel", "🔐", "Панель наставника", "замки, перенос, сервер") +
-    lkBtnHTML("kact", "about", "🐍", "О тренажёре", "что видит ребёнок") +
-    '</div>';
-
+  /* ⚠️ Никаких плиток-дублей. День 1.103.0: под навигацией стояла сетка
+     плиток, где «Группа» и «Панель» повторяли навигацию строчкой выше, а
+     «Завести ученика» повторял карточку «Добавить ученика» строчкой ниже.
+     Вопрос фаундера 08.09.2026: «зачем кнопка, если ниже есть добавить?» —
+     и ответа не нашлось. Одна дорога к одному действию. */
   h += '<div class="card" id="kidadd"><h3>Добавить ученика</h3>' +
     '<p class="dim">Впишите имя — тренажёр придумает код и даст ссылку. Ссылку отправьте ребёнку: ' +
     'открыв её, он сразу окажется в тренажёре под своим именем.</p>' +
@@ -15762,23 +15748,11 @@ function screenKids(){
           msg.innerHTML = "<b>Нужно имя</b>Хотя бы две буквы — по нему вы будете узнавать ученика в списке.";
           return;
         }
-        return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она ниже.");
+        return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она уже открыта.");
       }
       if (act === "open") return screenKid(code);
       if (act === "leave") return leaveRoom();
       if (act === "role") return screenRoles();
-      if (act === "about") return screenAbout();
-      if (act === "group"){ location.hash = "#group"; return screenGroup(); }
-      if (act === "panel"){ location.hash = "#panel"; return screenAdmin(); }
-      /* Две плитки не уводят со страницы, а подводят к нужному месту на ней:
-         и список учеников, и поле «завести» стоят тут же, ниже. */
-      if (act === "tolist" || act === "toadd"){
-        var to = document.getElementById(act === "tolist" && kids.length ? "kidlist" : "kidadd");
-        if (to && to.scrollIntoView) to.scrollIntoView({ behavior:"smooth", block:"start" });
-        var inp = document.getElementById("kidname");
-        if (act === "toadd" && inp) inp.focus();
-        return;
-      }
       if (act === "link") return copyText(kidLink(code), b);
       if (act === "drop"){
         var k = kidGet(code);
@@ -15806,29 +15780,16 @@ function screenKid(code, note){
   var k = kidGet(code);
   if (!k) return screenKids();
   kidTarget = { code: code, name: k.name, data: null, dirty: false };
+  /* Ссылки живут во вкладке «Доступ» (kidLinksHTML). Только что заведённому
+     ученику открываем именно её: единственное, что сейчас нужно, — ссылка. */
+  kidTab = note ? "link" : "";
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">ученик</div><h1>' + esc(k.name || code) + '</h1></div></div>' +
     (note ? '<div class="note"><b>Готово</b>' + esc(note) + '</div>' : "") +
-    '<div class="card"><h3>Ссылка для ребёнка</h3>' +
-      '<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
-      'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
-      '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
-      '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
-      '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
-      '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
-      'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
-      '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
-      '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
-      '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-kd="back">← К списку учеников</button></div>';
-  app.querySelectorAll("[data-kd]").forEach(function(b){
-    b.onclick = function(){
-      var a = b.getAttribute("data-kd");
-      if (a === "copy") return copyText(kidLink(code), b);
-      if (a === "pcopy") return copyText(parentLink(code, (kidGet(code) || {}).name), b);
-      if (a === "back"){ kidTarget = null; return screenKids(); }
-    };
+    '<div class="pager"><button class="bigbtn ghost" data-kback="1">← К списку учеников</button></div>';
+  app.querySelectorAll("[data-kback]").forEach(function(b){
+    b.onclick = function(){ kidTarget = null; screenKids(); };
   });
   refreshTop();
   kidLoad(code);
@@ -15858,30 +15819,108 @@ function kidLoad(code){
       esc(err.message || err) + '</p>';
   });
 }
+/* ===== карточка ученика и кабинет родителя: панель с вкладками =====
+   Раньше всё лежало одной колонной — присутствие, рамка, домашка, заметка,
+   отчёт, — восемь экранов прокрутки, и родитель не понимал, что где. Жалоба
+   фаундера 08.09.2026: «нужна панель управления сверху, вкладки: открываешь,
+   смотришь, меняешь». Теперь сверху вкладки, над ними — только «что он делает
+   сейчас»: это единственное, что взрослый должен видеть всегда.
+   ⚠️ Разделы НЕ перерисовываются при переключении: все отрисованы сразу,
+   вкладка только прячет чужие (hidden). Так переключение мгновенно, а
+   обработчики и наполовину заполненные поля (заметка, галочки домашки)
+   не пропадают. */
+var KID_TABS = [
+  ["rep",   "📊", "Отчёт"],
+  ["frame", "🗓", "Расписание"],
+  ["hw",    "📮", "Домашка"],
+  ["note",  "✍️", "Заметка"],
+  ["link",  "🔗", "Доступ"]   /* только у наставника: родителю раздавать нечего */
+];
+var kidTab = "";
+function kidPaneHTML(id, inner){
+  return '<div class="kpane" data-kpane="' + id + '"' + (kidTab === id ? "" : " hidden") + '>' +
+    inner + '</div>';
+}
+/* Ссылки и код — бывшая статичная карточка screenKid: теперь вкладка. */
+function kidLinksHTML(code){
+  var k = kidGet(code) || {};
+  return '<div class="card"><h3>Ссылка для ребёнка</h3>' +
+    '<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
+    'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
+    '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
+    '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
+    '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
+    '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+    'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
+    '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
+    '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
+    '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>';
+}
 function kidRender(savedNote){
   var box = document.getElementById("kidbody");
   if (!box || !kidTarget || !kidTarget.data) return;
   var st = kidTarget.data;
+  var mentor = (curPlace === "kid");
+  var tabs = KID_TABS.filter(function(t){ return t[0] !== "link" || mentor; });
+  /* Стартовая вкладка: отчёт — если он есть; новому ученику показываем
+     расписание, потому что это первое (и единственное) осмысленное действие. */
+  if (!tabs.some(function(t){ return t[0] === kidTab; }))
+    kidTab = kidTarget.fresh ? "frame" : "rep";
+
   var h = "";
-  /* статус присутствия и вход в живое занятие — первой строкой: «что он
-     делает сейчас» и есть вопрос, с которым взрослый открыл карточку */
+  /* статус присутствия — НАД вкладками: «что он делает сейчас» и есть вопрос,
+     с которым взрослый открыл карточку, и он виден с любой вкладки */
   h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</div>';
   if (kidTarget.fresh)
     h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
          'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
-  h += '<h3 class="sect">🗓 Расписание</h3>' + frameEditorHTML(frame()) +
-       '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
-       '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
-       /* Подтверждение сохранения должно пережить перерисовку рамки, которая
-          идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
-       (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
-  h += hwGiveHTML(st);
-  h += noteGiveHTML(st);
-  if (!kidTarget.fresh){
-    h += parentReportCardHTML() + askCardHTML(st) + oralCardHTML(st);
-    h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
-  }
+
+  h += '<div class="ltabs kidnav" role="tablist">' + tabs.map(function(t){
+    return '<button class="ltab' + (t[0] === kidTab ? " on" : "") + '" role="tab" data-ktab="' + t[0] + '"' +
+      ' aria-selected="' + (t[0] === kidTab ? "true" : "false") + '">' +
+      '<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+  }).join("") + '</div>';
+
+  h += kidPaneHTML("rep",
+    kidTarget.fresh
+      ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
+      : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
+        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
+
+  h += kidPaneHTML("frame",
+    frameEditorHTML(frame()) +
+    '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
+    '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
+    /* Подтверждение сохранения должно пережить перерисовку рамки, которая
+       идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
+    (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
+
+  h += kidPaneHTML("hw", hwGiveHTML(st));
+  h += kidPaneHTML("note", noteGiveHTML(st));
+  if (mentor) h += kidPaneHTML("link", kidLinksHTML(kidTarget.code));
+
   box.innerHTML = h;
+  /* переключение — только показ/скрытие, без перерисовки (см. шапку) */
+  box.querySelectorAll("[data-ktab]").forEach(function(b){
+    b.onclick = function(){
+      kidTab = b.getAttribute("data-ktab");
+      box.querySelectorAll("[data-ktab]").forEach(function(x){
+        var on = x.getAttribute("data-ktab") === kidTab;
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      box.querySelectorAll("[data-kpane]").forEach(function(p){
+        p.hidden = p.getAttribute("data-kpane") !== kidTab;
+      });
+    };
+  });
+  box.querySelectorAll("[data-kd]").forEach(function(b){
+    b.onclick = function(){
+      var a = b.getAttribute("data-kd");
+      if (a === "copy") return copyText(kidLink(kidTarget.code), b);
+      if (a === "pcopy") return copyText(parentLink(kidTarget.code, (kidGet(kidTarget.code) || {}).name), b);
+    };
+  });
   bindFrameEditor(function(){ kidRender(); });
   bindHwGive();
   bindNoteGive();
@@ -16310,6 +16349,7 @@ function screenParent(code){
   if (!code) return screenRoles();
   enterScreen("home", "parent");
   kidTarget = { code: code, name: parentLabel(), data: null, dirty: false };
+  kidTab = "";
   var who = parentLabel() || ("ученик " + code);
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">кабинет родителя</div><h1>' + esc(who) + '</h1></div></div>' +
@@ -17623,6 +17663,17 @@ function screenGroup(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+var ADM_TABS = [
+  ["over", "📊", "Обзор"],
+  ["srv",  "☁️", "Сервер"],
+  ["les",  "📚", "Уроки и звёзды"],
+  ["file", "💾", "Перенос"]
+];
+var admTab = "over";
+function admPane(id, inner){
+  return '<div class="apane" data-apane="' + id + '"' + (admTab === id ? "" : " hidden") + '>' +
+    inner + '</div>';
+}
 function screenAdmin(){
   /* без clearAdminHash: этот экран открывается по #panel и живёт под ним */
   curPlace = "admin";
@@ -17653,25 +17704,33 @@ function screenAdmin(){
       '<p class="lede">' + (cloudEnabled()
         ? 'Прогресс синхронизируется с сервером — его видно с любого устройства.'
         : 'Прогресс лежит в памяти <b>этого</b> браузера. Чтобы видеть его с другого устройства, ' +
-          'подключите сервер или выгрузите файл внизу страницы.') + '</p>';
+          'подключите сервер или перенесите файлом — вкладки ниже.') + '</p>';
 
-    /* Приборная панель служебного экрана. Он длинный — восемь карточек одна
-       под другой, — и до 1.103.0 единственным способом найти нужную было
-       прокрутить всё. Плитки называют, что здесь вообще есть, и подводят к
-       месту; порядок тот же, что у карточек ниже. */
-    h += '<div class="lkgrid live">' +
-      lkBtnHTML("act", "toadult", "👨‍👩‍👦", "Кабинет взрослого", "рамка, отчёт, задание") +
-      lkJumpHTML("admserver", "☁️", "Сервер", cloudEnabled() ? "подключён" : "не подключён") +
-      lkJumpHTML("admfast", "🔓", "Замки и звёзды", S.admin.unlockAll ? "все уроки открыты" : "открыть все уроки") +
-      lkJumpHTML("admtable", "📋", "Таблица уроков", "по одному уроку") +
-      lkJumpHTML("admfile", "💾", "Перенос файлом", "когда сервера нет") +
-      '</div>';
+    /* Панель разложена по ВКЛАДКАМ. Плитки-указатели, подводившие к карточкам
+       прокруткой, прожили один день (1.103.0): прокрутку они не убирали, а
+       только удлиняли её на себя. Жалоба фаундера 08.09.2026: «нужна панель
+       управления сверху, вкладки: открываешь, смотришь, меняешь».
+       ⚠️ Разделы отрисованы ВСЕ сразу, вкладка только прячет чужие (hidden):
+       переключение мгновенно, обработчики и набранный текст не пропадают.
+       admTab — переменная модуля: «Открыть все уроки» перерисовывает экран,
+       и взрослый обязан остаться на той же вкладке. */
+    if (!ADM_TABS.some(function(t){ return t[0] === admTab; })) admTab = "over";
+    h += '<div class="ltabs admnav" role="tablist">' + ADM_TABS.map(function(t){
+      return '<button class="ltab' + (t[0] === admTab ? " on" : "") + '" role="tab" data-atab="' + t[0] + '"' +
+        ' aria-selected="' + (t[0] === admTab ? "true" : "false") + '">' +
+        '<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+    }).join("") + '</div>';
 
-    h += statsGridHTML(S);
-    h += weekReportHTML(S);
-    h += '<div id="admserver">' + serverCardHTML() + '</div>';
+    h += admPane("over",
+      statsGridHTML(S) + weekReportHTML(S) +
+      '<div class="card"><h3>👨‍👩‍👦 Кабинет взрослого этого устройства</h3>' +
+      '<p class="dim">Рамка занятий, отчёт и задание для ребёнка, который занимается ' +
+      'прямо на этом устройстве.</p><div class="admrow">' +
+      '<button class="rbtn check" data-act="toadult">Открыть →</button></div></div>');
 
-    h += '<div class="card" id="admfast"><h3>Быстрые действия</h3><div class="admrow">' +
+    h += admPane("srv", serverCardHTML());
+
+    var lesPane = '<div class="card" id="admfast"><h3>Быстрые действия</h3><div class="admrow">' +
       '<button class="rbtn ' + (S.admin.unlockAll ? "check" : "sec") + '" data-act="unlockall">' +
         (S.admin.unlockAll ? "✓ Все уроки открыты" : "Открыть все уроки") + '</button>' +
       '<button class="rbtn sec" data-act="passready">Зачесть все готовые на 3★</button>' +
@@ -17679,7 +17738,7 @@ function screenAdmin(){
       '</div><p class="dim">«Открыть все уроки» только снимает замки, звёзды не ставит. ' +
       'Настройка этого устройства, на сервер не уходит.</p></div>';
 
-    h += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
+    lesPane += '<div class="card"><h3>Опыт и бейджи</h3><div class="admrow">' +
       '<label class="admlbl">XP <input type="number" id="xpin" value="' + S.xp + '" min="0" step="25"></label>' +
       '<button class="rbtn sec" data-act="setxp">Записать</button></div>' +
       '<div class="admbadges">' +
@@ -17690,9 +17749,10 @@ function screenAdmin(){
       }).join("") +
       '</div><p class="dim">Нажатие на бейдж выдаёт его или отбирает.</p></div>';
 
-    h += '<div id="admtable">' + lessonTableHTML(S, true) + '</div>';
+    lesPane += lessonTableHTML(S, true);
+    h += admPane("les", lesPane);
 
-    h += '<div class="card" id="admfile"><h3>Перенос прогресса файлом</h3>' +
+    h += admPane("file", '<div class="card" id="admfile"><h3>Перенос прогресса файлом</h3>' +
       '<div class="admrow">' +
         '<button class="rbtn sec" data-act="download">↓ Скачать файл прогресса</button>' +
         '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
@@ -17701,7 +17761,7 @@ function screenAdmin(){
       'устройстве. ⚠️ Загрузка файла <b>заменяет</b> прогресс целиком, а не сливает.</p>' +
       '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
       '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
-      '<div class="msg" id="admmsg"></div></div>';
+      '<div class="msg" id="admmsg"></div></div>');
 
     h += '<div class="pager"><button class="bigbtn ghost" data-act="tomap">← На главную</button>' +
       '<span class="sp"></span><button class="bigbtn ghost" data-act="lock">Выйти из панели</button></div>';
@@ -17712,6 +17772,19 @@ function screenAdmin(){
   var box = document.getElementById("adm");
   box.innerHTML = h;
   wireRoomNav(box);
+  box.querySelectorAll("[data-atab]").forEach(function(b){
+    b.onclick = function(){
+      admTab = b.getAttribute("data-atab");
+      box.querySelectorAll("[data-atab]").forEach(function(x){
+        var on = x.getAttribute("data-atab") === admTab;
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      box.querySelectorAll("[data-apane]").forEach(function(p){
+        p.hidden = p.getAttribute("data-apane") !== admTab;
+      });
+    };
+  });
 
   function say(cls, html){
     var m = document.getElementById("admmsg");
@@ -17727,11 +17800,7 @@ function screenAdmin(){
     if (!b) return;
     var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
 
-    if (act === "jump"){
-      var to = document.getElementById(b.getAttribute("data-to"));
-      if (to && to.scrollIntoView) to.scrollIntoView({ behavior:"smooth", block:"start" });
-    }
-    else if (act === "tomap"){ viewState = null; screenWorlds(); }
+    if (act === "tomap"){ viewState = null; screenWorlds(); }
     else if (act === "myown"){ viewState = null; screenAdmin(); }
     else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
     else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }

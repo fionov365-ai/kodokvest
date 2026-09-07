@@ -7667,6 +7667,19 @@ function checkEncoding(){
        справа продолжалось. Жалоба фаундера 08.09.2026 — «слева свободное
        место, всё должно быть симметрично». Высоту в jsdom не измерить,
        поэтому стережём место, где они стоят, и что полоса ровно одна. */
+    /* ⚠️ Симметрия ширины (docs § 14): в одной карточке плашки и кнопки
+       занимают всю ширину, и потолок ширины на абзацах давал «сверху широко,
+       ниже почему-то узко» — жалоба фаундера 08.09.2026. */
+    {
+      const cssW2 = fs.readFileSync(path.join(root, "css/style.css"), "utf8");
+      if (/\.card p\{[^}]*max-width/.test(cssW2))
+        bad("[вёрстка] текст в карточке снова режется узкой колонкой при широких соседях");
+      /* плашка «глазами ребёнка»: текст одним куском, иначе flex рвёт его
+         на элементы и кнопка падает под текст */
+      const appSrc = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+      if (!/class="peekbar"><span class="pktx">/.test(appSrc))
+        bad("[вёрстка] в плашке просмотра текст снова голыми кусками — flex разорвёт строку");
+    }
     /* ⚠️ Лид раздела стоит ПОД заголовком, а не отдельной колонкой справа.
        Две колонки завели 06.09.2026 под длинный лид; после сокращения
        текстов лид стал в одну строку, и она повисла в правой половине на
@@ -7693,11 +7706,17 @@ function checkEncoding(){
         bad("[вывеска] подпись шага снова абзац (" + sp.textContent.length + " знаков)");
     });
 
-    /* --- те же плитки, но живые --- */
+    /* --- кабинет: одна дорога к одному действию --- */
     g.adminPassSet("1234"); g.becomeAdmin(); g.adminUnlock();
     g.screenKids(); await tick();
-    if (doc.querySelectorAll(".lkgrid.live button.lktile").length < 4)
-      bad("[панель] в кабинете нет плиток-инструментов — они снова строчки в подвале");
+    /* ⚠️ Плитки-дубли прожили один день (1.103.0): «Группа» и «Панель»
+       повторяли навигацию строчкой выше, «Завести ученика» — карточку
+       строчкой ниже. Вопрос фаундера 08.09.2026: «зачем кнопка, если ниже
+       есть добавить?» — и ответа не нашлось. */
+    if (doc.querySelector(".lkgrid.live"))
+      bad("[панель] на «Учениках» снова сетка плиток — они дублируют навигацию и карточки");
+    if ([...doc.querySelectorAll("#app h3")].filter(x => /Добавить ученика/.test(x.textContent)).length !== 1)
+      bad("[панель] дорога «добавить ученика» не одна");
     const nav = [...doc.querySelectorAll(".roomnav button")].map(b => b.textContent);
     if (nav.length !== 3)
       bad("[панель] в навигации кабинета не три экрана: " + nav.join(" | "));
@@ -7709,13 +7728,71 @@ function checkEncoding(){
       bad("[панель] навигация кабинета не показывает, где ты сейчас");
     g.screenGroup(); await tick();
     if (!doc.querySelector(".roomnav")) bad("[панель] на экране группы нет навигации кабинета");
+
+    /* --- панель наставника: вкладки, всё отрисовано, показано одно --- */
     g.screenAdmin(); await tick();
-    if (!doc.querySelector(".roomnav")) bad("[панель] в панели наставника нет навигации кабинета");
-    /* Плитка-указатель обязана вести к существующему месту на странице. */
-    [...doc.querySelectorAll('[data-act="jump"]')].forEach(function(b){
-      if (!doc.getElementById(b.getAttribute("data-to")))
-        bad("[панель] плитка ведёт в никуда: " + b.getAttribute("data-to"));
-    });
+    const atabs = [...doc.querySelectorAll(".admnav .ltab")];
+    if (atabs.length !== 4)
+      bad("[панель] в панели наставника не четыре вкладки: " + atabs.length);
+    const apanes = [...doc.querySelectorAll("[data-apane]")];
+    if (apanes.length !== 4)
+      bad("[панель] панелей под вкладками " + apanes.length + " вместо четырёх");
+    if (apanes.filter(p => !p.hidden).length !== 1)
+      bad("[панель] видимых панелей " + apanes.filter(p => !p.hidden).length + " — должна быть ровно одна");
+    /* ⚠️ Скрытые разделы ОТРИСОВАНЫ: переключение не перерисовывает экран,
+       поэтому поле переноса обязано существовать ещё до клика по вкладке. */
+    if (!doc.getElementById("admjson"))
+      bad("[панель] раздел «Перенос» не отрисован заранее — вкладки стали перерисовкой");
+    const ftab = atabs.find(b => /Перенос/.test(b.textContent));
+    if (ftab){
+      ftab.click(); await tick();
+      const vis = apanes.filter(p => !p.hidden);
+      if (vis.length !== 1 || vis[0].getAttribute("data-apane") !== "file")
+        bad("[панель] клик по вкладке «Перенос» не показал её раздел");
+      if (!doc.querySelector(".admnav .ltab.on") || !/Перенос/.test(doc.querySelector(".admnav .ltab.on").textContent))
+        bad("[панель] вкладка «Перенос» не отметилась активной");
+    }
+
+    /* --- карточка ученика: те же вкладки (сервер подменён заглушкой) ---
+       ⚠️ Cloud берётся с ОКНА (w), а не из __game: в экспортах его нет, и
+       проверка через g молча пропускала весь блок — мутация это показала. */
+    if (!w.Cloud || !w.Cloud.load) bad("[панель] на окне нет Cloud — карточку ученика не проверить");
+    else {
+      const origLoad = w.Cloud.load, origHas = w.Cloud.hasUrl;
+      w.Cloud.load = () => Promise.resolve({ found: false });
+      w.Cloud.hasUrl = () => true;
+      try {
+        const kid = g.kidAdd("Тестовый Ученик");
+        g.screenKid(kid.code); await tick(); await tick();
+        const ktabs = [...doc.querySelectorAll(".kidnav .ltab")].map(b => b.textContent);
+        if (ktabs.length !== 5)
+          bad("[панель] в карточке ученика не пять вкладок: " + ktabs.join(" | "));
+        ["Отчёт", "Расписание", "Домашка", "Заметка", "Доступ"].forEach(function(t){
+          if (!ktabs.some(x => x.indexOf(t) >= 0))
+            bad("[панель] в карточке ученика нет вкладки «" + t + "»");
+        });
+        const kpanes = [...doc.querySelectorAll("[data-kpane]")];
+        if (kpanes.filter(p => !p.hidden).length !== 1)
+          bad("[панель] в карточке ученика видимых панелей не одна");
+        /* новому ученику открыто расписание: отчёта у него ещё нет */
+        const kvis = kpanes.find(p => !p.hidden);
+        if (kvis && kvis.getAttribute("data-kpane") !== "frame")
+          bad("[панель] новому ученику открыта вкладка «" + kvis.getAttribute("data-kpane") + "» вместо расписания");
+        /* клик по «Доступу» обязан ПОКАЗАТЬ доступ — вкладка и её панель
+           связаны именем, и расхождение имён рвёт связь молча */
+        const kdt = [...doc.querySelectorAll(".kidnav .ltab")].find(b => /Доступ/.test(b.textContent));
+        if (kdt){
+          kdt.click(); await tick();
+          const kv2 = [...doc.querySelectorAll("[data-kpane]")].filter(p => !p.hidden);
+          if (kv2.length !== 1 || kv2[0].getAttribute("data-kpane") !== "link" ||
+              !kv2[0].querySelector(".codebox"))
+            bad("[панель] клик по «Доступу» не показал ссылки ученика");
+        }
+        g.kidDrop(kid.code);
+      } finally {
+        w.Cloud.load = origLoad; w.Cloud.hasUrl = origHas;
+      }
+    }
     g.becomeKid();
     if (problems.length === p0) dashChecked++;
     viewReset(g);
@@ -8306,7 +8383,7 @@ function checkEncoding(){
   console.log(`лестница выхода из затыка: ${ladderChecked ? "да" : "нет"}`);
   console.log(`заметка наставника к уроку: ${noteChecked ? "да" : "нет"}`);
   console.log(`кабинеты: место отдельно от роли: ${roomChecked ? "да" : "нет"}`);
-  console.log(`приборная панель: макет на вывеске и плитки в кабинете: ${dashChecked ? "да" : "нет"}`);
+  console.log(`кабинет на вкладках: панель, карточка ученика, без дублей: ${dashChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
   console.log(`клавиатура планшета: ${kbChecked ? "да" : "нет"}`);

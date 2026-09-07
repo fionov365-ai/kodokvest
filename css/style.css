@@ -443,7 +443,12 @@ button{font-family:inherit}
 
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
 .card h3{margin:0 0 8px;font-size:17px}
-.card p{margin:0 0 10px;max-width:70ch}
+/* ⚠️ БЕЗ потолка ширины, и это жёсткое правило (docs § 14): в одной карточке
+   плашки и кнопки занимают всю её ширину, и абзац, обрезанный на 70 знаках
+   рядом с ними, читается как «сверху широко, ниже почему-то узко» — жалоба
+   фаундера 08.09.2026. Потолок ширины разрешён только отдельно стоящей
+   строке (лид), а не тексту среди широких соседей. */
+.card p{margin:0 0 10px}
 .card p:last-child{margin-bottom:0}
 .card p.dim{color:var(--soft);font-size:13.5px;margin-top:10px}
 /* pre-wrap, а не обычный перенос: внутри <code> в условиях иногда стоят
@@ -1173,7 +1178,8 @@ body.focus .lede{display:none}
   padding:10px 15px;border:1px dashed var(--acc2);border-radius:12px;
   background:rgba(0,224,184,.08);font-size:13.5px;color:var(--soft)}
 .peekbar b{color:var(--ink)}
-.peekbar .rbtn{margin-left:auto}
+.peekbar .pktx{flex:1 1 300px;min-width:0}
+.peekbar .rbtn{margin-left:auto;flex:none}
 
 /* ---------- выпускной мира ----------
    Список умений — не украшенная похвала, а перечень, по которому ходят
