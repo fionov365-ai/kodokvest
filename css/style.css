@@ -1864,8 +1864,14 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
     linear-gradient(90deg,var(--lgrid) 1px,transparent 1px) 0 0/34px 100%;
   -webkit-mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%);
   mask-image:radial-gradient(90% 80% at 50% 42%,#000 20%,transparent 78%)}
+/* ⚠️ Колонки выравниваются ПО ВЕРХУ, а не по центру. Раньше стояло center, и
+   пока обе половины были примерно одной высоты, это сходило с рук. С 1.94.0
+   справа рисунок, окно стало заметно выше — и заголовок «Информатика без
+   репетитора» уехал вниз от верхнего края окна почти на двести пикселей.
+   Находка фаундера 07.09.2026. Первый экран читают сверху вниз, и обе
+   половины обязаны начинаться на одной линии. */
 .lhin{position:relative;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);
-  gap:34px;align-items:center}
+  gap:34px;align-items:start}
 .lhtext{min-width:0}
 /* Плашка над заголовком. Точка перед текстом — не декор: она держит взгляд
    на строке, набранной капителью, которая иначе читается как подпись. */
