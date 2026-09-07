@@ -4207,6 +4207,54 @@ function checkEncoding(){
     if (g.zanSlots(20) >= g.zanSlots(45))
       bad("[занятие] в 20 минут помещается не меньше, чем в 45");
 
+    /* ⚠️ Первое занятие после паузы — короче и входит со знакомого (4.3б).
+       Полный план после недельного пропуска — это ровно та цена входа, из-за
+       которой возвращение и не случается, а карточка «С возвращением» рядом
+       обещает обратное. */
+    {
+      const nowMs = Date.now(), dayMs = 864e5;
+      const keepDays = g.state.days, keepStars = g.state.stars,
+            keepLog = g.state.log, keepReview = g.state.review;
+      g.state.stars = {}; g.state.log = {}; g.state.review = {};
+      /* два урока сданы дорого и давно — значит долг по повторам есть */
+      ["print-first", "text-vs-num"].forEach(function(id){
+        g.state.stars[id] = 3;
+        g.state.log[id] = { attempts:3, hints:2, shown:0,
+                            solvedAt: nowMs - 30*dayMs, last: nowMs - 30*dayMs };
+      });
+      g.state.days = {}; g.state.days[g.dayKey()] = 1;
+      if (g.zanAfterPause()) bad("[пауза] паузу насчитали тому, кто занимался сегодня");
+      const planFull = g.zanPlanFor(g.dayKey());
+      g.state.days = {}; g.state.days[g.dayKey(new Date(nowMs - 9*dayMs))] = 1;
+      if (!g.zanAfterPause()) bad("[пауза] девять дней без занятий паузой не считаются");
+      const planBack = g.zanPlanFor(g.dayKey());
+      if (!(planBack.length < planFull.length))
+        bad("[пауза] план после паузы не стал короче: " + planBack.length +
+            " шагов против " + planFull.length);
+      const firstWork = planBack.filter(function(b){ return b.k !== "warm"; })[0];
+      if (!firstWork || firstWork.k !== "review")
+        bad("[пауза] после паузы вход идёт не со знакомого: " + JSON.stringify(firstWork));
+      /* взрослый попросил «только новое» — повтор не подставляем, но короче всё равно */
+      g.frameSet({ mix:"new" });
+      const planNew = g.zanPlanFor(g.dayKey());
+      if (planNew.some(function(b){ return b.k === "review"; }))
+        bad("[пауза] повтор подставлен вопреки рамке «только новое»");
+      if (!(planNew.length < planFull.length))
+        bad("[пауза] при рамке «только новое» занятие после паузы не сократилось");
+      g.frameSet({ mix:"balanced" });
+      /* экран занятия обязан сказать, почему сегодня короче, и без упрёка */
+      g.screenZan();
+      await tick();
+      const tz = doc.getElementById("app").textContent;
+      if (!/занятие короче/.test(tz))
+        bad("[пауза] экран занятия молчит о том, что сегодня план короче");
+      if (/пропуст|прогул|виноват|забросил|не занимался \d/i.test(tz))
+        bad("[пауза] экран занятия упрекает за перерыв: " + tz.slice(0, 200));
+      g.state.days = keepDays; g.state.stars = keepStars;
+      g.state.log = keepLog; g.state.review = keepReview;
+      g.state.days[g.dayKey()] = 1;      /* дальше секция считает день рабочим */
+    }
+
     const rec = g.zanStart();
     if (!rec || !rec.plan.length) bad("[занятие] занятие не началось или план пуст");
     if (!g.zanOpen()) bad("[занятие] открытое занятие не находится");

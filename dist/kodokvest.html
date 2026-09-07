@@ -19965,11 +19965,28 @@ function zanPredictPick(key){
   for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return pool[h % pool.length];
 }
+/* ⚠️ Первое занятие после паузы — короче. Пункт 4.3б, отложенный в 1.61.
+   Ребёнок, пропустивший неделю, открывал занятие и видел полный план: три
+   новых урока подряд. Это ровно та цена входа, из-за которой возвращение и
+   не случается, — а карточка «С возвращением» в двух экранах отсюда обещает
+   ПРОТИВОПОЛОЖНОЕ: «после паузы легче входить с малого». Обещание и план
+   спорили друг с другом, и верил ребёнок плану.
+   Меняется два: шагов на один меньше, и первым идёт знакомое (повтор), а не
+   новый урок. Ни слова упрёка и ни одной цифры пропуска — те же правила, что
+   у карточки возвращения: виноватый не возвращается.
+   ⚠️ Рамку взрослого это не ломает: если он попросил «только новое»
+   (mix = "new"), повтор не подставляется — короче становится всё равно. */
+function zanAfterPause(){
+  var gap = daysSincePause();
+  return gap !== null && gap >= PAUSE_DAYS;
+}
 /* План занятия. Детерминирован по дате и текущему прогрессу: на двух
    устройствах в один день выходит одно и то же. */
 function zanPlanFor(key){
   key = key || dayKey();
   var f = frame(), slots = zanSlotsFor(f.len), plan = [];
+  var back = zanAfterPause();
+  if (back) slots = Math.max(1, slots - 1);
   var warm = dailyPick(key);
   if (warm) plan.push({ k:"warm", id:warm.id, title:warm.title });
 
@@ -19977,6 +19994,9 @@ function zanPlanFor(key){
   var wantRepeat = f.mix === "repeat" ? Math.min(due.length, slots - 1)
                  : f.mix === "new" ? 0
                  : Math.min(due.length, 1);
+  /* после паузы повтор в плане обязателен, если долг есть: это и есть тот
+     «лёгкий вход», ради которого занятие сокращается */
+  if (back && f.mix !== "new") wantRepeat = Math.min(due.length, Math.max(wantRepeat, 1));
   var newCount = Math.max(0, slots - wantRepeat);
 
   /* новые уроки: следующие непройденные по порядку курса */
@@ -19987,11 +20007,12 @@ function zanPlanFor(key){
     for (var i = 0; i < ready.length && picked.length < newCount; i++)
       if (!solved(ready[i].id)) picked.push(ready[i]);
   });
-  picked.forEach(function(l){ plan.push({ k:"lesson", id:l.id, title:l.title }); });
-
-  due.slice(0, wantRepeat).forEach(function(r){
-    plan.push({ k:"review", id:r.lesson.id, title:r.lesson.title });
+  var lessons = picked.map(function(l){ return { k:"lesson", id:l.id, title:l.title }; });
+  var repeats = due.slice(0, wantRepeat).map(function(r){
+    return { k:"review", id:r.lesson.id, title:r.lesson.title };
   });
+  /* после паузы знакомое идёт впереди нового, в обычный день — наоборот */
+  (back ? repeats.concat(lessons) : lessons.concat(repeats)).forEach(function(b){ plan.push(b); });
 
   var pred = zanPredictPick(key);
   if (pred) plan.push({ k:"predict", id:pred.id, title:pred.title });
@@ -29293,7 +29314,10 @@ function screenZan(){
         '<div class="right"><span class="tag">' + plan.length + ' ' + plural(plan.length, "шаг", "шага", "шагов") + '</span></div></div>' +
       '<p class="lede">Занятие — это не «сколько успеешь», а понятный кусок: вот столько минут, вот эти шаги, и всё. ' +
       'Урок посередине не обрывается: время только разрешает закончить, а не подгоняет.</p>' +
-      '<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML + '</div>' +
+      '<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML +
+        (zanAfterPause() ? '<p class="dim">👋 Сегодня занятие короче обычного: ты возвращаешься ' +
+          'после перерыва, и вход идёт со знакомого. Полный план вернётся, как только занятия ' +
+          'пойдут подряд.</p>' : '') + '</div>' +
       '<div class="winrow"><button class="bigbtn" id="zgo"' + (plan.length ? "" : " disabled") + '>Начать занятие</button>' +
       '<button class="bigbtn ghost" id="zback">← На «Сегодня»</button></div>';
     var zg = document.getElementById("zgo");
@@ -38372,6 +38396,7 @@ window.__game = {
   weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHTML,
   worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
+  zanAfterPause: zanAfterPause,
   grpStats: grpStats, stuckTopHTML: stuckTopHTML, STUCK_PRICE: STUCK_PRICE,
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
   presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
