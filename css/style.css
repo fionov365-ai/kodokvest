@@ -654,6 +654,11 @@ button{font-family:inherit}
 .gutter i{display:block;font-style:normal;transition:.2s;border-radius:3px}
 .gutter i.err{color:var(--onacc);background:var(--bad);margin-right:-4px;padding-right:4px}
 .gutter i.cur{color:var(--onacc2);background:var(--acc2);margin-right:-4px;padding-right:4px}
+/* Строка с пометкой взрослого. ⚠️ Слабее ошибки и слабее текущей строки:
+   пометка это «посмотри сюда», а не «здесь сломано». Точка вместо заливки —
+   номер остаётся читаемым, а глаз всё равно её находит. */
+.gutter i.note{color:var(--acc);font-weight:700}
+.gutter i.note::after{content:"•";margin-left:2px}
 .edit-scroll{position:relative;flex:1;min-width:0}
 .edit-scroll pre.hl,.edit-scroll textarea{
   margin:0;padding:12px 14px;font-size:13.5px;line-height:1.62;
@@ -1590,6 +1595,26 @@ body.focus .toTop{display:none}
 .notelist li{border:1px solid var(--line);border-radius:12px;padding:9px 11px}
 .notelist li p{margin:5px 0 7px;line-height:1.5}
 .notelist li b{font-size:14px}
+.notelist .nmk{margin:4px 0 0;padding-left:14px;font-size:13px;color:var(--soft)}
+/* Пометки к строкам на экране урока: цитата строки моноширинным, фраза —
+   обычным. Ребёнок должен узнать строку глазами, а не сверять номер. */
+.lnmarks{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:7px}
+.lnmarks li{line-height:1.5}
+.lnmarks .lnln{display:inline-block;font-size:12px;font-weight:700;color:var(--acc);
+  margin-right:6px}
+.lnmarks code{font-family:'JetBrains Mono',monospace;font-size:12.5px;
+  background:var(--code);border-radius:5px;padding:1px 5px}
+/* Заготовка урока у взрослого: строки-кнопки, по которым он тыкает. */
+.mkpick{margin:6px 0 0;border:1px solid var(--line);border-radius:12px;
+  background:var(--code);overflow:hidden;max-height:340px;overflow-y:auto}
+.mkpick button{display:flex;gap:10px;width:100%;border:0;background:none;text-align:left;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;
+  padding:2px 10px;color:var(--codeink);cursor:pointer}
+.mkpick button:hover{background:var(--sunken)}
+.mkpick button.on{background:var(--sunken);box-shadow:inset 3px 0 0 var(--acc)}
+.mkpick button i{font-style:normal;color:var(--gutink);min-width:20px;text-align:right;
+  flex:none;user-select:none}
+.mkpick button span{white-space:pre-wrap;word-break:break-word}
 
 /* Ступень лестницы выхода — внутри сообщения о неудаче, под ним.
    ⚠️ Рамка сверху, а не своя коробка: это продолжение того же ответа урока,

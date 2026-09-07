@@ -1882,7 +1882,8 @@ function mergeProgress(a, b){
   Object.keys(mergeSet(a.notes, b.notes)).forEach(function(k){
     var x = (a.notes || {})[k] || {}, y = (b.notes || {})[k] || {};
     var base = (y.at || 0) > (x.at || 0) ? y : x;
-    out.notes[k] = { t: String(base.t || ""), by: base.by || "", at: base.at || 0 };
+    out.notes[k] = { t: String(base.t || ""), by: base.by || "", at: base.at || 0,
+                     marks: Array.isArray(base.marks) ? base.marks : [] };
   });
 
   /* статус «чем занят сейчас» — просто самый свежий из двух */
@@ -2857,8 +2858,19 @@ function makeEditor(initial, label, files){
     ta.style.height = "auto";
     ta.style.height = Math.max(190, ta.scrollHeight) + "px";
     var n = ta.value.split("\n").length, g = "";
+    /* ⚠️ Строки пометок ищем на КАЖДОЙ отрисовке, а не запоминаем номер:
+       ребёнок дописывает строки выше, и запомненный номер начал бы показывать
+       не туда. Ищем по тексту строки — точка едет вместе с ней. */
+    var noted = [];
+    if (box._notes) box._notes.forEach(function(m){
+      var ln = noteMarkLine(ta.value, m);
+      if (ln && noted.indexOf(ln) < 0) noted.push(ln);
+    });
     for (var i = 1; i <= n; i++)
-      g += '<i class="' + (i === box._errLine ? "err" : (i === box._curLine ? "cur" : "")) + '">' + i + '</i>';
+      g += '<i class="' + (i === box._errLine ? "err"
+              : (i === box._curLine ? "cur"
+              : (noted.indexOf(i) >= 0 ? "note" : ""))) +
+           '">' + i + '</i>';
     gut.innerHTML = g;
     syncGutter();
   }
@@ -2982,6 +2994,15 @@ function makeEditor(initial, label, files){
     openFile(+b.getAttribute("data-file"));
   });
 
+  /* Строки с пометкой взрослого. ⚠️ В отличие от _errLine и _curLine НЕ
+     сбрасывается при наборе: ошибка относится к последнему запуску, а
+     пометка — к уроку, и от того, что ребёнок дописал строку, она никуда
+     не девается. */
+  box._notes = null;
+  box.setNotes = function(marks){
+    box._notes = (marks && marks.length) ? marks.slice() : null;
+    sync();
+  };
   box.setLine = function(n){ box._curLine = n; box._errLine = 0; sync(); };
   box.setError = function(n){ box._errLine = n; box._curLine = 0; sync(); };
   box.setWatch = function(map){
@@ -5318,6 +5339,13 @@ function openLesson(id){
          (jsdom) его нет, и без неё падал бы обработчик, а не прокрутка */
       if (studio.scrollIntoView) studio.scrollIntoView({ behavior:"smooth", block:"center" });
     };
+    /* Пометки взрослого к строкам: редактор ищет их сам по тексту строки и
+       ставит точку в колонке номеров (см. sync). Даём ему список один раз. */
+    {
+      var myNote = noteFor(S, l.id);
+      if (myNote && myNote.marks.length && studio.editor.setNotes)
+        studio.editor.setNotes(myNote.marks);
+    }
     wireHint(body.task.hints, function(){ logOf(l.id).hints++; save(); });
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
@@ -5396,13 +5424,48 @@ function openLesson(id){
         нового наблюдения за ребёнком тут не заводится.
    ============================================================ */
 var NOTE_MAX = 400;          /* длиннее — это уже не заметка, а урок */
+var NOTE_MARKS_MAX = 5;      /* пометок к строкам на урок */
+var NOTE_MARK_MAX = 200;     /* длина одной пометки к строке */
 function notesAll(st){ var o = (st || S).notes; return (o && typeof o === "object") ? o : {}; }
 /* Заметка к уроку или null. ⚠️ Пустой текст — это НАДГРОБИЕ снятой заметки,
    а не заметка: показывать его нельзя, а хранить надо (см. mergeProgress). */
+function noteMarks(n){
+  return (n && Array.isArray(n.marks) ? n.marks : []).filter(function(m){
+    return m && String(m.t || "").trim();
+  }).slice(0, NOTE_MARKS_MAX);
+}
 function noteFor(st, id){
   var n = notesAll(st)[id];
-  if (!n || !String(n.t || "").trim()) return null;
-  return { t: String(n.t), by: n.by || "", at: n.at || 0, id: id };
+  if (!n) return null;
+  var t = String(n.t || "").trim(), marks = noteMarks(n);
+  if (!t && !marks.length) return null;       /* надгробие снятой заметки */
+  return { t: String(n.t || ""), by: n.by || "", at: n.at || 0, id: id, marks: marks };
+}
+/* ===== пометка к строке =====
+   ⚠️ Номер строки сам по себе врёт. Взрослый пишет пометку к третьей строке
+   ЗАГОТОВКИ, а ребёнок к тому времени дописал две строки выше — и пометка
+   показывает не туда. Поэтому вместе с номером храним ТЕКСТ строки, какой её
+   видел взрослый, и на стороне ребёнка ищем именно его:
+     — стоит на своём номере — там и показываем;
+     — переехала — показываем там, где она теперь;
+     — строки больше нет — номера не даём вовсе, показываем пометку с цитатой.
+   Соврать «строка 3», показав на чужую строку, хуже, чем не показать номер. */
+function noteMarkLine(code, mark){
+  var want = String((mark && mark.src) || "").trim();
+  if (!want) return 0;
+  var lines = String(code || "").split("\n");
+  var ln = Math.round((mark && mark.ln) || 0);
+  if (ln >= 1 && ln <= lines.length && lines[ln - 1].trim() === want) return ln;
+  for (var i = 0; i < lines.length; i++) if (lines[i].trim() === want) return i + 1;
+  return 0;
+}
+/* Пометки урока, разложенные по ТЕКУЩЕМУ коду ребёнка. */
+function noteMarksFor(st, id, code){
+  var n = noteFor(st, id);
+  if (!n) return [];
+  return n.marks.map(function(m){
+    return { ln: noteMarkLine(code, m), src: String(m.src || ""), t: String(m.t || "") };
+  });
 }
 function noteList(st){
   return Object.keys(notesAll(st))
@@ -5423,9 +5486,21 @@ function noteWho(){ return (typeof hwWho === "function") ? hwWho() : "наста
    «начни со второго примера», прочитать это после теории уже поздно. */
 function noteCardHTML(n){
   if (!n) return "";
+  /* ⚠️ Номера строки в карточке НЕТ намеренно. Номер устаревает от первой же
+     дописанной строки, а соврать «строка 3», показав на чужую, хуже, чем не
+     называть номер вовсе. Строку ребёнок узнаёт по цитате, а ГДЕ она — по
+     точке в колонке номеров редактора: та ищет строку заново при каждом
+     наборе и врать не может. */
+  var marks = (n.marks || []).map(function(m){
+    return '<li>' + (m.src ? '<code>' + esc(String(m.src).trim()) + '</code> ' : '') +
+      esc(m.t) + '</li>';
+  }).join("");
   return '<div class="lnote"><b>✍️ ' + esc(n.by || "взрослый") + ' оставил заметку' +
     (n.at ? ' · ' + fmtWhen(n.at) : '') + '</b>' +
-    '<p>' + esc(n.t) + '</p></div>';
+    (String(n.t || "").trim() ? '<p>' + esc(n.t) + '</p>' : '') +
+    (marks ? '<ul class="lnmarks">' + marks + '</ul>' +
+      '<p class="dim">Строки с пометкой отмечены точкой в колонке номеров.</p>' : '') +
+    '</div>';
 }
 
 /* ================= лестница выхода из затыка =================
@@ -15456,6 +15531,18 @@ function noteLessons(st){
   });
   return out;
 }
+/* Черновик пометок, пока взрослый их набирает: сюда складываются строки,
+   по которым он тыкнул, до нажатия «Отправить». Живёт только на его экране. */
+var noteDraft = { lesson: "", marks: [] };
+/* Заготовка урока — ТОТ ЖЕ текст, что увидит ребёнок, когда откроет урок.
+   ⚠️ Здесь показывается наша заготовка, а не код ребёнка: код ребёнка
+   взрослому не виден без его согласия (красная линия, обещание записано
+   ребёнку в его же профиле), и заводить сюда чёрный ход нельзя. */
+function noteStarterOf(id){
+  var l = CURRICULUM.byId(id);
+  var body = l ? lessonBody(l) : null;
+  return (body && body.task && typeof body.task.starter === "string") ? body.task.starter : "";
+}
 function noteGiveHTML(st){
   var list = noteLessons(st), have = noteList(st);
   /* ⚠️ По умолчанию выбран тот урок, где ребёнок застрял, а если затыка нет —
@@ -15497,24 +15584,63 @@ function noteGiveHTML(st){
         'урок ' + l.num + ' · ' + esc(l.title) + (l.id === (stuck && stuck.id) ? " — тут застрял" : "") +
         '</option>';
     }).join("") + '</select>' +
-    '<div class="admlbl">Текст</div>' +
-    '<textarea id="notetext" rows="3" maxlength="' + NOTE_MAX + '" ' +
+    '<div class="admlbl">Текст ко всему уроку (необязательно)</div>' +
+    '<textarea id="notetext" rows="2" maxlength="' + NOTE_MAX + '" ' +
       'placeholder="Начни со второго примера — первый мы разобрали вместе."></textarea>' +
+    noteMarkPickHTML(pick) +
     '<div class="admrow"><button class="rbtn check" id="notesave">Отправить ребёнку</button>' +
     '<span class="dim">не длиннее ' + NOTE_MAX + ' знаков</span></div>' +
     '<div class="msg" id="notesavemsg"></div></div>';
   return h;
 }
+/* Выбор строки: заготовка урока строками-кнопками. ⚠️ Это НАША заготовка,
+   а не код ребёнка. Ребёнку обещано в его профиле: «сам экран и то, что ты
+   печатаешь, взрослым не видно», и код показывается только когда он сам
+   нажал «Показать экран наставнику». Пометка к строке заготовки этого
+   обещания не трогает: взрослый показывает пальцем на общий текст урока,
+   тот же, что видит ребёнок, открыв урок. */
+function noteMarkPickHTML(lessonId){
+  var code = noteStarterOf(lessonId);
+  if (noteDraft.lesson !== lessonId){ noteDraft.lesson = lessonId; noteDraft.marks = []; }
+  var h = '<div class="admlbl">Пометки к строкам (необязательно)</div>';
+  if (!code.trim())
+    return h + '<p class="dim">У этого урока нет заготовки — помечать нечего. ' +
+      'Останется текст ко всему уроку.</p>';
+  h += '<p class="dim">Тыкните в строку заготовки — ребёнок увидит вашу фразу рядом с ней, ' +
+    'а сама строка будет отмечена точкой в колонке номеров. Это текст задания, ' +
+    'а не код ребёнка: его код виден только когда он сам включит показ экрана.</p>';
+  h += '<div class="mkpick">' + code.split("\n").map(function(ln, i){
+    var on = noteDraft.marks.some(function(m){ return m.ln === i + 1; });
+    return '<button type="button" class="' + (on ? "on" : "") + '" data-mkln="' + (i + 1) + '">' +
+      '<i>' + (i + 1) + '</i><span>' + (esc(ln) || " ") + '</span></button>';
+  }).join("") + '</div>';
+  if (noteDraft.marks.length){
+    h += '<ul class="notelist">' + noteDraft.marks.map(function(m, i){
+      return '<li><b>строка ' + m.ln + '</b> <code>' + esc(String(m.src).trim() || "(пусто)") + '</code>' +
+        '<input class="lblin" data-mktext="' + i + '" maxlength="' + NOTE_MARK_MAX + '" ' +
+        'value="' + esc(m.t || "") + '" placeholder="что тут посмотреть">' +
+        '<button class="rbtn sec" data-mkdel="' + i + '">убрать</button></li>';
+    }).join("") + '</ul>';
+  }
+  return h;
+}
+
 /* Записать заметку ребёнку. Как у домашки: читаем запись заново прямо перед
    записью — ребёнок мог позаниматься, пока взрослый печатал, и отправить
    старый снимок значило бы откатить ему прогресс. Меняем ТОЛЬКО заметки. */
-function kidSaveNote(id, text){
+function kidSaveNote(id, text, marks){
   if (!kidTarget || !kidTarget.data) return;
   var code = kidTarget.code;
   var msg = document.getElementById("notesavemsg");
   function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
   var t = String(text || "").trim().slice(0, NOTE_MAX);
+  var mk = (marks || []).filter(function(m){ return m && String(m.t || "").trim(); })
+    .slice(0, NOTE_MARKS_MAX)
+    .map(function(m){ return { ln: Math.round(m.ln) || 0, src: String(m.src || ""),
+                               t: String(m.t).trim().slice(0, NOTE_MARK_MAX) }; });
   if (!id) return say("warn", "<b>Урок не выбран</b>Выберите, к какому уроку заметка.");
+  if (!t && !mk.length && !noteFor(kidTarget.data, id))
+    return say("warn", "<b>Пусто</b>Напишите текст или пометьте строку.");
   if (!serverOn()) return say("bad", "<b>Не сохранилось</b>Сервер не подключён — передать заметку некуда.");
   say("warn", "<b>Сохраняю…</b>");
   return Cloud.load(code).then(function(r){
@@ -15522,14 +15648,16 @@ function kidSaveNote(id, text){
     /* ⚠️ Пустой текст не удаляет ключ, а кладёт НАДГРОБИЕ со свежим временем:
        иначе на устройстве ребёнка остаётся старая заметка, и при следующем
        обмене она воскресает. */
-    base.notes[id] = { t: t, by: noteWho(), at: Date.now() };
+    base.notes[id] = { t: t, by: noteWho(), at: Date.now(), marks: mk };
     return Cloud.save(base, code).then(function(){
       kidTarget.data = base;
       kidTarget.fresh = false;
       var l = CURRICULUM.byId(id);
-      kidRender(t
+      noteDraft = { lesson: "", marks: [] };
+      kidRender((t || mk.length)
         ? "<b>Заметка отправлена</b>Ребёнок увидит её над объяснением, когда откроет урок «" +
-          esc(l ? l.title : id) + "»."
+          esc(l ? l.title : id) + "»" +
+          (mk.length ? ", а помеченные строки — с точкой в колонке номеров." : ".")
         : "<b>Заметка снята</b>К уроку «" + esc(l ? l.title : id) + "» ребёнок больше ничего не увидит.");
     });
   }, function(err){
@@ -15539,13 +15667,47 @@ function kidSaveNote(id, text){
   });
 }
 function bindNoteGive(){
+  var sel = document.getElementById("notepick");
+  /* смена урока меняет заготовку под пометки — перерисовываем карточку */
+  if (sel) sel.onchange = function(){
+    noteDraft = { lesson: sel.value, marks: [] };
+    kidRender();
+  };
   var b = document.getElementById("notesave");
   if (b) b.onclick = function(){
-    var sel = document.getElementById("notepick"), ta = document.getElementById("notetext");
-    kidSaveNote(sel ? sel.value : "", ta ? ta.value : "");
+    var s2 = document.getElementById("notepick"), ta = document.getElementById("notetext");
+    noteDraftReadInputs();
+    kidSaveNote(s2 ? s2.value : "", ta ? ta.value : "", noteDraft.marks);
   };
   document.querySelectorAll("[data-noteoff]").forEach(function(x){
-    x.onclick = function(){ kidSaveNote(x.getAttribute("data-noteoff"), ""); };
+    x.onclick = function(){ kidSaveNote(x.getAttribute("data-noteoff"), "", []); };
+  });
+  /* ⚠️ Перед КАЖДОЙ перерисовкой забираем то, что взрослый уже напечатал в
+     полях пометок: иначе тык по второй строке стирал бы фразу к первой. */
+  document.querySelectorAll("[data-mkln]").forEach(function(x){
+    x.onclick = function(){
+      noteDraftReadInputs();
+      var ln = +x.getAttribute("data-mkln");
+      var at = noteDraft.marks.map(function(m){ return m.ln; }).indexOf(ln);
+      if (at >= 0) noteDraft.marks.splice(at, 1);
+      else if (noteDraft.marks.length < NOTE_MARKS_MAX)
+        noteDraft.marks.push({ ln: ln, src: (noteStarterOf(noteDraft.lesson).split("\n")[ln - 1] || ""), t: "" });
+      noteDraft.marks.sort(function(a, b){ return a.ln - b.ln; });
+      kidRender();
+    };
+  });
+  document.querySelectorAll("[data-mkdel]").forEach(function(x){
+    x.onclick = function(){
+      noteDraftReadInputs();
+      noteDraft.marks.splice(+x.getAttribute("data-mkdel"), 1);
+      kidRender();
+    };
+  });
+}
+function noteDraftReadInputs(){
+  document.querySelectorAll("[data-mktext]").forEach(function(inp){
+    var i = +inp.getAttribute("data-mktext");
+    if (noteDraft.marks[i]) noteDraft.marks[i].t = inp.value;
   });
 }
 
@@ -18669,6 +18831,8 @@ window.__game = {
   stuckStep: stuckStep, stuckStepHTML: stuckStepHTML,
   noteFor: noteFor, noteList: noteList, noteLessons: noteLessons, noteCardHTML: noteCardHTML,
   noteGiveHTML: noteGiveHTML, kidSaveNote: kidSaveNote, noteSeenHint: noteSeenHint, NOTE_MAX: NOTE_MAX,
+  noteMarkLine: noteMarkLine, noteMarksFor: noteMarksFor, noteStarterOf: noteStarterOf,
+  NOTE_MARKS_MAX: NOTE_MARKS_MAX,
   STEP_HINT: STEP_HINT, STEP_SOL: STEP_SOL, STEP_REST: STEP_REST,
   lessonPrice: lessonPrice, STUCK_PRICE: STUCK_PRICE,
   screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
