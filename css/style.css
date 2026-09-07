@@ -1577,6 +1577,16 @@ body.focus .toTop{display:none}
 .grpplan.ontrack,.grpplan.ahead{color:var(--ok)}
 .grpplan.behind{color:var(--warn)}
 .grpplan.none{opacity:var(--dim2)}
+/* Ступень лестницы выхода — внутри сообщения о неудаче, под ним.
+   ⚠️ Рамка сверху, а не своя коробка: это продолжение того же ответа урока,
+   а не отдельная плашка «а вот и надзиратель». Кнопка обычная, «check», —
+   ступень предлагает ход, а не сигналит тревогу. */
+.stkstep{margin-top:10px;padding-top:10px;border-top:1px dashed currentColor;
+  display:flex;flex-direction:column;align-items:flex-start;gap:7px;line-height:1.55}
+.stkstep b{display:block}
+.stkstep .rbtn{margin-top:2px}
+.stknote{font-size:12.5px;opacity:var(--dim2)}
+
 /* Затык в недельной карточке. ⚠️ Жёлтым, как «тяжело далось», а не красным:
    красный на экране взрослого читается как «с ребёнком что-то не так», а тут
    сказано только, что урок не взят и курс дальше не пускает. */

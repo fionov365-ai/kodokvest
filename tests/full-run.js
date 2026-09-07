@@ -4127,6 +4127,7 @@ function checkEncoding(){
   let timeFmtChecked = 0, homeChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
+  let ladderChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -5981,6 +5982,96 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 10б2. лестница выхода из затыка ---
+     ⚠️ Пункт Б из разбора вопроса фаундера 07.09.2026. Выход из трудного урока
+     был всегда — подсказки и «Показать решение», — но неудачные попытки нигде
+     не считались, и на пятой попытке экран отвечал то же, что на двадцать
+     пятой. Стережём и лестницу, и четыре её правила. */
+  if (typeof g.stuckStep === "function"){
+    const p0 = problems.length;
+    const k = (a, took, shown, all) => { const r = g.stuckStep(a, took, shown, all); return r ? r.k : ""; };
+
+    /* правило 4: раньше четвёртой попытки лестницы нет — три попытки это
+       нормальный ход работы, и лезть туда с утешением значит мешать */
+    for (const a of [1, 2, 3])
+      if (k(a, 0, false, 3)) bad("[лестница] появилась на " + a + "-й попытке — рано");
+    if (k(4, 0, false, 3) !== "hint") bad("[лестница] на четвёртой попытке не предложена подсказка");
+
+    /* правило 3: следующий шаг, а не сделанный */
+    if (k(5, 1, false, 3) === "hint")
+      bad("[лестница] дёргает за рукав сразу после взятой подсказки");
+    if (k(6, 1, false, 3) !== "hint") bad("[лестница] после паузы подсказка не предложена снова");
+    if (k(4, 3, false, 3) !== "sol")
+      bad("[лестница] взявшему все подсказки снова предлагают подсказку");
+    if (k(8, 0, false, 3) !== "sol")
+      bad("[лестница] на восьмой попытке решение так и не предложено");
+    if (k(8, 3, true, 3) === "sol")
+      bad("[лестница] открывшему решение предлагают открыть решение");
+    if (k(14, 3, true, 3) !== "rest")
+      bad("[лестница] после открытого решения и четырнадцати попыток не предложено отложить");
+    /* урок без подсказок вовсе — сразу вторая ступень, а не пустота */
+    if (k(4, 0, false, 0) !== "sol")
+      bad("[лестница] на уроке без подсказок ступени нет вообще");
+
+    /* правило 1: виноват урок, а не ребёнок */
+    [g.stuckStepHTML({ k:"hint", left:2 }), g.stuckStepHTML({ k:"sol", took:1 }),
+     g.stuckStepHTML({ k:"rest" })].forEach(h => {
+      const t = h.replace(/<[^>]+>/g, " ");
+      if (/не справ|плох|лен|глуп|стыд|ты не |опять|снова ошиб/i.test(t))
+        bad("[лестница] ступень винит ребёнка: " + t);
+    });
+    if (!/не проигрыш/.test(g.stuckStepHTML({ k:"sol", took:1 })))
+      bad("[лестница] про решение не сказано, что открыть его не проигрыш");
+    /* правило 2: цена названа честно и не выросла */
+    if (!/одна звезда вместо трёх/.test(g.stuckStepHTML({ k:"sol", took:0 })))
+      bad("[лестница] цена решения не названа");
+    if (!/про урок, а не про тебя/.test(g.stuckStepHTML({ k:"rest" })))
+      bad("[лестница] последняя ступень не снимает вину с ребёнка");
+    if (g.stuckStepHTML(null) !== "") bad("[лестница] без ступени что-то всё равно рисуется");
+
+    /* --- вживую на уроке: ступень приходит и на пути «Почти» тоже ---
+       ⚠️ Путей неудачи в runCheck пять, и ребёнку всё равно, на каком он
+       застрял. Берём урок с needCode: там неудача идёт по самой ранней
+       ветке, до запуска программы. */
+    g.setStars("print-first", 3);
+    g.openLesson("text-vs-num");
+    await tick();
+    const st = studioOf();
+    if (!st) bad("[лестница] урок с проверкой по коду не открылся");
+    else {
+      const btn = st.querySelector('[data-role="check"]');
+      let seen = [];
+      for (let i = 1; i <= 4; i++){
+        st.editor.setCode("print(42)\nprint(2517)\nprint(\"ааааа\")");
+        btn.click();
+        await tick();
+        seen.push(!!doc.querySelector(".stkstep"));
+      }
+      if (seen[0] || seen[1] || seen[2])
+        bad("[лестница] на пути «Почти» ступень пришла раньше четвёртой попытки: " + JSON.stringify(seen));
+      if (!seen[3])
+        bad("[лестница] на пути «Почти» ступени нет вовсе — она живёт только в одной ветке из пяти");
+      const step = doc.querySelector(".stkstep");
+      const go = step && doc.getElementById("stkgo");
+      if (!go) bad("[лестница] у ступени нет кнопки");
+      else {
+        /* ⚠️ Кнопка ступени обязана нажимать ТУ ЖЕ кнопку урока: иначе цена
+           подсказки разойдётся с ценой из угла экрана. */
+        const было = (g.state.log["text-vs-num"] || {}).hints || 0;
+        go.click();
+        await tick();
+        const стало = (g.state.log["text-vs-num"] || {}).hints || 0;
+        if (стало !== было + 1)
+          bad("[лестница] подсказка через ступень списалась не как обычная: " + было + " → " + стало);
+        const out = doc.getElementById("hintout");
+        if (!out || out.className.indexOf("show") < 0)
+          bad("[лестница] кнопка ступени не открыла настоящую подсказку");
+      }
+    }
+    if (problems.length === p0) ladderChecked++;
+    viewReset(g);
+  } else bad("[лестница] функции stuckStep нет");
+
   /* --- 10в. возвращаемость: метрики, «в следующий раз», «до конца мира»,
      возвращение после паузы --- */
   if (typeof g.worldCountdown === "function"){
@@ -7395,6 +7486,7 @@ function checkEncoding(){
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
+  console.log(`лестница выхода из затыка: ${ladderChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
   console.log(`клавиатура планшета: ${kbChecked ? "да" : "нет"}`);

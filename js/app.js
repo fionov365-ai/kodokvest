@@ -5346,10 +5346,98 @@ function openLesson(id){
   });
 }
 
+/* ================= лестница выхода из затыка =================
+   Пункт Б из разбора вопроса фаундера 07.09.2026: «что делать, когда ребёнок
+   уперся в урок и никак не может его решить».
+
+   Выход из трудного урока в продукте был с самого начала — подсказки по одной
+   и «Показать решение» на одну звезду вместо трёх. Но НИКТО про него ребёнку
+   не говорил: неудачные попытки нигде не считались, и на пятой попытке экран
+   отвечал ровно то же, что на двадцать пятой, — «Ещё не то». Обе кнопки стоят
+   в углу с первой секунды и выглядят как «сдаться». Десятилетний их не нажмёт:
+   он ткнёт «Проверить» ещё двадцать раз и закроет вкладку.
+
+   ⚠️ Четыре правила, без которых лестница превращается в укор:
+     1. **Виноват урок, а не ребёнок.** «Тут застревают многие» — и ни одного
+        «ты не справился». Виноватый не возвращается (то же правило, что у
+        напоминания молчащему).
+     2. **Ничего не запирается и не дорожает.** Подсказка стоит звезды и без
+        нас; лестница цену не поднимает и ничего не отнимает сверх этого.
+     3. **Каждая ступень называет СЛЕДУЮЩИЙ шаг, а не сделанный.** «Возьми
+        подсказку» тому, кто взял их все, читается как «плохо старался» — тот
+        же промах, что и в совете взрослому (stuckAdvice).
+     4. **Раньше четвёртой попытки лестницы нет.** Одна-три попытки — это
+        нормальный ход работы, и лезть туда с утешением значит мешать.
+   ============================================================ */
+var STEP_HINT = 4;    /* с этой попытки предлагаем подсказку */
+var STEP_SOL  = 8;    /* с этой — решение, даже если подсказки ещё есть */
+var STEP_REST = 14;   /* с этой, когда решение уже открыто, — отложить */
+/* Какая ступень сейчас. ⚠️ Ничего не берёт из session сама, всё приходит
+   доводами: так её видно тесту целиком, без подмены живого состояния урока.
+   Считать надо именно по ТЕКУЩЕМУ заходу, а не по журналу: журнал копит
+   попытки за все дни, и ребёнок, вернувшийся назавтра со свежей головой,
+   получил бы «отложи» на первом же нажатии. */
+function stuckStep(a, took, shown, hintsAll){
+  a = a || 0; took = took || 0; shown = !!shown;
+  hintsAll = hintsAll || 0;
+  if (a < STEP_HINT) return null;
+  if (shown) return a >= STEP_REST ? { k:"rest" } : null;
+  /* Подсказка ещё есть — зовём её, но не на каждой попытке: после взятой
+     подсказки даём два хода тишины, иначе лестница дёргает за рукав. */
+  if (took < hintsAll && a < STEP_SOL && a >= STEP_HINT + took * 2)
+    return { k:"hint", left: hintsAll - took };
+  if (a >= STEP_SOL || took >= hintsAll) return { k:"sol", took: took };
+  return null;
+}
+function stuckStepHTML(step){
+  if (!step) return "";
+  if (step.k === "hint")
+    return '<div class="stkstep"><b>Тут застревают многие</b>' +
+      'Это трудное место урока. Подсказка объясняет приём на других числах — ответ она не выдаёт, ' +
+      'решать всё равно тебе.' +
+      '<button class="rbtn check" id="stkgo" data-stk="hint">💡 Взять подсказку</button>' +
+      '<span class="stknote">осталось ' + step.left + ' ' +
+      plural(step.left, "подсказка", "подсказки", "подсказок") + '</span></div>';
+  if (step.k === "sol")
+    return '<div class="stkstep"><b>Можно посмотреть, как это делается</b>' +
+      (step.took ? 'Подсказки уже брал, а урок не идёт. ' : 'Подсказки тут не помогли. ') +
+      'Открыть решение — это не проигрыш: прочитай его строчку за строчкой, запусти, ' +
+      'поменяй числа и посмотри, что изменится. Так тоже учатся, и часто быстрее.' +
+      '<button class="rbtn check" id="stkgo" data-stk="sol">Показать решение</button>' +
+      '<span class="stknote">за урок будет одна звезда вместо трёх</span></div>';
+  return '<div class="stkstep"><b>Сегодня этот урок не идёт — так бывает</b>' +
+    'Это про урок, а не про тебя. Отложи его и вернись завтра: часто наутро видно сразу. ' +
+    'Взрослый увидит в отчёте, что здесь было трудно, — просить об этом не нужно.' +
+    '<button class="rbtn check" id="stkgo" data-stk="rest">← Отложить и вернуться позже</button></div>';
+}
+/* Кнопка ступени не делает ничего своего: она нажимает те же кнопки урока,
+   что стоят в углу. Значит цена подсказки и решения ровно та же, что была, и
+   разойтись эти два пути не могут. */
+function bindStuckStep(l){
+  var b = document.getElementById("stkgo");
+  if (!b) return;
+  b.onclick = function(){
+    var k = b.getAttribute("data-stk");
+    if (k === "rest") return screenWorld(l.world);
+    var target = document.getElementById(k === "hint" ? "hintbtn" : "solbtn");
+    if (target) target.click();
+  };
+}
+
 function runCheck(l, body, ed, showMsg, canvas){
   session.attempts++;
   logOf(l.id).attempts++; touchLog(l.id);
   var chk = body.task.check, code = ed.getCode(), eng = Runtime.get(l.engine);
+  /* ⚠️ Любой неуспех уходит через fail(), а не через showMsg напрямую.
+     Путей неудачи здесь пять — «Почти», «Так нельзя», ошибка Python, «Ещё не
+     то» и «это не починка», — и ребёнку совершенно всё равно, на каком из них
+     он застрял. Лестница обязана появляться на всех, иначе она появлялась бы
+     ровно там, где мы про неё вспомнили. */
+  function fail(cls, html){
+    showMsg(cls, html + stuckStepHTML(stuckStep(session.attempts, session.hints,
+      session.shown, (body.task.hints || []).length)));
+    bindStuckStep(l);
+  }
 
   /* Требования проверяем по ВСЕМ файлам задания, а не только по главному:
      в многофайловом уроке нужная строчка законно живёт в подключённом файле. */
@@ -5360,7 +5448,7 @@ function runCheck(l, body, ed, showMsg, canvas){
   if (chk.needCode){
     for (var i = 0; i < chk.needCode.length; i++){
       if (!codeHas(весьКод, chk.needCode[i])){
-        showMsg("warn", "<b>Почти</b>" + chk.needMsg);
+        fail("warn", "<b>Почти</b>" + chk.needMsg);
         return;
       }
     }
@@ -5370,7 +5458,7 @@ function runCheck(l, body, ed, showMsg, canvas){
   if (chk.needText){
     for (var t2 = 0; t2 < chk.needText.length; t2++){
       if (весьКод.indexOf(chk.needText[t2]) < 0){
-        showMsg("warn", "<b>Почти</b>" + chk.needMsg);
+        fail("warn", "<b>Почти</b>" + chk.needMsg);
         return;
       }
     }
@@ -5380,7 +5468,7 @@ function runCheck(l, body, ed, showMsg, canvas){
   if (chk.noCode){
     for (var j = 0; j < chk.noCode.length; j++){
       if (codeHas(весьКод, chk.noCode[j])){
-        showMsg("warn", "<b>Так нельзя</b>" + (chk.noMsg || ("В этом задании нельзя использовать «" + chk.noCode[j] + "».")));
+        fail("warn", "<b>Так нельзя</b>" + (chk.noMsg || ("В этом задании нельзя использовать «" + chk.noCode[j] + "».")));
         return;
       }
     }
@@ -5394,7 +5482,7 @@ function runCheck(l, body, ed, showMsg, canvas){
   var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (body.task.stdin || []);
   var res = eng.run(code, { turtle:t, sources: srcs, files: dataFiles(body.task.data), stdin: stdin });
   if (canvas) animateTurtle(canvas, t);
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+  if (res.error){ ed.setError(res.error.line); fail("bad", errHTML(res.error)); return; }
 
   var problem = null;
   if (chk.kind === "custom"){
@@ -5419,7 +5507,7 @@ function runCheck(l, body, ed, showMsg, canvas){
     }
   }
 
-  if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+  if (problem){ fail("bad", "<b>Ещё не то</b>" + problem); return; }
 
   /* Цена программы в шагах: сколько операций движок выполнил. Считать
      отдельно ничего не надо — интерпретатор и так их считает ради защиты от
@@ -5437,7 +5525,7 @@ function runCheck(l, body, ed, showMsg, canvas){
   if (body.task.type === "fix"){
     var budget = chk.fixBudget || (editUnits(body.task.starter, body.task.solution) + 1);
     if (editUnits(body.task.starter, code) > budget){
-      showMsg("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно: " +
+      fail("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно: " +
         "похоже, программа написана заново. Смысл задания в другом: найти одну поломку и тронуть только её. " +
         "Нажми «↩ Вернуть как было» и попробуй ещё раз.");
       return;
@@ -18385,6 +18473,8 @@ window.__game = {
   specTaskById: specTaskById, SPEC_KINDS: SPEC_KINDS,
   planFact: planFact, planFactText: planFactText, frameState: frameState,
   stuckIn: stuckIn, stuckWhy: stuckWhy, stuckAdvice: stuckAdvice,
+  stuckStep: stuckStep, stuckStepHTML: stuckStepHTML,
+  STEP_HINT: STEP_HINT, STEP_SOL: STEP_SOL, STEP_REST: STEP_REST,
   lessonPrice: lessonPrice, STUCK_PRICE: STUCK_PRICE,
   screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
   groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,

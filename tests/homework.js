@@ -177,7 +177,22 @@ BANK.forEach(item => {
   if (!hasPy){
     console.log("⚠️ python3 не найден — сверка эталонов с настоящим Python пропущена.");
   } else {
-    const tmp = path.join(os.tmpdir(), "kodokvest-hw-check.py");
+    /* ⚠️ Своя папка у каждого прогона, и python3 запускается ИЗ НЕЁ.
+       Раньше было два общих места, и оба ломались, если два npm test шли
+       одновременно (например ручной и фоновый):
+         — файл эталона лежал под постоянным именем в общей временной папке,
+           и соседний прогон перетирал его между записью и запуском: движок
+           печатал свою задачу, а python3 — соседнюю. Выходил 41 «провал» на
+           ровном месте, и по выводу причину не угадать — расхождения
+           выглядят как настоящие;
+         — задача hw-file пишет и читает scores.txt, а рабочей папкой был
+           КОРЕНЬ РЕПОЗИТОРИЯ: два прогона писали в один файл, и заодно
+           каждый прогон мусорил в репозиторий (следы этого до сих пор
+           в .gitignore: a.txt, t.csv, scores.txt).
+       Обе беды лечит своя папка: имя уникально, а всё, что задача создаёт
+       рядом с собой, остаётся в ней и уносится вместе с ней. */
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kodokvest-hw-"));
+    const tmp = path.join(tmpDir, "check.py");
     let compared = 0;
     BANK.forEach(item => {
       [1, 42, 2026].forEach(seed => {
@@ -186,7 +201,7 @@ BANK.forEach(item => {
         if (mini.error) return;                 /* об этом уже сказано выше */
         fs.writeFileSync(tmp, code);
         let py;
-        try { py = execFileSync("python3", [tmp], { encoding: "utf8" }); }
+        try { py = execFileSync("python3", [tmp], { encoding: "utf8", cwd: tmpDir }); }
         catch(e){
           say(`[python] ${item.id} (семя ${seed}): эталон падает в настоящем Python: ` +
               String(e.stderr || e).slice(0, 200));
@@ -200,6 +215,7 @@ BANK.forEach(item => {
               `  движок: ${JSON.stringify(a.slice(0, 120))}\n  python: ${JSON.stringify(b.slice(0, 120))}`);
       });
     });
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(e){}
     console.log(`Сверено с настоящим Python: ${compared} прогонов.`);
   }
 }
