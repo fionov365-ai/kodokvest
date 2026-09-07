@@ -511,10 +511,15 @@ function zanSlotsFor(len){
 var ZAN_SANE = 60;
 var MIN_PER_LESSON = 7;      /* 5–8 минут по замеру, берём середину */
 var MIN_AROUND = 8;          /* разминка, повтор и проверка вокруг уроков */
-function lessonsLeft(){
+/* ⚠️ Считает по ЛЮБОМУ снимку, а не только по своему. Без этого кабинет
+   наставника, где рамка правится удалённо у выбранного ученика, считал
+   «сколько уроков осталось» по прогрессу САМОГО НАСТАВНИКА и обещал родителю
+   чужую дату. Пусто — значит своё состояние, как раньше. */
+function lessonsLeft(st){
+  var sm = (st && st.stars) ? st.stars : S.stars;
   var n = 0;
   CURRICULUM.forEach(function(w){
-    worldReadyLessons(w).forEach(function(l){ if (!solved(l.id)) n++; });
+    worldReadyLessons(w).forEach(function(l){ if (sm[l.id] === undefined) n++; });
   });
   return n;
 }
@@ -528,8 +533,8 @@ function studyDaysUntil(goal, days){
   }
   return n;
 }
-function paceCheck(goal, days, len){
-  var left = lessonsLeft();
+function paceCheck(goal, days, len, st){
+  var left = lessonsLeft(st);
   var sessions = studyDaysUntil(goal, days || frame().days);
   /* ⚠️ Ноль занятий до даты — это НЕ «всё в порядке», а «посчитать не из чего»:
      либо не отмечен ни один день недели, либо дата уже прошла. Раньше отсюда
@@ -552,6 +557,99 @@ function paceCheck(goal, days, len){
     byMeasure: !!frame().perLesson
   };
 }
+
+/* ================= план и факт =================
+   Корзина 3.5. Наставник, открывая группу, спрашивает про ученика не «сколько
+   пройдено», а «успевает ли». «Всего 24 урока» на этот вопрос не отвечает:
+   двадцать четыре урока за месяц по три занятия в неделю — это впереди плана,
+   а за полгода — далеко позади. Разница в том, с чем сравнивать, и сравнивать
+   мы имеем право только с РАМКОЙ, которую поставил взрослый.
+
+   Как считается:
+     точка отсчёта — день, когда рамку сохранили (frame.setAt);
+     план          — учебные дни от неё до сегодня (дни недели минус каникулы)
+                     × уроков в занятие (по длине, а если замер темпа принят —
+                     по замеру этого ребёнка);
+     факт          — уроки, сданные ПОСЛЕ той же точки отсчёта.
+   ⚠️ Обе половины считаются от одного дня. Уроки, пройденные до того, как
+   рамку задали, к этому плану отношения не имеют, и складывать их с ним
+   значит сравнивать разные вещи.
+
+   ⚠️ Три ограничения, каждое из красной линии «это не табель»:
+     1. допуск — одно занятие. Меньше — «идёт по плану», а не «отстаёт на 1»:
+        точность здесь мнимая, а обвинение настоящее;
+     2. «впереди» показывается ровно так же заметно, как «отстаёт». Колонка,
+        у которой есть только плохая половина, и есть табель;
+     3. без рамки план НЕ выдумывается по среднему темпу. Молчим и говорим,
+        что рамки нет: придуманный план обвинял бы ребёнка за нашу догадку.
+
+   Работает на ЛЮБОМ снимке — ничего не берёт из S, поэтому годится и строке
+   группы, и своему кабинету. */
+function planFact(st){
+  st = st || {};
+  var f = frameShape(st.frame);
+  if (!f.days.length) return { none: "noframe" };
+  if (!f.setAt)       return { none: "nodate" };
+
+  var start = dayKey(new Date(f.setAt)), today = dayKey();
+  if (start > today) return { none: "nodate" };
+
+  /* уроков в занятие: по замеру этого ребёнка, если взрослый его принял.
+     ⚠️ Своя копия расчёта, а не zanSlotsFor(): та смотрит в frame(), то есть
+     в СВОЮ рамку, и на чужом снимке считала бы по чужой длине занятия. */
+  var per = f.perLesson
+    ? Math.max(1, Math.min(6, Math.round((f.len - MIN_AROUND) / f.perLesson)))
+    : zanSlots(f.len);
+
+  /* учебные дни от точки отсчёта до сегодня. День, в который рамку сохранили,
+     не считаем: занятие в него могло уже пройти, а могло и не начаться. */
+  var days = 0, cur = start, guard = 0;
+  while (cur < today && guard++ < 1200){
+    cur = shiftDay(cur, 1);
+    if (f.days.indexOf(weekdayOf(cur)) < 0) continue;
+    if (f.breaks.some(function(b){ return cur >= b[0] && cur <= b[1]; })) continue;
+    days++;
+  }
+
+  var sm = st.stars || {}, lg = st.log || {};
+  var before = 0, fact = 0;
+  Object.keys(sm).forEach(function(id){
+    var at = (lg[id] || {}).solvedAt || 0;
+    if (at && at >= f.setAt) fact++; else before++;
+  });
+
+  /* ⚠️ Больше, чем осталось в курсе, спланировать нельзя: иначе ребёнок,
+     дошедший до последнего урока, вечно «отстаёт» от плана, который физически
+     некуда выполнять. */
+  var total = 0;
+  CURRICULUM.forEach(function(w){ total += worldReadyLessons(w).length; });
+  var plan = Math.min(days * per, Math.max(0, total - before));
+
+  var diff = fact - plan;
+  return {
+    plan: plan, fact: fact, diff: diff, per: per, days: days, since: start,
+    lessons: Math.abs(diff),
+    zan: Math.floor(Math.abs(diff) / per),
+    kind: diff <= -per ? "behind" : (diff >= per ? "ahead" : "ontrack")
+  };
+}
+/* Одна строка про план — словами, без процентов и без оценки. */
+function planFactText(pf){
+  if (!pf || pf.none) return pf && pf.none === "noframe"
+    ? "рамка занятий не задана — плана нет"
+    : "рамка задана без даты — считать не от чего";
+  if (pf.kind === "ontrack") return "идёт по плану";
+  var n = pf.lessons;
+  var s = (pf.kind === "behind" ? "отстаёт от рамки на " : "впереди рамки на ") +
+    n + " " + plural(n, "урок", "урока", "уроков");
+  /* Расстояние в занятиях, а не в процентах: занятие — то, чем взрослый
+     распоряжается, а процент ему нечего делать. */
+  if (pf.zan >= 1) s += " — это " + pf.zan + " " + plural(pf.zan, "занятие", "занятия", "занятий");
+  return s;
+}
+/* Чей прогресс сейчас в руках у взрослого: выбранного ученика или свой.
+   Та же развилка, что у frame(), и по той же причине. */
+function frameState(){ return (kidTarget && kidTarget.data) ? kidTarget.data : S; }
 
 /* ================= потолок дня =================
    Замер 03.09.2026: первое, чего боится родитель в любом экранном продукте, —
@@ -11457,7 +11555,6 @@ function screenAdult(){
   if (!adminUnlocked()) return adminGate(screenAdult);
   var f = frame();
   var last = zanLast();
-  var pace = paceCheck(f.goal, f.days, f.len);
 
   var h = '<div class="lvlhead"><div><div class="idx">для взрослого</div>' +
     '<h1>👨‍👩‍👦 Кабинет</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
@@ -11482,7 +11579,7 @@ function screenAdult(){
   h += heatHTML(S);
   h += paceStatHTML();
 
-  h += frameEditorHTML(f, paceCheck(f.goal, f.days, f.len));
+  h += frameEditorHTML(f);
 
   /* ---------- как шла работа (запись авторства) ---------- */
   var asum = authorSummary();
@@ -13469,7 +13566,14 @@ var viewState = null;
    удалённо у выбранного ученика (screenKid). Разметка общая, а КУДА пишут
    кнопки, решает frame()/frameSet(): при выбранном kidTarget они работают на
    рамку ребёнка, иначе на свою. Поэтому дублировать ничего не пришлось. */
-function frameEditorHTML(f, pace){
+function frameEditorHTML(f){
+  /* ⚠️ Темп считается ЗДЕСЬ, а не приходит параметром. Раньше кабинет
+     наставника звал frameEditorHTML(frame()) без второго довода — и стоило
+     поставить выбранному ученику дату «успеть к», как экран падал на
+     pace.none у неопределённого pace. Заодно снят второй промах того же
+     места: paceCheck без снимка считал остаток уроков по прогрессу самого
+     наставника, то есть обещал родителю чужую дату. */
+  var pace = paceCheck(f.goal, f.days, f.len, frameState());
   var h;
   var chips = WD_ORDER.map(function(n){
     return '<button class="wdchip' + (f.days.indexOf(n) >= 0 ? " sel" : "") + '" data-fwd="' + n + '">' +
@@ -13513,6 +13617,26 @@ function frameEditorHTML(f, pace){
         plural(pace.left, "урок", "урока", "уроков") + ' на ' + pace.sessions + ' ' +
         plural(pace.sessions, "занятие", "занятия", "занятий") + ' не помещаются.</p>';
   }
+
+  /* ---------- план и факт (корзина 3.5) ----------
+     Стоит сразу под органами управления рамкой: это ответ на вопрос «а он
+     успевает?», и задаёт его тот же человек, который только что выставил дни
+     и длину. Без рамки блок называет, чего не хватает, а не молчит. */
+  var pf = planFact(frameState());
+  h += '<div class="admlbl">План и факт</div>' +
+    (pf.none
+      ? '<p class="dim planfact none">' + esc(planFactText(pf)) + '. ' +
+        'Отметьте дни занятий и сохраните — со следующего дня будет видно, ' +
+        'идёт ребёнок по рамке, отстаёт или впереди.</p>'
+      : '<p class="planfact ' + pf.kind + '"><b>' + esc(planFactText(pf)) + '.</b> ' +
+        'С ' + pf.since.split("-").reverse().join(".") + ' по рамке набралось <b>' + pf.plan + '</b> ' +
+        plural(pf.plan, "урок", "урока", "уроков") + ' (' + pf.days + ' ' +
+        plural(pf.days, "занятие", "занятия", "занятий") + ' по ' + pf.per + '), ' +
+        'сдано <b>' + pf.fact + '</b>.</p>' +
+        '<p class="dim">Считаем от дня, когда рамку сохранили: то, что пройдено до неё, ' +
+        'к этому плану отношения не имеет. Разница меньше одного занятия — это «по плану», ' +
+        'а не отставание.</p>') +
+    '';
 
   /* каникулы */
   h += '<div class="admlbl">Каникулы и запланированные паузы</div>' +
@@ -15881,6 +16005,9 @@ function groupRow(code, st, serverAt){
     " " + plural(ahead, "урок", "урока", "уроков") });
 
   return { code: code, label: adminLabel(code) || "", week: week, tries: tries,
+           /* план и факт — по рамке, которую взрослый поставил ЭТОМУ ребёнку
+              (корзина 3.5). Не пометка: показывается всегда и в обе стороны */
+           plan: planFact(st),
            presence: presenceInfo(st, serverAt || 0),
            solved: Object.keys(sm).length, lastAt: lastAt, quiet: quiet,
            pred: pred, marks: marks, hwDone: hwDone, hwAll: hwAllRecs.length,
@@ -16178,10 +16305,27 @@ function screenGroup(){
 
   if (rows && rows.length){
     var weekAll = 0, triesAll = 0;
-    rows.forEach(function(r){ weekAll += r.week; triesAll += r.tries; });
+    /* План и факт по группе (корзина 3.5): первое, что наставник спрашивает
+       про группу, — не «сколько пройдено», а «кто не успевает». ⚠️ Считаем
+       и тех, у кого рамки нет: без неё плана не существует, и молчаливо
+       записывать такого ученика в «идёт по плану» значит врать. */
+    var planOk = 0, planBehind = 0, planNo = 0;
+    rows.forEach(function(r){
+      weekAll += r.week; triesAll += r.tries;
+      if (r.plan.none) planNo++;
+      else if (r.plan.kind === "behind") planBehind++;
+      else planOk++;
+    });
     h += '<div class="card"><h3>📊 За неделю</h3><ul class="trsum">' +
       '<li>Учеников: <b>' + rows.length + '</b>.</li>' +
       '<li>Уроков сдано: <b>' + weekAll + '</b>.</li>' +
+      (planOk + planBehind
+        ? '<li>По своей рамке идут или впереди: <b>' + planOk + '</b> из <b>' +
+          (planOk + planBehind) + '</b>' +
+          (planNo ? ', ещё у <b>' + planNo + '</b> рамка занятий не задана — ' +
+                    'им план сравнивать не с чем' : '') + '.</li>'
+        : '<li>Рамка занятий не задана ни у кого: плана нет, и «успевает или нет» ' +
+          'сравнивать не с чем. Рамка ставится в карточке ученика.</li>') +
       /* Число, ради которого всё и затевалось: столько раз движок прочитал
          и выполнил код вместо человека. У конкурентов это ручные часы. */
       '<li>Проверок сделал движок: <b>' + triesAll + '</b> — столько программ ' +
@@ -16204,6 +16348,12 @@ function screenGroup(){
         'за неделю ' + r.week + ' · всего ' + r.solved +
         (r.hwAll ? ' · домашка ' + r.hwDone + '/' + r.hwAll : '') + ' · ' +
         (r.lastAt ? fmtWhen(r.lastAt) : "занятий не было") + '</span></div>' +
+        /* ⚠️ План и факт — отдельная строка, а не пометка в списке «на кого
+           посмотреть». Пометка появляется только когда что-то не так, и план
+           в этом списке читался бы как обвинение; здесь же «по плану» и
+           «впереди» видны ровно так же, как «отстаёт». */
+        '<div class="grpplan ' + (r.plan.none ? "none" : r.plan.kind) + '">' +
+          '📅 ' + esc(planFactText(r.plan)) + '</div>' +
         (r.marks.length
           ? '<ul class="trmarks">' + r.marks.map(function(m){
               return '<li class="' + m.k + '">' + esc(m.txt) + '</li>';
@@ -18092,6 +18242,7 @@ window.__game = {
   specToPython: specToPython, specRunAll: specRunAll, specVerdict: specVerdict,
   specsList: specsList, specDone: specDone, specSplitArgs: specSplitArgs,
   specTaskById: specTaskById, SPEC_KINDS: SPEC_KINDS,
+  planFact: planFact, planFactText: planFactText, frameState: frameState,
   screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
   groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
