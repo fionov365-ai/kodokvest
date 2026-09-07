@@ -2123,6 +2123,17 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   color:var(--acc);letter-spacing:-.01em}
 .landnum span{font-size:14px;font-weight:600}
 .landnum i{font-style:normal;font-size:12.5px;color:var(--faint);line-height:1.4;margin-top:4px}
+/* Числа живут ВНУТРИ первого экрана, в левой колонке: без них колонка
+   кончалась на четыреста пикселей раньше правой, и под кнопками висела дыра.
+   Здесь их две в ряд, а не четыре — колонка вдвое уже страницы. */
+.lhtext .landnums{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:16px;
+  box-shadow:none;background:var(--line)}
+/* ⚠️ Отступы и кегль здесь меньше, чем у полосы во всю ширину, и это ЗАМЕР,
+   а не вкус: колонки первого экрана обязаны кончаться на одной высоте.
+   С прежними числа перевешивали окно с рисунком на 126 px. */
+.lhtext .landnum{padding:11px 14px}
+.lhtext .landnum b{font-size:27px}
+.lhtext .landnum i{margin-top:2px}
 
 /* ---------- заголовки разделов ----------
    Надпись-указатель над заголовком отвечает на «что это за кусок страницы»
