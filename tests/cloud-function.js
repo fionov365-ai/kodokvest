@@ -173,6 +173,45 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   check("медиана уроков за 4 недели", m.month && m.month.medianLessons === 1,
         JSON.stringify(m.month));
 
+  /* ---------- где застревают ----------
+     Урок «trudnyi» взяли трое: один сдал, двое застряли (у одного шесть
+     попыток, у другого четыре плюс подсказка — обе цены дотягивают до 6).
+     Урок «lyogkii» взяли двое и оба сдали — в ответе его быть не должно.
+     Урок «poproboval» открыт и брошен после двух попыток: это ещё не затык. */
+  await call(post({ op:"save", code:"zatyk-a" }, JSON.stringify({ xp:1, stars:{ lyogkii:3 },
+    days: mkDays(NOW - DAY),
+    log: { lyogkii:{ solvedAt: NOW - DAY, attempts:1 },
+           trudnyi:{ attempts:6, hints:0, shown:0 },
+           poproboval:{ attempts:2 } } })));
+  await call(post({ op:"save", code:"zatyk-b" }, JSON.stringify({ xp:1, stars:{ lyogkii:3 },
+    days: mkDays(NOW - DAY),
+    log: { lyogkii:{ solvedAt: NOW - DAY, attempts:2 },
+           trudnyi:{ attempts:4, hints:1, shown:0 } } })));
+  await call(post({ op:"save", code:"zatyk-c" }, JSON.stringify({ xp:1,
+    stars:{ trudnyi:3 }, days: mkDays(NOW - DAY),
+    log: { trudnyi:{ solvedAt: NOW - DAY, attempts:9 } } })));
+  /* одна попытка и открытое решение — цена 1 + 5 = 6, это уже затык.
+     Проверка пришпиливает саму формулу, а не только её порог: если вес
+     показанного решения уедет, «pokazal» из ответа исчезнет. */
+  await call(post({ op:"save", code:"zatyk-d" }, JSON.stringify({ xp:1, stars:{},
+    days: mkDays(NOW - DAY), log: { pokazal:{ attempts:1, shown:1 } } })));
+
+  r = await call(get({ op:"stats", key:"kluch-nastavnika" }));
+  const zt = json(r).stuck || [];
+  const trud = zt.filter(x => x.lesson === "trudnyi")[0];
+  check("трудный урок попал в затыки", !!trud, JSON.stringify(zt));
+  check("застрявших на трудном двое", trud && trud.stuck === 2, JSON.stringify(trud));
+  check("бралось за трудный трое", trud && trud.tried === 3, JSON.stringify(trud));
+  check("сдал трудный один", trud && trud.solved === 1, JSON.stringify(trud));
+  check("среднее попыток у застрявших", trud && trud.avgAttempts === 5, JSON.stringify(trud));
+  check("лёгкий урок в затыки не попал", !zt.some(x => x.lesson === "lyogkii"), JSON.stringify(zt));
+  check("две попытки затыком не считаются",
+        !zt.some(x => x.lesson === "poproboval"), JSON.stringify(zt));
+  check("открытое решение весит пять: одна попытка плюс решение — уже затык",
+        zt.some(x => x.lesson === "pokazal"), JSON.stringify(zt));
+  check("затыки идут сверху вниз по числу застрявших",
+        zt.every((x, i) => i === 0 || zt[i-1].stuck >= x.stuck), JSON.stringify(zt));
+
   /* ---------- живое занятие ---------- */
   r = await call(post({ op:"live_set", code:"misha-7f3a" },
         JSON.stringify({ at: 1, place:"lesson", title:"Урок 3", code:"print(1)", output:"1" })));
@@ -190,7 +229,7 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
         !json(r).students.some(s => /\.live$/.test(s.code || "")), r.body.slice(0, 200));
   r = await call(get({ op:"stats", key:"kluch-nastavnika" }));
   const st2 = json(r);
-  check("трансляция не считается учеником в метриках", st2.students === 6, JSON.stringify(st2.students));
+  check("трансляция не считается учеником в метриках", st2.students === 10, JSON.stringify(st2.students));
   /* негодные кадры */
   r = await call(get({ op:"live_set", code:"misha-7f3a" }));
   check("кадр через GET отклонён", r.statusCode === 405);

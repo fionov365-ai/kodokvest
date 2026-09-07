@@ -6384,6 +6384,51 @@ function checkEncoding(){
       if (!/это ещё случаи, а не замер/.test(t))
         bad("[метрики] экран молчит о том, что на малых числах это не замер");
       if (!doc.getElementById("grpstats")) bad("[метрики] нет кнопки «Посчитать»");
+
+      /* 10в.5. Затыки по урокам: детектор НАШИХ ошибок.
+         Двое сидят на «vars» без решения, один его сдал. Карточка обязана
+         назвать урок словами (на сервере только идентификатор) и сказать
+         главное — застрявших больше, чем сдавших. */
+      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+        log: { "vars": { attempts:7, hints:0, shown:0 } } }, "stat-c");
+      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+        log: { "vars": { attempts:9, hints:0, shown:0 } } }, "stat-d");
+      await w.Cloud.save({ xp:1, stars:{ "vars":3 }, days: mkDays([now - day]),
+        log: { "vars": { solvedAt: now - day, attempts:2 } } }, "stat-e");
+      const m2 = await w.Cloud.stats("kluch-testa");
+      const zt = (m2.stuck || []).filter(x => x.lesson === "vars")[0];
+      if (!zt || zt.stuck !== 2 || zt.tried !== 3 || zt.solved !== 1)
+        bad("[затыки] сервер посчитал затык неверно: " + JSON.stringify(m2.stuck));
+      g.grpStats.data = m2;
+      g.screenGroup();
+      await tick();
+      const tz = doc.getElementById("app").textContent;
+      if (!/Где застревают/.test(tz)) bad("[затыки] на экране группы нет карточки затыков");
+      if (!/Переменные|Коробки/.test(tz))
+        bad("[затыки] урок назван кодом, а не словами: " + tz.slice(0, 200));
+      if (!/застряли 2 из 3/.test(tz)) bad("[затыки] числа затыка не показаны");
+      if (!/Застрявших больше, чем сдавших/.test(tz))
+        bad("[затыки] экран молчит о главном признаке нашей ошибки");
+      if (!/не про детей/.test(tz))
+        bad("[затыки] карточка не говорит, что это цифра про нас, а не про детей");
+      /* пустой список — не молчание, а прямая строка; отсутствие поля — молчание */
+      if (!/Никто нигде не застрял/.test(g.stuckTopHTML([])))
+        bad("[затыки] на пустом списке карточка ничего не говорит");
+      if (g.stuckTopHTML(undefined) !== "")
+        bad("[затыки] старый ответ сервера без затыков рисует карточку из ничего");
+
+      /* ⚠️ Формула цены урока и порог живут в ДВУХ файлах: js/app.js и
+         cloud/index.js (облачная функция ничего из игры не видит). Разойдутся
+         молча: и там, и там всё соберётся. Сверяем число прямо в исходниках. */
+      const cloudSrc = fs.readFileSync(path.join(root, "cloud/index.js"), "utf8");
+      const appSrc = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+      const cloudPrice = (cloudSrc.match(/STUCK_PRICE\s*=\s*(\d+)/) || [])[1];
+      const appPrice = (appSrc.match(/STUCK_PRICE\s*=\s*(\d+)/) || [])[1];
+      if (!cloudPrice || !appPrice || cloudPrice !== appPrice)
+        bad("[затыки] порог затыка разошёлся: в игре " + appPrice + ", в облаке " + cloudPrice);
+      if (String(g.STUCK_PRICE) !== appPrice)
+        bad("[затыки] в игре порог из исходника не совпал с рабочим: " + g.STUCK_PRICE);
+
       g.grpStats.data = null;
       try { fs.rmSync(stDir, { recursive:true, force:true }); } catch(e){}
     }

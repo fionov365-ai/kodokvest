@@ -13,7 +13,7 @@
      GET  ?op=load&code=КОД               прочитать прогресс ученика
      POST ?op=save&code=КОД   тело=JSON   записать прогресс ученика
      GET  ?op=list&key=КЛЮЧ               список всех учеников (кратко)
-     GET  ?op=stats&key=КЛЮЧ              метрики возвращаемости по всем
+     GET  ?op=stats&key=КЛЮЧ              метрики возвращаемости и затыков
      POST ?op=live_set&code=КОД тело=JSON  ребёнок транслирует экран (код+вывод)
      GET  ?op=live_get&code=КОД            взрослый смотрит трансляцию
 
@@ -144,7 +144,8 @@ module.exports.handler = async function(event){
        корзина 4): доля вернувшихся в первую неделю после первого занятия и
        доля дошедших до конца каждого мира. Плюс медиана уроков за 4 недели.
        Считается по уже хранимым снимкам — никаких новых данных о ребёнке.
-       Доступ — по тому же ADMIN_KEY, что и список: это цифры наставника. */
+       Доступ — по тому же ADMIN_KEY, что и список: это цифры наставника.
+       Плюс топ уроков, где застревают: это цифра не про детей, а про нас. */
     if (op === "stats"){
       const key = process.env.ADMIN_KEY;
       if (!key) return reply(403, { ok:false, error:"Метрики отключены: в настройках функции не задан ADMIN_KEY." });
@@ -158,6 +159,24 @@ module.exports.handler = async function(event){
       /* день из строки «ГГГГ-ММ-ДД». Полдень UTC, чтобы разница дней не
          прыгала от часовых поясов: нам нужны разности, а не моменты */
       const dayMs = k => Date.parse(k + "T12:00:00Z");
+
+      /* ---------- где застревают: единственная цифра здесь про НАС ----------
+         Все остальные метрики этого ответа — про детей. Эта одна — про урок.
+         Если урок взяли десять, сдали двое, а восемь сидят на нём с попытками
+         и без решения, дело не в детях: непонятное условие, недостающий шаг в
+         теории, слишком большой прыжок. Считается по тем же снимкам — новых
+         данных о ребёнке не появляется.
+         ⚠️ Формула цены урока и порог затыка — КОПИЯ из js/app.js
+         (lessonPrice и STUCK_PRICE). Копия, потому что функция живёт в облаке
+         отдельным файлом и ничего из игры не видит. Расхождение стережёт тест
+         [затыки]: он читает оба файла и сверяет число. */
+      const STUCK_PRICE = 6;
+      const priceOf = g => ((g && g.attempts) || 0) + ((g && g.hints) || 0) * 2 + ((g && g.shown) ? 5 : 0);
+      const byLesson = {};
+      function lessonRec(id){
+        if (!byLesson[id]) byLesson[id] = { lesson: id, tried:0, solved:0, stuck:0, attemptsSum:0 };
+        return byLesson[id];
+      }
 
       let students = 0, started = 0;
       let weekEligible = 0, weekReturned = 0;
@@ -174,6 +193,25 @@ module.exports.handler = async function(event){
         catch(e){ return; }
         const data = (rec && rec.data) || {};
         students++;
+
+        /* затыки считаем ДО проверки «занимался ли»: урок с попытками и без
+           решения — место, где ребёнок стоит, а не событие недели. Идём по
+           объединению журнала и звёзд: в старых снимках сданный урок мог
+           остаться без записи в журнале, и без него знаменатель врал бы. */
+        const lg = data.log || {}, sm = data.stars || {}, seen = {};
+        Object.keys(lg).forEach(function(k){ seen[k] = 1; });
+        Object.keys(sm).forEach(function(k){ seen[k] = 1; });
+        Object.keys(seen).forEach(function(id){
+          const g = lg[id] || {};
+          const done = sm[id] !== undefined;
+          if (!done && !(g.attempts > 0)) return;   /* открыл и закрыл — не брался */
+          const it = lessonRec(id);
+          it.tried++;
+          if (done) return void it.solved++;
+          if (priceOf(g) < STUCK_PRICE) return;     /* три попытки — это работа, а не затык */
+          it.stuck++;
+          it.attemptsSum += (g.attempts || 0);
+        });
 
         const days = Object.keys(data.days || {}).sort();
         if (!days.length) return;          /* завёл код, но не занимался */
@@ -206,6 +244,21 @@ module.exports.handler = async function(event){
         if (activeRecently){ active4w++; recent.push(lessons28); }
       });
 
+      /* наверх — уроки, где застрявших больше всего; при равенстве тот, за
+         который бралось больше детей. Порядок обязан быть определённым:
+         иначе один и тот же ответ меняется от порядка файлов в бакете. */
+      const stuck = Object.keys(byLesson).map(function(k){ return byLesson[k]; })
+        .filter(function(it){ return it.stuck > 0; })
+        .sort(function(a, b){
+          return (b.stuck - a.stuck) || (b.tried - a.tried) ||
+                 (a.lesson < b.lesson ? -1 : a.lesson > b.lesson ? 1 : 0);
+        })
+        .slice(0, 12)
+        .map(function(it){
+          return { lesson: it.lesson, tried: it.tried, solved: it.solved, stuck: it.stuck,
+                   avgAttempts: Math.round(it.attemptsSum / it.stuck) };
+        });
+
       recent.sort(function(a, b){ return a - b; });
       const median = recent.length
         ? (recent.length % 2 ? recent[(recent.length - 1) / 2]
@@ -216,7 +269,8 @@ module.exports.handler = async function(event){
         students: students, started: started,
         week: { eligible: weekEligible, returned: weekReturned },
         reach: REACH.map(function(n, i){ return { lessons: n, students: reached[i] }; }),
-        month: { active: active4w, medianLessons: median } });
+        month: { active: active4w, medianLessons: median },
+        stuck: stuck });
     }
 
     /* ---------- дальше нужен код ученика ---------- */

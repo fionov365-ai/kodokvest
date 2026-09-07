@@ -36156,6 +36156,42 @@ function groupStatsHTML(){
   h += '<div class="admrow"><button class="rbtn sec" id="grpstats">' +
     (m ? "Пересчитать" : "Посчитать") + '</button>' +
     (grpStats.busy ? '<span class="dim">Считаю…</span>' : '') + '</div></div>';
+  if (m) h += stuckTopHTML(m.stuck);
+  return h;
+}
+
+/* ===== где застревают — отдельной карточкой =====
+   ⚠️ Все остальные цифры на этом экране про детей: кто сдал, кто вернулся,
+   кто молчит. Эта одна — про НАС. Урок, который взяли десять, сдали двое, а
+   восемь сидят на нём с попытками и без решения, — это наша ошибка, а не их
+   лень: непонятное условие, пропущенный шаг в теории, слишком большой прыжок.
+   Поэтому карточка стоит отдельно и говорит это прямо: иначе строчка внутри
+   «Возвращаемости» прочитается как ещё один список отстающих.
+   Считает сервер (op=stats), названия уроков подставляем здесь: на сервере
+   курса нет, там только идентификаторы. */
+function stuckTopHTML(rows){
+  if (!rows) return "";                 /* старый ответ сервера — молчим, а не врём нулём */
+  var h = '<div class="card"><h3>⛔ Где застревают</h3>' +
+    '<p class="dim">Единственная цифра на этом экране, которая говорит не про детей, ' +
+    'а про урок. Застрявший — это тот, кто урок не сдал, а попыток, подсказок и ' +
+    'открытых решений набрал на ' + STUCK_PRICE + ' и больше. Смотреть в первую очередь ' +
+    'на строки, где застрявших больше, чем сдавших: там дело почти наверняка в уроке.</p>';
+  if (!rows.length)
+    return h + '<p class="dim">Никто нигде не застрял: нерешённых уроков с такой ценой ' +
+      'на сервере нет.</p></div>';
+  h += '<ul class="trsum">';
+  rows.forEach(function(r){
+    var l = CURRICULUM.byId(r.lesson);
+    var name = l ? ("урок " + l.num + " · " + l.title) : r.lesson;
+    var beda = r.stuck > r.solved;
+    h += '<li>' + (beda ? "⚠️ " : "") + '<b>' + esc(name) + '</b> — застряли <b>' + r.stuck +
+      '</b> из ' + r.tried + ' ' + plural(r.tried, "взявшегося", "взявшихся", "взявшихся") +
+      ', сдали ' + r.solved + '. Попыток у застрявших в среднем: ' + r.avgAttempts + '.' +
+      (beda ? ' <b>Застрявших больше, чем сдавших.</b>' : '') + '</li>';
+  });
+  h += '</ul><p class="dim">⚠️ На одном-двух учениках это ещё не сигнал: ' +
+    'застрять на любом уроке может кто угодно. Сигналом строка становится тогда, ' +
+    'когда за урок бралось хотя бы пятеро.</p></div>';
   return h;
 }
 function bindGroupStats(){
@@ -38336,7 +38372,7 @@ window.__game = {
   weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHTML,
   worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
-  grpStats: grpStats,
+  grpStats: grpStats, stuckTopHTML: stuckTopHTML, STUCK_PRICE: STUCK_PRICE,
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
   presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
   presenceDetailHTML: presenceDetailHTML,
