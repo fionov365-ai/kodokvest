@@ -2519,6 +2519,29 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   transition:.2s;cursor:pointer}
 .swdots i.on{background:var(--acc);transform:scale(1.35)}
 
+/* ---------- переключатели на телефоне: по два в ряд ----------
+   Просьба фаундера 07.09.2026: «переключатели идут вниз, а можно два в
+   горизонталь, потом ниже по порядку, если ширина экрана позволяет».
+
+   Было `flex-wrap:wrap`, и переносило честно — только подписи длинные
+   («Репетитору и учителю», «Мир 4 · Настоящий Python»), в строку помещалась
+   ровно одна кнопка, и пять вкладок миров занимали 232 пикселя, то есть треть
+   экрана телефона ДО того, как начнётся содержимое.
+
+   Сетка в две колонки решает это без единой правки разметки: подпись внутри
+   кнопки переносится сама, а высота ряда падает вдвое.
+
+   ⚠️ `.ltsm` исключены. Это мелкие вкладки с подписью слева («Что рисуем:»,
+   «Разминка:»), они живут одной строкой вместе с этой подписью, и сетка
+   выбросила бы подпись в отдельную ячейку.
+   ⚠️ Правило стоит в конце файла: у `.ltabs` есть свой `display:flex` выше, и
+   при равной силе решает порядок. */
+@media (max-width:640px){
+  .ltabs:not(.ltsm){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:stretch}
+  .ltabs:not(.ltsm) .ltab{justify-content:flex-start;padding:9px 11px}
+}
+
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
      это позже, тот, у кого выбрана тёмная, увидит вспышку светлого фона —
@@ -20809,8 +20832,20 @@ function goHome(){
   return screenWorlds();
 }
 
+/* Экраны, которые СЧИТАЮТСЯ кабинетом. Список явный, а не «всё, что не
+   вывеска»: урок, открытый взрослым для просмотра, кабинетом не является, и
+   обновление на нём не должно вышвыривать человека в список учеников. */
+var ROOM_PLACES = ["admin", "kids", "kid", "group", "parent", "adult",
+                   "adminsetup", "adminlogin", "parentlogin", "roles"];
 function refreshTop(){
   syncBack();
+  /* ⚠️ Место отмечаем ЗДЕСЬ, а не в каждом экране по отдельности: refreshTop
+     зовут все экраны без исключения, и забыть его негде. Раскладывать те же
+     две строки по десятку функций значит однажды пропустить одну. */
+  if (isAdminDevice() || isParentDevice()){
+    if (curPlace === "about") setPlace("home");
+    else if (ROOM_PLACES.indexOf(curPlace) >= 0) setPlace("room");
+  }
   /* На устройстве взрослого детская навигация ни к чему: вкладки уроков,
      звёзды, опыт, «Сегодня», «Повторить» — всё это про ребёнка. Прячем весь
      этот ряд и оставляем только логотип и «?», чтобы кабинет не выглядел как
@@ -32885,6 +32920,41 @@ function adminPassSet(pass, makeAdmin){
 }
 function adminPassOk(pass){ return adminHasPass() && S.admin.pass === adminHash(pass); }
 function isAdminDevice(){ return !!(S.admin && S.admin.isAdmin); }
+
+/* ===== где взрослый находится: в кабинете или на главной =====
+   ⚠️ Жалоба фаундера 07.09.2026: «на главной делаю обновление — он уходит в
+   кабинет, а должен оставаться на главной». Так и было: при загрузке экран
+   выбирался ПО РОЛИ УСТРОЙСТВА (админское — значит кабинет), а не по тому,
+   где человек был. Уйти с кабинетного устройства на главную было можно —
+   логотипом, — но первое же обновление возвращало обратно.
+
+   Роль устройства и место человека — РАЗНЫЕ вещи, и путать их нельзя. Роль
+   отвечает на вопрос «чей это компьютер» и живёт годами. Место отвечает на
+   «где я сейчас» и меняется по клику. Раньше вторая величина не хранилась
+   вовсе, и её роль исполняла первая.
+
+   Хранится рядом с ролью, в S.admin: на сервер не уходит, сбросом прогресса
+   не стирается, переживает обновление страницы. Всё, что не «home», считается
+   кабинетом, — тогда старым устройствам ничего мигрировать не надо. */
+function atHome(){ return !!(S.admin && S.admin.place === "home"); }
+/* Выйти из кабинета: человек больше не в кабинете и оказывается на главной.
+   ⚠️ Это НЕ «устройство больше не кабинет» — роль, пароль и код ребёнка на
+   месте, вернуться можно кнопкой в шапке. Разница ровно та же, что между
+   «выйти из комнаты» и «съехать с квартиры», и обе кнопки нужны.
+   ⚠️ Замок закрываем: вышел — значит вышел, и следующий вход в кабинет
+   администратора спросит пароль. Иначе на общем компьютере «выход» ничего не
+   охраняет: ребёнок вернётся в кабинет одним нажатием. */
+function leaveRoom(){
+  kidTarget = null;
+  adminLock();
+  setPlace("home");
+  screenAbout();
+}
+function setPlace(p){
+  if (!S.admin || S.admin.place === p) return;
+  S.admin.place = p;
+  saveLocal();                 /* admin не синхронизируется — хватит местного */
+}
 /* ===== устройство родителя =====
    Родитель следит за ОДНИМ ребёнком: расписание и отчёт, без списка и без
    группы. Опознаётся по коду ребёнка, привязанному к устройству (parentOf).
@@ -34562,7 +34632,11 @@ function screenKids(){
   /* Полная панель наставника — «под капотом»: группа, просмотр любого ученика
      по коду, список всех с сервера. Обычному родителю с парой детей она не
      нужна, репетитору с классом — да, поэтому лежит отдельной ссылкой. */
-  h += '<div class="pager"><button class="bigbtn ghost" data-kact="role">⇄ Сменить роль</button>' +
+  h += '<div class="pager">' +
+    /* ⚠️ Выход стоит ПЕРВЫМ и отдельно от «больше не кабинет»: это разные
+       вещи, и раньше лёгкого выхода не было вовсе. */
+    '<button class="bigbtn ghost" data-kact="leave">🚪 Выйти из кабинета</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-kact="role">⇄ Сменить роль</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-kact="panel">Полная панель наставника →</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-kact="off">Это устройство больше не кабинет</button></div>' +
     aboutFootHTML();
@@ -34584,6 +34658,7 @@ function screenKids(){
         return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она ниже.");
       }
       if (act === "open") return screenKid(code);
+      if (act === "leave") return leaveRoom();
       if (act === "role") return screenRoles();
       if (act === "panel"){ location.hash = "#panel"; return screenAdmin(); }
       if (act === "link") return copyText(kidLink(code), b);
@@ -35123,16 +35198,23 @@ function screenParent(code){
     '<p class="lede">Здесь видно, как идут занятия, и можно поставить расписание. ' +
     'Ребёнок занимается на своём устройстве — его тренажёр отдельно от этого экрана.</p>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Выйти</button></div>' +
+    '<div class="pager">' +
+    '<button class="bigbtn ghost" data-pd="leave">🚪 Выйти из кабинета</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button>' +
+    /* ⚠️ Кнопка переименована. Она забывает код ребёнка на устройстве — это
+       не «выйти», а «отвязать», и рядом с новым лёгким выходом старое слово
+       «Выйти» означало бы две разные вещи одним словом. */
+    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Забыть код на этом устройстве</button></div>' +
     aboutFootHTML();
   wireAboutFoot(app);
   app.querySelectorAll("[data-pd]").forEach(function(b){
     b.onclick = function(){
+      if (b.getAttribute("data-pd") === "leave") return leaveRoom();
       if (b.getAttribute("data-pd") === "role"){ kidTarget = null; return screenRoles(); }
       if (b.getAttribute("data-pd") !== "off") return;
-      if (!confirm("Выйти из кабинета родителя на этом устройстве?\n\n" +
-                   "Ссылку от учителя можно открыть снова, чтобы вернуться."))
+      if (!confirm("Забыть код ребёнка на этом устройстве?\n\n" +
+                   "Кабинет закроется совсем. Ссылку от учителя можно открыть снова, " +
+                   "чтобы вернуться."))
         return;
       kidTarget = null;
       parentDeviceOff();
@@ -37964,6 +38046,22 @@ function kbFocusInit(){
   });
 }
 
+/* Какой экран открыть при загрузке. ⚠️ Вынесено отдельной функцией, чтобы
+   решение можно было проверить тестом: оно про правила, а не про отрисовку, и
+   именно в нём была ошибка. Возвращает имя, а не зовёт экран. */
+function bootWhere(){
+  /* ⚠️ Взрослого открываем ТАМ, ГДЕ ОН БЫЛ, а не там, куда ведёт роль
+     устройства: ушёл на главную — обновление обязано оставить его на главной.
+     Разбор у atHome(). */
+  if ((isAdminDevice() || isParentDevice()) && atHome()) return "about";
+  if (isAdminDevice()) return "adminhome";
+  if (isParentDevice()) return "parent";
+  if (myCode() || S.name) return "worlds";
+  /* ⚠️ Незакреплённое устройство встречает ВЫВЕСКА, а не выбор роли. Раньше
+     здесь стоял screenRoles(), и первым, что видел человек по ссылке, были
+     три двери без единого слова о том, куда они ведут. */
+  return "about";
+}
 function bootRender(){
   /* общий счётчик активных минут запускается один раз на всю сессию: он
      считает не «сколько открыта вкладка», а сколько ребёнок реально работал */
@@ -37977,12 +38075,10 @@ function bootRender(){
          устройство видит экран выбора — это и есть «общий компьютер».
          Ученик считается закреплённым, если у него есть код (онлайн) или он
          зарегистрировался по имени (офлайн, S.name). */
-      if (isAdminDevice()) screenAdminHome();
-      else if (isParentDevice()) screenParent();
-      else if (myCode() || S.name) screenWorlds();
-      /* ⚠️ Незакреплённое устройство встречает ВЫВЕСКА, а не выбор роли.
-         Раньше здесь стоял screenRoles(), и первым, что видел человек по
-         ссылке, были три двери без единого слова о том, куда они ведут. */
+      var куда = bootWhere();
+      if (куда === "adminhome") screenAdminHome();
+      else if (куда === "parent") screenParent();
+      else if (куда === "worlds") screenWorlds();
       else screenAbout();
     }
   } catch(e){
@@ -38183,6 +38279,8 @@ window.__game = {
   screenAdminHome: screenAdminHome, screenAdminSetup: screenAdminSetup,
   screenAdminLogin: screenAdminLogin, screenKids: screenKids, screenKid: screenKid,
   isAdminDevice: isAdminDevice, adminHasPass: adminHasPass, adminPassSet: adminPassSet,
+  atHome: atHome, setPlace: setPlace, leaveRoom: leaveRoom, ROOM_PLACES: ROOM_PLACES,
+  bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
