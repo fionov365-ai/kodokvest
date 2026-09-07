@@ -14264,8 +14264,15 @@ function landWarmRender(i){
   var w = landWarms()[i], box = document.getElementById("warmwin");
   if (!w || !box) return;
   var want = ((Runtime.get("mini").run(w.code, {}) || {}).output || "").replace(/\n+$/, "");
+  /* ⚠️ У обеих колонок своя подпись, и это не украшение. Без подписи слева
+     рамка кода начиналась на высоте ТЕКСТА правой подписи, то есть на 40
+     пикселей выше поля ответа: две одинаковые с виду коробки стояли рядом
+     со сдвигом, и вся пара читалась криво. Подпись слева ставит обе рамки
+     на одну линию — и заодно называет, что в левой коробке. */
   box.innerHTML =
-    '<div class="warmask"><div class="dwcode">' + landCodeHTML(w.code.replace(/\n$/, "")) + '</div>' +
+    '<div class="warmask">' +
+      '<div class="warmcode"><div class="warmlbl">Программа</div>' +
+      '<div class="dwcode">' + landCodeHTML(w.code.replace(/\n$/, "")) + '</div></div>' +
       '<div class="warmans"><label for="warmin">Что напечатает программа?</label>' +
       '<textarea id="warmin" rows="' + Math.max(2, want.split("\n").length) + '" spellcheck="false" ' +
         'placeholder="по строке на каждый print"></textarea>' +
@@ -18118,6 +18125,7 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   goLogo: goLogo, landNums: landNums, landLiveCode: landLiveCode,
+  landWarmRender: landWarmRender, landWarms: landWarms,
   myWorksList: myWorksList, myWorkSave: myWorkSave, myWorkDrop: myWorkDrop,
   myWorkById: myWorkById, myWorkLink: myWorkLink, WORK_MAX: WORK_MAX,
   screenWorldDone: screenWorldDone, worldSkills: worldSkills,

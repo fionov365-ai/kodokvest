@@ -6588,6 +6588,44 @@ function checkEncoding(){
       bad("[вывеска] правило про колонку номеров не попало в сборку одним файлом");
   }
 
+  /* --- 11б2. «Угадай вывод» на вывеске: две колонки стоят на одной линии --- */
+  if (typeof g.landWarmRender === "function"){
+    /* ⚠️ Жалоба фаундера 07.09.2026: «не симметрично расположены блоки, один
+       выше другого на всех трёх задачах». Причина была структурная: справа
+       над полем ответа стояла подпись, слева над кодом — нет, и рамка кода
+       вставала вровень с ТЕКСТОМ правой подписи, то есть на сорок пикселей
+       выше поля ответа. Две одинаковые с виду коробки стояли рядом со
+       сдвигом. Высоту в jsdom не измерить, поэтому стережём саму симметрию:
+       у обеих колонок есть подпись и под ней коробка. */
+    const box = doc.createElement("div");
+    box.id = "warmwin";
+    doc.getElementById("app").appendChild(box);
+    g.landWarmRender(0);
+    const ask = doc.querySelector(".warmask");
+    if (!ask) bad("[вывеска] разминка «угадай вывод» не отрисовалась");
+    else {
+      const left = ask.querySelector(".warmcode"), right = ask.querySelector(".warmans");
+      if (!left || !right) bad("[вывеска] у разминки не две колонки");
+      else {
+        if (!left.querySelector(".warmlbl"))
+          bad("[вывеска] у колонки с кодом нет подписи — её рамка встанет выше поля ответа");
+        if (!right.querySelector("label"))
+          bad("[вывеска] у колонки с ответом нет подписи");
+        /* подпись обязана быть ПЕРВОЙ в колонке, иначе коробки снова разъедутся */
+        if (left.firstElementChild !== left.querySelector(".warmlbl"))
+          bad("[вывеска] подпись слева стоит не первой в колонке");
+        if (right.firstElementChild !== right.querySelector("label"))
+          bad("[вывеска] подпись справа стоит не первой в колонке");
+        if (!left.querySelector(".dwcode")) bad("[вывеска] под подписью слева нет кода");
+      }
+    }
+    const cssW = fs.readFileSync(path.join(root, "css/style.css"), "utf8");
+    if (!/\.warmlbl,\.warmans label\{/.test(cssW))
+      bad("[вывеска] подписи колонок разминки набраны по-разному — коробки разъедутся");
+    box.remove();
+    viewReset(g);
+  }
+
   /* --- 11в. витрина проектов на вывеске --- */
   let showcaseChecked = 0;
   if (typeof g.screenAbout === "function" && typeof g.landNums === "function"){
