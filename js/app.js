@@ -14016,17 +14016,33 @@ function wireAboutFoot(box){
    Две кнопки — два обещания вывески. «Запустить» доказывает «код работает
    сразу», «А если ошибиться» доказывает «ошибки объясняются словами»: то же
    самое расхождение, тем же русским текстом, что увидит ребёнок в уроке. */
+/* ⚠️ Пример РИСУЕТ, а не печатает. Так было не всегда: до 1.94.0 здесь
+   печаталась лесенка из звёздочек, и фаундер нашёл на ней сразу три беды.
+     1. «И что запускать, если звёздочки уже ниже?» — окно само выполняет код
+        при открытии (иначе большинство уйдёт, не увидев доказательства), и
+        приглашение «нажми Запустить» после этого читалось как бессмыслица.
+     2. Он ввёл 1700 звёзд — и страница уехала на километр вниз. Мы сами
+        зовём «поменяй любое число» и сами же наказываем за большое.
+     3. «Можем пример сделать лучше? Может рисунок, чтоб рисовался?»
+   Рисунок закрывает все три. Он появляется штрихами — то есть САМ показывает,
+   что код выполняется прямо сейчас, и звать «запусти» больше не нужно. Размер
+   у холста постоянный, растянуть им страницу нельзя. И у черепашки есть свой
+   предел («Слишком много линий — черепашка устала»), поэтому даже 5000
+   лепестков дают понятную фразу, а не повисшую вкладку.
+
+   Число одно и названо словом: поменял 24 на 6 — вместо мандалы шестилистник.
+   Связь «правлю число → меняется картинка» видна без единого объяснения. */
 var LAND_DEMO_OK =
-  'звёзд = 5\n' +
+  'лепестков = 24\n' +
   '\n' +
-  'for i in range(1, звёзд + 1):\n' +
-  '    print("★" * i)\n' +
-  '\n' +
-  'print("Готово!")';
+  'color("#7c5cff")\n' +
+  'for i in range(лепестков):\n' +
+  '    circle(90)\n' +
+  '    right(360 / лепестков)';
 /* Сломанная версия отличается ровно одним знаком — пропущенным двоеточием.
    Так и задумано: родитель должен увидеть, что тренажёр ловит не «что-то
    пошло не так», а конкретную опечатку в конкретной строке. */
-var LAND_DEMO_BAD = LAND_DEMO_OK.replace("звёзд + 1):", "звёзд + 1)");
+var LAND_DEMO_BAD = LAND_DEMO_OK.replace("range(лепестков):", "range(лепестков)");
 
 function landCodeHTML(code){
   var lines = code.split("\n"), nums = "";
@@ -14037,6 +14053,32 @@ function landCodeHTML(code){
    действительно выполняется по строкам, и глаз должен успеть связать строку
    кода со строкой вывода. Кому мельтешение мешает — системная настройка
    «меньше движения» выключает эффект целиком. */
+/* Прогон демо-окна вывески: сначала рисунок, потом текст, потом ошибка.
+   ⚠️ Отдельно от landRun: тому нужен только текст (он обслуживает вкладки
+   ниже по странице), а здесь главное — холст. Смешивать их в одну функцию с
+   флагом значит завести ветку, которую никто не проверит. */
+function landDemoRun(code, out){
+  if (!out) return;
+  if (out._landT){ clearInterval(out._landT); out._landT = null; }
+  var eng = Runtime.get("mini");
+  var t = eng.newTurtle ? eng.newTurtle() : null;
+  var r = eng.run(code, { turtle: t });
+  if (r.error){
+    out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
+    return;
+  }
+  var txt = (r.output || "").replace(/\n+$/, "");
+  var drew = !!(t && t.segs && t.segs.length);
+  if (!drew && !txt){
+    out.innerHTML = '<span class="dwwait">Программа ничего не нарисовала и ничего не напечатала. ' +
+      'Верни рабочий код кнопкой рядом.</span>';
+    return;
+  }
+  out.innerHTML = (drew ? '<canvas class="dwcanvas"></canvas>' : '') +
+    (txt ? '<pre class="dwtext"></pre>' : '');
+  if (txt) out.querySelector(".dwtext").textContent = txt;
+  if (drew) animateTurtle(out.querySelector(".dwcanvas"), t);
+}
 function landRun(code, out, instant){
   /* ⚠️ Прошлая печать обязана быть остановлена ПЕРВОЙ строкой. Вывод набирается
      по строке в такт таймеру, и если запустить программу второй раз, пока идёт
@@ -14080,14 +14122,17 @@ function landDemoHTML(){
       '<span class="dwtag">это не картинка — код можно править прямо здесь</span></figcaption>' +
     '<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
     '<div class="dwbar">' +
-      '<button class="dwbtn go" data-dw="run">▶ Запустить</button>' +
+      /* ⚠️ «Нарисовать заново», а не «Запустить». Окно выполняет код само при
+         открытии, и кнопка «Запустить» рядом с готовым результатом вызывает
+         ровно один вопрос — «что запускать?». Это и спросил фаундер. */
+      '<button class="dwbtn go" data-dw="run">▶ Нарисовать заново</button>' +
       '<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
-      '<span class="dwhint">поменяй любое число — вывод изменится</span>' +
+      '<span class="dwhint">поменяй 24 на 6 — и рисунок станет другим</span>' +
     '</div>' +
-    '<div class="dwout" aria-live="polite"><span class="dwwait">Нажми «▶ Запустить» — программа выполнится прямо здесь.</span></div>' +
+    '<div class="dwout" aria-live="polite"><span class="dwwait">Рисунок появится прямо здесь.</span></div>' +
   '</figure>' +
   '<p class="dwnote">Это настоящий редактор — тот же, что откроется ребёнку на уроке. ' +
-  'Поменяйте число звёзд, сломайте строку, запустите снова: ни установки Python, ' +
+  'Поменяйте число лепестков, сломайте строку — рисунок перерисуется сам: ни установки Python, ' +
   'ни командной строки для этого не нужно.</p>';
 }
 function wireLandDemo(){
@@ -14110,7 +14155,7 @@ function wireLandDemo(){
      то же окно потом — и не думает, что ему показали рекламный макет.
      Сломать страницу этим нельзя: движок ловит ошибку и объясняет её словами,
      а кнопка «Вернуть рабочий код» возвращает исходный. */
-  var ed = makeEditor(LAND_DEMO_OK, "попробуй поменять число");
+  var ed = makeEditor(LAND_DEMO_OK, "попробуй поменять число лепестков");
   ed.classList.add("dwed");
   if (codeBox && codeBox.parentNode) codeBox.parentNode.replaceChild(ed, codeBox);
   /* ⚠️ Перерисовать ОБЯЗАТЕЛЬНО после вставки в страницу. Редактор меряет
@@ -14122,12 +14167,12 @@ function wireLandDemo(){
      померить заново. */
   ed.setCode(LAND_DEMO_OK);
 
-  function прогон(){ landRun(ed.getCode(), out, true); }
+  function прогон(){ landDemoRun(ed.getCode(), out); }
   var ждём = null;
   /* Печатают по знаку, а запуск после каждого знака показывал бы ошибку на
      недописанной строке. Ждём, пока рука остановится. */
   ed.onEdit = function(){
-    hint.textContent = "это твой код — он выполняется по-настоящему";
+    hint.textContent = "это твой код — он рисует по-настоящему";
     brkBtn.textContent = "↩ Вернуть рабочий код";
     if (ждём) clearTimeout(ждём);
     ждём = setTimeout(прогон, 400);
@@ -14141,14 +14186,14 @@ function wireLandDemo(){
     ed.setCode(сломать ? LAND_DEMO_BAD : LAND_DEMO_OK);
     brkBtn.textContent = сломать ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
     hint.textContent = сломать
-      ? "убрали двоеточие в третьей строке"
-      : "поменяй любое число — вывод изменится";
+      ? "убрали двоеточие в строке с for"
+      : "поменяй 24 на 6 — и рисунок станет другим";
     прогон();
   };
   /* Первый запуск делаем сами. Вывеску читают, а не изучают: если ждать
      нажатия, большая часть посетителей уйдёт со страницы, так и не увидев
      единственное доказательство, которое у нас есть. */
-  landRun(LAND_DEMO_OK, out);
+  landDemoRun(LAND_DEMO_OK, out);
 }
 /* ---- появление блоков при прокрутке ----
    Страница длинная: восемь разделов подряд одинаковой плотности сливаются в
@@ -18701,6 +18746,8 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   goLogo: goLogo, landNums: landNums, landLiveCode: landLiveCode,
+  LAND_DEMO_OK: LAND_DEMO_OK, LAND_DEMO_BAD: LAND_DEMO_BAD,
+  landDemoHTML: landDemoHTML, landDemoRun: landDemoRun,
   landWarmRender: landWarmRender, landWarms: landWarms,
   myWorksList: myWorksList, myWorkSave: myWorkSave, myWorkDrop: myWorkDrop,
   myWorkById: myWorkById, myWorkLink: myWorkLink, WORK_MAX: WORK_MAX,

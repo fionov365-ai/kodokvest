@@ -1908,12 +1908,17 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .lhdemo{min-width:0}
 .demowin{margin:0;border:1px solid var(--line2);border-radius:18px;overflow:hidden;
   background:var(--code);box-shadow:var(--shbig)}
-.dwhead{display:flex;align-items:center;gap:10px;padding:10px 14px;
+/* ⚠️ flex-wrap обязателен. Без него подпись справа (.dwtag) с nowrap не
+   помещалась в узкую колонку и обрезалась окном по overflow:hidden —
+   посередине слова: «код можно править пр». Находка фаундера 07.09.2026.
+   Теперь строка переносится, и фраза остаётся целой. */
+.dwhead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 14px;
   background:var(--dwbar);border-bottom:1px solid var(--line);font-size:12.5px;color:var(--soft)}
 .dwdots{display:flex;gap:5px;flex:none}
 .dwdots i{width:9px;height:9px;border-radius:50%;background:var(--dot)}
 .dwhead b{color:var(--ink);font-size:12.5px;white-space:nowrap}
-.dwhead .dwtag{margin-left:auto;color:var(--acc2);font-weight:600;white-space:nowrap}
+.dwhead .dwtag{margin-left:auto;color:var(--acc2);font-weight:600;
+  white-space:normal;min-width:0}
 /* Код с колонкой номеров — ровно как в редакторе урока. Это не украшение:
    родитель, увидевший на вывеске то же окно, что потом откроет ребёнок,
    узнаёт его и не думает, что ему показали рекламный макет. */
@@ -1965,10 +1970,22 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .numin:focus{outline:2px solid var(--acc2);outline-offset:1px;background:rgba(127,127,127,.14)}
 /* Окно вывода. Высота задана снизу, а не сверху: без min-height окно
    подпрыгивает на высоту шести строк в тот момент, когда на него смотрят. */
-.dwout{padding:14px 16px;min-height:132px;background:var(--res);
+/* ⚠️ max-height обязателен, и это не косметика. Код в окне правит ПОСЕТИТЕЛЬ,
+   и мы сами зовём его менять числа. Фаундер ввёл 1700 звёзд — программа
+   честно напечатала 1700 строк, и страница уехала на километр вниз: вывеска
+   превратилась в простыню, из которой не видно ничего. Ограничение сверху
+   плюс своя прокрутка держат страницу целой при ЛЮБОМ коде, который посетитель
+   сюда напишет, а не только при нашем примере. */
+.dwout{padding:14px 16px;min-height:132px;max-height:340px;overflow:auto;
+  background:var(--res);
   border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;
   font-size:13.5px;line-height:1.6;color:var(--outink);white-space:pre-wrap;
   word-break:break-word}
+/* Холст рисунка. Ширину меряет сам drawTurtle по clientWidth, высоту ставит
+   по ней же — поэтому здесь только ширина. */
+.dwout .dwcanvas{display:block;width:100%;border-radius:10px}
+.dwout .dwtext{margin:10px 0 0;font-family:'JetBrains Mono',monospace;
+  font-size:13px;line-height:1.6;white-space:pre-wrap}
 .dwout .dwwait{color:var(--faint);font-family:'Inter',sans-serif;font-size:13.5px}
 .dwout .dwcaret{display:inline-block;width:8px;height:16px;vertical-align:-3px;
   background:var(--acc);animation:dwblink 1s steps(1) infinite}
