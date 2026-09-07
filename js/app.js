@@ -5649,6 +5649,21 @@ function screenSandbox(){
       ref.map(function(x){ return "<span>" + esc(x) + "</span>"; }).join("") +
     '</div><p class="dim">Нажми на команду — она вставится в конец кода.</p></div>' +
     '<div id="studio"></div>' +
+    /* ⚠️ «Назвать и сохранить» стоит для ЛЮБОГО движка, в отличие от галереи:
+       галерея про рисунки, а своя программа — это что угодно, от считалки до
+       игры. Пункт 2.4 плана: из песочницы уходило всё, кроме рисунков. */
+    '<div class="savework"><button class="rbtn" id="towork">🛠 Назвать и сохранить в «Моё»</button>' +
+    '<span class="tip">Дай программе имя — и она ляжет в портфолио, а ссылку на неё ' +
+    'можно отправить: друг откроет и запустит, не видя кода.</span>' +
+    '<div class="workform" id="workform" hidden>' +
+      '<label>Название<input type="text" id="worktitle" maxlength="40" ' +
+        'placeholder="например, Угадай число" autocomplete="off"></label>' +
+      '<label>Что она делает<input type="text" id="workabout" maxlength="160" ' +
+        'placeholder="загадывает число, а ты угадываешь за пять попыток" autocomplete="off"></label>' +
+      '<div class="row"><button class="rbtn" id="worksave">Сохранить</button>' +
+      '<button class="rbtn sec" id="workcancel">Отмена</button></div>' +
+    '</div>' +
+    '<div class="msg" id="workmsg"></div></div>' +
     (real ? "" :
     '<div class="savepic"><button class="rbtn" id="topic">🖼 Сохранить рисунок в галерею</button>' +
     '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
@@ -5709,6 +5724,61 @@ function screenSandbox(){
       "в портфолио, раздел «Мои рисунки». Хранится программа, а не картинка: рисунок " +
       "считается заново каждый раз, поэтому места занимает несколько строк.";
   };
+  /* ---- назвать и сохранить свою программу ---- */
+  var wform = document.getElementById("workform"),
+      wmsg  = document.getElementById("workmsg"),
+      wttl  = document.getElementById("worktitle"),
+      wabt  = document.getElementById("workabout");
+  document.getElementById("towork").onclick = function(){
+    var code = studio.editor.getCode();
+    if (!code.trim()){
+      wmsg.className = "msg show warn";
+      wmsg.innerHTML = "<b>Сохранять нечего</b>В редакторе пусто — сначала напиши программу.";
+      return;
+    }
+    /* ⚠️ Проверяем, что программа хотя бы запускается. Сохранить сломанное
+       можно было бы, но ссылка на падающую программу — это подарок, который
+       не открывается, и стыдно за него будет ребёнку, а не нам. */
+    var r = Runtime.get(real ? "pyodide" : "mini").run(code, { stdin: [] });
+    if (r.error){
+      wmsg.className = "msg show bad";
+      wmsg.innerHTML = "<b>Сначала пусть заработает</b>" + errHTML(r.error) +
+        "<br>Программу с ошибкой сохранять незачем: тот, кому ты дашь ссылку, " +
+        "увидит ровно эту ошибку.";
+      return;
+    }
+    wform.hidden = false;
+    wmsg.className = "msg";
+    wttl.focus();
+  };
+  document.getElementById("workcancel").onclick = function(){ wform.hidden = true; };
+  document.getElementById("worksave").onclick = function(){
+    var t = (wttl.value || "").trim();
+    if (!t){
+      wmsg.className = "msg show warn";
+      wmsg.innerHTML = "<b>Нужно имя</b>Пока не назовёшь — это просто код в редакторе. " +
+        "Назовёшь — станет твоей вещью, которую можно показать.";
+      wttl.focus();
+      return;
+    }
+    var code = studio.editor.getCode();
+    S.sandbox = code;
+    var id = myWorkSave(t, wabt.value, code);
+    var w = myWorkById(id);
+    wform.hidden = true;
+    wttl.value = ""; wabt.value = "";
+    wmsg.className = "msg show ok";
+    wmsg.innerHTML = "<b>«" + esc(w.title) + "» сохранена</b>" +
+      "Она лежит в «Моём», в разделе «Мои программы»: оттуда её можно открыть, " +
+      "переделать и отправить ссылкой. " +
+      '<div class="row"><button class="rbtn" id="worklink">🔗 Скопировать ссылку</button>' +
+      '<button class="rbtn sec" id="workfolio">🎒 Открыть «Моё»</button></div>';
+    document.getElementById("worklink").onclick = function(e){
+      copyText(myWorkLink(w), e.currentTarget);
+    };
+    document.getElementById("workfolio").onclick = screenFolio;
+  };
+
   document.getElementById("tomap").onclick = function(){ S.sandbox = studio.editor.getCode(); save(); screenWorlds(); };
   pyCardWire(seq, studio, real, waking);
   refreshTop();
@@ -5791,6 +5861,70 @@ function pyCardWire(seq, studio, real, waking){
   if (on && !waking) on.onclick = start;
   /* Выбор уже сделан раньше, страницу просто перезагрузили: поднимаем молча. */
   if (waking) start();
+}
+
+/* ================= свои проекты =================
+   Пункт 2.4 плана. Из песочницы уходило всё, кроме рисунков: написал программу,
+   ушёл с экрана — и её нет. Рисунок при этом сохранялся, а игра-угадайка,
+   калькулятор или считалка — нет, потому что черепашка в них не участвовала.
+
+   ⚠️ Отличие от галереи и от мастерской, и оно содержательное. Галерея хранит
+   РИСУНКИ и название берёт сама, из первой строки-комментария. Мастерская
+   хранит вещи, собранные из деталей. А здесь ребёнок сам даёт имя и сам
+   пишет, что это такое, — и это половина смысла: пока не назовёшь, оно не
+   твоё, а просто код в редакторе.
+
+   ⚠️ Описание не для нас: его читает тот, кому отправят ссылку. Он открывает
+   игру, не видя кода, и ему надо понять, что делать.
+   ============================================================ */
+var WORK_MAX = 20;            /* столько своих проектов держим */
+var WORK_TITLE_MAX = 40;
+var WORK_ABOUT_MAX = 160;
+
+function myWorksAll(){ S.works = S.works || {}; return S.works; }
+function myWorksList(){
+  var d = myWorksAll();
+  return Object.keys(d).map(function(k){
+    var x = d[k];
+    if (!x || typeof x.code !== "string" || !x.code.trim()) return null;
+    return { id:k, code:x.code, title:x.title || "Программа",
+             about:x.about || "", at:x.at || 0 };
+  }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+}
+/* ⚠️ id не может строиться из одних миллисекунд. Два сохранения подряд
+   попадают в одну миллисекунду, получают ОДИН id, и второе молча затирает
+   первое — поймано глазами 07.09.2026: сохранил две программы, в «Моём»
+   осталась одна. Добавляем счётчик, который не повторяется в пределах
+   загрузки страницы. */
+var workSeq = 0;
+function myWorkSave(title, about, code){
+  var d = myWorksAll();
+  var id = "w" + Date.now().toString(36) + (++workSeq).toString(36);
+  while (d[id]) id = "w" + Date.now().toString(36) + (++workSeq).toString(36);
+  d[id] = { title: String(title || "").trim().slice(0, WORK_TITLE_MAX) || "Программа",
+            about: String(about || "").trim().slice(0, WORK_ABOUT_MAX),
+            code: String(code || ""), at: Date.now() };
+  var keys = Object.keys(d);
+  if (keys.length > WORK_MAX){
+    keys.sort(function(a, b){ return (d[a].at || 0) - (d[b].at || 0); });
+    keys.slice(0, keys.length - WORK_MAX).forEach(function(k){ delete d[k]; });
+  }
+  save();
+  return id;
+}
+function myWorkDrop(id){ delete myWorksAll()[id]; save(); }
+function myWorkById(id){
+  var xs = myWorksList();
+  for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
+  return null;
+}
+/* Ссылка на свой проект — тот же механизм, что у игр (#play=): программа
+   уезжает внутри адреса, сервер не нужен, а тот, кто открыл, видит её
+   работающей и не видит кода. Описание едет заголовком: без него друг
+   открывает окно и не знает, что делать. */
+function myWorkLink(w){
+  return playLink({ title: w.title, code: w.code,
+                    author: myName() || "", emoji: "🛠" });
 }
 
 /* ================= выпускной мира =================
@@ -9306,6 +9440,36 @@ function screenFolio(){
     h += '</div>';
   });
 
+  /* ===== мои программы =====
+     Стоит ПЕРЕД рисунками: рисунок — это тоже программа, но названная нами,
+     а здесь лежит то, что ребёнок назвал сам. Своё имя важнее нашего. */
+  var works = myWorksList();
+  h += '<div class="sect"><h2>Мои программы</h2><div class="line"></div>' +
+    '<span class="cnt">' + works.length + '</span></div>';
+  if (!works.length){
+    h += '<div class="note"><b>Пока пусто</b>Напиши что-нибудь в песочнице и нажми там ' +
+      '«Назвать и сохранить в «Моё»». Название и описание придумываешь ты сам — ' +
+      'и по ссылке друг откроет программу и запустит её, не видя кода.' +
+      '<button class="rbtn" id="folio-sand">Открыть песочницу</button></div>';
+  } else {
+    h += '<div class="hubgrid">' + works.map(function(x){
+      var n = x.code.replace(/\n+$/, "").split("\n").length;
+      return '<div class="hubcard"><span class="hubem">🛠</span>' +
+        '<b>' + esc(x.title) + '</b>' +
+        '<span class="hubwhy">' + esc(x.about || "без описания") + '</span>' +
+        '<span class="hubstat">' + fmtDay(x.at) + ' · ' + n + ' ' +
+          plural(n, "строка", "строки", "строк") + '</span>' +
+        '<div class="picbtns">' +
+          '<button class="rbtn sec" data-worklink="' + x.id + '">🔗 Ссылка</button>' +
+          '<button class="rbtn sec" data-workopen="' + x.id + '">→ В песочницу</button>' +
+          '<button class="rbtn sec" data-workdel="' + x.id + '">Удалить</button>' +
+        '</div></div>';
+    }).join("") + '</div>' +
+    '<p class="dim">Программа целиком лежит внутри ссылки, сервер для этого не нужен. ' +
+    'Тот, кто её откроет, увидит работающую программу и кнопку «Заглянуть в код» — ' +
+    'но только если сам захочет.</p>';
+  }
+
   /* ===== мои рисунки ===== */
   var pics = galleryList();
   h += '<div class="sect"><h2>Мои рисунки</h2><div class="line"></div>' +
@@ -9411,6 +9575,33 @@ function screenFolio(){
   app.querySelectorAll("[data-picdel]").forEach(function(b){
     b.onclick = function(){ galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
   });
+  app.querySelectorAll("[data-worklink]").forEach(function(b){
+    b.onclick = function(){
+      var x = myWorkById(b.getAttribute("data-worklink"));
+      if (x) copyText(myWorkLink(x), b);
+    };
+  });
+  app.querySelectorAll("[data-workopen]").forEach(function(b){
+    b.onclick = function(){
+      var x = myWorkById(b.getAttribute("data-workopen"));
+      if (!x) return;
+      S.sandbox = x.code; save();
+      screenSandbox();
+    };
+  });
+  app.querySelectorAll("[data-workdel]").forEach(function(b){
+    b.onclick = function(){
+      var x = myWorkById(b.getAttribute("data-workdel"));
+      var yes = true;
+      try { yes = confirm("Удалить «" + ((x && x.title) || "программу") + "»? Вернуть будет нельзя."); }
+      catch(e){}
+      if (!yes) return;
+      myWorkDrop(b.getAttribute("data-workdel"));
+      screenFolio();
+    };
+  });
+  var fs2 = document.getElementById("folio-sand");
+  if (fs2) fs2.onclick = screenSandbox;
   var fm = document.getElementById("folio-mine");
   if (fm) fm.onclick = function(){ screenMyTasks(); };
   app.querySelectorAll("[data-tasklink]").forEach(function(b){
@@ -17741,6 +17932,8 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   goLogo: goLogo, landNums: landNums, landLiveCode: landLiveCode,
+  myWorksList: myWorksList, myWorkSave: myWorkSave, myWorkDrop: myWorkDrop,
+  myWorkById: myWorkById, myWorkLink: myWorkLink, WORK_MAX: WORK_MAX,
   screenWorldDone: screenWorldDone, worldSkills: worldSkills,
   worldGraduated: worldGraduated, WORLD_SKILLS: WORLD_SKILLS,
   openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,

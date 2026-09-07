@@ -1155,6 +1155,20 @@ body.focus .lede{display:none}
   transition:width .3s linear}
 .pypct{font-size:12.5px;color:var(--soft);font-variant-numeric:tabular-nums}
 
+/* Назвать свою программу. Форма прячется до нажатия: два пустых поля под
+   редактором выглядели бы обязательными, а называть программу никто не
+   обязан — это предложение, а не требование. */
+.savework{display:flex;flex-direction:column;gap:7px;margin:16px 0 0}
+.savework .tip{font-size:12.5px;color:var(--faint)}
+.savework .rbtn{align-self:flex-start}
+.workform{display:flex;flex-direction:column;gap:9px;margin:4px 0 0;padding:13px 15px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.workform label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--soft)}
+.workform input{font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line2);
+  border-radius:9px;background:var(--sunken);color:var(--ink)}
+.workform input:focus{outline:2px solid var(--acc2);outline-offset:1px;border-color:transparent}
+.workform .row{display:flex;gap:8px;flex-wrap:wrap}
+
 .savepic{display:flex;flex-direction:column;gap:7px;margin:14px 0 0}
 .savepic .tip{font-size:12.5px;color:var(--faint)}
 .savepic .rbtn{align-self:flex-start}

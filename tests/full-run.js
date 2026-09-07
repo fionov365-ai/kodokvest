@@ -6495,6 +6495,99 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- 12г. свой проект с именем --- */
+  let workChecked = 0;
+  if (typeof g.myWorkSave === "function"){
+    const p0 = problems.length;
+    g.state.works = {};
+    g.state.name = g.state.name || "Аня";
+
+    /* Имя и описание — то, ради чего пункт и делался: пока программа не
+       названа, она просто код в редакторе. */
+    const id = g.myWorkSave("Угадай число", "загадывает число и даёт подсказку",
+                            'секрет = 7\nprint("Загадал число")');
+    const w0 = g.myWorkById(id);
+    if (!w0) bad("[свой проект] сохранённая программа не находится по id");
+    else {
+      if (w0.title !== "Угадай число") bad("[свой проект] имя не сохранилось");
+      if (!/подсказк/.test(w0.about)) bad("[свой проект] описание не сохранилось");
+      /* Ссылка: программа уезжает внутри адреса и возвращается знак в знак,
+         вместе с именем автора — без него «смотри, что я сделал» теряет смысл. */
+      const link = g.myWorkLink(w0);
+      if (link.indexOf("#play=") < 0)
+        bad("[свой проект] ссылка не открывает программу запущенной: " + link.slice(0, 40));
+      const back = g.playUnpack(link.split("#play=")[1] || "");
+      if (!back) bad("[свой проект] ссылка не распаковывается обратно");
+      else {
+        if (back.code !== w0.code) bad("[свой проект] код в ссылке разошёлся с сохранённым");
+        if (back.title !== w0.title) bad("[свой проект] имя в ссылке разошлось с сохранённым");
+        if (!back.author) bad("[свой проект] в ссылке не назван автор");
+      }
+    }
+    /* Пустое имя не должно превращаться в пустую карточку. */
+    const id2 = g.myWorkSave("   ", "", "print(1)");
+    if ((g.myWorkById(id2) || {}).title === "") bad("[свой проект] сохранилась программа без имени");
+
+    /* ⚠️ Два сохранения подряд обязаны дать ДВЕ записи. Первая версия строила
+       id из одних миллисекунд, и второе сохранение молча затирало первое:
+       сохранил две программы — в «Моём» одна. Тест этого не видел, потому что
+       проверял только «не больше предела», а это выполняется и у одной. */
+    g.state.works = {};
+    g.myWorkSave("Первая", "", "print(1)");
+    g.myWorkSave("Вторая", "", "print(2)");
+    if (g.myWorksList().length !== 2)
+      bad("[свой проект] два сохранения подряд дали " + g.myWorksList().length +
+          " запись вместо двух — id повторяются");
+
+    /* Хранилище не растёт бесконечно: это память устройства, а не облако. */
+    g.state.works = {};
+    for (let k = 0; k < g.WORK_MAX + 4; k++) g.myWorkSave("п" + k, "", "print(" + k + ")");
+    if (g.myWorksList().length !== g.WORK_MAX)
+      bad("[свой проект] после " + (g.WORK_MAX + 4) + " сохранений осталось " +
+          g.myWorksList().length + ", а предел " + g.WORK_MAX);
+
+    /* Раздел в «Моём» и три действия на карточке. */
+    g.state.works = {};
+    g.myWorkSave("Угадай число", "загадывает число", 'print("Загадал")');
+    g.screenFolio(); await tick(); await tick();
+    const fol = doc.getElementById("app").textContent;
+    if (!/Мои программы/.test(fol)) bad("[свой проект] в «Моём» нет раздела «Мои программы»");
+    if (!/Угадай число/.test(fol)) bad("[свой проект] сохранённой программы нет в «Моём»");
+    ["data-worklink", "data-workopen", "data-workdel"].forEach(a => {
+      if (!doc.querySelector("[" + a + "]"))
+        bad("[свой проект] на карточке нет действия " + a);
+    });
+
+    /* Пустое «Моё» обязано объяснять, откуда программы берутся. */
+    g.state.works = {};
+    g.screenFolio(); await tick();
+    if (!/песочниц/i.test(doc.getElementById("app").textContent))
+      bad("[свой проект] пустой раздел не говорит, где сохранять программу");
+
+    if (problems.length === p0) workChecked++;
+    viewReset(g);
+  }
+
+  /* --- 12бис. одно имя — одна функция ---
+     ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
+     workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
+     #work=). JavaScript на это не ругается — просто побеждает объявленная
+     позже, и мой код молча начал звать чужую функцию. Ссылка собиралась,
+     кнопка нажималась, ничего не падало — а работало не то. Такое ловится
+     только глазами и только случайно, поэтому теперь ловится тестом. */
+  {
+    const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+    const seen = {}, dup = [];
+    const re = /^function\s+([A-Za-zА-Яа-яЁё_$][\w$]*)\s*\(/gm;
+    let m;
+    while ((m = re.exec(src))){
+      if (seen[m[1]]) dup.push(m[1]); else seen[m[1]] = 1;
+    }
+    if (dup.length)
+      bad("[имена] в js/app.js одно имя у двух функций: " + [...new Set(dup)].join(", ") +
+          " — победит объявленная позже, и звать будут не то");
+  }
+
   /* --- 12в. выпускной мира --- */
   let gradChecked = 0;
   if (typeof g.screenWorldDone === "function"){
@@ -6949,6 +7042,7 @@ function checkEncoding(){
   console.log(`витрина проектов: ${showcaseChecked ? "да" : "нет"}`);
   console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
   console.log(`выпускной мира: ${gradChecked ? "да" : "нет"}`);
+  console.log(`свой проект с именем: ${workChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
