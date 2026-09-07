@@ -122,6 +122,95 @@
   --shbig:0 30px 80px -20px #000;
   --dim:.42; --dim2:.52;
 }
+
+/* ============================================================
+   НАБОРЫ ОФОРМЛЕНИЯ: цвет за пройденный мир (пункт 2.5)
+
+   Пройден мир — открылся набор. Меняется только АКЦЕНТ: цвет кнопок,
+   свечение фона и шапки. Ни один цвет, отвечающий за смысл (ошибка, успех,
+   предупреждение, подсветка кода), набором не трогается — иначе оформление
+   начало бы врать про содержание.
+
+   ⚠️ Каждый набор описан ДВАЖДЫ: для светлой темы и отдельно для тёмной.
+   Причина не в красоте, а в порядке правил: у `:root[data-skin=...]` и у
+   `:root[data-theme="dark"]` одинаковый вес, и набор, стоящий ниже, молча
+   перекрасил бы тёмную тему в светлые цвета. Пара `[data-theme][data-skin]`
+   весит больше и выигрывает всегда, где бы ни стояла.
+
+   ⚠️ Цвет --acc обязан держать белый текст: на нём стоят кнопки и вкладки.
+   Все значения ниже дают на белом не меньше 4,9:1 (проверено расчётом).
+   ============================================================ */
+:root[data-skin="rostok"]{
+  --acc:#17714a; --acc-lt:#1f9a63; --accink:#166b42;
+  --glow1:#e0f5e9; --glow2:#ddf1ee;
+  --herobg:linear-gradient(150deg,#e2f6ea,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#e9f8ee,#e5f4f5);
+}
+:root[data-theme="dark"][data-skin="rostok"]{
+  --acc:#1b7f57; --acc-lt:#28a06d; --accink:#7ce0a6;
+  --glow1:#12301f; --glow2:#17303f;
+  --herobg:linear-gradient(150deg,#123526,#152a44);
+  --goalbg:linear-gradient(150deg,#123023,#182a45);
+}
+:root[data-skin="dannye"]{
+  --acc:#1a52b8; --acc-lt:#2f74e0; --accink:#1a52b8;
+  --glow1:#e2ecff; --glow2:#ddf1ee;
+  --herobg:linear-gradient(150deg,#e4ecff,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#eaf0ff,#e5f4f5);
+}
+:root[data-theme="dark"][data-skin="dannye"]{
+  --acc:#2160c8; --acc-lt:#4a86ee; --accink:#8fbaff;
+  --glow1:#152449; --glow2:#17303f;
+  --herobg:linear-gradient(150deg,#152a52,#152a44);
+  --goalbg:linear-gradient(150deg,#16264a,#182a45);
+}
+:root[data-skin="svoi"]{
+  --acc:#8f5410; --acc-lt:#b8781f; --accink:#8a5000;
+  --glow1:#fbeedd; --glow2:#ddf1ee;
+  --herobg:linear-gradient(150deg,#fbeedd,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#fcf1e3,#e5f4f5);
+}
+:root[data-theme="dark"][data-skin="svoi"]{
+  --acc:#9a5a08; --acc-lt:#c07d1c; --accink:#ffcb6b;
+  --glow1:#33230d; --glow2:#17303f;
+  --herobg:linear-gradient(150deg,#3a2810,#152a44);
+  --goalbg:linear-gradient(150deg,#33230f,#182a45);
+}
+:root[data-skin="real"]{
+  --acc:#20607f; --acc-lt:#2f87ad; --accink:#1f5e78;
+  --glow1:#e0f0f7; --glow2:#ddf1ee;
+  --herobg:linear-gradient(150deg,#e2f2f9,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#e9f4fa,#e5f4f5);
+}
+:root[data-theme="dark"][data-skin="real"]{
+  --acc:#1f6b86; --acc-lt:#3b95b4; --accink:#8fd4f0;
+  --glow1:#122b39; --glow2:#17303f;
+  --herobg:linear-gradient(150deg,#123141,#152a44);
+  --goalbg:linear-gradient(150deg,#122b3a,#182a45);
+}
+:root[data-skin="pro"]{
+  --acc:#a82a67; --acc-lt:#cc4a8c; --accink:#9c1f52;
+  --glow1:#fbe6f0; --glow2:#ddf1ee;
+  --herobg:linear-gradient(150deg,#fbe7f1,#ddf0f3);
+  --goalbg:linear-gradient(150deg,#fcecf4,#e5f4f5);
+}
+:root[data-theme="dark"][data-skin="pro"]{
+  --acc:#b02a63; --acc-lt:#d1508b; --accink:#ff9ec4;
+  --glow1:#361026; --glow2:#17303f;
+  --herobg:linear-gradient(150deg,#3a1329,#152a44);
+  --goalbg:linear-gradient(150deg,#331025,#182a45);
+}
+/* Плитка выбора набора: тот же ряд, что у темы, плюс закрытые с подписью,
+   ЧЕМ они открываются. Закрытая плитка нарочно не спрятана: «за что дают»
+   должно быть видно до того, как дали. */
+.skinpick{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.skinpick button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  min-width:150px;padding:9px 12px;border-radius:12px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--ink);font-size:13.5px;cursor:pointer;text-align:left}
+.skinpick button .sname{font-weight:700}
+.skinpick button .swhen{font-size:11.5px;color:var(--faint)}
+.skinpick button.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.skinpick button[disabled]{opacity:.55;cursor:default}
 *{box-sizing:border-box}
 body{
   margin:0;

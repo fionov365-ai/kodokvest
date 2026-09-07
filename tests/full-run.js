@@ -4016,6 +4016,71 @@ function checkEncoding(){
     if (doc.documentElement.getAttribute("data-theme") !== "light")
       bad("[оформление] светлая тема не вернулась");
 
+    /* --- наборы оформления: награда за выпускной мира (2.5) ---
+       ⚠️ Главное здесь не цвет, а замок: набор, который можно включить, не
+       пройдя мир, отменяет саму награду. И обратное: чужой набор обязан
+       слететь сам, когда на общем устройстве сменился ученик. */
+    if (typeof g.skinSet === "function"){
+      const keepStars = g.state.stars, keepProj = g.state.projects;
+      g.state.stars = {}; g.state.projects = {};
+      w.localStorage.removeItem("kodokvest_skin");
+      g.skinApply();
+      if (doc.documentElement.getAttribute("data-skin"))
+        bad("[набор] у новичка стоит набор, которого он не открывал");
+      if (g.skinsOpen().length)
+        bad("[набор] при нулевом прогрессе уже что-то открыто: " +
+            JSON.stringify(g.skinsOpen().map(x => x.id)));
+      if (g.skinSet("rostok") !== false)
+        bad("[набор] закрытый набор дали включить — награда за мир перестала быть наградой");
+      if (doc.documentElement.getAttribute("data-skin"))
+        bad("[набор] закрытый набор всё-таки встал на страницу");
+      /* плитка обязана честно говорить, ЧЕМ откроется закрытый набор */
+      const pick = g.skinPickHTML();
+      if (!/откроется за мир 1/.test(pick))
+        bad("[набор] в плитке не написано, чем открывается закрытый набор");
+      if (!/Росток/.test(pick)) bad("[набор] закрытые наборы спрятаны — за что их дают, не видно");
+
+      /* проходим первый мир целиком вместе с проектом */
+      const w1 = w.CURRICULUM.world(1);
+      w1.lessons.forEach(l => { g.state.stars[l.id] = 3; });
+      const p1 = g.projectOfWorld(1);
+      if (p1) g.state.projects[p1.id] = { done:true, at:Date.now(), steps:{} };
+      if (!g.worldGraduated(1))
+        bad("[набор] мир пройден целиком, а выпускной не наступил — проверка набора ничего не значит");
+      else {
+        if (!g.skinSet("rostok")) bad("[набор] открытый набор не включился");
+        if (doc.documentElement.getAttribute("data-skin") !== "rostok")
+          bad("[набор] выбранный набор не встал на страницу");
+        if (g.skinNow().em !== "🌱") bad("[набор] у набора нет своего значка");
+        /* значок набора обязан появиться на кнопке профиля: награда, которую
+           не видно каждый день, наградой не работает */
+        g.refreshTop();
+        const bw = doc.getElementById("btn-who");
+        if (bw && bw.textContent !== "🌱")
+          bad("[набор] значок набора не попал на кнопку профиля: " + (bw && bw.textContent));
+        /* ⚠️ сменился ученик — чужой набор слетает сам */
+        g.state.stars = {}; g.state.projects = {};
+        g.skinApply();
+        if (doc.documentElement.getAttribute("data-skin"))
+          bad("[набор] после сброса прогресса закрытый набор остался на странице");
+        if (g.skinNow().id !== "base")
+          bad("[набор] после сброса прогресса действующим считается закрытый набор");
+      }
+      /* у каждого набора обязаны быть свои цвета в стилях: набор без правила
+         молча ничего не меняет, и «награда» оказывается пустой */
+      g.SKINS.filter(x => x.world).forEach(sk => {
+        if (cssText.indexOf('[data-skin="' + sk.id + '"]') < 0)
+          bad("[набор] в стилях нет цветов набора «" + sk.id + "»");
+        if (cssText.indexOf('[data-theme="dark"][data-skin="' + sk.id + '"]') < 0)
+          bad("[набор] у набора «" + sk.id + "» нет отдельного блока для тёмной темы — " +
+              "он перекрасит её в светлые цвета");
+      });
+      g.state.stars = keepStars; g.state.projects = keepProj;
+      w.localStorage.removeItem("kodokvest_skin");
+      g.skinApply();
+      g.refreshTop();
+    }
+
     /* --- пробелы внутри <code> в условиях обязаны сохраняться ---
        Иногда сами пробелы и есть смысл примера: выравнивание таблицы по
        ширине (урок 40) или «лишние пробелы снаружи и внутри» (урок 7).

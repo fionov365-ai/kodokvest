@@ -1628,6 +1628,10 @@ var ROOM_PLACES = ["admin", "kids", "kid", "group", "parent", "adult",
                    "adminsetup", "adminlogin", "parentlogin", "roles"];
 function refreshTop(){
   syncBack();
+  /* Набор применяется здесь по той же причине, что и место человека: сюда
+     заходят все экраны без исключения, и забыть его негде. Заодно закрытый
+     набор слетает сам, как только прогресс сменился. */
+  skinApply();
   /* ⚠️ Место отмечаем ЗДЕСЬ, а не в каждом экране по отдельности: refreshTop
      зовут все экраны без исключения, и забыть его негде. Раскладывать те же
      две строки по десятку функций значит однажды пропустить одну. */
@@ -1741,8 +1745,13 @@ function refreshTop(){
        вторую строку у длинных имён. Имя видно на самом экране профиля,
        а здесь достаточно значка и подсказки. */
     var nm = myName();
-    bw.textContent = "👤";
-    bw.title = nm ? ("Профиль: " + nm) : "Профиль";
+    /* Значок набора стоит ЗДЕСЬ, на кнопке профиля, а не отдельной иконкой в
+       шапке: место в панели занято, а награда должна быть видна каждый день,
+       иначе она не награда. Обычный набор оставляет привычного человечка. */
+    var sk = skinNow();
+    bw.textContent = sk.world ? sk.em : "👤";
+    bw.title = (nm ? ("Профиль: " + nm) : "Профиль") +
+      (sk.world ? (" · набор «" + sk.name + "»") : "");
   }
 }
 
@@ -6422,6 +6431,21 @@ function screenWorldDone(n){
         '<div class="row"><button class="bigbtn" id="gr-proj">Открыть мой проект</button></div></div>';
     }
 
+    /* ⚠️ Награда называется В ТОТ МОМЕНТ, когда она открылась. Набор, про
+       который ребёнок узнаёт случайно в настройках через месяц, наградой не
+       работает вовсе: он не связан ни с каким усилием. */
+    var gsk = SKINS.filter(function(x){ return x.world === n; })[0];
+    if (gsk && skinOpen(gsk)){
+      var already = skinNow().id === gsk.id;
+      h += '<div class="card"><h3>🎨 Открылся набор «' + esc(gsk.name) + '»</h3>' +
+        '<p>Это цвет тренажёра и твой значок ' + gsk.em + ' в панели. Он твой навсегда: ' +
+        'набор не сгорает и не отбирается. Поменять его можно в профиле в любой момент.</p>' +
+        '<div class="row"><button class="bigbtn' + (already ? ' ghost' : '') + '" id="gr-skin"' +
+        (already ? " disabled" : "") + '>' +
+        (already ? "Уже включён" : "Включить " + gsk.em + " " + esc(gsk.name)) +
+        '</button></div></div>';
+    }
+
     h += '<div class="card gradshow"><h3>Показать взрослому</h3>' +
       '<p>Лист с твоим именем, названием мира и датой. Его можно распечатать ' +
       'или сохранить в PDF — и он останется у тебя на руках.</p>' +
@@ -6443,6 +6467,8 @@ function screenWorldDone(n){
     document.getElementById("gr-folio").onclick = screenFolio;
     var nx = document.getElementById("gr-next");
     if (nx && next) nx.onclick = function(){ screenWorld(next.n); };
+    var gs = document.getElementById("gr-skin");
+    if (gs && gsk) gs.onclick = function(){ skinSet(gsk.id); screenWorldDone(n); };
     refreshTop();
     window.scrollTo({ top:0, behavior:"smooth" });
   });
@@ -7146,7 +7172,10 @@ function screenAccount(){
     '<div class="themepick" id="acctheme">' +
       '<button data-theme-set="light">☀️ Светлая</button>' +
       '<button data-theme-set="dark">🌙 Тёмная</button>' +
-    '</div></div>' +
+    '</div>' +
+    '<p class="dim">Набор — цвет тренажёра и твой значок в панели. Каждый открывается ' +
+    'за выпускной мира: все уроки мира и его проект. Открытый набор не сгорает.</p>' +
+    skinPickHTML() + '</div>' +
     /* Звук стоит рядом с оформлением по той же причине: настройку ищут там,
        где настройки. Про «этом устройстве» сказано прямо — иначе родитель
        выключит дома и удивится, что в кружке снова звенит. */
@@ -7199,6 +7228,9 @@ function screenAccount(){
     b.onclick = function(){ themeSet(b.getAttribute("data-theme-set")); paintTheme(); };
   });
   paintTheme();
+  /* Плитку набора перерисовываем целиком: выбранный набор отмечается рамкой,
+     а закрытые могли открыться, пока экран был открыт. */
+  bindSkinPick(screenAccount);
   var paintSound = function(){
     app.querySelectorAll("#accsfx button").forEach(function(b){
       b.classList.toggle("on", (b.getAttribute("data-sfx-set") === "on") === sfxOn());
@@ -18079,6 +18111,92 @@ function wireSay(root, texts){
    тёмная. Ставится тема ещё в <head>, до первой отрисовки, — иначе у того,
    кто выбрал тёмную, мелькал бы светлый фон.
    ============================================================ */
+/* ============================================================
+   НАБОРЫ ОФОРМЛЕНИЯ: цвет и значок за пройденный мир (пункт 2.5)
+
+   ⚠️ Почему такая награда безопасна. Всё, что даётся за прогресс, обязано
+   быть ДОБАВЛЕНИЕМ, а не тем, что можно потерять: страх потерять — красная
+   линия продукта, из-за неё же убрано число серии. Набор не отсчитывает
+   ничего, не сгорает и никуда не торопит: открылся — и остался.
+
+   Открывается набор ВЫПУСКНЫМ мира (уроки плюс проект) — тем же правилом,
+   что сертификат. Одно правило на две награды: иначе «мир пройден» значило
+   бы в двух местах продукта разное.
+
+   Выбор набора — настройка устройства, как тема: на сервер не едет и на
+   другое устройство не переезжает.
+
+   ⚠️ Замок проверяется при КАЖДОМ применении, а не только при выборе. На
+   общем устройстве после смены ученика чужой набор обязан слететь сам —
+   иначе новичок увидит цвет, которого не заработал, и слово «открывается за
+   мир» окажется неправдой с первого же экрана.
+   ============================================================ */
+var SKINS = [
+  { id:"base",   em:"🐍", name:"Кодоквест",         world:0 },
+  { id:"rostok", em:"🌱", name:"Росток",            world:1 },
+  { id:"dannye", em:"📦", name:"Данные",            world:2 },
+  { id:"svoi",   em:"🛠", name:"Свой код",          world:3 },
+  { id:"real",   em:"⚙️", name:"Настоящий Python",  world:4 },
+  { id:"pro",    em:"🚀", name:"Профессия",         world:5 }
+];
+var SKIN_KEY = "kodokvest_skin";
+function skinById(id){
+  for (var i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i];
+  return null;
+}
+function skinOpen(s){ return !!s && (!s.world || worldGraduated(s.world)); }
+function skinSaved(){
+  try { return localStorage.getItem(SKIN_KEY) || "base"; } catch(e){ return "base"; }
+}
+/* Набор, который действует прямо сейчас. Закрытый молча превращается в
+   обычный — см. предупреждение выше про общее устройство. */
+function skinNow(){
+  var s = skinById(skinSaved());
+  return skinOpen(s) ? s : SKINS[0];
+}
+function skinSet(id){
+  var s = skinById(id);
+  if (!skinOpen(s)) return false;
+  try { localStorage.setItem(SKIN_KEY, s.id); } catch(e){}
+  skinApply();
+  return true;
+}
+function skinApply(){
+  var s = skinNow();
+  if (s.id === "base") document.documentElement.removeAttribute("data-skin");
+  else document.documentElement.setAttribute("data-skin", s.id);
+}
+/* Наборы, которые уже открыты (кроме обычного) — нужно и экрану выпускного,
+   и профилю, и тесту. */
+function skinsOpen(){
+  return SKINS.filter(function(s){ return s.world && skinOpen(s); });
+}
+/* Плитка выбора: открытые выбираются, закрытые честно говорят, чем откроются. */
+function skinPickHTML(){
+  var cur = skinNow().id;
+  return '<div class="skinpick" id="skinpick">' + SKINS.map(function(s){
+    var open = skinOpen(s);
+    var w = s.world ? CURRICULUM.world(s.world) : null;
+    var when = !s.world ? "открыт всегда"
+      : open ? ("за мир " + s.world)
+      : ("откроется за мир " + s.world + (w ? " «" + w.title + "»" : ""));
+    return '<button data-skin-set="' + s.id + '"' +
+      (open ? "" : " disabled") + (s.id === cur ? ' class="on"' : '') + '>' +
+      '<span class="sname">' + s.em + " " + esc(s.name) + '</span>' +
+      '<span class="swhen">' + esc(when) + '</span></button>';
+  }).join("") + '</div>';
+}
+function bindSkinPick(after){
+  document.querySelectorAll("[data-skin-set]").forEach(function(b){
+    b.onclick = function(){
+      if (b.disabled) return;
+      skinSet(b.getAttribute("data-skin-set"));
+      refreshTop();
+      if (typeof after === "function") after();
+    };
+  });
+}
+
 var THEME_KEY = "kodokvest_theme";
 function themeGet(){
   try {
@@ -19073,6 +19191,9 @@ window.__game = {
   RANKS: RANKS,
   toggleHelp: toggleHelp, screenGuide: screenGuide,
   themeGet: themeGet, themeSet: themeSet,
+  refreshTop: refreshTop,
+  SKINS: SKINS, skinNow: skinNow, skinSet: skinSet, skinOpen: skinOpen,
+  skinsOpen: skinsOpen, skinPickHTML: skinPickHTML, skinApply: skinApply,
   lessonSearch: lessonSearch, lessonOpen: lessonOpen,
   ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
   errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
