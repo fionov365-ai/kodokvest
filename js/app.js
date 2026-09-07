@@ -14210,6 +14210,97 @@ function wireLandDemo(){
      единственное доказательство, которое у нас есть. */
   landDemoRun(LAND_DEMO_OK, out);
 }
+/* ================= карусель карточек на телефоне =================
+   Идея фаундера 07.09.2026: «на телефоне карточки чтобы вправо-влево
+   листались». Резерв тут самый большой на вывеске: четыре довода «Чего нет у
+   других» лежат стопкой на 1571 пиксель, карточки «Между делом» — на 816,
+   полоса чисел — на 541. Вместе около двух экранов телефона.
+
+   Листание — РОДНАЯ прокрутка с прилипанием, без библиотек и без обработчиков
+   жестов: инерцию, отскок у краёв, работу колесом и с клавиатуры браузер
+   даёт сам. Скрипт делает две вещи: включает раскладку и рисует точки.
+
+   ⚠️ Карточка занимает 86% ширины, а не 100%, и это главное в конструкции:
+   край следующей ВИДЕН. Карусель без выглядывающего края читается как обычный
+   блок, листать её никто не догадается, и три карточки из четырёх не прочитает
+   никто. Точки под рядом — вторая половина того же ответа: по ним видно,
+   сколько карточек и где ты сейчас.
+
+   ⚠️ Раскладка задаётся СВОЙСТВАМИ ЭЛЕМЕНТОВ, а не правилами CSS, и это
+   решение, а не небрежность. Первая попытка (07.09.2026) делала всё
+   правилами, и карточки упорно делились поровну по 79 пикселей — при том,
+   что правило лежало в загруженном листе, селектор совпадал и медиазапрос
+   подходил. Разбор в HANDOFF: скорее всего врал инструмент, а не браузер.
+   Но у свойства элемента этого класса сомнений нет вовсе, и цена ошибки тут
+   высокая: сломанная карусель превращает четыре главных довода страницы в
+   полоски. Заодно и отказ мягкий: не отработал скрипт — страница осталась
+   ровно такой, какая есть сейчас.
+   ============================================================ */
+var SWIPE_ROWS = ".bigs, .landgrid, .landnums";
+function landSwipeInit(root){
+  (root || document).querySelectorAll(SWIPE_ROWS).forEach(function(row){
+    if (row._swipe || row.children.length < 2) return;
+    row._swipe = true;
+    row.classList.add("swipe");
+
+    var dots = document.createElement("div");
+    dots.className = "swdots";
+    for (var i = 0; i < row.children.length; i++) dots.appendChild(document.createElement("i"));
+    row.parentNode.insertBefore(dots, row.nextSibling);
+    var marks = dots.querySelectorAll("i");
+
+    var mq = window.matchMedia ? window.matchMedia("(max-width:640px)") : null;
+    /* Числа мелкие — их влезает по две в кадр: листать восемь штук по одной
+       долго, а прочитать их можно и мельком. */
+    var доля = row.classList.contains("landnums") ? "46%" : "86%";
+
+    /* какая карточка ближе всего к середине окна — та и подсвечена точкой */
+    function paint(){
+      var mid = row.scrollLeft + row.clientWidth / 2, best = 0, dist = 1e9;
+      for (var k = 0; k < row.children.length; k++){
+        var c = row.children[k], d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+        if (d < dist){ dist = d; best = k; }
+      }
+      marks.forEach(function(m, k){ m.classList.toggle("on", k === best); });
+    }
+
+    /* Включить или снять карусель. ⚠️ Снимать обязательно: поворот телефона и
+       переход на планшет должны возвращать обычную сетку, а не оставлять
+       ряд шириной в одну карточку. */
+    function apply(){
+      var on = mq ? mq.matches : false;
+      row.style.display        = on ? "flex" : "";
+      row.style.overflowX      = on ? "auto" : "";
+      row.style.scrollSnapType = on ? "x mandatory" : "";
+      for (var k = 0; k < row.children.length; k++){
+        var c = row.children[k];
+        c.style.flex            = on ? "0 0 auto" : "";
+        c.style.width           = on ? доля : "";
+        c.style.scrollSnapAlign = on ? "center" : "";
+        c.style.margin          = on ? "0" : "";
+      }
+      dots.hidden = !on;
+      if (!on) row.scrollLeft = 0;
+      paint();
+    }
+
+    row.addEventListener("scroll", function(){
+      if (row._swT) return;
+      row._swT = setTimeout(function(){ row._swT = null; paint(); }, 90);
+    });
+    /* Точка — не только указатель, но и кнопка: пальцем в неё попасть проще,
+       чем доскроллить до нужной карточки. */
+    marks.forEach(function(m, k){
+      m.onclick = function(){
+        var c = row.children[k];
+        if (c) row.scrollTo({ left: c.offsetLeft - (row.clientWidth - c.offsetWidth) / 2 });
+      };
+    });
+    apply();
+    if (mq && mq.addEventListener) mq.addEventListener("change", apply);
+  });
+}
+
 /* ---- появление блоков при прокрутке ----
    Страница длинная: восемь разделов подряд одинаковой плотности сливаются в
    сплошной текст. Сдвиг на десяток пикселей в момент, когда раздел въезжает
@@ -14912,6 +15003,9 @@ function screenAbout(){
   wireLandTabs(app.querySelectorAll(".ltabs.how")[1], landElseRender);
   wireLandTabs(document.getElementById("showcase"), landShowcaseRender);
   wireLandTabs(document.getElementById("roles"), landRolesRender);
+  /* ⚠️ После вкладок, а не до: содержимое панелей рисуют их обработчики, и
+     до этого момента карточек в панелях ещё нет. */
+  landSwipeInit(app);
   wireReveal(app);
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -14996,6 +15090,9 @@ function landHowRender(i){
 function landElseRender(i){
   var box = document.getElementById("elsepane"), c = aboutCounts();
   if (!box) return;
+  /* ⚠️ Панель перерисовывается на каждом переключении вкладки, и новые
+     карточки приходят без карусели — заводим её заново, уже после отрисовки. */
+  setTimeout(function(){ landSwipeInit(box); }, 0);
   if (i === 0){
     var h = '<div class="landgrid g4">';
     /* Направления («Ты и ИИ», алгоритмы) отсюда выброшены нарочно: они стоят
@@ -18765,6 +18862,7 @@ window.__game = {
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
   screenPath: screenPath, pathAhead: pathAhead, pathState: pathState, pathZan: pathZan,
   goLogo: goLogo, landNums: landNums, landLiveCode: landLiveCode,
+  landSwipeInit: landSwipeInit, SWIPE_ROWS: SWIPE_ROWS,
   LAND_DEMO_OK: LAND_DEMO_OK, LAND_DEMO_BAD: LAND_DEMO_BAD,
   landDemoHTML: landDemoHTML, landDemoRun: landDemoRun,
   landWarmRender: landWarmRender, landWarms: landWarms,

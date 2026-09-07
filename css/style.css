@@ -2445,3 +2445,22 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .lktab.go{background:var(--acc);border-color:transparent;color:var(--onacc)}
 .lktab.go:hover{background:var(--acc-lt);border-color:transparent}
 @media (max-width:640px){ .lktab .lbl{display:none} .lktab{padding:7px 10px} }
+
+/* ---------- карусель карточек на телефоне ----------
+   ⚠️ Здесь ТОЛЬКО косметика. Всю раскладку — display, ширину карточки,
+   прилипание — ставит скрипт свойствами элементов (landSwipeInit в js/app.js),
+   и причина записана там же. Правило отсюда не может ни сломать ряд, ни
+   растянуть страницу: оно прячет полосу прокрутки и рисует точки.
+
+   Полоса прокрутки спрятана намеренно: с ней ряд выглядит как ошибка вёрстки,
+   а не как то, что надо листать. Вместо неё — выглядывающий край следующей
+   карточки и точки под рядом. */
+.swipe{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch}
+.swipe::-webkit-scrollbar{display:none}
+.swdots{display:flex;justify-content:center;gap:7px;margin:10px 0 0}
+/* ⚠️ Обязательно: display:flex выше перебивает встроенное поведение hidden,
+   и без этого правила точки видны на широком экране, где карусели нет. */
+.swdots[hidden]{display:none}
+.swdots i{width:7px;height:7px;border-radius:50%;background:var(--line2);
+  transition:.2s;cursor:pointer}
+.swdots i.on{background:var(--acc);transform:scale(1.35)}
