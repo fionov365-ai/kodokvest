@@ -1577,6 +1577,20 @@ body.focus .toTop{display:none}
 .grpplan.ontrack,.grpplan.ahead{color:var(--ok)}
 .grpplan.behind{color:var(--warn)}
 .grpplan.none{opacity:var(--dim2)}
+/* Заметка взрослого над объяснением урока (корзина 3.7).
+   ⚠️ Не «сообщение» и не пузырь чата: у продукта красная линия на болталку,
+   и вид заметки не должен обещать ответа. Записка на полях — рамка слева,
+   спокойный фон, никакой кнопки рядом. */
+.lnote{margin:0 0 14px;padding:10px 13px;border-left:3px solid var(--acc);
+  border-radius:0 12px 12px 0;background:var(--sunken)}
+.lnote b{display:block;font-size:12.5px;font-weight:600;color:var(--faint);
+  margin-bottom:4px}
+.lnote p{margin:0;line-height:1.55}
+.notelist{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+.notelist li{border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.notelist li p{margin:5px 0 7px;line-height:1.5}
+.notelist li b{font-size:14px}
+
 /* Ступень лестницы выхода — внутри сообщения о неудаче, под ним.
    ⚠️ Рамка сверху, а не своя коробка: это продолжение того же ответа урока,
    а не отдельная плашка «а вот и надзиратель». Кнопка обычная, «check», —

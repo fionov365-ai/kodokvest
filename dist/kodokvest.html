@@ -1631,6 +1631,20 @@ body.focus .toTop{display:none}
 .grpplan.ontrack,.grpplan.ahead{color:var(--ok)}
 .grpplan.behind{color:var(--warn)}
 .grpplan.none{opacity:var(--dim2)}
+/* Заметка взрослого над объяснением урока (корзина 3.7).
+   ⚠️ Не «сообщение» и не пузырь чата: у продукта красная линия на болталку,
+   и вид заметки не должен обещать ответа. Записка на полях — рамка слева,
+   спокойный фон, никакой кнопки рядом. */
+.lnote{margin:0 0 14px;padding:10px 13px;border-left:3px solid var(--acc);
+  border-radius:0 12px 12px 0;background:var(--sunken)}
+.lnote b{display:block;font-size:12.5px;font-weight:600;color:var(--faint);
+  margin-bottom:4px}
+.lnote p{margin:0;line-height:1.55}
+.notelist{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+.notelist li{border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.notelist li p{margin:5px 0 7px;line-height:1.5}
+.notelist li b{font-size:14px}
+
 /* Ступень лестницы выхода — внутри сообщения о неудаче, под ним.
    ⚠️ Рамка сверху, а не своя коробка: это продолжение того же ответа урока,
    а не отдельная плашка «а вот и надзиратель». Кнопка обычная, «check», —
@@ -19183,7 +19197,8 @@ var KEY = "kodokvest_v2";
 var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPlayed",
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
-                     "hours","zan","ptasks","hw","specs","parts","builds","solved","algo"];
+                     "hours","zan","ptasks","hw","specs","parts","builds","solved","algo",
+                     "notes"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели наставника такое не
@@ -20978,6 +20993,20 @@ function mergeProgress(a, b){
                   at: maxN(x.at, y.at),
                   done: maxN(x.done, y.done),
                   tries: maxN(x.tries, y.tries) };
+  });
+
+  /* ===== заметки наставника к урокам (корзина 3.7) =====
+     Слияние как у домашки: побеждает более свежая запись. Объединять нечего —
+     заметка к уроку одна, и две правки одного текста это не два текста.
+     ⚠️ Снятая заметка хранится НАДГРОБИЕМ (пустой текст со свежим временем),
+     а не удалением ключа. Иначе на другом устройстве лежит старая заметка с
+     непустым текстом, и при следующем обмене она воскресает — ребёнок читает
+     то, что взрослый уже стёр. Тот же приём, что у выключения трансляции. */
+  out.notes = {};
+  Object.keys(mergeSet(a.notes, b.notes)).forEach(function(k){
+    var x = (a.notes || {})[k] || {}, y = (b.notes || {})[k] || {};
+    var base = (y.at || 0) > (x.at || 0) ? y : x;
+    out.notes[k] = { t: String(base.t || ""), by: base.by || "", at: base.at || 0 };
   });
 
   /* статус «чем занят сейчас» — просто самый свежий из двух */
@@ -24245,7 +24274,11 @@ function openLesson(id){
        редактор. Там же работает липкая полоска задания, см. taskPinShow(). */
     app.innerHTML = head + howbar +
       '<div class="lessongrid' + (body.draw ? ' one' : '') + '">' +
-        '<div class="lcol-read">' + theory + goal + bug + askCard + '</div>' +
+        /* ⚠️ Заметка взрослого стоит ПЕРВОЙ, до теории. Если наставник
+           написал «начни со второго примера, первый мы разобрали», прочитать
+           это после теории уже поздно. */
+        '<div class="lcol-read">' + noteCardHTML(noteFor(S, l.id)) +
+          theory + goal + bug + askCard + '</div>' +
         '<div class="lcol-work">' +
           /* Задание живёт в конце объяснения, а верстак стоит наверху — значит
              у верстака нет контекста: «непонятно, как решить задачу справа».
@@ -24454,6 +24487,69 @@ function openLesson(id){
     taskPinShow(app.querySelector(".goal"));
     window.scrollTo({ top:0, behavior:"smooth" });
   });
+}
+
+/* ================= заметка наставника к уроку =================
+   Корзина 3.7, и заодно ответ на второй вопрос фаундера 07.09.2026 — «можем
+   ли мы сделать рабочее пространство, где репетитор объясняет ребёнку на
+   экране».
+
+   ⚠️ Совместную доску с курсором и голосом мы НЕ строим, и это решение, а не
+   отсрочка. Репетитор и так сидит с ребёнком в видеозвонке с демонстрацией
+   экрана, и объясняет он там лучше, чем сделаем мы; повторять Zoom значит
+   соревноваться там, где мы заведомо слабее. Наше преимущество в другом:
+   запустить код ребёнка, показать расхождение и передать задание. Плюс
+   технически: связь у нас — облачная функция с опросом раз в пять секунд, у
+   хранилища уже замерен кэш, из-за которого кадры прыгают, и совместный
+   редактор на этом не поедет.
+
+   Заметка делает то, чего видеозвонок не умеет: работает, когда репетитора
+   рядом НЕТ — а это почти всё время ребёнка. Взрослый пишет две фразы к
+   уроку 34, они уезжают по коду вместе с прогрессом, и ребёнок видит их,
+   когда откроет этот урок. Хоть через неделю.
+
+   Три ограничения:
+     1. **Одна заметка на урок.** Не переписка и не лента: две правки одного
+        текста — это один текст, а не два. Слияние берёт свежую.
+     2. **Обратного канала нет.** Ребёнок заметку читает, а не отвечает на
+        неё. Болталка — красная линия продукта, и заводить её с чёрного хода
+        через «заметки» нельзя.
+     3. **Дошло ли — видно по уже имеющимся данным**, а не по расписке о
+        прочтении. Взрослому показываем, открывал ли ребёнок этот урок после
+        того, как заметка написана: журнал уроков и так синхронизируется, и
+        нового наблюдения за ребёнком тут не заводится.
+   ============================================================ */
+var NOTE_MAX = 400;          /* длиннее — это уже не заметка, а урок */
+function notesAll(st){ var o = (st || S).notes; return (o && typeof o === "object") ? o : {}; }
+/* Заметка к уроку или null. ⚠️ Пустой текст — это НАДГРОБИЕ снятой заметки,
+   а не заметка: показывать его нельзя, а хранить надо (см. mergeProgress). */
+function noteFor(st, id){
+  var n = notesAll(st)[id];
+  if (!n || !String(n.t || "").trim()) return null;
+  return { t: String(n.t), by: n.by || "", at: n.at || 0, id: id };
+}
+function noteList(st){
+  return Object.keys(notesAll(st))
+    .map(function(id){ return noteFor(st, id); })
+    .filter(Boolean)
+    .sort(function(a, b){ return b.at - a.at; });
+}
+/* Открывал ли ребёнок урок ПОСЛЕ того, как заметка написана. Считается по
+   журналу, который и так ездит на сервер: нового слежения не заводим. */
+function noteSeenHint(st, n){
+  var g = ((st || {}).log || {})[n.id] || {};
+  if (!g.last) return "урок ещё не открывал";
+  return g.last >= n.at ? "с тех пор урок открывал" : "с тех пор урок не открывал";
+}
+/* Кто пишет — та же подпись, что у домашки: роль, а не имя. */
+function noteWho(){ return (typeof hwWho === "function") ? hwWho() : "наставник"; }
+/* Карточка заметки на экране урока. Стоит НАД теорией: если взрослый написал
+   «начни со второго примера», прочитать это после теории уже поздно. */
+function noteCardHTML(n){
+  if (!n) return "";
+  return '<div class="lnote"><b>✍️ ' + esc(n.by || "взрослый") + ' оставил заметку' +
+    (n.at ? ' · ' + fmtWhen(n.at) : '') + '</b>' +
+    '<p>' + esc(n.t) + '</p></div>';
 }
 
 /* ================= лестница выхода из затыка =================
@@ -34266,6 +34362,7 @@ function kidRender(savedNote){
           идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
        (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>');
   h += hwGiveHTML(st);
+  h += noteGiveHTML(st);
   if (!kidTarget.fresh){
     h += parentReportCardHTML() + askCardHTML(st) + oralCardHTML(st);
     h += '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) + weekReportHTML(st);
@@ -34273,6 +34370,7 @@ function kidRender(savedNote){
   box.innerHTML = h;
   bindFrameEditor(function(){ kidRender(); });
   bindHwGive();
+  bindNoteGive();
   bindParentReport(st);
   var sv = box.querySelector('[data-kf="save"]');
   if (sv) sv.onclick = kidSave;
@@ -34463,6 +34561,115 @@ function kidSaveHW(ids, due){
     say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
   }).catch(function(err){
     say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+  });
+}
+
+/* ===== заметка к уроку: сторона взрослого (корзина 3.7) ===== */
+/* Какие уроки взрослому предлагать. Не весь курс: заметка к уроку, до
+   которого ребёнок не дошёл и неизвестно когда дойдёт, — это записка в
+   пустоту. Берём пройденные плюс ТЕКУЩИЙ (первый несданный): он и есть тот,
+   на котором ребёнок стоит, в том числе когда стоит намертво. */
+function noteLessons(st){
+  var sm = (st || {}).stars || {}, out = [], stopped = false;
+  CURRICULUM.forEach(function(w){
+    worldReadyLessons(w).forEach(function(l){
+      if (stopped) return;
+      if (sm[l.id] !== undefined){ out.push(l); return; }
+      out.push(l); stopped = true;             /* текущий — последний в списке */
+    });
+  });
+  return out;
+}
+function noteGiveHTML(st){
+  var list = noteLessons(st), have = noteList(st);
+  /* ⚠️ По умолчанию выбран тот урок, где ребёнок застрял, а если затыка нет —
+     текущий. Именно там взрослому есть что сказать, и именно оттуда он сюда
+     приходит, прочитав «застрял на уроке …» в отчёте. */
+  var stuck = stuckIn(st)[0];
+  var pick = (stuck && list.some(function(l){ return l.id === stuck.id; }))
+    ? stuck.id : (list.length ? list[list.length - 1].id : "");
+
+  var h = '<h3 class="sect">✍️ Заметка к уроку</h3>' +
+    '<p class="dim">Две-три фразы, которые ребёнок увидит НАД объяснением, когда откроет этот урок. ' +
+    'Работает тогда, когда вас рядом нет: «начни со второго примера», «здесь мы вчера споткнулись — ' +
+    'посмотри внимательно на отступ». Заметка одна на урок; новая заменяет прежнюю. ' +
+    'Ответить на неё ребёнок не может — это записка, а не переписка.</p>';
+
+  if (have.length){
+    h += '<div class="card"><h3>Что уже написано</h3><ul class="notelist">';
+    have.slice(0, 12).forEach(function(n){
+      var l = CURRICULUM.byId(n.id);
+      h += '<li><b>' + esc(l ? l.title : n.id) + '</b>' +
+        '<span class="dim"> · ' + esc(n.by || "взрослый") + ', ' + fmtWhen(n.at) +
+        ' · ' + esc(noteSeenHint(st, n)) + '</span>' +
+        '<p>' + esc(n.t) + '</p>' +
+        '<button class="rbtn sec" data-noteoff="' + esc(n.id) + '">Снять заметку</button></li>';
+    });
+    h += '</ul></div>';
+  }
+
+  /* ⚠️ Сюда попасть можно только если в курсе нет ни одного урока с
+     содержанием: даже у новичка доступен первый. Оставлено защитой от пустого
+     контента, а не как рабочая ветка. */
+  if (!list.length)
+    return h + '<div class="note"><b>Писать пока не к чему</b>' +
+      'В курсе нет ни одного готового урока — привязать заметку не к чему.</div>';
+
+  h += '<div class="card"><div class="admlbl">Урок</div>' +
+    '<select id="notepick">' + list.map(function(l){
+      return '<option value="' + esc(l.id) + '"' + (l.id === pick ? " selected" : "") + '>' +
+        'урок ' + l.num + ' · ' + esc(l.title) + (l.id === (stuck && stuck.id) ? " — тут застрял" : "") +
+        '</option>';
+    }).join("") + '</select>' +
+    '<div class="admlbl">Текст</div>' +
+    '<textarea id="notetext" rows="3" maxlength="' + NOTE_MAX + '" ' +
+      'placeholder="Начни со второго примера — первый мы разобрали вместе."></textarea>' +
+    '<div class="admrow"><button class="rbtn check" id="notesave">Отправить ребёнку</button>' +
+    '<span class="dim">не длиннее ' + NOTE_MAX + ' знаков</span></div>' +
+    '<div class="msg" id="notesavemsg"></div></div>';
+  return h;
+}
+/* Записать заметку ребёнку. Как у домашки: читаем запись заново прямо перед
+   записью — ребёнок мог позаниматься, пока взрослый печатал, и отправить
+   старый снимок значило бы откатить ему прогресс. Меняем ТОЛЬКО заметки. */
+function kidSaveNote(id, text){
+  if (!kidTarget || !kidTarget.data) return;
+  var code = kidTarget.code;
+  var msg = document.getElementById("notesavemsg");
+  function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+  var t = String(text || "").trim().slice(0, NOTE_MAX);
+  if (!id) return say("warn", "<b>Урок не выбран</b>Выберите, к какому уроку заметка.");
+  if (!serverOn()) return say("bad", "<b>Не сохранилось</b>Сервер не подключён — передать заметку некуда.");
+  say("warn", "<b>Сохраняю…</b>");
+  return Cloud.load(code).then(function(r){
+    var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+    /* ⚠️ Пустой текст не удаляет ключ, а кладёт НАДГРОБИЕ со свежим временем:
+       иначе на устройстве ребёнка остаётся старая заметка, и при следующем
+       обмене она воскресает. */
+    base.notes[id] = { t: t, by: noteWho(), at: Date.now() };
+    return Cloud.save(base, code).then(function(){
+      kidTarget.data = base;
+      kidTarget.fresh = false;
+      var l = CURRICULUM.byId(id);
+      kidRender(t
+        ? "<b>Заметка отправлена</b>Ребёнок увидит её над объяснением, когда откроет урок «" +
+          esc(l ? l.title : id) + "»."
+        : "<b>Заметка снята</b>К уроку «" + esc(l ? l.title : id) + "» ребёнок больше ничего не увидит.");
+    });
+  }, function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+  }).catch(function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+  });
+}
+function bindNoteGive(){
+  var b = document.getElementById("notesave");
+  if (b) b.onclick = function(){
+    var sel = document.getElementById("notepick"), ta = document.getElementById("notetext");
+    kidSaveNote(sel ? sel.value : "", ta ? ta.value : "");
+  };
+  document.querySelectorAll("[data-noteoff]").forEach(function(x){
+    x.onclick = function(){ kidSaveNote(x.getAttribute("data-noteoff"), ""); };
   });
 }
 
@@ -37584,6 +37791,8 @@ window.__game = {
   planFact: planFact, planFactText: planFactText, frameState: frameState,
   stuckIn: stuckIn, stuckWhy: stuckWhy, stuckAdvice: stuckAdvice,
   stuckStep: stuckStep, stuckStepHTML: stuckStepHTML,
+  noteFor: noteFor, noteList: noteList, noteLessons: noteLessons, noteCardHTML: noteCardHTML,
+  noteGiveHTML: noteGiveHTML, kidSaveNote: kidSaveNote, noteSeenHint: noteSeenHint, NOTE_MAX: NOTE_MAX,
   STEP_HINT: STEP_HINT, STEP_SOL: STEP_SOL, STEP_REST: STEP_REST,
   lessonPrice: lessonPrice, STUCK_PRICE: STUCK_PRICE,
   screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,

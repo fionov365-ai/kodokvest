@@ -4127,7 +4127,7 @@ function checkEncoding(){
   let timeFmtChecked = 0, homeChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
-  let ladderChecked = 0;
+  let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
 
   /* --- 1. время: считаем работу, а не открытую вкладку --- */
@@ -6072,6 +6072,110 @@ function checkEncoding(){
     viewReset(g);
   } else bad("[лестница] функции stuckStep нет");
 
+  /* --- 10б3. заметка наставника к уроку (корзина 3.7) --- */
+  if (typeof g.noteFor === "function"){
+    const p0 = problems.length;
+    const now = Date.now(), day = 864e5;
+    const kid = g.ensureShape({
+      stars: { "print-first": 3, "text-vs-num": 3 },
+      log: {
+        "print-first": { solvedAt: now - 2*day, last: now - 2*day, attempts: 1 },
+        "text-vs-num": { solvedAt: now - day, last: now - day, attempts: 2 },
+        "vars": { solvedAt: null, last: now - day, attempts: 11, hints: 2, timeMs: 1500000 }
+      }
+    });
+
+    /* ⚠️ Предлагаем не весь курс: заметка к уроку, до которого ребёнок не
+       дошёл, — записка в пустоту. Пройденные плюс текущий. */
+    const list = g.noteLessons(kid).map(l => l.id);
+    if (list.join(",") !== "print-first,text-vs-num,vars")
+      bad("[заметка] список уроков для заметки не тот: " + list.join(","));
+
+    const give = g.noteGiveHTML(kid);
+    /* по умолчанию выбран урок, где ребёнок застрял: оттуда взрослый и приходит */
+    if (!/value="vars"\s+selected/.test(give))
+      bad("[заметка] по умолчанию выбран не тот урок, где ребёнок застрял");
+    if (!/тут застрял/.test(give)) bad("[заметка] в списке не помечен урок с затыком");
+    /* ⚠️ Красная линия: это записка, а не переписка */
+    if (!/не может/.test(give) || !/записка, а не переписка/.test(give))
+      bad("[заметка] не сказано, что ответить ребёнок не может — иначе это болталка с чёрного хода");
+
+    /* ⚠️ Новичку, который ещё ничего не прошёл, доступен ровно один урок —
+       первый. Записка «начни отсюда» к нему осмысленна, поэтому пустого
+       списка тут не бывает и карточка не должна прятаться. */
+    const новичок = g.noteLessons(g.ensureShape({}));
+    if (новичок.length !== 1)
+      bad("[заметка] новичку предложено уроков: " + новичок.length + " вместо одного");
+    if (!/notepick/.test(g.noteGiveHTML(g.ensureShape({}))))
+      bad("[заметка] новичку карточку заметки не показали");
+
+    /* ---- показ ребёнку ---- */
+    const st = g.ensureShape({ notes: { "print-first": { t: "Начни со второго примера.",
+                                                         by: "наставник", at: now - 3600e3 } } });
+    if (!g.noteFor(st, "print-first")) bad("[заметка] заметка не читается из снимка");
+    if (g.noteFor(st, "vars")) bad("[заметка] к уроку без заметки что-то нашлось");
+    const card = g.noteCardHTML(g.noteFor(st, "print-first"));
+    if (!/Начни со второго примера/.test(card)) bad("[заметка] текст не попал в карточку");
+    if (!/наставник/.test(card)) bad("[заметка] не сказано, кто написал");
+    if (g.noteCardHTML(null) !== "") bad("[заметка] без заметки карточка всё равно рисуется");
+
+    /* на экране урока — ПЕРВОЙ, до теории: «начни со второго примера»,
+       прочитанное после теории, уже бесполезно */
+    g.state.notes = { "print-first": { t: "Смотри на кавычки.", by: "наставник", at: now } };
+    g.save();
+    g.openLesson("print-first");
+    await tick();
+    const col = doc.querySelector(".lcol-read");
+    const note = doc.querySelector(".lnote");
+    if (!note) bad("[заметка] на экране урока заметки нет");
+    else if (col && col.firstElementChild !== note)
+      bad("[заметка] заметка стоит не первой в колонке объяснения");
+    /* к уроку без заметки её быть не должно */
+    g.setStars("print-first", 3);
+    g.openLesson("text-vs-num");
+    await tick();
+    if (doc.querySelector(".lnote"))
+      bad("[заметка] заметка от одного урока показалась на другом");
+    g.state.notes = {};
+    g.save();
+
+    /* ---- слияние: снятая заметка не воскресает ----
+       ⚠️ Взрослый снял заметку, а на устройстве ребёнка лежит прежняя, с
+       непустым текстом. Если снятие удаляло бы ключ, при следующем обмене
+       ребёнок снова прочитал бы то, что уже стёрто. */
+    const было = { notes: { "print-first": { t: "Старая", by: "наставник", at: now - 7200e3 } } };
+    const сняли = { notes: { "print-first": { t: "", by: "наставник", at: now } } };
+    if (g.noteFor(g.mergeProgress(было, сняли), "print-first"))
+      bad("[заметка] снятая заметка воскресла при слиянии");
+    if (g.noteFor(g.mergeProgress(сняли, было), "print-first"))
+      bad("[заметка] снятая заметка воскресла при слиянии в обратном порядке");
+    if (!g.mergeProgress(было, сняли).notes["print-first"])
+      bad("[заметка] надгробие снятой заметки потеряно — она воскреснет на следующем обмене");
+    /* свежая заметка побеждает старую */
+    const новая = { notes: { "print-first": { t: "Новая", by: "родитель", at: now } } };
+    const слито = g.mergeProgress(было, новая);
+    if ((g.noteFor(слито, "print-first") || {}).t !== "Новая")
+      bad("[заметка] при слиянии победила старая заметка");
+
+    /* ---- «дошло ли» считается по журналу, а не по расписке ---- */
+    const свежая = { id: "print-first", at: now - day, t: "x", by: "наставник" };
+    if (!/с тех пор урок открывал/.test(g.noteSeenHint(
+        { log: { "print-first": { last: now } } }, свежая)))
+      bad("[заметка] открытый после заметки урок не отмечен");
+    if (!/с тех пор урок не открывал/.test(g.noteSeenHint(
+        { log: { "print-first": { last: now - 3*day } } }, свежая)))
+      bad("[заметка] неоткрытый после заметки урок не отмечен");
+    if (!/ещё не открывал/.test(g.noteSeenHint({ log: {} }, свежая)))
+      bad("[заметка] урок, который не открывали вовсе, не отмечен");
+
+    /* длина: заметка это две-три фразы, а не второй урок */
+    if (!(g.NOTE_MAX > 100 && g.NOTE_MAX <= 600))
+      bad("[заметка] предел длины неразумный: " + g.NOTE_MAX);
+
+    if (problems.length === p0) noteChecked++;
+    viewReset(g);
+  } else bad("[заметка] функции noteFor нет");
+
   /* --- 10в. возвращаемость: метрики, «в следующий раз», «до конца мира»,
      возвращение после паузы --- */
   if (typeof g.worldCountdown === "function"){
@@ -7487,6 +7591,7 @@ function checkEncoding(){
   console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`лестница выхода из затыка: ${ladderChecked ? "да" : "нет"}`);
+  console.log(`заметка наставника к уроку: ${noteChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
   console.log(`присутствие и живое занятие: ${liveChecked ? "да" : "нет"}`);
   console.log(`клавиатура планшета: ${kbChecked ? "да" : "нет"}`);
