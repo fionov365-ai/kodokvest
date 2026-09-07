@@ -1568,7 +1568,7 @@ body.focus .toTop{display:none}
 /* ⚠️ Ни одной красной пометки: красный на экране наставника читается как
    «поймали ребёнка», а мы никого не ловим. Тишина и трудный урок — жёлтым,
    ровный ход — зелёным. */
-.trmarks li.quiet,.trmarks li.tough,.trmarks li.pred{color:var(--warn)}
+.trmarks li.quiet,.trmarks li.tough,.trmarks li.pred,.trmarks li.stuck{color:var(--warn)}
 /* План и факт (корзина 3.5). ⚠️ «Отстаёт» — тем же жёлтым, что тишина, и ни в
    коем случае не красным: это расстояние до рамки, которую поставил взрослый,
    а не приговор ребёнку. «Впереди» и «по плану» — зелёным, и такого же
@@ -1577,6 +1577,14 @@ body.focus .toTop{display:none}
 .grpplan.ontrack,.grpplan.ahead{color:var(--ok)}
 .grpplan.behind{color:var(--warn)}
 .grpplan.none{opacity:var(--dim2)}
+/* Затык в недельной карточке. ⚠️ Жёлтым, как «тяжело далось», а не красным:
+   красный на экране взрослого читается как «с ребёнком что-то не так», а тут
+   сказано только, что урок не взят и курс дальше не пускает. */
+.wrstuck{margin:10px 0 0;padding:10px 12px;border-radius:12px;
+  background:var(--warnbg);border:1px solid var(--warnline)}
+.wrstuck b{display:block;margin-bottom:4px;color:var(--warn)}
+.wrstuck p{margin:0 0 6px;font-size:13.5px;line-height:1.55}
+.wrstuck p:last-child{margin-bottom:0}
 .planfact{margin:6px 0 0;line-height:1.5}
 .planfact.ontrack b,.planfact.ahead b{color:var(--ok)}
 .planfact.behind b{color:var(--warn)}
