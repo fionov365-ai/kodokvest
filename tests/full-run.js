@@ -4191,6 +4191,7 @@ function checkEncoding(){
   let hwChecked = 0, reportChecked = 0, returnChecked = 0, liveChecked = 0, kbChecked = 0;
   let timeFmtChecked = 0, homeChecked = 0;
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
+  let myExamChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
@@ -5147,6 +5148,105 @@ function checkEncoding(){
     }
 
     if (problems.length === p0) myPredChecked++;
+  }
+
+  /* --- 6б. экзамен по своей программе (остаток 1.1б) ---
+     ⚠️ Главное здесь — ЕДИНСТВЕННОСТЬ ответа. Задача обещает: «оно ровно
+     одно». Если в диапазоне найдётся второе число с тем же выводом, ребёнок,
+     решивший верно, получит «не оно» — и будет прав он, а не мы. Проверяем не
+     обещание, а факт: подставляем ВСЕ числа диапазона движком. */
+  if (typeof g.myExamMake === "function"){
+    const p0 = problems.length;
+    const keepWorks = g.state.works, keepDrafts = g.state.drafts;
+    g.state.works = {}; g.state.drafts = {};
+
+    if (g.myExamHasSource()) bad("[своя задача] источники нашлись там, где ребёнок ничего не написал");
+    if (g.myExamPick()) bad("[своя задача] задача собралась из ничего");
+    g.screenMyExam();
+    await tick();
+    if (!/не из чего собрать/i.test(doc.getElementById("app").textContent))
+      bad("[своя задача] без программы экран не объясняет, чего не хватает");
+
+    /* программа со случайностью и с вводом в источники не идёт: у такой задачи
+       не может быть повторяемого ответа */
+    if (g.myExamMake("import random\nprint(random.randint(1, 9))\n"))
+      bad("[своя задача] задача собрана из программы со случайностью");
+    if (g.myExamMake("n = int(input())\nprint(n * 2)\n"))
+      bad("[своя задача] задача собрана из программы, которая просит ввод");
+
+    g.myWorkSave("Считалка", "сумма", "итог = 0\nfor i in range(1, 5):\n    итог = итог + i\nprint(итог)\n");
+    if (!g.myExamHasSource()) bad("[своя задача] сохранённая программа не стала источником");
+    const made = g.myExamPick();
+    if (!made) bad("[своя задача] из годной программы задача не собралась");
+    else {
+      if (made.code.indexOf(g.MYEXAM_BOX) < 0)
+        bad("[своя задача] в показанной программе нет закрытой клетки");
+      if (made.code.indexOf(String(made.ans)) >= 0 && /^\d+$/.test(String(made.ans)) &&
+          made.code.replace(g.MYEXAM_BOX, "").indexOf(String(made.ans)) >= 0 &&
+          made.code.split(g.MYEXAM_BOX)[0].indexOf(String(made.ans)) >= 0)
+        bad("[своя задача] ответ виден прямо в тексте программы");
+      /* единственность: подставляем весь диапазон и считаем совпадения */
+      const run = code => {
+        const r = w.Runtime.get("mini").run(code, {});
+        return r.error ? null : String(r.output || "").replace(/\n+$/, "");
+      };
+      const single = (x, label) => {
+        if (!x) return;
+        let hits = 0;
+        for (let v = g.MYEXAM_LO; v <= g.MYEXAM_HI; v++){
+          const out = run(x.code.replace(g.MYEXAM_BOX, String(v)));
+          if (out !== null && out === x.out) hits++;
+        }
+        if (hits !== 1)
+          bad("[своя задача] " + label + ": верных ответов " + hits + ", а обещан один — " +
+              "решивший верно получит «не оно»");
+        if (run(x.code.replace(g.MYEXAM_BOX, String(x.ans))) !== x.out)
+          bad("[своя задача] " + label + ": обещанный ответ не даёт обещанного вывода");
+      };
+      single(made, "задача из «Считалки»");
+      /* ⚠️ Ловушка: у этой программы в первом же месте числа СХОДЯТСЯ — при
+         делении нацело десяток значений даёт один и тот же вывод. Сборщик
+         обязан такое место пропустить. Без этой проверки единственность не
+         проверяется вовсе: у «Считалки» каждое число даёт свой вывод, и
+         совпасть там нечему — сборщик без проверки прошёл бы её насквозь. */
+      single(g.myExamMake("x = 21\nprint(x // 7)\n"), "задача из деления нацело");
+
+      /* ход по-настоящему: из раздела кнопкой, как это делает ребёнок */
+      g.screenAlgo();
+      await tick();
+      const btn = doc.getElementById("myexam");
+      if (!btn) bad("[своя задача] в разделе экзамена нет кнопки «Собрать задачу»");
+      else {
+        btn.click();
+        await new Promise(r => setTimeout(r, 60));
+        const st = studioOf();
+        if (!st) bad("[своя задача] экран задачи не открылся по кнопке");
+        else {
+          st.editor.setCode("кот");
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()) bad("[своя задача] засчитан ответ, который даже не число");
+          st.editor.setCode(String(made.ans === g.MYEXAM_LO ? made.ans + 1 : made.ans - 1));
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()) bad("[своя задача] засчитано неверное число");
+          const hint = doc.querySelector(".msg").textContent;
+          if (!/больше|меньше/.test(hint))
+            bad("[своя задача] после промаха не сказано, в какую сторону: " + hint.slice(0, 80));
+          if (hint.indexOf(String(made.ans)) >= 0)
+            bad("[своя задача] верное число показано в ответе на промах — вторая попытка обесценена: " +
+                "ответ " + made.ans + ", текст «" + hint + "»");
+          st.editor.setCode(String(made.ans));
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[своя задача] верное число не засчитано");
+          closeWin();
+        }
+      }
+    }
+    g.state.works = keepWorks; g.state.drafts = keepDrafts;
+    viewReset(g);
+    if (problems.length === p0) myExamChecked++;
   }
 
   /* --- 7. мастерская: полка деталей и верстак --- */
@@ -8113,6 +8213,7 @@ function checkEncoding(){
   console.log(`перерыв и потолок дня: ${breakChecked ? "да" : "нет"}`);
   console.log(`запись авторства («как шла работа»): ${authorChecked ? "да" : "нет"}`);
   console.log(`проверка понимания на своём коде: ${myPredChecked ? "да" : "нет"}`);
+  console.log(`экзамен по своей программе: ${myExamChecked ? "да" : "нет"}`);
   console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
   console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
   console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
@@ -8126,6 +8227,47 @@ function checkEncoding(){
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
+  /* ================= [сборка] снятие комментариев ничего не съело =========
+     ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),
+     а значит каждый файл проходит через разборщик. Разборщик, съевший строку
+     кода или пустую строку ВНУТРИ программы на Python, ломает не сборку —
+     ломает урок, и узнаём мы об этом от ребёнка. Уже случилось однажды:
+     схлопывание пустых строк по всему тексту залезло в шаблонную строку и
+     сдвинуло программу разминки «предскажи память» на строку вверх.
+     Проверяем прямо: каждый файл банка грузим дважды — как есть и обрезанным —
+     и сверяем всё, что он положил в window, вместе с текстами функций. */
+  {
+    const vm = require("vm");
+    const { stripComments, bundled } = require(path.join(root, "build.js"));
+    /* ⚠️ Функции сравниваем ТОЖЕ обрезанными — с обеих сторон. Иначе проверка
+       ловила бы сама себя: комментарий внутри функции честно исчез, тексты
+       разошлись, и «сломано» кричало бы на каждой правке. Значение имеет то,
+       что осталось от кода, а не то, что мы сами и убирали. */
+    const fnText = f => stripComments("(" + String(f) + ")", "функция");
+    const load = src => {
+      const ctx = { window:{}, console };
+      ctx.globalThis = ctx; ctx.self = ctx;
+      vm.createContext(ctx);
+      try { vm.runInContext(src, ctx); } catch(e){ return null; }
+      try {
+        return JSON.stringify(ctx.window, (k, v) => typeof v === "function" ? fnText(v) : v);
+      } catch(e){ return null; }
+    };
+    let same = 0, skipped = [];
+    bundled.forEach(f => {
+      const src = fs.readFileSync(path.join(root, f), "utf8");
+      const was = load(src);
+      if (was === null || was === "{}") return void skipped.push(f);  /* без DOM не грузится */
+      const now = load(stripComments(src, f));
+      if (now === was) same++;
+      else bad(`[сборка] после снятия комментариев ${f} отдаёт другое содержимое`);
+    });
+    if (same < 8)
+      bad(`[сборка] сверено всего ${same} файлов из ${bundled.length} — проверка ничего не значит ` +
+          `(не грузятся: ${skipped.join(", ")})`);
+    console.log(`файлов сверено после снятия комментариев: ${same} из ${bundled.length}`);
+  }
+
   console.log(`вызовов рисования на холсте: ${drawCalls.n}`);
   console.log(`запросов к серверу в тесте: ${calls}`);
   console.log(`ошибок JavaScript: ${jsErrors.length}`);

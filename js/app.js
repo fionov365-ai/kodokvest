@@ -6808,12 +6808,17 @@ function makePredictStudio(cfg){
     '<span class="dot"></span><span class="lbl">программа — только читаем</span></div>' +
     '<pre><code>' + hl(cfg.code || "") + '</code></pre>';
 
+  /* Подписи задаются снаружи, потому что этой же студией спрашивают не только
+     «что напечатает»: экзамен по своей программе спрашивает ЧИСЛО. Значения по
+     умолчанию — прежние, поэтому все старые вызовы работают как работали. */
   var ansBox = document.createElement("div");
   ansBox.className = "pane pans";
-  ansBox.innerHTML = '<div class="ph">что напечатает программа?</div><div class="pb">' +
-    '<textarea class="stdinbox predin" spellcheck="false" autocapitalize="off" autocorrect="off" rows="6" ' +
-    'placeholder="Запиши вывод по строкам — так, как его напечатает программа"></textarea>' +
-    '<div class="stdinhint">По строке на каждый print. Потом нажми «Проверить».</div></div>';
+  ansBox.innerHTML = '<div class="ph">' + esc(cfg.ask || "что напечатает программа?") + '</div><div class="pb">' +
+    '<textarea class="stdinbox predin" spellcheck="false" autocapitalize="off" autocorrect="off" rows="' +
+    (cfg.rows || 6) + '" ' +
+    'placeholder="' + esc(cfg.place || "Запиши вывод по строкам — так, как его напечатает программа") + '"></textarea>' +
+    '<div class="stdinhint">' + esc(cfg.hint || "По строке на каждый print. Потом нажми «Проверить».") +
+    '</div></div>';
   var ta = ansBox.querySelector("textarea");
 
   var runbar = document.createElement("div");
@@ -6825,7 +6830,8 @@ function makePredictStudio(cfg){
   var msg = document.createElement("div"); msg.className = "msg";
 
   var outPane = document.createElement("div"); outPane.className = "pane pout"; outPane.style.display = "none";
-  outPane.innerHTML = '<div class="ph">настоящий вывод программы</div><div class="console"></div>';
+  outPane.innerHTML = '<div class="ph">' + esc(cfg.outHead || "настоящий вывод программы") +
+    '</div><div class="console"></div>';
   var con = outPane.querySelector(".console");
 
   wrap.appendChild(codeBox);
@@ -8072,6 +8078,22 @@ function screenAlgo(){
     '«1000 шагов против 10» — числом на экране.</li>' +
     '</ul></div>';
 
+  /* ⚠️ Карточка стоит ПЕРЕД группами, а не в конце списка: это единственная
+     задача раздела, которой до сегодняшнего дня не существовало — её ещё
+     предстоит собрать из кода самого ребёнка. Сама сборка идёт по нажатию:
+     она стоит сотен прогонов движка, и делать их на каждом заходе в раздел
+     нечестно к телефону. */
+  h += '<div class="card"><h3>🧾 Задача по твоей программе</h3>' +
+    '<p>Все задачи ниже написаны нами и одинаковы для всех. Эта — нет: она ' +
+    'собирается из программы, которую написал ты. В ней закрывается одно число, ' +
+    'и по напечатанному нужно понять, какое. Запускать нельзя — как на экзамене.</p>' +
+    (myExamHasSource()
+      ? '<div class="admrow"><button class="rbtn check" id="myexam">Собрать задачу</button>' +
+        (algoDone("myexam") ? '<span class="dim">уже решал — задача будет другая</span>' : '') + '</div>'
+      : '<p class="dim">Пока не из чего собрать: нужна твоя программа — сданный урок ' +
+        'или сохранённая в «Моё» из песочницы.</p>') +
+    '</div>';
+
   ALGO_GROUPS.forEach(function(g){
     var items = xs.filter(function(x){ return x.group === g.id; });
     if (!items.length) return;
@@ -8095,6 +8117,14 @@ function screenAlgo(){
     b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
   });
   document.getElementById("tomap").onclick = screenTrain;
+  var me = document.getElementById("myexam");
+  if (me) me.onclick = function(){
+    me.disabled = true;
+    me.textContent = "Собираю…";
+    /* сборка блокирует поток на пару сотен прогонов — даём кнопке
+       перерисоваться, иначе ребёнок жмёт второй раз по мёртвому экрану */
+    setTimeout(function(){ myExamCur = myExamPick(); screenMyExam(); }, 30);
+  };
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -8257,6 +8287,204 @@ function winAlgo(x, res){
   confetti(first ? 2 : 1);
   document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
   document.getElementById("wstay").onclick = closeWin;
+}
+
+
+/* ================= экзамен по своей программе =================
+   Остаток пункта 1.1б. Все задачи мира «Алгоритмы, ОГЭ и ЕГЭ» написаны нами
+   и одинаковы для всех. Здесь — задача, которой не существовало до того, как
+   ребёнок написал свою программу: она собирается ИЗ ЕГО КОДА.
+
+   ⚠️ Тип взят экзаменационный и ровно один: ОБРАТНАЯ задача. Не «что
+   напечатает программа» — так уже спрашивает проверка понимания в конце
+   занятия (myPredictMake), — а «программа напечатала вот это; какое число
+   стояло в закрытой клетке». Разница не в оформлении: прямую задачу можно
+   сдать, вспомнив свой прошлый вывод, обратную — нельзя, её приходится
+   выполнять в голове. Это и есть школьный тип «найдите число, при котором».
+
+   ⚠️ Верный ответ обязан быть ОДИН. Мы не спрашиваем «какое число подходит»:
+   движок прогоняет ВЕСЬ диапазон и берёт только то значение, чей вывод не
+   повторился ни у одного другого. Задача с двумя верными ответами ломается
+   не у нас в тестах, а у ребёнка, который решил правильно.
+
+   ⚠️ Задача собирается ПО КНОПКЕ, а не при отрисовке экрана: на неё уходит
+   до нескольких сотен прогонов движка, и делать их каждый раз, когда ребёнок
+   просто зашёл в раздел, нечестно к его телефону.
+
+   ⚠️ Чужой код в источники не идёт. Берём то, что ребёнок назвал сам
+   («Мои программы»), и черновики сданных уроков, где решение НЕ открывалось,
+   — то же правило, по которому попадают детали на полку мастерской. */
+var MYEXAM_LO = 1;            /* в каком диапазоне ищем закрытое число */
+var MYEXAM_HI = 30;
+var MYEXAM_SPOTS = 3;         /* столько мест в программе пробуем */
+var MYEXAM_SRC = 4;           /* столько программ пробуем */
+var MYEXAM_BOX = "⬜";
+
+function myExamSources(){
+  var out = [];
+  myWorksList().forEach(function(x){
+    out.push({ code: x.code, from: "твоя программа «" + x.title + "»" });
+  });
+  var d = draftsAll();
+  var ids = Object.keys(d).filter(function(id){
+    var g = (S.log || {})[id] || {};
+    return solved(id) && !g.shown && !!CURRICULUM.byId(id);
+  });
+  ids.sort(function(a, b){
+    return (((S.log || {})[b] || {}).solvedAt || 0) - (((S.log || {})[a] || {}).solvedAt || 0);
+  });
+  ids.forEach(function(id){
+    var dr = draftGet(id);
+    if (!dr || dr.files.length !== 1) return;   /* вопрос про одну страницу кода */
+    var l = CURRICULUM.byId(id);
+    out.push({ code: dr.files[0].code,
+               from: "твоя программа из урока " + l.num + " «" + l.title + "»" });
+  });
+  return out;
+}
+/* Есть ли из чего собирать. Дёшево: ничего не запускает — нужно карточке,
+   которая рисуется на каждом заходе в раздел. */
+function myExamHasSource(){ return myExamSources().length > 0; }
+
+function myExamMake(code){
+  if (!myPredSafe(code)) return null;
+  if (!myPredRun(code)) return null;
+  var k = codeSkeleton(code);
+  var re = /(^|[^A-Za-z_0-9.А-Яа-яЁё])(\d+)(?![.\dA-Za-z_])/g, m, spots = [];
+  while ((m = re.exec(k)) !== null && spots.length < MYEXAM_SPOTS)
+    spots.push({ at: m.index + m[1].length, txt: m[2] });
+  for (var i = 0; i < spots.length; i++){
+    var at = spots[i].at, len = spots[i].txt.length;
+    var was = parseInt(spots[i].txt, 10);
+    var outs = {}, seen = {}, v, o;
+    for (v = MYEXAM_LO; v <= MYEXAM_HI; v++){
+      o = myPredRun(code.slice(0, at) + String(v) + code.slice(at + len));
+      outs[v] = o;
+      if (o) seen[o] = (seen[o] || 0) + 1;
+    }
+    /* ⚠️ Идём по диапазону не с начала, а со сдвига, посчитанного из самого
+       кода. Иначе годным первым почти всегда оказывается наименьшее значение,
+       и ответ «1» начинает угадываться без единой мысли — а угаданная задача
+       не проверяет ничего. Сдвиг считается из кода, поэтому у одной и той же
+       программы задача одна и та же. */
+    var span = MYEXAM_HI - MYEXAM_LO + 1;
+    var shift = 0;
+    for (var c = 0; c < code.length; c++) shift = (shift * 31 + code.charCodeAt(c)) % span;
+    for (var t = 0; t < span; t++){
+      v = MYEXAM_LO + ((shift + t) % span);
+      o = outs[v];
+      if (!o || seen[o] !== 1) continue;      /* вывод повторяется — ответов два */
+      if (v === was) continue;                /* своё число ребёнок помнит */
+      return { code: code.slice(0, at) + MYEXAM_BOX + code.slice(at + len),
+               out: o, ans: v, lo: MYEXAM_LO, hi: MYEXAM_HI };
+    }
+  }
+  return null;
+}
+/* Собрать задачу из первой годной программы. null — значит не из чего:
+   придумывать задачу из ничего нельзя, ровно как в проверке понимания. */
+function myExamPick(){
+  var src = myExamSources();
+  for (var i = 0; i < src.length && i < MYEXAM_SRC; i++){
+    var made = myExamMake(src[i].code);
+    if (made){ made.from = src[i].from; return made; }
+  }
+  return null;
+}
+
+var myExamCur = null;         /* собранная задача живёт до следующей сборки */
+
+function screenMyExam(){
+  if (capHard()) return screenCapReached();
+  enterScreen("train", "myexam");
+  session = { id:null, attempts:0, hints:0, shown:false, myexam:true };
+  var made = myExamCur;
+
+  var head = '<div class="crumbs"><button class="backbtn" data-go="algo">← К задачам</button>' +
+    '<span data-go="algo">Алгоритмы, ОГЭ и ЕГЭ</span> › 🧾 Задача по твоей программе</div>' +
+    '<div class="lvlhead"><div><div class="idx">экзамен по своему коду</div>' +
+    '<h1>🧾 Какое число закрыто?</h1></div>' +
+    '<div class="right"><span class="tag">твой код</span></div></div>';
+
+  if (!made){
+    app.innerHTML = head +
+      '<div class="card"><h3>Пока не из чего собрать</h3>' +
+      '<p>Задача собирается из программы, которую написал ты сам: из сданного урока ' +
+      'или из того, что ты сохранил в «Моё» из песочницы. Нужна программа, которая ' +
+      'что-то печатает и печатает это всегда одинаково — без ввода с клавиатуры, ' +
+      'без случайных чисел и без черепашки.</p>' +
+      '<p class="dim">Урок, где ты открывал решение, сюда не идёт: это не твой код.</p>' +
+      '<div class="winrow"><button class="bigbtn ghost" data-go="algo">← К задачам</button>' +
+      '<button class="bigbtn ghost" id="me-sand">Открыть песочницу</button></div></div>';
+    app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+    var sb = document.getElementById("me-sand");
+    if (sb) sb.onclick = screenSandbox;
+    refreshTop();
+    return;
+  }
+
+  app.innerHTML = head +
+    '<p class="lede">Это ' + esc(made.from) + '. Одно число в ней ' +
+    'закрыто клеткой ' + MYEXAM_BOX + '. Известно только то, что она напечатала. ' +
+    'Запускать нельзя: реши в голове, как на экзамене.</p>' +
+    '<div class="goal"><h3>🎯 Твоя задача</h3>' +
+    '<p>Программа напечатала:</p><pre><code>' + esc(made.out) + '</code></pre>' +
+    '<p>Какое целое число от ' + made.lo + ' до ' + made.hi + ' стоит вместо ' + MYEXAM_BOX +
+    '? Оно ровно одно: при любом другом программа напечатала бы не это.</p></div>' +
+    '<div id="studio"></div>' +
+    '<div class="pager"><button class="bigbtn ghost" data-go="algo">← К задачам</button></div>';
+
+  var studio = makePredictStudio({
+    code: made.code,
+    ask: "какое число закрыто клеткой " + MYEXAM_BOX + "?",
+    place: "число",
+    hint: "Одно целое число от " + made.lo + " до " + made.hi + ". Потом нажми «Проверить».",
+    rows: 2,
+    outHead: "верное число",
+    check: function(ed, showMsg){
+      session.attempts++;
+      var got = String(ed.getCode()).trim().replace(",", ".");
+      if (!/^-?\d+$/.test(got))
+        return showMsg("warn", "<b>Нужно число</b>Одно целое число от " + made.lo +
+          " до " + made.hi + " — без слов и без пробелов.");
+      if (parseInt(got, 10) === made.ans) return winMyExam(made);
+      /* ⚠️ Верное число не показываем: задача решается перебором в голове, и
+         показанный ответ убивает вторую попытку насовсем. Вместо ответа —
+         направление: больше или меньше. */
+      showMsg("bad", "<b>Не оно</b>При " + esc(got) + " программа напечатала бы другое. " +
+        (parseInt(got, 10) < made.ans ? "Загаданное число больше." : "Загаданное число меньше.") +
+        " Пройди программу по строчкам ещё раз.");
+    }
+  });
+  document.getElementById("studio").appendChild(studio);
+  session.studio = studio;
+  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function winMyExam(made){
+  var first = session.attempts === 1;
+  algoMark("myexam");
+  markActiveToday();
+  save(); refreshTop();
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + (first ? "🧾" : "✅") + '</div>' +
+    '<h2>' + (first ? "Сошлось с первой попытки" : "Число найдено") + '</h2>' +
+    '<p>Закрыто было <b>' + made.ans + '</b>. Ты решил это, не запуская программу, — ' +
+    'а значит выполнил её в голове. Именно этого и просит экзамен.</p>' +
+    '<div class="stepnote"><b>Что тут было.</b> Задача не написана нами: она собрана ' +
+    'из твоего же кода. Другой ребёнок такой задачи не увидит — у него другая программа.</div>' +
+    '<div class="winrow"><button class="bigbtn" id="me-more">Ещё одну</button>' +
+    '<button class="bigbtn ghost" id="walgo">Ко всем задачам</button></div>';
+  document.getElementById("win").classList.add("show");
+  confetti(first ? 2 : 1);
+  document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("me-more").onclick = function(){
+    closeWin();
+    myExamCur = myExamPick();
+    screenMyExam();
+  };
 }
 
 /* ================= ДОМАШКА ОТ НАСТАВНИКА =================
@@ -13598,6 +13826,7 @@ var HASH_SCREENS = {
   "#again":   function(){ screenReview(); },
   "#hw":      function(){ screenHW(); },
   "#folio":   function(){ screenFolio(); },
+  "#myexam":  function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); },
   "#mine":    function(){ screenMyTasks(); },
   "#train":   function(){ screenTrain(); },
   "#works":   function(){ screenShowcase(); },
@@ -19192,6 +19421,9 @@ window.__game = {
   toggleHelp: toggleHelp, screenGuide: screenGuide,
   themeGet: themeGet, themeSet: themeSet,
   refreshTop: refreshTop,
+  myExamSources: myExamSources, myExamMake: myExamMake, myExamPick: myExamPick,
+  myExamHasSource: myExamHasSource, screenMyExam: screenMyExam,
+  MYEXAM_LO: MYEXAM_LO, MYEXAM_HI: MYEXAM_HI, MYEXAM_BOX: MYEXAM_BOX,
   SKINS: SKINS, skinNow: skinNow, skinSet: skinSet, skinOpen: skinOpen,
   skinsOpen: skinsOpen, skinPickHTML: skinPickHTML, skinApply: skinApply,
   lessonSearch: lessonSearch, lessonOpen: lessonOpen,
