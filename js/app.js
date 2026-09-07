@@ -13911,7 +13911,12 @@ function landShowcaseRender(i){
            родитель видел обрубок. Колонка номеров мешала перенести строки —
            при переносе номера разъезжаются и начинают врать. Но нужна она тут
            не была: сколько строк в программе, написано в заголовке над кодом. */
-        '<div class="ldcode wrap"><div class="dwcode"><pre><code>' + landLiveCode(code, nums) +
+        /* ⚠️ Класс называется «flow», а не «wrap»: «wrap» уже занят — это
+           класс страницы (<div class="wrap" id="app">), и панель кода тихо
+           получала отступы страницы, 26 сверху и 90 снизу. Код от этого
+           начинался ниже вывода, а под ним висела пустота. Вопрос фаундера
+           07.09.2026 «почему так?» — вот почему. */
+        '<div class="ldcode flow"><div class="dwcode"><pre><code>' + landLiveCode(code, nums) +
         '</code></pre></div></div></div>' +
       '<div class="shcol"><div class="shlbl">Что печатает программа</div>' +
         '<div class="ldout" id="shout" aria-live="polite"></div></div>' +
@@ -13951,7 +13956,18 @@ function landShowcaseRender(i){
       f.size = Math.max(1, f.value.length);
       if (назад) назад.hidden = !тронуто();
       if (ждём) clearTimeout(ждём);
-      ждём = setTimeout(function(){ landRun(собрать(), out, true); }, 350);
+      ждём = setTimeout(function(){
+        landRun(собрать(), out, true);
+        /* ⚠️ Пересчёт обязан быть ВИДЕН. Жалоба фаундера 07.09.2026: «меняю
+           цифру — ничего не происходит». Программа при этом честно
+           выполнялась заново, но изменившаяся строка легко оказывается ниже
+           видимой части панели, и на экране действительно ничего не менялось.
+           Поэтому панель на мгновение подсвечивается: это единственный знак,
+           который виден независимо от того, где именно поменялся вывод. */
+        out.classList.remove("ranew");
+        void out.offsetWidth;              /* заставляем анимацию начаться заново */
+        out.classList.add("ranew");
+      }, 350);
     };
   });
   if (назад) назад.onclick = function(){

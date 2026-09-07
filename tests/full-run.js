@@ -6434,8 +6434,13 @@ function checkEncoding(){
       }
       /* Длинные строки переносятся, а не прячутся под полосу прокрутки. */
       const code = win.querySelector(".ldcode");
-      if (code && !/\bwrap\b/.test(code.className))
+      if (code && !/\bflow\b/.test(code.className))
         bad("[витрина] код снова уезжает вправо вместо переноса");
+      /* ⚠️ И панель не должна носить чужих классов раскладки: «wrap» — это
+         класс страницы, и с ним панель получала её отступы (26 сверху,
+         90 снизу). Поймано глазами фаундера 07.09.2026. */
+      if (code && /\bwrap\b/.test(code.className))
+        bad("[витрина] на панели кода класс «wrap» — это класс страницы, он даст ей чужие отступы");
     }
     if (problems.length === p0) showcaseChecked++;
     viewReset(g);

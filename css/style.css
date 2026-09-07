@@ -1873,6 +1873,10 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .dwhint{margin-left:auto;font-size:12px;color:var(--faint)}
 /* Подпись без кнопки рядом: прижимать её вправо не к чему. */
 .dwhint.own{margin-left:0;flex:1;min-width:220px}
+/* Вспышка «пересчитал»: единственный знак, который виден, даже если
+   изменившаяся строка вывода осталась ниже края панели. */
+@keyframes ranewflash{ from{background:rgba(0,224,184,.22)} to{background:var(--res)} }
+.ldout.ranew{animation:ranewflash .65s ease-out}
 /* Число в коде, которое можно поменять. Выглядит как число (тот же цвет, тот
    же моноширинный шрифт), а что его можно трогать — говорит пунктир снизу.
    Кнопкой не притворяется: это по-прежнему код, просто живой. */
@@ -1880,7 +1884,8 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   color:var(--n);background:none;border:none;padding:0;margin:0;
   border-bottom:1px dashed currentColor;text-align:center;min-width:1.1em;
   border-radius:0;-moz-appearance:textfield}
-.numin:hover{background:rgba(127,127,127,.14)}
+.numin{background:rgba(127,127,127,.10)}
+.numin:hover{background:rgba(127,127,127,.22)}
 .numin:focus{outline:2px solid var(--acc2);outline-offset:1px;background:rgba(127,127,127,.14)}
 /* Окно вывода. Высота задана снизу, а не сверху: без min-height окно
    подпрыгивает на высоту шести строк в тот момент, когда на него смотрят. */
@@ -2214,7 +2219,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 /* Витрина показывает чужую готовую программу, а не редактор: читать её надо
    глазами и целиком. Поэтому длинные строки переносятся, а не уезжают вправо
    под полосу прокрутки, которую в macOS ещё и не видно. */
-.ldcode.wrap pre{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:visible}
+.ldcode.flow pre{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:visible}
 @media (max-width:760px){
   .shbody{grid-template-columns:1fr}
   .shcol + .shcol{border-left:none;border-top:1px solid var(--line)}
