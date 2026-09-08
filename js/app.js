@@ -11111,205 +11111,30 @@ function winSpec(task, v){
 }
 
 /* ================= витрина: что создают ученики =================
-   Замер 03.09.2026 (docs/market-research.md § 3а): у Айтигенио есть отдельная
-   страница «Что создают ученики на курсе?» — карусель работ с подписью
-   «Лабиринт (Python), имя, 14 лет». Это и есть то, чем школы продают:
-   **родитель покупает не программу курса, а вот эту картинку.** У нас такой
-   страницы не было вовсе — показаны уроки, то есть процесс, а не изделие.
-
-   ⚠️ ГЛАВНОЕ ОГРАНИЧЕНИЕ, И ОНО ЖЕ ПРЕИМУЩЕСТВО. Под чужой работой у них
-   стоит имя и возраст ребёнка — это персональные данные, и под них берут
-   согласие родителя. Нам этот путь закрыт конструкцией продукта, и открывать
-   его нельзя: отсутствие ПДн — снятое юридическое ограничение целого сегмента
-   (docs/foresight-2027.md § 7). Публичная лента чужих работ потребовала бы
-   ещё и модерации, то есть ручного труда на каждого клиента, — прямо против
-   требования автономности.
-
-   Поэтому витрина устроена из двух половин, и ни в одной нет чужого ребёнка:
-     1. что СОБИРАЕТСЯ на курсе — шесть проектов, рисунки и игры, запускаемые
-        прямо здесь нашим же движком. Это честнее карусели скриншотов: у нас
-        не картинка работы, а сама работа;
-     2. что собрал ТЫ — только на этом устройстве, никуда не уезжает.
-
-   ⚠️ Код проекта, который ещё не пройден, здесь НЕ показывается. Витрина — это
-   витрина, а не ответы: родителю нужен результат, а выложить решение проекта
-   рядом с курсом значит своими руками сломать курс. Показываем вывод (первые
-   строки) — и код только у того проекта, который ребёнок уже собрал сам.
-   ============================================================ */
-var SHOW_LINES = 12;      /* столько строк вывода показываем в карточке */
-var showOut = {};         /* вывод считается один раз за сессию */
-
-function showcaseRun(code, stdin){
-  var key = code + "\u0000" + (stdin || []).join("\u0000");
-  if (showOut[key] === undefined){
-    var r = Runtime.get("mini").run(code, { stdin: (stdin || []).slice() });
-    showOut[key] = r.error ? null : String(r.output || "").replace(/\n+$/, "");
-  }
-  return showOut[key];
-}
-/* Готовая программа проекта — это последний шаг. Берём её же, что и экран
-   «проект собран», чтобы витрина не разошлась с тем, что получит ребёнок.
-   ⚠️ Игра-проект ЖДЁТ ходов — витрине отдаём записанную партию из её же
-   проверки (step.stdin): на экране живой вывод настоящей игры, а не ошибка. */
-function showcaseProjects(){
-  return projectsList().map(function(p){
-    var last = p.steps[p.steps.length - 1];
-    var code = last.solution || "";
-    return { p: p, code: code, out: showcaseRun(code, last.stdin), done: projectDone(p.id) };
-  });
-}
-/* Сколько уроков надо пройти, чтобы дойти до проекта: честная цена входа,
-   а не «начни прямо сейчас». Проект «Напарник» живёт вне миров. */
-function showcaseAfter(p){
-  if (p.world === 0) return "после раздела «Ты и ИИ»";
-  var w = CURRICULUM.world(p.world);
-  if (!w || !w.lessons || !w.lessons.length) return "после мира " + p.world;
-  return "после урока " + w.lessons[w.lessons.length - 1].num;
-}
-
-function screenShowcase(){
-  var seq = enterScreen("home", "works");
-  session = { id:null, attempts:0, hints:0, shown:false };
-
-  var list = showcaseProjects();
-  var doneN = list.filter(function(x){ return x.done; }).length;
-  var pics = galleryList().length, made = buildsList().length;
-  var mine = myTasksList().length, got = solvedCount();
-
-  var h = '<div class="lvlhead"><div><div class="idx">витрина</div>' +
-    '<h1>🏗 Что создают ученики</h1></div>' +
-    '<div class="right"><span class="tag">можно запустить прямо здесь</span></div></div>' +
-    '<p class="lede">Программа курса ничего не говорит родителю: «списки, словари, классы» — ' +
-    'это слова. Вот вещи, которые ученик собирает своими руками. Все они запускаются ' +
-    'прямо на этой странице — это не картинки работ, а сами работы.</p>';
-
-  h += '<div class="card"><h3>🧱 Шесть программ курса</h3>' +
-    '<p class="dim">Каждая собирается по шагам в конце своего мира: ребёнок дописывает её сам, ' +
-    'а движок проверяет каждый шаг. Нажмите «Что печатает» — программа выполнится здесь и сейчас.</p>' +
-    '<div class="shelf">';
-  list.forEach(function(x){
-    var p = x.p;
-    h += '<div class="partcard"><div class="parthead">' +
-      '<b>' + p.emoji + ' ' + esc(p.title) + (x.done ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
-      '<span class="dim">' + esc(showcaseAfter(p)) + '</span></div>' +
-      '<p class="dim">' + esc(p.tagline) + '</p>' +
-      (x.out === null
-        ? '<p class="dim">Программа этого проекта запускается на экране проекта.</p>'
-        : '<div class="partbar"><button class="rbtn check" data-show="' + p.id + '">▶ Что печатает</button>' +
-          (x.done ? '<button class="rbtn sec" data-showopen="' + p.id + '">Открыть мою</button>' : '') +
-          '</div><pre class="showout" data-out="' + p.id + '" hidden></pre>') +
-      '</div>';
-  });
-  h += '</div>' +
-    '<p class="dim">⚠️ Кода непройденного проекта здесь нет намеренно: витрина — это витрина, ' +
-    'а не ответы. Выложить решение рядом с курсом значит своими руками сломать курс.</p></div>';
-
-  /* Рисунки грузятся отдельно: контент мира приходит по требованию, и держать
-     ради витрины все пять миров в памяти незачем. */
-  h += '<div class="card" id="showdraw"><h3>🎨 Что рисует черепашка</h3>' +
-    '<p class="dim">Рисунки считает тот же движок — это настоящий вывод программ из уроков, ' +
-    'а не заготовленные картинки.</p><div class="drawstrip" id="drawstrip">' +
-    '<p class="dim">Загружаем…</p></div></div>';
-
-  var games = gamesList();
-  if (games.length){
-    h += '<div class="card"><h3>🎮 Игры, у которых виден код</h3>' +
-      '<p class="dim">В каждую можно играть, и у каждой рядом лежит её программа — ' +
-      'её можно менять прямо во время игры.</p><div class="admrow">';
-    games.forEach(function(g){
-      h += '<button class="rbtn sec" data-game="' + esc(g.id) + '">' + g.emoji + ' ' + esc(g.title) + '</button>';
-    });
-    h += '</div></div>';
-  }
-
-  /* ---------- вторая половина: что собрал ТЫ ---------- */
-  h += '<div class="card"><h3>🎒 А это собрано на этом устройстве</h3>' +
-    (doneN || pics || made || mine
-      ? '<ul class="trsum">' +
-        '<li>Программ курса собрано: <b>' + doneN + '</b> из ' + list.length + '.</li>' +
-        (pics ? '<li>Рисунков в галерее: <b>' + pics + '</b>.</li>' : '') +
-        (made ? '<li>Вещей собрано в мастерской: <b>' + made + '</b>.</li>' : '') +
-        (mine ? '<li>Своих заданий придумано: <b>' + mine + '</b>' +
-                (got ? ', и их решали <b>' + got + '</b> ' + plural(got, "раз", "раза", "раз") : '') + '.</li>' : '') +
-        '</ul>' +
-        '<div class="admrow"><button class="rbtn check" id="showfolio">🎒 Открыть портфолио</button></div>'
-      : '<p class="dim">Пока пусто. Первая программа появится, когда будет собран проект первого мира — ' +
-        'и встанет сюда же, рядом с остальными.</p>') + '</div>';
-
-  /* ---------- почему тут нет чужих детей ---------- */
-  h += '<div class="card"><h3>⚖️ Почему здесь нет чужих работ с именами</h3>' +
-    '<p>У школ под работой в такой карусели стоит имя и возраст ребёнка. Это персональные ' +
-    'данные, и берут их с согласия родителя. Мы имя ребёнка не спрашиваем вовсе и на сервер ' +
-    'не отправляем — значит и показывать нам нечего, и это не недостаток витрины, а её условие.</p>' +
-    '<p class="dim">Публичной ленты работ у нас тоже не будет: её пришлось бы кому-то проверять руками. ' +
-    'Вместо неё — <b>адресная ссылка</b>: любую свою работу или задачу ребёнок отправляет ' +
-    'конкретному человеку, и она не попадает никуда больше.</p></div>';
-
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
-  app.innerHTML = h;
-
-  app.querySelectorAll("[data-show]").forEach(function(b){
-    b.onclick = function(){
-      var id = b.getAttribute("data-show");
-      var box = app.querySelector('[data-out="' + id + '"]');
-      var x = list.filter(function(y){ return y.p.id === id; })[0];
-      if (!box || !x || x.out === null) return;
-      var lines = x.out.split("\n");
-      box.hidden = false;
-      box.textContent = lines.slice(0, SHOW_LINES).join("\n") +
-        (lines.length > SHOW_LINES ? "\n… и ещё " + (lines.length - SHOW_LINES) + " " +
-          plural(lines.length - SHOW_LINES, "строка", "строки", "строк") : "");
-      b.disabled = true;
-    };
-  });
-  app.querySelectorAll("[data-showopen]").forEach(function(b){
-    b.onclick = function(){ screenProjectDone(b.getAttribute("data-showopen")); };
-  });
-  app.querySelectorAll("[data-game]").forEach(function(b){
-    b.onclick = function(){ openGame(b.getAttribute("data-game")); };
-  });
-  var sf = document.getElementById("showfolio");
-  if (sf) sf.onclick = screenFolio;
-  document.getElementById("tomap").onclick = goHome;
-
-  /* Рисунки: контент первого мира приходит по требованию. Если экран за это
-     время сменился, ничего не рисуем — иначе canvas'ы уедут в чужую разметку. */
-  worldContent(1).then(function(){
-    if (screenStale(seq)) return;
-    var strip = document.getElementById("drawstrip");
-    if (!strip) return;
-    var eng = Runtime.get("mini"), ready = [];
-    strip.innerHTML = "";
-    (CURRICULUM.world(1).lessons || []).forEach(function(l){
-      if (ready.length >= 4) return;
-      var body = lessonBody(l);
-      if (!body || !body.draw || !body.task) return;
-      var t = eng.newTurtle ? eng.newTurtle() : null;
-      if (!t) return;
-      var r = eng.run(body.task.solution, { turtle: t });
-      if (r.error || !t.segs || !t.segs.length) return;
-      var cell = document.createElement("div");
-      cell.className = "drawcell";
-      cell.innerHTML = '<canvas></canvas><span class="dim">урок ' + l.num + ' · ' + esc(l.title) + '</span>';
-      strip.appendChild(cell);
-      ready.push({ canvas: cell.querySelector("canvas"), turtle: t });
-    });
-    if (!ready.length){
-      strip.innerHTML = '<p class="dim">Рисующие уроки появятся вместе с первым миром.</p>';
-      return;
-    }
-    /* ⚠️ Рисуем ТОЛЬКО когда вся полоска уже в документе. drawTurtle меряет
-       ширину холста по факту, а сетка добирает колонки по мере добавления
-       ячеек: рисунок, нарисованный сразу после вставки, мерил ширину пустой
-       строки и выходил вчетверо крупнее соседа. Так и было — 2000 точек у
-       первого против 480 у последнего. */
-    ready.forEach(function(x){ drawTurtle(x.canvas, x.turtle); });
-  });
-
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
+   ⚠️ Экран переехал в js/screens-showcase.js — первый шаг по архитектурному
+   долгу (разбор docs/arhitektura-2026-09-08.md § 4). Договор между файлами
+   и почему витрина взята первой — в шапке того файла. Здесь остаётся только
+   сборка объекта A: это и есть список всего, чем экран связан с остальным
+   продуктом, и он нарочно стоит на виду, а не спрятан в общий контейнер.
+   ⚠️ Функции ниже объявлены через var, а не function: значит до этой строки
+   их звать нельзя. Все нынешние места вызова — обработчики и таблица маршрутов,
+   они срабатывают позже. ============================================ */
+var SHOWCASE = KVSCREENS.showcase({
+  app: app,
+  clearSession: function(){ session = { id:null, attempts:0, hints:0, shown:false }; },
+  enterScreen: enterScreen, refreshTop: refreshTop, esc: esc, plural: plural,
+  buildsList: buildsList, galleryList: galleryList, gamesList: gamesList,
+  myTasksList: myTasksList, solvedCount: solvedCount, drawTurtle: drawTurtle,
+  lessonBody: lessonBody, worldContent: worldContent,
+  projectsList: projectsList, projectDone: projectDone,
+  openGame: openGame, goHome: goHome, screenFolio: screenFolio,
+  screenProjectDone: screenProjectDone, screenStale: screenStale
+});
+var SHOW_LINES = SHOWCASE.SHOW_LINES,
+    showcaseRun = SHOWCASE.showcaseRun,
+    showcaseProjects = SHOWCASE.showcaseProjects,
+    showcaseAfter = SHOWCASE.showcaseAfter,
+    screenShowcase = SHOWCASE.screenShowcase;
 /* ================= мастерская: полка деталей и верстак =================
    Ставка Г из docs/foresight-2027.md § 3, дешёвый вход по § 12 п. 5:
    НЕ переписывать сто уроков в сквозную линию, а надстроить сверху.

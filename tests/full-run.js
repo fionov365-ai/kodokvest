@@ -6676,7 +6676,16 @@ function checkEncoding(){
          так и случилось на бою в первый же день. Список мест снимаем с самого
          приложения, а не переписываем руками. */
       {
-        const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+        /* ⚠️ Читаем НЕ только app.js. С 1.108.0 экраны отрезаются в отдельные
+           файлы js/screens-*.js (договор — в шапке js/screens-showcase.js), и
+           первое же отрезание уронило эту проверку: ключ «works» остался в
+           словаре, а enterScreen("home","works") уехал в другой файл. Список
+           файлов берём маской, чтобы следующее отрезание не уронило её снова. */
+        const src = [path.join(root, "js/app.js")]
+          .concat(fs.readdirSync(path.join(root, "js"))
+                    .filter(f => /^screens-.*\.js$/.test(f))
+                    .map(f => path.join(root, "js", f)))
+          .map(f => fs.readFileSync(f, "utf8")).join("\n");
         const real = new Set();
         (src.match(/enterScreen\([^,)]*,\s*"([a-z]+)"/g) || []).forEach(m =>
           real.add(m.replace(/^.*"([a-z]+)"$/, "$1")));
