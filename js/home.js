@@ -231,6 +231,46 @@ function screenWorlds(){
   });
   h += '</div>';
 
+  /* ===== экзамены: ОГЭ и ЕГЭ =====
+     ⚠️ Заведено 08.09.2026 по жалобе фаундера: «на сайте сложно найти про ЕГЭ
+     и ОГЭ, спрятано». Так и было — экзамен лежал двумя карточками в ряду
+     «Тренировки», а над тем рядом написано «без звёзд, по желанию» и «куда
+     заходят, когда хочется». То есть единственное, за что родитель платит
+     деньгами, стояло под вывеской «необязательное развлечение».
+     Теперь это свой раздел, и стоит он ВЫШЕ тренировок. Ниже уроков он стоит
+     тоже сознательно: курс — по-прежнему главное, а экзамен — вторая дверь,
+     а не замена первой.
+     ⚠️ Числа приходят из карты экзаменов (A.examTally), а не пишутся здесь:
+     «27 из 27» обязано перестать быть правдой в ту же секунду, когда
+     перестанет. */
+  var exE = A.examTally("ege"), exO = A.examTally("oge");
+  if (exE && exO){
+    h += '<div class="sect"><h2>Экзамены</h2>' +
+      '<div class="line"></div><span class="cnt">ОГЭ и ЕГЭ по номерам</span></div>' +
+      '<p class="dim">Здесь экзамен не «немного алгоритмов», а полный список заданий: ' +
+      'против каждого номера написано, есть у нас задача или ещё нет. Баллы не считаем — ' +
+      'шкала перевода меняется каждый год.</p>' +
+      '<div class="hubgrid">' +
+      [exE, exO].map(function(x){
+        return '<button class="hubcard" data-exam="' + x.id + '">' +
+          '<span class="hubem">' + x.em + '</span>' +
+          '<b>' + A.esc(x.full) + '</b>' +
+          '<span class="hubwhy">Карта всех ' + x.total + ' заданий по номерам.</span>' +
+          '<span class="hubstat">задачи есть на ' + x.есть + ' из ' + x.total + '</span>' +
+          '</button>';
+      }).join("") +
+      '<button class="hubcard" data-exam="variant"><span class="hubem">📝</span>' +
+        '<b>Пробный вариант</b>' +
+        '<span class="hubwhy">Весь экзамен подряд, как в мае.</span>' +
+        (A.variantStat() ? '<span class="hubstat">' + A.esc(A.variantStat()) + '</span>' : '') +
+        '</button>' +
+      '<button class="hubcard" data-exam="robot"><span class="hubem">🤖</span>' +
+        '<b>Робот</b>' +
+        '<span class="hubwhy">Второе задание ОГЭ по выбору: русские команды вместо Python.</span>' +
+        '</button>' +
+      '</div>';
+  }
+
   /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
   h += '<div class="sect"><h2>Тренировки</h2>' + A.qm("train", "Что такое тренировки") +
     '<div class="line"></div>' +
@@ -238,7 +278,12 @@ function screenWorlds(){
     '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
     'Звёзд они не дают, но день занятий засчитывают.</p>' +
     '<div class="hubgrid">' +
-    A.trainCards().map(function(c){
+    /* ⚠️ Экзамен и вариант отсюда убраны нарочно: они стоят выше своим
+       разделом. Одна и та же дверь в двух местах одного экрана — это не
+       «заметнее», а «выбирай, какая настоящая». */
+    A.trainCards().filter(function(c){
+      return c.id !== "algo" && c.id !== "variant" && c.id !== "robot";
+    }).map(function(c){
       return '<button class="hubcard" data-train="' + c.id + '">' +
         '<span class="hubem">' + c.em + '</span>' +
         '<b>' + A.esc(c.title) + '</b>' +
@@ -365,6 +410,14 @@ function screenWorlds(){
   if (gw) gw.onclick = A.screenShowcase;
   var gs = document.getElementById("goshop");
   if (gs) gs.onclick = A.screenShop;
+  A.app.querySelectorAll("[data-exam]").forEach(function(b){
+    var k = b.getAttribute("data-exam");
+    b.onclick = function(){
+      if (k === "variant") return A.screenVariant();
+      if (k === "robot") return A.screenRobot();
+      A.openExamMap(k);
+    };
+  });
   var cards = A.trainCards();
   A.app.querySelectorAll("[data-train]").forEach(function(b){
     var id = b.getAttribute("data-train");

@@ -2677,6 +2677,22 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
   .exwhy,.excnt{font-size:12px}
 }
 
+.roomhint{margin:-6px 0 14px;font-size:13px;line-height:1.55;color:var(--faint)}
+.roomhint b{color:var(--soft);font-weight:600}
+
+/* ---------- ЕГЭ и ОГЭ на вывеске ----------
+   Два числа рядом и список под ними. Сетка на две колонки и одинаковые
+   карточки — раздел обязан читаться за секунду, а не разбираться. */
+.exlanding{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:0 0 16px}
+.exlbig{border:1px solid var(--line);border-radius:16px;padding:18px 20px;background:var(--panel);
+  display:flex;flex-direction:column;gap:4px}
+.exlnum{font-family:'Fredoka',system-ui,sans-serif;font-size:34px;line-height:1.1;color:var(--acc)}
+.exlbig b{font-size:15px}
+.exllist{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:10px}
+.exllist li{border-left:3px solid var(--line2);padding:2px 0 2px 14px;font-size:14.5px;line-height:1.5;color:var(--soft)}
+.exllist li b{color:var(--ink)}
+@media (max-width:620px){ .exlnum{font-size:28px} .exllist li{font-size:14px} }
+
 /* ---------- пробный вариант ----------
    Строка варианта — та же строка карты экзамена (.exrow), только под темой
    задания стоит вторая строчка: наша задача на этот номер. Отдельной сетки
@@ -17533,13 +17549,45 @@ function screenWorlds(){
   h += '</div>';
 
    
+  var exE = A.examTally("ege"), exO = A.examTally("oge");
+  if (exE && exO){
+    h += '<div class="sect"><h2>Экзамены</h2>' +
+      '<div class="line"></div><span class="cnt">ОГЭ и ЕГЭ по номерам</span></div>' +
+      '<p class="dim">Здесь экзамен не «немного алгоритмов», а полный список заданий: ' +
+      'против каждого номера написано, есть у нас задача или ещё нет. Баллы не считаем — ' +
+      'шкала перевода меняется каждый год.</p>' +
+      '<div class="hubgrid">' +
+      [exE, exO].map(function(x){
+        return '<button class="hubcard" data-exam="' + x.id + '">' +
+          '<span class="hubem">' + x.em + '</span>' +
+          '<b>' + A.esc(x.full) + '</b>' +
+          '<span class="hubwhy">Карта всех ' + x.total + ' заданий по номерам.</span>' +
+          '<span class="hubstat">задачи есть на ' + x.есть + ' из ' + x.total + '</span>' +
+          '</button>';
+      }).join("") +
+      '<button class="hubcard" data-exam="variant"><span class="hubem">📝</span>' +
+        '<b>Пробный вариант</b>' +
+        '<span class="hubwhy">Весь экзамен подряд, как в мае.</span>' +
+        (A.variantStat() ? '<span class="hubstat">' + A.esc(A.variantStat()) + '</span>' : '') +
+        '</button>' +
+      '<button class="hubcard" data-exam="robot"><span class="hubem">🤖</span>' +
+        '<b>Робот</b>' +
+        '<span class="hubwhy">Второе задание ОГЭ по выбору: русские команды вместо Python.</span>' +
+        '</button>' +
+      '</div>';
+  }
+
+   
   h += '<div class="sect"><h2>Тренировки</h2>' + A.qm("train", "Что такое тренировки") +
     '<div class="line"></div>' +
     '<span class="cnt">без звёзд, по желанию</span></div>' +
     '<p class="dim">Это не обязательная программа, а то, куда заходят, когда хочется. ' +
     'Звёзд они не дают, но день занятий засчитывают.</p>' +
     '<div class="hubgrid">' +
-    A.trainCards().map(function(c){
+     
+    A.trainCards().filter(function(c){
+      return c.id !== "algo" && c.id !== "variant" && c.id !== "robot";
+    }).map(function(c){
       return '<button class="hubcard" data-train="' + c.id + '">' +
         '<span class="hubem">' + c.em + '</span>' +
         '<b>' + A.esc(c.title) + '</b>' +
@@ -17654,6 +17702,14 @@ function screenWorlds(){
   if (gw) gw.onclick = A.screenShowcase;
   var gs = document.getElementById("goshop");
   if (gs) gs.onclick = A.screenShop;
+  A.app.querySelectorAll("[data-exam]").forEach(function(b){
+    var k = b.getAttribute("data-exam");
+    b.onclick = function(){
+      if (k === "variant") return A.screenVariant();
+      if (k === "robot") return A.screenRobot();
+      A.openExamMap(k);
+    };
+  });
   var cards = A.trainCards();
   A.app.querySelectorAll("[data-train]").forEach(function(b){
     var id = b.getAttribute("data-train");
@@ -25714,6 +25770,12 @@ var HOME = KVSCREENS.home({
   screenShowcase: screenShowcase, screenShop: screenShop,
   screenPath: screenPath, screenGuide: screenGuide,
   screenAdminHome: screenAdminHome,
+   
+  examTally: examTally, openExamMap: openExamMap,
+  screenVariant: function(){ location.hash = "#variant"; screenVariant(); },
+  screenRobot: function(){ location.hash = "#robot"; screenRobot(); },
+   
+  variantStat: function(){ return typeof variantStat === "function" ? variantStat() : ""; },
   S: function(){ return S; },
   session: function(){ return session; },
   newSession: function(v){ session = v; }
@@ -33624,6 +33686,20 @@ function aboutCounts(){
   };
 }
  
+function examTally(id){
+  var ex = (window.EXAMS || {})[id];
+  if (!ex) return null;
+  var t = EXAMS.tally(ex, algoCountIn);
+  return { id: id, em: ex.em, title: ex.title, full: ex.full, total: ex.total,
+           year: ex.year, есть: t.yes + t.part, нет: t.soon + t.no };
+}
+ 
+function openExamMap(id){
+  algoTab = (id === "oge" || id === "ege") ? id : "all";
+  location.hash = "#algo";
+  screenAlgo();
+}
+ 
 function aboutFootHTML(){
   return '<div class="landfoot"><button class="linkbtn" data-goabout="1">' +
     '🐍 О тренажёре: что это, сколько уроков и что видит взрослый</button></div>';
@@ -34045,10 +34121,15 @@ var ROOM_TABS = [["kids","👥 Ученики"], ["group","👨‍🏫 Груп�
 function roomNavHTML(cur){
    
   if (!isAdminDevice()) return "";
+   
   return '<div class="roomnav">' + ROOM_TABS.map(function(t){
     return '<button' + (t[0] === cur ? ' class="on"' : '') + ' data-room="' + t[0] + '">' +
       t[1] + '</button>';
-  }).join("") + '</div>';
+  }).join("") + '</div>' +
+  '<p class="roomhint">Это <b>один кабинет</b> и три его вкладки, а не три разных входа: ' +
+  '<b>Ученики</b> — кого вы ведёте с этого устройства, имена и ссылки; ' +
+  '<b>Группа</b> — все ученики сразу, с сервера, по ключу репетитора; ' +
+  '<b>Панель</b> — служебное: обзор, сервер, звёзды и перенос прогресса файлом.</p>';
 }
 function wireRoomNav(box){
   (box || document).querySelectorAll("[data-room]").forEach(function(b){
@@ -34318,6 +34399,37 @@ function screenAbout(){
   '</section>';
 
    
+  var exE = examTally("ege"), exO = examTally("oge");
+  if (exE && exO){
+    h += '<div class="landsect rv" id="exams">' +
+      secHead("ЕГЭ и ОГЭ", "Экзамен целиком, а не «немного алгоритмов»",
+        "Все задания обоих экзаменов по номерам. Против каждого честно написано, " +
+        "что у нас есть, а чего нет и почему.") +
+      '<div class="exlanding">' +
+        '<div class="exlbig"><span class="exlnum">' + exE.есть + ' / ' + exE.total + '</span>' +
+          '<b>заданий ЕГЭ закрыто задачами</b>' +
+          '<span class="dim">нумерация демоверсии ' + exE.year + ' года</span></div>' +
+        '<div class="exlbig"><span class="exlnum">' + exO.есть + ' / ' + exO.total + '</span>' +
+          '<b>заданий ОГЭ закрыто задачами</b>' +
+          '<span class="dim">включая «Робота» с русскими командами</span></div>' +
+      '</div>' +
+      '<ul class="exllist">' +
+        '<li><b>Карта экзамена по номерам.</b> Не «темы вообще», а список всех ' +
+        exE.total + ' заданий ЕГЭ и ' + exO.total + ' ОГЭ: где у нас есть задачи, ' +
+        'где ещё нет, а где не будет никогда — и почему.</li>' +
+        '<li><b>Пробный вариант целиком.</b> Весь экзамен подряд, по одной задаче на ' +
+        'номер, как в мае. В конце — сколько номеров закрыто и на каких просело.</li>' +
+        '<li><b>Исполнитель «Робот» с русскими командами.</b> Это второе задание ОГЭ ' +
+        'по выбору — то самое, где в школе дают КуМир и где Python не примут.</li>' +
+         
+        '<li><b>Баллов мы не считаем.</b> Шкала перевода меняется каждый год и ' +
+        'объявляется не нами. Показываем проверяемое: какие номера закрыты, а какие нет.</li>' +
+      '</ul>' +
+      '<div class="landcta"><button class="bigbtn" data-land="exams">Открыть карту экзамена →</button></div>' +
+    '</div>';
+  }
+
+   
   h += '<div class="landsect rv">' +
     secHead("Чего нет у других", "Четыре вещи, ради которых это и делалось",
       "Не обещания — то, что уже работает.") +
@@ -34444,6 +34556,8 @@ function screenAbout(){
         if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
         return;
       }
+       
+      if (k === "exams") return openExamMap("ege");
       screenRoles();
     };
   });
