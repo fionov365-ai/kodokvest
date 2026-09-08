@@ -15146,6 +15146,67 @@ function landHwRender(){
    читался как сломанная вёрстка. Узкая строка нужна (длинную не читают), но
    она обязана выглядеть решением, а не обрезкой, — поэтому справа от неё не
    пустота, а заголовок слева. На узком экране колонки складываются. */
+/* ---- вход и регистрация на ПЕРВОМ экране ----
+   Раньше единственная форма жила на отдельном экране, а с вывески к ней вели
+   ТРИ шага: «Войти» → «кто занимается?» → «Я ученик» → и только там поле с
+   именем. Гость уходил раньше, чем доходил до поля, а внизу страницы стояла
+   вторая кнопка про то же самое — то есть страница заканчивалась дважды.
+   ⚠️ Одно поле на оба дела, переключатель строкой под ним. Две формы рядом
+   («заведи профиль» и «войди по коду») читались бы как выбор, которого гость
+   сделать не может: он ещё не знает, есть у него код или нет. */
+var landAuthMode = "reg";
+function landAuthHTML(){
+  var code = landAuthMode === "code";
+  return '<div class="ldauthrow">' +
+      '<input type="text" id="ldname" autocomplete="off" spellcheck="false"' +
+        ' maxlength="' + (code ? 32 : 24) + '"' +
+        ' aria-label="' + (code ? "Код ученика" : "Имя ребёнка") + '"' +
+        ' placeholder="' + (code ? "например, anya-3f7a" : "Имя ребёнка") + '">' +
+      '<button class="bigbtn" data-auth="go">' + (code ? "Войти →" : "Начать →") + '</button>' +
+    '</div><div class="msg" id="ldmsg"></div>' +
+    '<p class="ldalt">' +
+      /* Вход по коду есть только когда есть сервер: без него doLogin всё равно
+         ответит отказом, а ссылка на несуществующую дверь хуже её отсутствия. */
+      (serverOn()
+        ? (code
+            ? 'Ещё нет профиля? <button class="linkjump" data-auth="reg">Завести по имени</button>'
+            : 'Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>') + ' · '
+        : '') +
+      '<button class="linkjump" data-auth="try">👀 Посмотреть первый урок</button>' +
+    '</p>';
+}
+function landAuthRender(focus){
+  var box = document.getElementById("ldauth");
+  if (!box) return;
+  box.innerHTML = landAuthHTML();
+  var inp = document.getElementById("ldname");
+  function fail(err){
+    var m = document.getElementById("ldmsg");
+    if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
+    if (inp && inp.focus) inp.focus();
+  }
+  function go(){
+    /* Тот же порядок, что и на экране входа ученика: заход ребёнком снимает
+       роли взрослого, иначе на общем устройстве профиль заводится поверх
+       открытого кабинета. Пароль при этом цел. */
+    becomeKid();
+    if (landAuthMode === "code") return doLogin(inp.value, fail);
+    doRegister(inp.value, fail);
+  }
+  box.querySelectorAll("[data-auth]").forEach(function(b){
+    b.onclick = function(){
+      var k = b.getAttribute("data-auth");
+      if (k === "go") return go();
+      if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      landAuthMode = k;
+      landAuthRender(true);
+    };
+  });
+  if (inp){
+    inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
+    if (focus && inp.focus) inp.focus();
+  }
+}
 function secHead(kick, title, lede){
   return '<div class="secthead"><div class="sechl"><span class="seckick">' + kick + '</span>' +
     '<h2>' + title + '</h2></div><p class="lede">' + lede + '</p></div>';
@@ -15159,6 +15220,14 @@ function screenAbout(){
      (посмотрел урок с этой же вывески и решил его). Тогда первая кнопка — не
      «начать», а «продолжить»: иначе сделанное выглядит потерянным. */
   var started = Object.keys(S.stars).length;
+  /* ⚠️ Форма входа показывается только тому, у кого профиля ЕЩЁ НЕТ, и считается
+     это по профилю, а не по звёздам. Ловушка: заведённый ребёнок, не сдавший ни
+     одного урока, — это started === 0, и по звёздам ему выдали бы форму
+     регистрации, а «Начать» в ней зовёт doRegister, который стирает локальный
+     прогресс. То есть вернувшийся на вывеску новичок мог обнулить себя одной
+     кнопкой. Роль взрослого тоже считается профилем: заводить ребёнка поверх
+     открытого кабинета — не то, зачем родитель зашёл на вывеску. */
+  var known = !!(myCode() || S.name || isAdminDevice() || isParentDevice());
 
   var h = '<div class="land">';
 
@@ -15201,13 +15270,13 @@ function screenAbout(){
          а плитками ниже: там это видно, а не рассказано. */
       '<p class="landlede"><b>' + c.lessons + '</b> ' + plural(c.lessons, "урок", "урока", "уроков") +
         ' Python прямо в браузере. Код запускается сразу, ошибки объясняются по-русски.</p>' +
-      '<div class="landcta">' +
-        (started
-          ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
-            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-          : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
-            '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
-      '</div>' +
+      (started || known
+        ? '<div class="landcta">' +
+            '<button class="bigbtn" data-land="on">' +
+              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
+          '</div>'
+        : '<div class="ldauth" id="ldauth"></div>') +
       /* Возражения, которые родитель проговаривает про себя, пока читает
          заголовок. Отвечать на них абзацем ниже поздно — до абзаца он не
          дойдёт, а до строчки фишек глаз доезжает за секунду.
@@ -15358,10 +15427,15 @@ function screenAbout(){
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
       '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
+      /* ⚠️ Внизу больше не вторая дверь, а указатель на ту же самую. Пока
+         здесь стояла своя кнопка «Войти или завести профиль», страница
+         заканчивалась дважды и к одному действию вели две дороги. */
       '<div class="landcta">' +
-        (started ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' : '') +
-        '<button class="bigbtn' + (started ? ' ghost' : '') + '" data-land="in">' +
-          (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
+        (started || known
+          ? '<button class="bigbtn" data-land="on">' +
+              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+          : '<button class="bigbtn" data-land="up">↑ Завести профиль</button>') +
       '</div>' +
       '<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
       'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
@@ -15374,6 +15448,13 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      if (k === "up"){                   /* наверх, к единственной форме входа */
+        var f = document.getElementById("ldauth");
+        if (f && f.scrollIntoView) f.scrollIntoView({ behavior:"smooth", block:"center" });
+        var i = document.getElementById("ldname");
+        if (i && i.focus) i.focus();
+        return;
+      }
       if (k === "adults"){
         var a = document.getElementById("adults");
         if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
@@ -15382,6 +15463,7 @@ function screenAbout(){
       screenRoles();
     };
   });
+  landAuthRender();
   wireLandDemo();
   wireLandTabs(app.querySelector(".ltabs.how"), landHowRender);
   wireLandTabs(app.querySelectorAll(".ltabs.how")[1], landElseRender);

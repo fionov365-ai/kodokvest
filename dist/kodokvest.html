@@ -2056,6 +2056,23 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:7px 12px}
 .landtrust b{font-weight:600;color:var(--ink)}
 
+/* ---------- вход и регистрация на первом экране ----------
+   Одно поле на два дела: имя заводит профиль, код открывает уже заведённый.
+   ⚠️ Размер шрифта в поле 16px и на широком экране тоже: меньше — и Safari
+   на телефоне сам увеличивает страницу при касании поля, а первый экран
+   уезжает вбок. */
+.ldauth{margin:24px 0 0;max-width:520px}
+.ldauthrow{display:flex;flex-wrap:wrap;gap:12px}
+.ldauthrow input{flex:1 1 200px;min-width:0;background:var(--panel);
+  border:1px solid var(--line2);border-radius:12px;padding:13px 16px;
+  color:var(--ink);font-size:16px;font-family:'Inter',sans-serif}
+.ldauthrow input::placeholder{color:var(--faint)}
+.ldauthrow input:focus{outline:none;border-color:var(--acc)}
+/* Свечение — то же, что было у главной кнопки вывески: действие на первом
+   экране по-прежнему одно, просто теперь у него есть поле. */
+.ldauthrow .bigbtn{box-shadow:0 10px 30px -10px var(--acc)}
+.ldalt{margin:12px 0 0;font-size:13.5px;color:var(--faint)}
+
 /* ---------- живое окно редактора на первом экране ----------
    Главный аргумент вывески и единственная её «картинка». Никакого скриншота:
    внутри работает тот же движок, что и в уроке, поэтому окно не может
@@ -2630,6 +2647,8 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
   .landend h2{font-size:26px}
   .landend{padding:28px 20px}
   .landcta .bigbtn{width:100%}
+  .ldauthrow .bigbtn{width:100%}
+  .ldauth{margin-top:20px}
   .landworld{grid-template-columns:44px minmax(0,1fr);gap:13px;padding:16px 16px 16px 18px}
   .landworld .lwico{width:44px;height:44px;border-radius:14px;font-size:22px}
   .lwno{font-size:56px;right:10px}
@@ -31747,6 +31766,57 @@ function landHwRender(){
   box.querySelector("#hwnext").onclick = function(){ landHwSeed++; landHwRender(); };
 }
  
+ 
+var landAuthMode = "reg";
+function landAuthHTML(){
+  var code = landAuthMode === "code";
+  return '<div class="ldauthrow">' +
+      '<input type="text" id="ldname" autocomplete="off" spellcheck="false"' +
+        ' maxlength="' + (code ? 32 : 24) + '"' +
+        ' aria-label="' + (code ? "Код ученика" : "Имя ребёнка") + '"' +
+        ' placeholder="' + (code ? "например, anya-3f7a" : "Имя ребёнка") + '">' +
+      '<button class="bigbtn" data-auth="go">' + (code ? "Войти →" : "Начать →") + '</button>' +
+    '</div><div class="msg" id="ldmsg"></div>' +
+    '<p class="ldalt">' +
+       
+      (serverOn()
+        ? (code
+            ? 'Ещё нет профиля? <button class="linkjump" data-auth="reg">Завести по имени</button>'
+            : 'Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>') + ' · '
+        : '') +
+      '<button class="linkjump" data-auth="try">👀 Посмотреть первый урок</button>' +
+    '</p>';
+}
+function landAuthRender(focus){
+  var box = document.getElementById("ldauth");
+  if (!box) return;
+  box.innerHTML = landAuthHTML();
+  var inp = document.getElementById("ldname");
+  function fail(err){
+    var m = document.getElementById("ldmsg");
+    if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
+    if (inp && inp.focus) inp.focus();
+  }
+  function go(){
+     
+    becomeKid();
+    if (landAuthMode === "code") return doLogin(inp.value, fail);
+    doRegister(inp.value, fail);
+  }
+  box.querySelectorAll("[data-auth]").forEach(function(b){
+    b.onclick = function(){
+      var k = b.getAttribute("data-auth");
+      if (k === "go") return go();
+      if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      landAuthMode = k;
+      landAuthRender(true);
+    };
+  });
+  if (inp){
+    inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
+    if (focus && inp.focus) inp.focus();
+  }
+}
 function secHead(kick, title, lede){
   return '<div class="secthead"><div class="sechl"><span class="seckick">' + kick + '</span>' +
     '<h2>' + title + '</h2></div><p class="lede">' + lede + '</p></div>';
@@ -31758,6 +31828,8 @@ function screenAbout(){
   var c = aboutCounts();
    
   var started = Object.keys(S.stars).length;
+   
+  var known = !!(myCode() || S.name || isAdminDevice() || isParentDevice());
 
   var h = '<div class="land">';
 
@@ -31787,13 +31859,13 @@ function screenAbout(){
        
       '<p class="landlede"><b>' + c.lessons + '</b> ' + plural(c.lessons, "урок", "урока", "уроков") +
         ' Python прямо в браузере. Код запускается сразу, ошибки объясняются по-русски.</p>' +
-      '<div class="landcta">' +
-        (started
-          ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' +
-            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-          : '<button class="bigbtn" data-land="in">Начать заниматься →</button>' +
-            '<button class="bigbtn ghost" data-land="try">👀 Посмотреть первый урок</button>') +
-      '</div>' +
+      (started || known
+        ? '<div class="landcta">' +
+            '<button class="bigbtn" data-land="on">' +
+              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
+          '</div>'
+        : '<div class="ldauth" id="ldauth"></div>') +
        
       '<ul class="landtrust">' +
         '<li>🆓 Сейчас бесплатно</li>' +
@@ -31899,10 +31971,13 @@ function screenAbout(){
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
       '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
+       
       '<div class="landcta">' +
-        (started ? '<button class="bigbtn" data-land="on">Продолжить занятия →</button>' : '') +
-        '<button class="bigbtn' + (started ? ' ghost' : '') + '" data-land="in">' +
-          (started ? "Войти или сменить роль" : "Войти или завести профиль →") + '</button>' +
+        (started || known
+          ? '<button class="bigbtn" data-land="on">' +
+              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+            '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+          : '<button class="bigbtn" data-land="up">↑ Завести профиль</button>') +
       '</div>' +
       '<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
       'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
@@ -31915,6 +31990,13 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
+      if (k === "up"){                    
+        var f = document.getElementById("ldauth");
+        if (f && f.scrollIntoView) f.scrollIntoView({ behavior:"smooth", block:"center" });
+        var i = document.getElementById("ldname");
+        if (i && i.focus) i.focus();
+        return;
+      }
       if (k === "adults"){
         var a = document.getElementById("adults");
         if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
@@ -31923,6 +32005,7 @@ function screenAbout(){
       screenRoles();
     };
   });
+  landAuthRender();
   wireLandDemo();
   wireLandTabs(app.querySelector(".ltabs.how"), landHowRender);
   wireLandTabs(app.querySelectorAll(".ltabs.how")[1], landElseRender);

@@ -2002,6 +2002,23 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:7px 12px}
 .landtrust b{font-weight:600;color:var(--ink)}
 
+/* ---------- вход и регистрация на первом экране ----------
+   Одно поле на два дела: имя заводит профиль, код открывает уже заведённый.
+   ⚠️ Размер шрифта в поле 16px и на широком экране тоже: меньше — и Safari
+   на телефоне сам увеличивает страницу при касании поля, а первый экран
+   уезжает вбок. */
+.ldauth{margin:24px 0 0;max-width:520px}
+.ldauthrow{display:flex;flex-wrap:wrap;gap:12px}
+.ldauthrow input{flex:1 1 200px;min-width:0;background:var(--panel);
+  border:1px solid var(--line2);border-radius:12px;padding:13px 16px;
+  color:var(--ink);font-size:16px;font-family:'Inter',sans-serif}
+.ldauthrow input::placeholder{color:var(--faint)}
+.ldauthrow input:focus{outline:none;border-color:var(--acc)}
+/* Свечение — то же, что было у главной кнопки вывески: действие на первом
+   экране по-прежнему одно, просто теперь у него есть поле. */
+.ldauthrow .bigbtn{box-shadow:0 10px 30px -10px var(--acc)}
+.ldalt{margin:12px 0 0;font-size:13.5px;color:var(--faint)}
+
 /* ---------- живое окно редактора на первом экране ----------
    Главный аргумент вывески и единственная её «картинка». Никакого скриншота:
    внутри работает тот же движок, что и в уроке, поэтому окно не может
@@ -2576,6 +2593,8 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
   .landend h2{font-size:26px}
   .landend{padding:28px 20px}
   .landcta .bigbtn{width:100%}
+  .ldauthrow .bigbtn{width:100%}
+  .ldauth{margin-top:20px}
   .landworld{grid-template-columns:44px minmax(0,1fr);gap:13px;padding:16px 16px 16px 18px}
   .landworld .lwico{width:44px;height:44px;border-radius:14px;font-size:22px}
   .lwno{font-size:56px;right:10px}
