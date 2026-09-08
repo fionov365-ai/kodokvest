@@ -2611,6 +2611,37 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .roomnav button:hover{color:var(--ink);border-color:var(--acc)}
 .roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 
+/* ---------- карта экзамена: все задания по номерам ----------
+   Строка на задание, а не карточка: заданий 27, и карточками это была бы
+   стена, по которой не пробежать глазами. Читателю тут нужно одно движение —
+   сверху вниз, «что есть, чего нет».
+   ⚠️ Три состояния различаются ЦВЕТОМ ЛЕВОГО КРАЯ и словом, а не только
+   цветом: дальтонизм и чёрно-белая печать не должны стирать разницу. */
+.extabs{margin-bottom:14px}
+.extally{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;font-size:13px}
+.extally span{border:1px solid var(--line);border-radius:11px;padding:6px 11px;background:var(--panel2)}
+.extally .exok{color:var(--ok)}
+.extally .exno{color:var(--faint)}
+.exmap{display:flex;flex-direction:column;gap:6px;margin:0 0 18px}
+.exrow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;
+  border:1px solid var(--line);border-left:3px solid var(--line2);border-radius:12px;
+  padding:10px 14px;background:var(--panel)}
+.exrow.yes{border-left-color:var(--ok)}
+.exrow.soon{border-left-color:var(--acc)}
+.exrow.no{border-left-color:var(--line2);background:var(--panel2)}
+.exn{font-weight:700;font-size:15px;color:var(--faint);text-align:right}
+.exrow.yes .exn{color:var(--ok)}
+.ext{font-size:14px;color:var(--ink);line-height:1.4}
+.exrow.no .ext{color:var(--soft)}
+.exact{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.excnt{font-size:12.5px;color:var(--faint)}
+.exwhy{font-size:12.5px;color:var(--faint)}
+@media (max-width:620px){
+  .exrow{grid-template-columns:30px minmax(0,1fr);row-gap:8px;padding:10px 12px}
+  .exact{grid-column:2;justify-content:flex-start}
+  .exwhy,.excnt{font-size:12px}
+}
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте
@@ -12694,7 +12725,7 @@ window.EXAMS = {
       { n:7,  t:"Определение объёма информации",                  g:["info"] },
       { n:8,  t:"Системы счисления и комбинаторика",              g:["base"] },
       { n:9,  t:"Работа с электронными таблицами",                g:[] },
-      { n:10, t:"Поиск в текстовом редакторе",                    g:[], off:true },
+      { n:10, t:"Поиск в текстовом редакторе",                    g:[], off:"текстовый редактор" },
       { n:11, t:"Вычисление количества информации",               g:["info"] },
       { n:12, t:"Исполнители с фиксированным набором команд",     g:["exec"] },
       { n:13, t:"IP-адрес и маски подсети",                       g:[] },
@@ -12728,13 +12759,13 @@ window.EXAMS = {
       { n:5,  t:"Алгоритмы и блок-схемы",                           g:["exec"] },
       { n:6,  t:"Линейный и циклический алгоритм",                  g:["exec"] },
       { n:7,  t:"Принципы адресации в Интернете",                   g:[] },
-      { n:8,  t:"Поиск информации в Интернете",                     g:[], off:true },
+      { n:8,  t:"Поиск информации в Интернете",                     g:[], off:"живой поиск в Интернете" },
       { n:9,  t:"Анализ информации в виде схем",                    g:["graph"] },
       { n:10, t:"Дискретная форма представления информации",        g:["base","info"] },
-      { n:11, t:"Поиск файлов и каталогов",                         g:[], off:true },
-      { n:12, t:"Файловая система",                                 g:[], off:true },
-      { n:13, t:"Презентация или текстовый документ",               g:[], off:true },
-      { n:14, t:"Электронные таблицы и диаграмма",                  g:[], off:true },
+      { n:11, t:"Поиск файлов и каталогов",                         g:[], off:"файлы на диске" },
+      { n:12, t:"Файловая система",                                 g:[], off:"файлы на диске" },
+      { n:13, t:"Презентация или текстовый документ",               g:[], off:"редактор документов" },
+      { n:14, t:"Электронные таблицы и диаграмма",                  g:[], off:"электронные таблицы" },
       { n:15, t:"Программа или алгоритм для «Робота»",              g:["oge","search","sort"] }
     ]
   },
@@ -26053,7 +26084,8 @@ function examMapHTML(ex){
       right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
         '<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
     } else if (st === "no"){
-      right = '<span class="exwhy">офисная программа — судить нечем</span>';
+       
+      right = '<span class="exwhy">судить нечем: ' + esc(x.off) + '</span>';
     } else {
       right = '<span class="exwhy">пока нет задач</span>';
     }
@@ -26063,10 +26095,11 @@ function examMapHTML(ex){
   });
   h += '</div>' +
     '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
-    'Наш судья запускает программу и сверяет вывод. Создать презентацию, ' +
-    'построить диаграмму в таблице или найти файл в папке он не может, и обещать ' +
-    'это мы не будем. Всё остальное решается программой — даже там, где на ' +
-    'экзамене принято брать таблицу: мы даём те же данные текстом.</div>';
+    'Наш судья запускает программу и сверяет вывод. Создать презентацию, построить ' +
+    'диаграмму, найти файл на диске или сходить в поисковик он не может, и обещать ' +
+    'это мы не будем. Всё остальное решается программой — даже там, где на экзамене ' +
+    'принято брать таблицу: мы даём те же данные текстом, а решение остаётся ' +
+    'программой. Поэтому «пока нет задач» — это план работ, а не граница.</div>';
   return h;
 }
 function screenAlgo(){
@@ -26077,7 +26110,33 @@ function screenAlgo(){
   var h = '<div class="lvlhead"><div><div class="idx">информатика: алгоритмы и экзамен</div>' +
     '<h1>🧮 Алгоритмы, ОГЭ и ЕГЭ</h1></div>' +
     '<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
-    '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
+    '<div class="roomnav extabs">' + ALGO_TABS.map(function(t){
+      return '<button' + (t[0] === algoTab ? ' class="on"' : '') +
+        ' data-algotab="' + t[0] + '">' + t[1] + '</button>';
+    }).join("") + '</div>';
+
+   
+  if (algoTab !== "all"){
+    h += examMapHTML(EXAMS[algoTab]) +
+      '<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+    app.innerHTML = h;
+    app.querySelectorAll("[data-algotab]").forEach(function(b){
+      b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
+    });
+     
+    app.querySelectorAll("[data-exgo]").forEach(function(b){
+      b.onclick = function(){
+        var t = algoNextIn(b.getAttribute("data-exgo").split(","));
+        if (t) openAlgo(t.id);
+      };
+    });
+    document.getElementById("tomap").onclick = screenTrain;
+    refreshTop();
+    window.scrollTo({ top:0, behavior:"smooth" });
+    return;
+  }
+
+  h += '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
     'сортировка, цена алгоритма, кодирование информации, логика, графы, исполнители, ' +
     'рекурсия и перебор — и типовые задания экзамена. Заходить можно с любого места курса — ' +
     'всё, что нужно, объясняется прямо в задании.</p>';
@@ -26090,8 +26149,11 @@ function screenAlgo(){
     'добавлены в 1.77.0, исполнители и перебор — в 1.81.0: их тут решают программой, и наш ' +
     'судья их проверяет. Чего по-прежнему нет: <b>электронные таблицы</b>. Их проверять нечем — ' +
     'движок умеет запускать Python, а не считать формулы Excel.</li>' +
-    '<li><b>Номер задания не называем.</b> Нумерация между годами меняется, а сверить её ' +
-    'по спецификации мы пока не смогли — она лежит архивом. Поэтому «в формате ОГЭ», а не «задание №».</li>' +
+     
+    '<li><b>Номера заданий — только на вкладках экзаменов.</b> Нумерация между ' +
+    'годами меняется, поэтому там написан год, с которого она снята, а сами номера ' +
+    'лежат в одном месте и правятся одной таблицей. В названиях задач номеров нет: ' +
+    'задача про графы остаётся задачей про графы, в каком бы году её ни спросили.</li>' +
     '<li><b>Типы ЕГЭ — свои формулировки по духу экзамена.</b> Мы берём те типы, ' +
     'где ответ считает программа; электронные таблицы — не наши. ' +
     'На настоящем экзамене — настоящий Python: то, что ты пишешь здесь, там работает так же.</li>' +
@@ -26134,6 +26196,9 @@ function screenAlgo(){
   app.innerHTML = h;
   app.querySelectorAll("[data-algo]").forEach(function(b){
     b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
+  });
+  app.querySelectorAll("[data-algotab]").forEach(function(b){
+    b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
   });
   document.getElementById("tomap").onclick = screenTrain;
   var me = document.getElementById("myexam");

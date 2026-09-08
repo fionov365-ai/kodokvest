@@ -2557,6 +2557,37 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .roomnav button:hover{color:var(--ink);border-color:var(--acc)}
 .roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 
+/* ---------- карта экзамена: все задания по номерам ----------
+   Строка на задание, а не карточка: заданий 27, и карточками это была бы
+   стена, по которой не пробежать глазами. Читателю тут нужно одно движение —
+   сверху вниз, «что есть, чего нет».
+   ⚠️ Три состояния различаются ЦВЕТОМ ЛЕВОГО КРАЯ и словом, а не только
+   цветом: дальтонизм и чёрно-белая печать не должны стирать разницу. */
+.extabs{margin-bottom:14px}
+.extally{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;font-size:13px}
+.extally span{border:1px solid var(--line);border-radius:11px;padding:6px 11px;background:var(--panel2)}
+.extally .exok{color:var(--ok)}
+.extally .exno{color:var(--faint)}
+.exmap{display:flex;flex-direction:column;gap:6px;margin:0 0 18px}
+.exrow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;
+  border:1px solid var(--line);border-left:3px solid var(--line2);border-radius:12px;
+  padding:10px 14px;background:var(--panel)}
+.exrow.yes{border-left-color:var(--ok)}
+.exrow.soon{border-left-color:var(--acc)}
+.exrow.no{border-left-color:var(--line2);background:var(--panel2)}
+.exn{font-weight:700;font-size:15px;color:var(--faint);text-align:right}
+.exrow.yes .exn{color:var(--ok)}
+.ext{font-size:14px;color:var(--ink);line-height:1.4}
+.exrow.no .ext{color:var(--soft)}
+.exact{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.excnt{font-size:12.5px;color:var(--faint)}
+.exwhy{font-size:12.5px;color:var(--faint)}
+@media (max-width:620px){
+  .exrow{grid-template-columns:30px minmax(0,1fr);row-gap:8px;padding:10px 12px}
+  .exact{grid-column:2;justify-content:flex-start}
+  .exwhy,.excnt{font-size:12px}
+}
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте
