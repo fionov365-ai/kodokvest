@@ -54,7 +54,7 @@ const markup = index.slice(bodyStart, scriptStart).trim();
 /* порядок важен: движок → рантайм → программа → контент → приложение */
 const scripts = ["js/engine-mini.js", "js/runtime.js", "js/curriculum.js",
                  "js/games.js", "js/warmups.js", "js/ailab.js", "js/projects.js",
-                 "js/cheatsheet.js", "js/specs.js", "js/algo.js", "js/algo-exam.js", "js/algo-ege.js", "js/exams.js", "js/parent.js", "js/homework.js",
+                 "js/cheatsheet.js", "js/specs.js", "js/algo.js", "js/algo-exam.js", "js/algo-ege.js", "js/algo-oge.js", "js/exams.js", "js/parent.js", "js/homework.js",
                  "js/cloud-config.js", "js/cloud.js", "js/screens-showcase.js"];
 
 const contentDir = path.join(root, "content");

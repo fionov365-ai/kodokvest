@@ -2568,6 +2568,9 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .extally span{border:1px solid var(--line);border-radius:11px;padding:6px 11px;background:var(--panel2)}
 .extally .exok{color:var(--ok)}
 .extally .exno{color:var(--faint)}
+.extally .expart{color:var(--warn)}
+.exrow.part{border-left-color:var(--warn)}
+.exrow.part .exn{color:var(--warn)}
 .exmap{display:flex;flex-direction:column;gap:6px;margin:0 0 18px}
 .exrow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;
   border:1px solid var(--line);border-left:3px solid var(--line2);border-radius:12px;
