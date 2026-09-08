@@ -6677,15 +6677,20 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
          так и случилось на бою в первый же день. Список мест снимаем с самого
          приложения, а не переписываем руками. */
       {
-        /* ⚠️ Читаем НЕ только app.js. С 1.108.0 экраны отрезаются в отдельные
-           файлы js/screens-*.js (договор — в шапке js/screens-showcase.js), и
-           первое же отрезание уронило эту проверку: ключ «works» остался в
-           словаре, а enterScreen("home","works") уехал в другой файл. Список
-           файлов берём маской, чтобы следующее отрезание не уронило её снова. */
+        /* ⚠️ Читаем НЕ только app.js. Экраны отрезаются в отдельные файлы
+           (договор — в шапке js/screens-showcase.js), и эта проверка падала
+           уже ДВАЖДЫ по одной причине: список экранов брался по имени файла.
+           Сначала читался только app.js — уехала витрина, ключ «works» стал
+           «выдуманным». Потом маска js/screens-*.js — уехала песочница в
+           js/sandbox.js, и то же случилось с ключом «sand».
+           Теперь файлы отбираются ПО ПРИЗНАКУ, а не по имени: модуль экрана —
+           это тот, кто регистрируется в KVSCREENS. Имя файла больше ничего не
+           решает, и третьего раза не будет. */
         const src = [path.join(root, "js/app.js")]
           .concat(fs.readdirSync(path.join(root, "js"))
-                    .filter(f => /^screens-.*\.js$/.test(f))
-                    .map(f => path.join(root, "js", f)))
+                    .filter(f => /\.js$/.test(f) && f !== "app.js")
+                    .map(f => path.join(root, "js", f))
+                    .filter(f => /KVSCREENS\s*\./.test(fs.readFileSync(f, "utf8"))))
           .map(f => fs.readFileSync(f, "utf8")).join("\n");
         const real = new Set();
         (src.match(/enterScreen\([^,)]*,\s*"([a-z]+)"/g) || []).forEach(m =>

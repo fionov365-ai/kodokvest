@@ -55,7 +55,7 @@ const markup = index.slice(bodyStart, scriptStart).trim();
 const scripts = ["js/engine-mini.js", "js/runtime.js", "js/curriculum.js",
                  "js/games.js", "js/warmups.js", "js/ailab.js", "js/projects.js",
                  "js/cheatsheet.js", "js/specs.js", "js/algo.js", "js/algo-exam.js", "js/algo-ege.js", "js/algo-oge.js", "js/robot.js", "js/robot-tasks.js", "js/exams.js", "js/parent.js", "js/homework.js",
-                 "js/cloud-config.js", "js/cloud.js", "js/editor.js", "js/story.js", "js/studio.js", "js/screens-robot.js", "js/screens-showcase.js"];
+                 "js/cloud-config.js", "js/cloud.js", "js/editor.js", "js/story.js", "js/studio.js", "js/sandbox.js", "js/screens-robot.js", "js/screens-showcase.js"];
 
 const contentDir = path.join(root, "content");
 const contentFiles = fs.readdirSync(contentDir)
