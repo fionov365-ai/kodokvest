@@ -34,7 +34,7 @@ var SHELL = [
   "./js/specs.js", "./js/algo.js", "./js/algo-exam.js",
   "./js/parent.js",
   "./js/homework.js",
-  "./js/cloud-config.js", "./js/cloud.js", "./js/screens-showcase.js", "./js/app.js",
+  "./js/exams.js", "./js/cloud-config.js", "./js/cloud.js", "./js/screens-showcase.js", "./js/app.js",
   "./content/world1.js", "./content/world2.js", "./content/world3.js",
   "./content/world4.js", "./content/world5.js"
 ];

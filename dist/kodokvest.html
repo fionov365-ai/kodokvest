@@ -12677,6 +12677,85 @@ window.ALGO = (window.ALGO || []).concat([
 
 <script>
  
+window.EXAMS = {
+
+   
+  ege: {
+    id: "ege", em: "🎓", title: "ЕГЭ", full: "ЕГЭ · 11 класс", year: 2027,
+    total: 27,
+    langs: "C#, C++, Pascal, Java, Python",
+    tasks: [
+      { n:1,  t:"Анализ информационных моделей. Графы",           g:["graph"] },
+      { n:2,  t:"Алгебра логики. Таблицы истинности",             g:["logic"] },
+      { n:3,  t:"Поиск и сортировка в базах данных",              g:[] },
+      { n:4,  t:"Кодирование и декодирование. Условие Фано",      g:["info"] },
+      { n:5,  t:"Формальное исполнение алгоритмов",               g:["exec"] },
+      { n:6,  t:"Результат работы исполнителя",                   g:["exec"] },
+      { n:7,  t:"Определение объёма информации",                  g:["info"] },
+      { n:8,  t:"Системы счисления и комбинаторика",              g:["base"] },
+      { n:9,  t:"Работа с электронными таблицами",                g:[] },
+      { n:10, t:"Поиск в текстовом редакторе",                    g:[], off:true },
+      { n:11, t:"Вычисление количества информации",               g:["info"] },
+      { n:12, t:"Исполнители с фиксированным набором команд",     g:["exec"] },
+      { n:13, t:"IP-адрес и маски подсети",                       g:[] },
+      { n:14, t:"Системы счисления. Кодирование чисел",           g:["base"] },
+      { n:15, t:"Преобразование логических выражений",            g:["logic"] },
+      { n:16, t:"Вычисление рекуррентных выражений",              g:["rec"] },
+      { n:17, t:"Обработка числовой последовательности",          g:["ege","search"] },
+      { n:18, t:"Таблицы: робот-сборщик",                         g:[] },
+      { n:19, t:"Теория игр: выигрышная позиция",                 g:["rec"] },
+      { n:20, t:"Теория игр: выигрышная стратегия",               g:["rec"] },
+      { n:21, t:"Теория игр: полный разбор",                      g:["rec"] },
+      { n:22, t:"Многопоточные процессы",                         g:[] },
+      { n:23, t:"Графы: подсчёт количества программ",             g:["graph","rec"] },
+      { n:24, t:"Программирование: обработка строк",              g:["ege"] },
+      { n:25, t:"Обработка целочисленной информации",             g:["ege"] },
+      { n:26, t:"Сортировка и обработка целых чисел",             g:["ege","sort"] },
+      { n:27, t:"Анализ данных. Кластеризация",                   g:["ege","cost"] }
+    ]
+  },
+
+   
+  oge: {
+    id: "oge", em: "📄", title: "ОГЭ", full: "ОГЭ · 9 класс", year: 2026,
+    total: 15,
+    langs: "изучаемый в школе язык или исполнитель «Робот»",
+    tasks: [
+      { n:1,  t:"Количественные параметры информационных объектов", g:["info"] },
+      { n:2,  t:"Кодирование и декодирование информации",           g:["info"] },
+      { n:3,  t:"Значение логического выражения",                   g:["logic"] },
+      { n:4,  t:"Формализация и моделирование",                     g:[] },
+      { n:5,  t:"Алгоритмы и блок-схемы",                           g:["exec"] },
+      { n:6,  t:"Линейный и циклический алгоритм",                  g:["exec"] },
+      { n:7,  t:"Принципы адресации в Интернете",                   g:[] },
+      { n:8,  t:"Поиск информации в Интернете",                     g:[], off:true },
+      { n:9,  t:"Анализ информации в виде схем",                    g:["graph"] },
+      { n:10, t:"Дискретная форма представления информации",        g:["base","info"] },
+      { n:11, t:"Поиск файлов и каталогов",                         g:[], off:true },
+      { n:12, t:"Файловая система",                                 g:[], off:true },
+      { n:13, t:"Презентация или текстовый документ",               g:[], off:true },
+      { n:14, t:"Электронные таблицы и диаграмма",                  g:[], off:true },
+      { n:15, t:"Программа или алгоритм для «Робота»",              g:["oge","search","sort"] }
+    ]
+  },
+
+   
+  state: function(task, countIn){
+    if (task.g && task.g.length && countIn(task.g) > 0) return "yes";
+    return task.off ? "no" : "soon";
+  },
+   
+  tally: function(ex, countIn){
+    var t = { yes:0, soon:0, no:0 }, self = this;
+    ex.tasks.forEach(function(x){ t[self.state(x, countIn)]++; });
+    return t;
+  }
+};
+
+</script>
+
+<script>
+ 
 var PARENT_TASKS = [
   {
     id: "kopilka",
@@ -25937,6 +26016,59 @@ function algoById(id){
 function algoDone(id){ return !!(S.algo && S.algo[id]); }
 function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
 
+ 
+var algoTab = "all";
+var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
+ 
+function algoCountIn(groups){
+  return algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; }).length;
+}
+function algoDoneIn(groups){
+  return algoList().filter(function(x){
+    return groups.indexOf(x.group) >= 0 && algoDone(x.id); }).length;
+}
+ 
+function algoNextIn(groups){
+  var xs = algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; });
+  var un = xs.filter(function(x){ return !algoDone(x.id); });
+  return (un[0] || xs[0] || null);
+}
+function examMapHTML(ex){
+  var t = EXAMS.tally(ex, algoCountIn);
+  var h = '<p class="lede">Все <b>' + ex.total + '</b> заданий ' + esc(ex.title) +
+    ' по номерам. Против каждого честно написано, что у нас есть, а чего нет.</p>' +
+    '<p class="dim">Нумерация снята с демоверсии <b>' + ex.year + '</b> года и между ' +
+    'годами меняется — сверяйтесь с демоверсией своего года. На экзамене принимают: ' +
+    esc(ex.langs) + '.</p>' +
+    '<div class="extally">' +
+      '<span class="exok">✓ есть задачи: ' + t.yes + '</span>' +
+      '<span class="exsoon">◻ пока нет: ' + t.soon + '</span>' +
+      '<span class="exno">— судить нечем: ' + t.no + '</span></div>' +
+    '<div class="exmap">';
+  ex.tasks.forEach(function(x){
+    var st = EXAMS.state(x, algoCountIn);
+    var right;
+    if (st === "yes"){
+      var n = algoCountIn(x.g), d = algoDoneIn(x.g);
+      right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
+        '<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
+    } else if (st === "no"){
+      right = '<span class="exwhy">офисная программа — судить нечем</span>';
+    } else {
+      right = '<span class="exwhy">пока нет задач</span>';
+    }
+    h += '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
+      '<span class="ext">' + esc(x.t) + '</span>' +
+      '<span class="exact">' + right + '</span></div>';
+  });
+  h += '</div>' +
+    '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
+    'Наш судья запускает программу и сверяет вывод. Создать презентацию, ' +
+    'построить диаграмму в таблице или найти файл в папке он не может, и обещать ' +
+    'это мы не будем. Всё остальное решается программой — даже там, где на ' +
+    'экзамене принято брать таблицу: мы даём те же данные текстом.</div>';
+  return h;
+}
 function screenAlgo(){
   enterScreen("train", "algo");
   session = { id:null, attempts:0, hints:0, shown:false };

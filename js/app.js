@@ -8051,6 +8051,72 @@ function algoById(id){
 function algoDone(id){ return !!(S.algo && S.algo[id]); }
 function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
 
+/* ---- вкладки «Темы / ОГЭ / ЕГЭ» ----
+   Решение 08.09.2026 (docs/arhitektura-2026-09-08.md § 2 и § 8): вкладка —
+   это ЭКЗАМЕН, а не кусок списка. Резать 52 задачи по группам нельзя: группы
+   «oge» и «ege» — это только формат заданий, а девять тем из одиннадцати
+   (логика, графы, кодирование, системы счисления, исполнители, рекурсия,
+   поиск, сортировка, цена) работают на оба экзамена сразу. Поэтому общая
+   тема честно стоит в обеих вкладках, а не выбирает себе одну.
+   ⚠️ Вкладка экзамена показывает ВСЕ его задания по номерам, включая те,
+   которых у нас нет. Пустая строка в полном списке — это план работ на виду;
+   выкинутая строка — враньё умолчанием. Номера и их год лежат в js/exams.js,
+   там же разобрано, почему прежнее правило «номер не называем» уточнено, а
+   не отменено. */
+var algoTab = "all";
+var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
+/* Сколько НАШИХ задач закрывает перечисленные группы. Считается по живому
+   списку, а не по записанному числу: иначе разойдётся в день наполнения. */
+function algoCountIn(groups){
+  return algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; }).length;
+}
+function algoDoneIn(groups){
+  return algoList().filter(function(x){
+    return groups.indexOf(x.group) >= 0 && algoDone(x.id); }).length;
+}
+/* Первая НЕрешённая задача темы — чтобы кнопка «решать» вела к делу, а не
+   к началу списка, где уже всё пройдено. */
+function algoNextIn(groups){
+  var xs = algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; });
+  var un = xs.filter(function(x){ return !algoDone(x.id); });
+  return (un[0] || xs[0] || null);
+}
+function examMapHTML(ex){
+  var t = EXAMS.tally(ex, algoCountIn);
+  var h = '<p class="lede">Все <b>' + ex.total + '</b> заданий ' + esc(ex.title) +
+    ' по номерам. Против каждого честно написано, что у нас есть, а чего нет.</p>' +
+    '<p class="dim">Нумерация снята с демоверсии <b>' + ex.year + '</b> года и между ' +
+    'годами меняется — сверяйтесь с демоверсией своего года. На экзамене принимают: ' +
+    esc(ex.langs) + '.</p>' +
+    '<div class="extally">' +
+      '<span class="exok">✓ есть задачи: ' + t.yes + '</span>' +
+      '<span class="exsoon">◻ пока нет: ' + t.soon + '</span>' +
+      '<span class="exno">— судить нечем: ' + t.no + '</span></div>' +
+    '<div class="exmap">';
+  ex.tasks.forEach(function(x){
+    var st = EXAMS.state(x, algoCountIn);
+    var right;
+    if (st === "yes"){
+      var n = algoCountIn(x.g), d = algoDoneIn(x.g);
+      right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
+        '<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
+    } else if (st === "no"){
+      right = '<span class="exwhy">офисная программа — судить нечем</span>';
+    } else {
+      right = '<span class="exwhy">пока нет задач</span>';
+    }
+    h += '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
+      '<span class="ext">' + esc(x.t) + '</span>' +
+      '<span class="exact">' + right + '</span></div>';
+  });
+  h += '</div>' +
+    '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
+    'Наш судья запускает программу и сверяет вывод. Создать презентацию, ' +
+    'построить диаграмму в таблице или найти файл в папке он не может, и обещать ' +
+    'это мы не будем. Всё остальное решается программой — даже там, где на ' +
+    'экзамене принято брать таблицу: мы даём те же данные текстом.</div>';
+  return h;
+}
 function screenAlgo(){
   enterScreen("train", "algo");
   session = { id:null, attempts:0, hints:0, shown:false };
