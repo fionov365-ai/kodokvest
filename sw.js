@@ -17,7 +17,7 @@
    старые файлы жили в кэше вечно и могли подмешаться к новой странице.
    Теперь каждый выпуск заводит свой кэш, а старые чистятся в activate.
    Версия обязана совпадать с package.json — на это есть проверка в тестах. */
-var CACHE = "kodokvest-1.118.0";
+var CACHE = "kodokvest-1.119.0";
 
 /* Оболочка: то, без чего страница не откроется. Уроки (content/worldN.js)
    тоже здесь — иначе офлайн открылась бы карта миров без самих уроков. */
@@ -34,7 +34,7 @@ var SHELL = [
   "./js/specs.js", "./js/algo.js", "./js/algo-exam.js",
   "./js/parent.js",
   "./js/homework.js",
-  "./js/algo-ege.js", "./js/algo-oge.js", "./js/robot.js", "./js/robot-tasks.js", "./js/exams.js", "./js/cloud-config.js", "./js/cloud.js", "./js/editor.js", "./js/story.js", "./js/studio.js", "./js/sandbox.js", "./js/account.js", "./js/screens-robot.js", "./js/screens-showcase.js", "./js/app.js",
+  "./js/algo-ege.js", "./js/algo-oge.js", "./js/robot.js", "./js/robot-tasks.js", "./js/exams.js", "./js/cloud-config.js", "./js/cloud.js", "./js/editor.js", "./js/story.js", "./js/studio.js", "./js/sandbox.js", "./js/account.js", "./js/home.js", "./js/screens-robot.js", "./js/screens-showcase.js", "./js/app.js",
   "./content/world1.js", "./content/world2.js", "./content/world3.js",
   "./content/world4.js", "./content/world5.js"
 ];
