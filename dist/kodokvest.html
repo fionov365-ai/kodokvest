@@ -2623,6 +2623,38 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .extally .exok{color:var(--ok)}
 .extally .exno{color:var(--faint)}
 .extally .expart{color:var(--warn)}
+
+/* ---------- поле Робота ----------
+   Клетки — сетка из <i>, а не картинка: поле читается программой чтения с
+   экрана, масштабируется без мыла и не требует ни одного байта картинок.
+   ⚠️ Робот и закрашенная клетка различаются НЕ только цветом: у робота стоит
+   значок. Одного цвета мало — дальтонизм и чёрно-белая печать его стирают. */
+.rbf{display:grid;grid-template-columns:repeat(var(--rbw),minmax(0,1fr));gap:2px;
+  max-width:340px;margin:0 0 10px;background:var(--line);border:1px solid var(--line2);
+  border-radius:10px;padding:2px}
+.rbc{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  background:var(--panel);border-radius:3px;font-size:15px;font-style:normal;line-height:1}
+.rbc.wall{background:var(--ink)}
+.rbc.paint{background:var(--acc-lt)}
+.rbwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px;margin:0 0 16px}
+.rbhead{font-size:12.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 8px}
+.rbcode{width:100%;box-sizing:border-box;background:var(--code);border:1px solid var(--line2);
+  border-radius:12px;padding:12px 14px;color:var(--ink);font-size:15px;line-height:1.6;
+  font-family:'JetBrains Mono','SF Mono',Menlo,monospace;resize:vertical}
+.rbcode:focus{outline:none;border-color:var(--acc)}
+.rbpair{display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 0}
+.rbpair .rbf{max-width:190px}
+.rbref{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.rbref b{display:block;font-size:12.5px;color:var(--faint);margin:0 0 4px}
+.rbref code{display:block;background:var(--sunken);border-radius:8px;padding:6px 9px;
+  margin:0 0 5px;font-size:13px;line-height:1.5;color:var(--codeink)}
+.rbhints{margin:0;padding-left:20px;font-size:14px;line-height:1.6;color:var(--soft)}
+.rbhints li{margin:0 0 6px}
+@media (max-width:720px){
+  .rbwrap{grid-template-columns:minmax(0,1fr)}
+  .rbf{max-width:280px}
+}
 .exrow.part{border-left-color:var(--warn)}
 .exrow.part .exn{color:var(--warn)}
 .exmap{display:flex;flex-direction:column;gap:6px;margin:0 0 18px}
@@ -13150,9 +13182,379 @@ window.ALGO = (window.ALGO || []).concat([
     "Вложенные папки отдельно обходить не надо: их пути тоже начинаются с нужного каталога.",
     "Если ни один путь не подошёл, сумма так и останется нулём — это верный ответ."
   ]
+},
+
+ 
+{
+  id: "graph-table", group: "graph", emoji: "🗺",
+  title: "Кратчайший путь по таблице",
+  tag: "таблица и схема",
+  intro: "Таблица расстояний и схема дорог — это одно и то же, записанное по-разному. Программе удобнее таблица.",
+  goal: "Дана таблица расстояний между пунктами: на пересечении строки и столбца — длина дороги, " +
+        "а ноль значит, что прямой дороги нет. Напиши программу, которая печатает длину кратчайшего " +
+        "пути из первого пункта в последний.",
+  list: [
+    "В первой строке — число пунктов N (2 \u2264 N \u2264 50)",
+    "Далее N\u00d7N строк — таблица по строкам: расстояние от пункта i до пункта j",
+    "Ноль значит «прямой дороги нет»; таблица симметрична",
+    "Путь из первого пункта в последний существует",
+    "Вывести одно число — длину кратчайшего пути"
+  ],
+  sample: { in: ["4", "0","5","0","0", "5","0","2","0", "0","2","0","3", "0","0","3","0"], out: "10" },
+  stdin: ["4", "0","5","0","0", "5","0","2","0", "0","2","0","3", "0","0","3","0"],
+  sets: [
+    ["2", "0","7", "7","0"],
+    ["3", "0","1","10", "1","0","1", "10","1","0"],
+    ["4", "0","1","0","9", "1","0","1","0", "0","1","0","1", "9","0","1","0"]
+  ],
+  starter: "n = int(input())\ntabl = []\nfor i in range(n):\n    stroka = []\n    for j in range(n):\n        stroka.append(int(input()))\n    tabl.append(stroka)\n# улучшай оценки, пока хоть одна улучшается\nprint(0)\n",
+  solution: "n = int(input())\ntabl = []\nfor i in range(n):\n    stroka = []\n    for j in range(n):\n        stroka.append(int(input()))\n    tabl.append(stroka)\nbolshoe = 10 ** 9\nput = [bolshoe] * n\nput[0] = 0\nfor shag in range(n):\n    for i in range(n):\n        for j in range(n):\n            if tabl[i][j] > 0 and put[i] + tabl[i][j] < put[j]:\n                put[j] = put[i] + tabl[i][j]\nprint(put[n - 1])\n",
+  check: { kind: "output" },
+  note: "Главное здесь — увидеть в таблице граф. Ноль на пересечении это не «расстояние ноль», " +
+        "а «дороги нет», и путать эти два смысла — самая частая ошибка. Дальше работает простая " +
+        "мысль: держим для каждого пункта лучшую известную оценку пути и n раз проходим по всем " +
+        "дорогам, улучшая её. Больше n проходов не нужно: кратчайший путь не может состоять " +
+        "более чем из n\u22121 дороги. И «бесконечность» — это просто заведомо большое число.",
+  hints: [
+    "Заведи список оценок: до первого пункта 0, до остальных — заведомо большое число.",
+    "Дорога есть, только если в таблице не ноль: `if tabl[i][j] > 0`.",
+    "Улучшение выглядит так: если `put[i] + tabl[i][j] < put[j]`, то `put[j]` становится меньше.",
+    "Повторить проходы n раз хватает всегда: длиннее чем n\u22121 дорога кратчайший путь не бывает."
+  ]
 }
 
 ]);
+
+</script>
+
+<script>
+ 
+(function(){
+"use strict";
+
+var DIRS = { "вверх":[0,-1], "вниз":[0,1], "влево":[-1,0], "вправо":[1,0] };
+var STOR = { "сверху":[0,-1], "снизу":[0,1], "слева":[-1,0], "справа":[1,0] };
+var MAX_STEPS = 20000;           
+
+ 
+function parseField(rows){
+  var f = { w:0, h:rows.length, walls:{}, painted:{}, x:0, y:0, found:false };
+  rows.forEach(function(row, y){
+    var chars = Array.from(row);
+    if (chars.length > f.w) f.w = chars.length;
+    chars.forEach(function(z, x){
+      var key = x + "," + y;
+      if (z === "#") f.walls[key] = 1;
+      if (z === "*" || z === "+") f.painted[key] = 1;
+      if (z === "@" || z === "+"){ f.x = x; f.y = y; f.found = true; }
+    });
+  });
+  return f;
+}
+function fieldRows(f){
+  var out = [];
+  for (var y = 0; y < f.h; y++){
+    var line = "";
+    for (var x = 0; x < f.w; x++){
+      var key = x + "," + y, here = (f.x === x && f.y === y);
+      if (f.walls[key]) line += "#";
+      else if (here && f.painted[key]) line += "+";
+      else if (here) line += "@";
+      else if (f.painted[key]) line += "*";
+      else line += ".";
+    }
+    out.push(line);
+  }
+  return out;
+}
+ 
+function paintedKeys(f){ return Object.keys(f.painted).sort(); }
+function samePainted(a, b){
+  var ka = paintedKeys(a), kb = paintedKeys(b);
+  return ka.length === kb.length && ka.join(";") === kb.join(";");
+}
+function free(f, dx, dy){
+  var nx = f.x + dx, ny = f.y + dy;
+  if (nx < 0 || ny < 0 || nx >= f.w || ny >= f.h) return false;
+  return !f.walls[nx + "," + ny];
+}
+
+ 
+function err(line, msg){ return { line: line, msg: msg }; }
+
+function tokens(s){
+  return s.replace(/\(/g, " ( ").replace(/\)/g, " ) ").split(/\s+/).filter(Boolean);
+}
+ 
+function parseCond(tk, line){
+  var i = 0;
+  function peek(){ return tk[i]; }
+  function eat(){ return tk[i++]; }
+  function atom(){
+    var t = eat();
+    if (t === "("){ var v = expr(); if (eat() !== ")") throw err(line, "Не закрыта скобка в условии."); return v; }
+    if (t === "не") return { op:"не", a: atom() };
+    if (t === "клетка"){
+      var w = eat();
+      if (w === "закрашена") return { op:"закрашена" };
+      if (w === "чистая")    return { op:"чистая" };
+      throw err(line, "После «клетка» бывает «закрашена» или «чистая», а не «" + w + "».");
+    }
+    if (STOR[t]){
+      var w2 = eat();
+      if (w2 === "свободно") return { op:"свободно", d:t };
+      if (w2 === "стена")    return { op:"стена", d:t };
+      throw err(line, "После «" + t + "» бывает «свободно» или «стена», а не «" + w2 + "».");
+    }
+    throw err(line, "Непонятное условие: «" + t + "».");
+  }
+  function and(){
+    var a = atom();
+    while (peek() === "и"){ eat(); a = { op:"и", a:a, b:atom() }; }
+    return a;
+  }
+  function expr(){
+    var a = and();
+    while (peek() === "или"){ eat(); a = { op:"или", a:a, b:and() }; }
+    return a;
+  }
+  var v = expr();
+  if (i < tk.length) throw err(line, "Лишнее в условии: «" + tk.slice(i).join(" ") + "».");
+  return v;
+}
+
+function parse(text){
+  var lines = String(text || "").split("\n");
+  var prog = [], stack = [prog], heads = [];
+  lines.forEach(function(raw, idx){
+    var line = idx + 1;
+    var s = raw.split("|")[0].trim();
+    if (!s) return;
+    var tk = tokens(s), head = tk[0], body = stack[stack.length - 1];
+
+    if (DIRS[head] || head === "закрасить"){
+      if (tk.length > 1) throw err(line, "После команды «" + head + "» ничего не пишут.");
+      body.push({ t: head, line: line });
+      return;
+    }
+    if (head === "нц"){
+      if (tk[1] === "пока"){
+        if (tk.length < 3) throw err(line, "После «нц пока» нужно условие.");
+        var node = { t:"пока", cond: parseCond(tk.slice(2), line), body: [], line: line };
+        body.push(node); stack.push(node.body); heads.push("нц"); return;
+      }
+      if (tk.length === 3 && tk[2] === "раз" && /^\d+$/.test(tk[1])){
+        var n = { t:"раз", n: +tk[1], body: [], line: line };
+        body.push(n); stack.push(n.body); heads.push("нц"); return;
+      }
+      throw err(line, "Цикл пишется «нц пока <условие>» или «нц <число> раз».");
+    }
+    if (head === "кц"){
+      if (heads.pop() !== "нц") throw err(line, "«кц» без открытого «нц».");
+      stack.pop(); return;
+    }
+    if (head === "если"){
+      if (tk[tk.length - 1] !== "то") throw err(line, "Строка с «если» кончается словом «то».");
+      var f = { t:"если", cond: parseCond(tk.slice(1, -1), line), body: [], other: null, line: line };
+      body.push(f); stack.push(f.body); heads.push("если"); return;
+    }
+    if (head === "иначе"){
+      if (heads[heads.length - 1] !== "если") throw err(line, "«иначе» бывает только внутри «если».");
+      stack.pop();
+      var owner = stack[stack.length - 1];
+      var last = owner[owner.length - 1];
+      last.other = [];
+      stack.push(last.other); return;
+    }
+    if (head === "все"){
+      if (heads.pop() !== "если") throw err(line, "«все» без открытого «если».");
+      stack.pop(); return;
+    }
+    throw err(line, "Непонятная команда: «" + head + "».");
+  });
+  if (heads.length) throw err(lines.length, "Не закрыт «" + (heads[heads.length - 1] === "нц" ? "нц» — нужен «кц" : "если» — нужно «все") + "».");
+  return prog;
+}
+
+ 
+function run(text, field){
+  var f = { w:field.w, h:field.h, walls:field.walls, painted:{}, x:field.x, y:field.y };
+  Object.keys(field.painted).forEach(function(k){ f.painted[k] = 1; });
+  var steps = 0, prog;
+  try { prog = parse(text); }
+  catch(e){ return { field: f, error: e, kind: "разбор" }; }
+
+  function cond(c){
+    if (c.op === "не")   return !cond(c.a);
+    if (c.op === "и")    return cond(c.a) && cond(c.b);
+    if (c.op === "или")  return cond(c.a) || cond(c.b);
+    if (c.op === "закрашена") return !!f.painted[f.x + "," + f.y];
+    if (c.op === "чистая")    return !f.painted[f.x + "," + f.y];
+    var d = STOR[c.d], sv = free(f, d[0], d[1]);
+    return c.op === "свободно" ? sv : !sv;
+  }
+  function block(list){
+    for (var i = 0; i < list.length; i++){
+      var st = list[i];
+      if (++steps > MAX_STEPS)
+        throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+      if (st.t === "закрасить"){ f.painted[f.x + "," + f.y] = 1; continue; }
+      if (DIRS[st.t]){
+        var d = DIRS[st.t];
+        if (!free(f, d[0], d[1]))
+          throw err(st.line, "Робот разбился: «" + st.t + "» упирается в стену.");
+        f.x += d[0]; f.y += d[1]; continue;
+      }
+      if (st.t === "раз"){ for (var k = 0; k < st.n; k++) block(st.body); continue; }
+      if (st.t === "пока"){
+        while (cond(st.cond)){
+          if (++steps > MAX_STEPS)
+            throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+          block(st.body);
+        }
+        continue;
+      }
+      if (st.t === "если"){
+        if (cond(st.cond)) block(st.body);
+        else if (st.other) block(st.other);
+      }
+    }
+  }
+  try { block(prog); }
+  catch(e){ return { field: f, error: e, kind: "выполнение" }; }
+  return { field: f, error: null, steps: steps };
+}
+
+window.ROBOT = {
+  parseField: parseField, fieldRows: fieldRows, run: run, parse: parse,
+  samePainted: samePainted, paintedKeys: paintedKeys, MAX_STEPS: MAX_STEPS
+};
+})();
+
+</script>
+
+<script>
+ 
+window.ROBOT_TASKS = [
+{
+  id: "rb-row", emoji: "➡️", title: "Закрась ряд до стены",
+  tag: "цикл «пока»",
+  intro: "Первая программа на языке Робота. Длина ряда заранее неизвестна — значит, считать шаги нельзя.",
+  goal: "Робот стоит в левом конце коридора, справа где-то стена. Закрась все клетки коридора, " +
+        "включая ту, где Робот стоит сейчас, и не разбейся о стену.",
+  list: [
+    "Длина коридора заранее неизвестна — программа должна работать при любой",
+    "Клетка, где Робот стоит в начале, тоже закрашивается",
+    "Клетку под стеной закрашивать не нужно: туда не попасть"
+  ],
+  field: ["@.....#"],
+  more: [["@.#"], ["@..........#"], ["@#"]],
+  starter: "закрасить\nвправо\nзакрасить\n",
+  solution: "закрасить\nнц пока справа свободно\n  вправо\n  закрасить\nкц\n",
+  note: "«нц N раз» тут не годится принципиально: числа N в условии нет, коридор каждый раз " +
+        "разной длины. Именно поэтому в задании и написано «длина неизвестна» — это подсказка, " +
+        "что нужен цикл «пока», а не счётчик. И порядок важен: закрасить сначала ту клетку, где " +
+        "стоишь, иначе первая останется чистой.",
+  hints: [
+    "Клетку, на которой стоишь, надо закрасить ДО цикла: внутрь цикла Робот попадёт уже сдвинувшись.",
+    "Условие продолжения — «справа свободно»: пока справа не стена, можно шагать.",
+    "Внутри цикла два действия: шаг вправо и закрасить.",
+    "Проверь на коридоре из одной клетки: цикл не выполнится ни разу, а одна клетка всё равно закрашена."
+  ]
+},
+{
+  id: "rb-wall", emoji: "🧱", title: "Вдоль стены",
+  tag: "цикл и условие",
+  intro: "Стена снизу, и её длина неизвестна. Робот идёт вдоль неё и отмечает, где она есть.",
+  goal: "Робот стоит слева. Пройди вправо до конца поля и закрась те клетки, под которыми стена.",
+  list: [
+    "Идти вправо, пока справа свободно",
+    "Закрашивать только те клетки, под которыми стена",
+    "Стена снизу идёт не сплошняком: в ней бывают разрывы",
+    "Клетку, где Робот стоит в начале, тоже надо проверить"
+  ],
+  field: ["@.....",
+          "##.###"],
+  more: [
+    ["@...", "####"],
+    ["@....", ".#.#."],
+    ["@..", "..."]
+  ],
+  starter: "нц пока справа свободно\n  вправо\nкц\n",
+  solution: "если снизу стена то\n  закрасить\nвсе\nнц пока справа свободно\n  вправо\n  если снизу стена то\n    закрасить\n  все\nкц\n",
+  note: "Задача разваливается на две независимые мысли, и в этом вся её польза: «дойти до конца» — " +
+        "это цикл, «закрасить, если под ногами стена» — это условие внутри него. Порознь каждая " +
+        "проста, вместе получается программа, которая работает на любом поле. ⚠️ Стартовую клетку " +
+        "надо проверить ОТДЕЛЬНО, до цикла: в цикл Робот входит уже после шага.",
+  hints: [
+    "Сначала научись просто доходить до правого края: «нц пока справа свободно / вправо / кц».",
+    "Теперь внутрь цикла добавь проверку «если снизу стена то закрасить все».",
+    "Стартовую клетку цикл не увидит — проверь её той же проверкой до цикла.",
+    "«Снизу стена» — это готовое условие, писать «не снизу свободно» не обязательно (хотя и верно)."
+  ]
+},
+{
+  id: "rb-corner", emoji: "📐", title: "В дальний угол",
+  tag: "два цикла подряд",
+  intro: "Поле неизвестного размера, а прийти надо в конкретный угол. Два цикла подряд — и всё.",
+  goal: "Приведи Робота в правый нижний угол поля и закрась только эту клетку. Стен внутри поля нет.",
+  list: [
+    "Размер поля заранее неизвестен",
+    "Закрасить нужно ровно одну клетку — правый нижний угол",
+    "По дороге ничего не закрашивать"
+  ],
+  field: ["@....",
+          ".....",
+          "....."],
+  more: [["@."], ["@...", "....", "....", "...."], ["@", ".", "."]],
+  starter: "нц пока справа свободно\n  вправо\nкц\nзакрасить\n",
+  solution: "нц пока справа свободно\n  вправо\nкц\nнц пока снизу свободно\n  вниз\nкц\nзакрасить\n",
+  note: "Два цикла подряд — самый частый и самый недооценённый приём этого раздела: сначала " +
+        "уехать до упора в одну сторону, потом до упора в другую. Порядок здесь не важен (можно " +
+        "сначала вниз), а вот «закрасить» обязано стоять ПОСЛЕ обоих циклов, иначе закрасится " +
+        "клетка на полпути.",
+  hints: [
+    "Доехать до правого края — цикл «пока справа свободно».",
+    "Доехать до нижнего края — точно такой же цикл, но со «снизу свободно».",
+    "Два цикла ставятся друг за другом: второй начнётся там, где кончился первый.",
+    "«Закрасить» — одна команда в самом конце, вне обоих циклов."
+  ]
+},
+{
+  id: "rb-gap", emoji: "🚪", title: "Найди проход",
+  tag: "цикл с условием выхода",
+  intro: "Стена справа сплошная, но где-то в ней есть проход. Найти его глазами нельзя — размер поля неизвестен.",
+  goal: "Робот идёт вниз вдоль стены, стоящей справа. Найди в ней проход, зайди в него на одну " +
+        "клетку вправо и закрась эту клетку.",
+  list: [
+    "Проход в стене ровно один, и он есть обязательно",
+    "Идти надо вниз, пока справа стена",
+    "Как только справа стало свободно — это проход: шагни вправо и закрась",
+    "Ниже прохода спускаться не нужно"
+  ],
+  field: [".@#",
+          "..#",
+          "...",
+          "..#"],
+  more: [
+    ["@.#", "..."],
+    ["@.#", "..#", "..#", "..."],
+    ["@..", "..#"]
+  ],
+  starter: "нц пока снизу свободно\n  вниз\nкц\nвправо\nзакрасить\n",
+  solution: "нц пока справа стена\n  вниз\nкц\nвправо\nзакрасить\n",
+  note: "Здесь важно, ЧТО стоит в условии цикла. Заготовка идёт «пока снизу свободно» — то есть до " +
+        "самого низа, мимо прохода. Правильное условие смотрит не под ноги, а вбок: «пока справа " +
+        "стена» — значит, шагаем вниз ровно до тех пор, пока стены нет. Как только справа стало " +
+        "свободно, цикл кончился сам, и Робот стоит ровно напротив прохода.",
+  hints: [
+    "Спрашивать надо не «можно ли идти вниз», а «есть ли ещё стена справа».",
+    "Условие цикла: «нц пока справа стена».",
+    "Когда цикл закончится, Робот уже стоит напротив прохода — остаётся шагнуть вправо.",
+    "Проверь на поле, где проход в самой первой строке: цикл не выполнится ни разу, и это верно."
+  ]
+}
+];
 
 </script>
 
@@ -13205,7 +13607,7 @@ window.EXAMS = {
       { n:1,  t:"Количественные параметры информационных объектов", g:["info"] },
       { n:2,  t:"Кодирование и декодирование информации",           g:["info"] },
       { n:3,  t:"Значение логического выражения",                   g:["logic"] },
-      { n:4,  t:"Формализация и моделирование",                     g:[] },
+      { n:4,  t:"Формализация и моделирование",                     g:["graph"] },
       { n:5,  t:"Алгоритмы и блок-схемы",                           g:["exec"] },
       { n:6,  t:"Линейный и циклический алгоритм",                  g:["exec"] },
       { n:7,  t:"Принципы адресации в Интернете",                   g:["net"] },
@@ -15284,6 +15686,169 @@ var Cloud = (function(){
     liveGet: function(code){ return ask({ op:"live_get", code: code || myCode() }); }
   };
 })();
+
+</script>
+
+<script>
+ 
+window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.robot = function(A){
+
+var cur = null;                  
+var code = "";                   
+var last = null;                 
+
+function taskById(id){
+  var xs = window.ROBOT_TASKS || [];
+  for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
+  return null;
+}
+function fields(t){ return [t.field].concat(t.more || []); }
+
+ 
+function fieldHTML(rows, cls){
+  var h = '<div class="rbf ' + (cls || "") + '" style="--rbw:' + rows[0].length + '">';
+  rows.forEach(function(row){
+    Array.from(row).forEach(function(z){
+      var k = z === "#" ? "wall" : (z === "*" ? "paint" : (z === "@" ? "bot" : (z === "+" ? "paint bot" : "")));
+      h += '<i class="rbc ' + k + '">' + (k.indexOf("bot") >= 0 ? "🤖" : "") + '</i>';
+    });
+  });
+  return h + "</div>";
+}
+
+ 
+function check(t, text){
+  var R = window.ROBOT, out = { ok:true, shown:null, error:null, badField:-1 };
+  var all = fields(t);
+  for (var i = 0; i < all.length; i++){
+    var got = R.run(text, R.parseField(all[i]));
+    var want = R.run(t.solution, R.parseField(all[i]));
+    if (i === 0) out.shown = got.field;
+    if (got.error){ out.ok = false; out.error = got.error; out.badField = i; break; }
+    if (!R.samePainted(got.field, want.field)){
+      out.ok = false; out.badField = i;
+      out.want = want.field; out.got = got.field;
+      break;
+    }
+  }
+  return out;
+}
+
+function verdictHTML(t, res){
+  if (res.ok)
+    return '<div class="msg show ok"><b>Решено ✓</b>Программа сработала на всех ' +
+      fields(t).length + ' полях, а не только на нарисованном.</div>';
+  if (res.error)
+    return '<div class="msg show bad"><b>' + (res.badField ? "Сломалось на скрытом поле №" + res.badField : "Ошибка") +
+      '</b>Строка ' + res.error.line + ': ' + A.esc(res.error.msg) + '</div>';
+  if (res.badField > 0)
+    return '<div class="msg show bad"><b>На картинке сошлось, а на другом поле — нет</b>' +
+      'Скрытое поле №' + res.badField + ': закрашено не то. На экзамене программа обязана ' +
+      'работать при любой длине стены — посмотрите, что в ней жёстко зашито.' +
+      '<div class="rbpair"><div><span class="dim">вышло</span>' + fieldHTML(window.ROBOT.fieldRows(res.got)) +
+      '</div><div><span class="dim">нужно</span>' + fieldHTML(window.ROBOT.fieldRows(res.want)) + '</div></div></div>';
+  return '<div class="msg show bad"><b>Закрашено не то</b>Сравните, что вышло и что нужно.' +
+    '<div class="rbpair"><div><span class="dim">вышло</span>' + fieldHTML(window.ROBOT.fieldRows(res.got)) +
+    '</div><div><span class="dim">нужно</span>' + fieldHTML(window.ROBOT.fieldRows(res.want)) + '</div></div></div>';
+}
+
+ 
+function openRobot(id){
+  var t = taskById(id);
+  if (!t) return screenRobot();
+  if (!cur || cur.id !== id){ cur = t; code = t.starter; last = null; }
+  A.enterScreen("train", "robot");
+
+  var shown = last && last.shown ? window.ROBOT.fieldRows(last.shown) : t.field;
+  var h = '<div class="lvlhead"><div><div class="idx">исполнитель «Робот» · формат ОГЭ</div>' +
+    '<h1>' + t.emoji + ' ' + A.esc(t.title) + '</h1></div>' +
+    (A.algoDone(t.id) ? '<div class="right"><span class="tag">решено ✓</span></div>' : '') + '</div>' +
+    '<p class="lede">' + A.esc(t.intro) + '</p>' +
+    '<div class="card"><h3>Что нужно сделать</h3><p>' + A.esc(t.goal) + '</p>' +
+    '<ul class="trrules">' + t.list.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ul></div>' +
+    '<div class="rbwrap">' +
+      '<div class="rbleft"><div class="rbhead">Поле</div>' + fieldHTML(shown) +
+        '<p class="dim">Робот 🤖 · закрашенные клетки — цветные · тёмные — стены. ' +
+        'Проверка гоняет программу ещё на <b>' + (fields(t).length - 1) + '</b> скрытых полях.</p></div>' +
+      '<div class="rbright"><div class="rbhead">Программа</div>' +
+        '<textarea id="rbcode" class="rbcode" spellcheck="false" rows="10">' + A.esc(code) + '</textarea>' +
+        '<div class="admrow"><button class="rbtn check" id="rbrun">▶ Выполнить</button>' +
+        '<button class="rbtn sec" id="rbreset">Сначала</button></div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="rbmsg">' + (last ? verdictHTML(t, last) : "") + '</div>' +
+    '<div class="card"><h3>Язык Робота</h3>' +
+      '<p class="dim">Тот же, что в КуМире на экзамене, — слово в слово.</p>' +
+      '<div class="rbref">' +
+        '<div><b>Команды</b><code>вверх вниз влево вправо закрасить</code></div>' +
+        '<div><b>Условия</b><code>сверху|снизу|слева|справа свободно</code>' +
+          '<code>сверху|снизу|слева|справа стена</code>' +
+          '<code>клетка закрашена · клетка чистая</code></div>' +
+        '<div><b>Связки</b><code>не · и · или · ( )</code></div>' +
+        '<div><b>Цикл</b><code>нц пока &lt;условие&gt;<br>  …<br>кц</code><code>нц 5 раз<br>  …<br>кц</code></div>' +
+        '<div><b>Ветвление</b><code>если &lt;условие&gt; то<br>  …<br>иначе<br>  …<br>все</code></div>' +
+        '<div><b>Комментарий</b><code>| после палочки</code></div>' +
+      '</div></div>' +
+    (A.algoDone(t.id)
+      ? '<div class="card"><h3>Разбор</h3><p>' + A.esc(t.note) + '</p></div>'
+      : '<div class="card"><h3>Подсказки</h3><ol class="rbhints">' +
+        t.hints.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ol></div>') +
+    '<div class="pager"><button class="bigbtn ghost" id="rbback">← Ко всем задачам</button></div>';
+
+  A.app.innerHTML = h;
+  var ta = document.getElementById("rbcode");
+  ta.addEventListener("input", function(){ code = ta.value; });
+  document.getElementById("rbrun").onclick = function(){
+    code = ta.value;
+    last = check(t, code);
+    if (last.ok && !A.algoDone(t.id)) A.algoMark(t.id);
+    openRobot(id);
+  };
+  document.getElementById("rbreset").onclick = function(){
+    code = t.starter; last = null; openRobot(id);
+  };
+  document.getElementById("rbback").onclick = function(){ cur = null; last = null; screenRobot(); };
+  A.refreshTop();
+}
+
+ 
+function screenRobot(){
+  A.enterScreen("train", "robot");
+  var xs = window.ROBOT_TASKS || [];
+  var done = xs.filter(function(x){ return A.algoDone(x.id); }).length;
+  var h = '<div class="lvlhead"><div><div class="idx">информатика: исполнитель</div>' +
+    '<h1>🤖 Робот</h1></div><div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
+    '<p class="lede">Исполнитель с пятью командами и своим языком — русскими словами. ' +
+    'Это <b>задание 15.1 ОГЭ</b>: там, где в школе дают КуМир, и там, где Python не примут.</p>' +
+    '<div class="card"><h3>⚖️ Честно про этот раздел</h3><ul class="trrules">' +
+      '<li><b>Язык взят кумировский слово в слово.</b> Свой синтаксис было бы приятнее сочинять, ' +
+      'но на экзамене принимают КуМир. Выучив «нц пока … кц» здесь, в КуМире пишешь то же самое.</li>' +
+      '<li><b>Программа проверяется на нескольких полях сразу</b>, а не на нарисованном. ' +
+      'На экзамене требуют ровно этого: решение обязано работать при любой длине стены.</li>' +
+      '<li><b>Одно расхождение с КуМиром, и оно нарочное:</b> у нас стена — это клетка, а не ребро ' +
+      'между клетками. Для программы разницы нет: «справа свободно» значит то же самое.</li>' +
+      '<li><b>Робот не заменяет Python.</b> Он закрывает ту половину задания 15, где просят ' +
+      'исполнителя; вторая половина, 15.2, — обычная программа, и она в разделе «Алгоритмы».</li>' +
+    '</ul></div><div class="gamegrid">';
+  xs.forEach(function(t){
+    h += '<button class="gamecard" data-rb="' + A.esc(t.id) + '">' +
+      '<span class="gemoji">' + t.emoji + '</span>' +
+      '<b>' + A.esc(t.title) + (A.algoDone(t.id) ? ' <span class="edittag done">решено ✓</span>' : '') + '</b>' +
+      '<span>' + A.esc(t.intro) + '</span>' +
+      '<span class="wtag">' + A.esc(t.tag) + '</span></button>';
+  });
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="rbtomap">← К тренировкам</button></div>';
+  A.app.innerHTML = h;
+  A.app.querySelectorAll("[data-rb]").forEach(function(b){
+    b.onclick = function(){ openRobot(b.getAttribute("data-rb")); };
+  });
+  document.getElementById("rbtomap").onclick = A.screenTrain;
+  A.refreshTop();
+}
+
+return { screenRobot: screenRobot, openRobot: openRobot };
+};
 
 </script>
 
@@ -23176,6 +23741,14 @@ function trainCards(){
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
       })() },
+    { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
+      why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
+      when: "Когда в школе ведут КуМир, а не Python.",
+      stat: (function(){
+        var xs = window.ROBOT_TASKS || [];
+        var d = xs.filter(function(x){ return algoDone(x.id); }).length;
+        return xs.length ? d + " из " + xs.length + " решено" : "";
+      })() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
       why: "Поиск, сортировка и типовые задания обоих экзаменов. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
       when: "Когда нужна школьная информатика, а не просто Python.",
@@ -26563,6 +27136,12 @@ function examMapHTML(ex){
       '<span class="exact">' + right + '</span></div>';
   });
   h += '</div>' +
+    (ex.id === "oge"
+      ? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
+        '15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
+        'свой язык и свой раздел. ' +
+        '<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
+      : '') +
     '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
     'Наш судья запускает программу и сверяет вывод. Создать презентацию, построить ' +
     'диаграмму, найти файл на диске или сходить в поисковик он не может, и обещать ' +
@@ -26593,6 +27172,8 @@ function screenAlgo(){
       b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
     });
      
+    var rb = app.querySelector("[data-exrobot]");
+    if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
       b.onclick = function(){
         var t = algoNextIn(b.getAttribute("data-exgo").split(","));
@@ -29335,6 +29916,13 @@ function winSpec(task, v){
 }
 
  
+ 
+var ROBOTS = KVSCREENS.robot({
+  app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
+  algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain
+});
+var screenRobot = ROBOTS.screenRobot, openRobot = ROBOTS.openRobot;
+
 var SHOWCASE = KVSCREENS.showcase({
   app: app,
   clearSession: function(){ session = { id:null, attempts:0, hints:0, shown:false }; },
@@ -31519,6 +32107,7 @@ var HASH_SCREENS = {
   "#mine":    function(){ screenMyTasks(); },
   "#train":   function(){ screenTrain(); },
   "#works":   function(){ screenShowcase(); },
+  "#robot":   function(){ screenRobot(); },
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
   "#algo":    function(){ screenAlgo(); },

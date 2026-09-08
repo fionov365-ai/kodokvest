@@ -4334,6 +4334,14 @@ function trainCards(){
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
       })() },
+    { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
+      why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
+      when: "Когда в школе ведут КуМир, а не Python.",
+      stat: (function(){
+        var xs = window.ROBOT_TASKS || [];
+        var d = xs.filter(function(x){ return algoDone(x.id); }).length;
+        return xs.length ? d + " из " + xs.length + " решено" : "";
+      })() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
       why: "Поиск, сортировка и типовые задания обоих экзаменов. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
       when: "Когда нужна школьная информатика, а не просто Python.",
@@ -8139,6 +8147,12 @@ function examMapHTML(ex){
       '<span class="exact">' + right + '</span></div>';
   });
   h += '</div>' +
+    (ex.id === "oge"
+      ? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
+        '15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
+        'свой язык и свой раздел. ' +
+        '<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
+      : '') +
     '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
     'Наш судья запускает программу и сверяет вывод. Создать презентацию, построить ' +
     'диаграмму, найти файл на диске или сходить в поисковик он не может, и обещать ' +
@@ -8172,6 +8186,8 @@ function screenAlgo(){
       b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
     });
     /* «Решать» ведёт к первой НЕрешённой задаче темы, а не в начало списка. */
+    var rb = app.querySelector("[data-exrobot]");
+    if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
       b.onclick = function(){
         var t = algoNextIn(b.getAttribute("data-exgo").split(","));
@@ -11253,6 +11269,15 @@ function winSpec(task, v){
    ⚠️ Функции ниже объявлены через var, а не function: значит до этой строки
    их звать нельзя. Все нынешние места вызова — обработчики и таблица маршрутов,
    они срабатывают позже. ============================================ */
+/* Робот отрезан сразу в свой файл (js/screens-robot.js), а не дописан сюда:
+   это первая возможность НЕ увеличивать архитектурный долг, вместо того чтобы
+   разбирать его потом. Договор — в шапке js/screens-showcase.js. */
+var ROBOTS = KVSCREENS.robot({
+  app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
+  algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain
+});
+var screenRobot = ROBOTS.screenRobot, openRobot = ROBOTS.openRobot;
+
 var SHOWCASE = KVSCREENS.showcase({
   app: app,
   clearSession: function(){ session = { id:null, attempts:0, hints:0, shown:false }; },
@@ -13794,6 +13819,7 @@ var HASH_SCREENS = {
   "#mine":    function(){ screenMyTasks(); },
   "#train":   function(){ screenTrain(); },
   "#works":   function(){ screenShowcase(); },
+  "#robot":   function(){ screenRobot(); },
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
   "#algo":    function(){ screenAlgo(); },
