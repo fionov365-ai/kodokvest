@@ -31110,6 +31110,7 @@ function atHome(){ return !!(S.admin && S.admin.place === "home"); }
 function leaveRoom(){
   kidTarget = null;
   adminLock();
+   
   setPlace("home");
   screenAbout();
 }
@@ -33060,25 +33061,25 @@ function screenParent(code){
     '<p class="lede">Здесь видно, как идут занятия, и можно поставить расписание. ' +
     'Ребёнок занимается на своём устройстве — его тренажёр отдельно от этого экрана.</p>' +
     '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
+     
     '<div class="pager">' +
     '<button class="bigbtn ghost" data-pd="leave">🚪 Выйти из кабинета</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button>' +
-     
-    '<span class="sp"></span><button class="bigbtn ghost" data-pd="off">Забыть код на этом устройстве</button></div>' +
+    '<span class="sp"></span><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button></div>' +
     aboutFootHTML();
   wireAboutFoot(app);
   app.querySelectorAll("[data-pd]").forEach(function(b){
     b.onclick = function(){
-      if (b.getAttribute("data-pd") === "leave") return leaveRoom();
       if (b.getAttribute("data-pd") === "role"){ kidTarget = null; return screenRoles(); }
-      if (b.getAttribute("data-pd") !== "off") return;
-      if (!confirm("Забыть код ребёнка на этом устройстве?\n\n" +
-                   "Кабинет закроется совсем. Ссылку от учителя можно открыть снова, " +
-                   "чтобы вернуться."))
+      if (b.getAttribute("data-pd") !== "leave") return;
+       
+      if (!confirm("Выйти из кабинета?\n\n" +
+                   "Устройство станет обычным. Чтобы вернуться, понадобится код ребёнка:\n\n" +
+                   "    " + code + "\n\n" +
+                   "Запишите его. Ссылка от учителя тоже откроет кабинет снова."))
         return;
       kidTarget = null;
       parentDeviceOff();
-      screenRoles();
+      leaveRoom();
     };
   });
   refreshTop();
