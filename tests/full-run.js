@@ -8414,8 +8414,30 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         const txt = doc.getElementById("app").textContent;
         if (/стобалльн|из 100|первичный балл/i.test(txt))
           bad("[вариант] на экране обещан балл, которого мы не знаем: шкала меняется каждый год");
-        if (!g.state.variant || !g.state.variant.seed)
+        if (!(g.state.variant.ege || {}).seed)
           bad("[вариант] собранный вариант не сохранился");
+      }
+    }
+
+    /* 13в.2б. ⚠️ Вкладка экзамена НЕ СТИРАЕТ соседний вариант. Один слот на
+       два экзамена означал бы, что переход на ОГЭ выбрасывает начатый ЕГЭ, —
+       и узнал бы об этом ученик уже после нажатия. */
+    {
+      const egeSeed = g.state.variant.ege.seed;
+      const oge = doc.querySelector('[data-vtab="oge"]');
+      if (!oge) bad("[вариант] на экране нет вкладок экзаменов");
+      else {
+        oge.click(); await tick();
+        const mk = doc.querySelector('[data-vnew="oge"]');
+        if (!mk) bad("[вариант] на вкладке ОГЭ нечем собрать вариант");
+        else { mk.click(); await tick(); }
+        if (!(g.state.variant.oge || {}).seed) bad("[вариант] вариант ОГЭ не собрался");
+        if ((g.state.variant.ege || {}).seed !== egeSeed)
+          bad("[вариант] сборка варианта ОГЭ затёрла вариант ЕГЭ");
+        const back = doc.querySelector('[data-vtab="ege"]');
+        back.click(); await tick();
+        if (!/Вариант № /.test(doc.getElementById("app").textContent))
+          bad("[вариант] возврат на вкладку ЕГЭ не показал собранный вариант");
       }
     }
 
@@ -8423,7 +8445,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
        именно в этом варианте. Это и есть весь смысл: пока возврат ведёт в общий
        список, ребёнок теряет вариант после первой же сданной задачи. */
     {
-      const v = g.state.variant;
+      const v = g.state.variant.ege;
       const first = (v.items || []).filter(x => x.id)[0];
       const btn = first ? doc.querySelector('[data-vgo="' + first.n + '"]') : null;
       if (!btn) bad("[вариант] в собранном варианте нет ни одной кнопки «Решать»");
@@ -8445,7 +8467,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             if (!/вариант/i.test(back.textContent))
               bad("[вариант] после победы кнопка ведёт не в вариант: " + back.textContent);
             back.click(); await tick();
-            if (!(g.state.variant.done || {})[first.n])
+            if (!(g.state.variant.ege.done || {})[first.n])
               bad("[вариант] решённый номер " + first.n + " не засчитан в варианте");
             if (!/Вариант/.test(doc.getElementById("app").textContent))
               bad("[вариант] после решённой задачи не вернулись в вариант");
@@ -8459,7 +8481,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         if (second){
           g.state.algo[second.id] = 1;
           g.screenVariant(); await tick();
-          if ((g.state.variant.done || {})[second.n])
+          if ((g.state.variant.ege.done || {})[second.n])
             bad("[вариант] номер " + second.n + " закрылся сам, потому что задача решалась когда-то раньше");
         }
       }
@@ -8480,13 +8502,31 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
 
     /* 13в.5. Обмен с сервером не склеивает два разных варианта в один. */
     {
-      const a = { savedAt:1, variant:{ ex:"ege", seed:"AAAAAA", items:[{n:1,id:"x"}], done:{}, seen:{} } };
-      const b = { savedAt:2, variant:{ ex:"oge", seed:"BBBBBB", items:[{n:1,id:"y"}], done:{}, seen:{} } };
+      /* разные экзамены живут в своих ключах и не мешают друг другу */
+      const a = { savedAt:1, variant:{ ege:{ ex:"ege", seed:"AAAAAA", at:5,
+                    items:[{n:1,id:"x"}], done:{ 1:1 }, seen:{} } } };
+      const b = { savedAt:2, variant:{ oge:{ ex:"oge", seed:"BBBBBB", at:6,
+                    items:[{n:1,id:"y"}], done:{}, seen:{} } } };
       const m = g.mergeProgress(a, b);
-      if (!m.variant || m.variant.seed !== "BBBBBB")
-        bad("[вариант] при слиянии победил не свежий вариант");
-      if ((m.variant.items || []).length !== 1)
-        bad("[вариант] слияние склеило два разных варианта в один");
+      if (!m.variant.ege || !m.variant.oge)
+        bad("[вариант] слияние потеряло вариант одного из экзаменов");
+      if ((m.variant.ege.done || {})["1"] !== 1)
+        bad("[вариант] слияние потеряло решённый номер");
+
+      /* два РАЗНЫХ варианта одного экзамена не склеиваются: побеждает свежий */
+      const m2 = g.mergeProgress(
+        { savedAt:1, variant:{ ege:{ ex:"ege", seed:"AAAAAA", at:5, items:[{n:1,id:"x"}], done:{}, seen:{} } } },
+        { savedAt:2, variant:{ ege:{ ex:"ege", seed:"CCCCCC", at:9, items:[{n:1,id:"y"}], done:{}, seen:{} } } });
+      if (m2.variant.ege.seed !== "CCCCCC")
+        bad("[вариант] при слиянии победил не тот вариант, что собран позже");
+
+      /* ОДИН И ТОТ ЖЕ вариант на двух устройствах — это один вариант:
+         решённые номера складываются, а не выбираются */
+      const m3 = g.mergeProgress(
+        { savedAt:1, variant:{ ege:{ ex:"ege", seed:"DDDDDD", at:5, items:[{n:1,id:"x"}], done:{ 1:1 }, seen:{} } } },
+        { savedAt:2, variant:{ ege:{ ex:"ege", seed:"DDDDDD", at:5, items:[{n:1,id:"x"}], done:{ 2:1 }, seen:{} } } });
+      if (Object.keys(m3.variant.ege.done || {}).length !== 2)
+        bad("[вариант] решённое на втором устройстве потерялось при слиянии одного и того же варианта");
     }
 
     g.state.algo = {}; g.state.variant = {};

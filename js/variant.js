@@ -108,13 +108,37 @@ function makeVariant(exId){
   return { ex: exId, seed: seed, at: Date.now(), endAt: 0,
            items: buildItems(exId, seed), done: {}, seen: {} };
 }
-/* Живой вариант из сохранения. Пустой объект (так поле выглядит у нового
-   ученика) — это «варианта нет», а не сломанный вариант. */
-function cur(){
-  var v = A.variantGet();
-  if (!v || !v.ex || !Array.isArray(v.items) || !v.items.length) return null;
-  if (!examById(v.ex)) return null;
-  return v;
+/* ---- где живут варианты ----
+   ⚠️ Вариант хранится ПО ЭКЗАМЕНУ: { ege: …, oge: … }. Один слот на двоих
+   означал бы, что вкладка ОГЭ стирает начатый ЕГЭ, — а вкладка, которая
+   стирает работу, это не вкладка, а ловушка. Решение 1.110.0 «вкладка — это
+   экзамен» действует и здесь.
+   ⚠️ Разбор старой формы (один вариант без экзаменного ключа) нужен ровно
+   на один выпуск: у тех, кто успел собрать вариант в 1.120.0, он лежит
+   именно так, и молча выбросить чужую работу нельзя. */
+function all(){
+  var box = A.variantGet();
+  if (!box || typeof box !== "object") return {};
+  if (box.ex && Array.isArray(box.items)){
+    var old = {};
+    old[box.ex] = box;
+    return old;
+  }
+  return box;
+}
+function isLive(v){
+  return !!(v && v.ex && Array.isArray(v.items) && v.items.length && examById(v.ex));
+}
+/* Живой вариант нужного экзамена, иначе null. */
+function cur(exId){
+  var v = all()[exId || tab];
+  return isLive(v) ? v : null;
+}
+/* Записать вариант своего экзамена, не тронув соседний. */
+function put(v){
+  var box = all();
+  box[v.ex] = v;
+  A.variantSet(box);
 }
 /* Свод по варианту. Считается, а не хранится, — по той же причине, по которой
    считается свод карты экзамена: хранимое число разойдётся с делом в первый
@@ -141,6 +165,24 @@ function numsRu(list){
   if (!list.length) return "";
   if (list.length === 1) return String(list[0]);
   return list.slice(0, -1).join(", ") + " и " + list[list.length - 1];
+}
+
+/* Какая вкладка открыта. Экзамен, а не «список вариантов»: решение 1.110.0
+   («вкладка — это экзамен») здесь просто продолжается. */
+var tab = "ege";
+function tabsHTML(){
+  return '<div class="roomnav extabs">' +
+    ["ege", "oge"].map(function(id){
+      var ex = examById(id);
+      var v = cur(id), mark = v ? " ✓" : "";
+      return '<button' + (id === tab ? ' class="on"' : '') + ' data-vtab="' + id + '">' +
+        ex.em + " " + A.esc(ex.title) + mark + '</button>';
+    }).join("") + '</div>';
+}
+function wireTabs(){
+  A.app.querySelectorAll("[data-vtab]").forEach(function(b){
+    b.onclick = function(){ tab = b.getAttribute("data-vtab"); screenVariant(); };
+  });
 }
 
 /* ---- строка варианта ---- */
@@ -171,13 +213,16 @@ function rowHTML(v, x, task){
    заводится: спросить «а не потеряется ли начатое» надо один раз и здесь,
    иначе кнопка на карте экзамена молча стёрла бы работу, начатую вчера. */
 function startVariant(exId){
-  var v = cur();
+  tab = exId;
+  var v = cur(exId);
   if (v){
     var t = tally(v);
     if (t.done + t.tried > 0){
-      var ex = examById(v.ex), yes = true;
+      var ex = examById(exId), yes = true;
       /* Спрашиваем через try: окна подтверждения нет ни в проверках, ни в
-         некоторых встроенных браузерах, и падать на этом сборке нельзя. */
+         некоторых встроенных браузерах, и падать на этом сборке нельзя.
+         ⚠️ Спрашиваем только про ТОТ ЖЕ экзамен: вариант соседнего лежит в
+         своём ключе и пересборкой не задевается. */
       try {
         yes = confirm("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
           t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
@@ -186,24 +231,30 @@ function startVariant(exId){
       if (!yes) return screenVariant();
     }
   }
-  A.variantSet(makeVariant(exId));
+  put(makeVariant(exId));
   screenVariant();
 }
-/* Дверь с карты экзамена: свой вариант этого экзамена открываем, чужой или
-   отсутствующий — собираем (со всеми вопросами, что задаёт startVariant). */
+/* Дверь с карты экзамена: свой вариант этого экзамена открываем, а если его
+   нет — собираем. Вариант соседнего экзамена при этом не трогаем. */
 function openFor(exId){
-  var v = cur();
-  if (v && v.ex === exId) return screenVariant();
+  tab = exId;
+  if (cur(exId)) return screenVariant();
   startVariant(exId);
 }
 
-/* ---- экран: выбрать экзамен ---- */
+/* ---- экран: варианта этого экзамена ещё нет ----
+   Отдельного «выбора экзамена» нет и не нужно: экзамен выбирается вкладкой,
+   как во всём разделе, а здесь остаётся один вопрос — собрать или нет. */
 function screenPick(){
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
+  var ex = examById(tab);
+  var able = buildItems(tab, "PROBE").filter(function(x){ return x.id; }).length;
+
   var h = '<div class="lvlhead"><div><div class="idx">пробный вариант</div>' +
     '<h1>📝 Вариант целиком</h1></div>' +
     '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML() +
     '<p class="lede">Задачи в разделе «Алгоритмы, ОГЭ и ЕГЭ» разложены по темам — это удобно, ' +
     'когда учишь одну тему. Экзамен так не устроен: там задания идут подряд, по номерам, и ' +
     'каждое про своё. Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>';
@@ -212,26 +263,22 @@ function screenPick(){
     '<li><b>Один номер — одна задача.</b> Порядок как на экзамене, с первого номера до последнего.</li>' +
     '<li><b>Решать можно с любого места и в любой день.</b> Вариант никуда не денется: ' +
     'закрыл вкладку — он останется на месте вместе с решённым.</li>' +
+    '<li><b>У каждого экзамена свой вариант.</b> Вкладки не мешают друг другу: собранный ЕГЭ ' +
+    'останется на месте, пока ты решаешь ОГЭ.</li>' +
     '<li><b>Номера, которых мы не даём, из варианта не выкинуты.</b> Против каждого написано ' +
     'почему: на экзамене этот номер всё равно будет.</li>' +
     '<li><b>Баллов здесь нет.</b> Шкала перевода в экзаменационные баллы меняется каждый год, ' +
     'и обещать её мы не будем. Итог говорит проверяемое: какие номера закрыты, а какие нет.</li>' +
     '</ul></div>';
 
-  h += '<div class="vexams">';
-  ["ege", "oge"].forEach(function(id){
-    var ex = examById(id);
-    if (!ex) return;
-    var able = buildItems(id, "PROBE").filter(function(x){ return x.id; }).length;
-    h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
-      '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
-      'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
-      '<div class="admrow"><button class="bigbtn" data-vnew="' + id + '">Собрать вариант</button></div></div>';
-  });
-  h += '</div>';
+  h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
+    '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
+    'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
+    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать вариант</button></div></div>';
 
   h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
     b.onclick = function(){ startVariant(b.getAttribute("data-vnew")); };
   });
@@ -252,6 +299,7 @@ function screenVariant(){
     '<h1>📝 Вариант № ' + A.esc(v.seed) + '</h1></div>' +
     '<div class="right"><span class="tag">' + t.done + ' из ' + t.able + '</span>' +
     A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML() +
     '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
     'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
     'это тренировка, а не контрольная.</p>' +
@@ -285,6 +333,7 @@ function screenVariant(){
     '<span class="sp"></span><button class="bigbtn ghost" id="vnew">Собрать другой вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
 
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
@@ -308,18 +357,23 @@ function openItem(n){
   if (!v) return screenPick();
   var x = itemOf(v, n);
   if (!x || !x.id) return screenVariant();
+  var ex = v.ex;
   v.seen[n] = 1;
-  A.variantSet(v);
+  put(v);
   A.setAlgoBack({
     crumb: "Вариант № " + v.seed,
     backLabel: "В вариант",
     winLabel: "← Вернуться в вариант",
     go: screenVariant,
     onWin: function(){
-      var w = cur();
+      /* ⚠️ Вариант перечитывается ЗАНОВО и по своему экзамену: между открытием
+         задачи и победой могло пройти полчаса, а вкладка — смениться. */
+      var w = cur(ex);
       if (!w) return;
-      w.done[n] = Date.now();
-      A.variantSet(w);
+      /* Единица, а не время: значение нигде не читается, а слияние двух
+         устройств складывает именно множества ключей. */
+      w.done[n] = 1;
+      put(w);
     }
   });
   A.openAlgo(x.id);
@@ -337,7 +391,8 @@ function screenVariantDone(){
 
   var h = '<div class="lvlhead"><div><div class="idx">итог варианта № ' + A.esc(v.seed) + '</div>' +
     '<h1>' + ex.em + ' ' + A.esc(ex.title) + ': что закрыто</h1></div>' +
-    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>';
+    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML();
 
   h += '<div class="card"><h3>Закрыто ' + t.done + ' ' +
     A.plural(t.done, "задание", "задания", "заданий") + ' из ' + ex.total + '</h3>' +
@@ -385,6 +440,7 @@ function screenVariantDone(){
   h += '<div class="pager"><button class="bigbtn" id="vback">← Вернуться в вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
@@ -397,10 +453,14 @@ function screenVariantDone(){
 /* Короткая справка для карточки в «Тренировках»: вариант либо идёт, либо его
    нет. Считается из того же свода, что и экран, — второго счёта не заводим. */
 function variantStat(){
-  var v = cur();
-  if (!v) return "";
-  var ex = examById(v.ex), t = tally(v);
-  return ex.title + ": решено " + t.done + " из " + t.able;
+  var parts = [];
+  ["ege", "oge"].forEach(function(id){
+    var v = cur(id);
+    if (!v) return;
+    var t = tally(v);
+    parts.push(examById(id).title + ": решено " + t.done + " из " + t.able);
+  });
+  return parts.join(" · ");
 }
 
 return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,

@@ -13233,6 +13233,74 @@ window.ALGO = (window.ALGO || []).concat([
     "Повторить проходы n раз хватает всегда: длиннее чем n\u22121 дорога кратчайший путь не бывает."
   ]
 }
+,
+
+ 
+{
+  id: "rec-game2", group: "rec", emoji: "♟",
+  title: "За сколько ходов выиграть",
+  tag: "теория игр",
+  intro: "Мало знать, что позиция выигрышная. На экзамене спрашивают, за сколько ходов победа приходит наверняка.",
+  goal: "В куче N камней. Игроки по очереди берут 1 или 2 камня; берущий последний выигрывает. " +
+        "Оба играют наилучшим образом. Напиши программу, которая печатает, за сколько ходов " +
+        "закончится игра при правильной игре обоих.",
+  list: [
+    "На вход одно число N (1 \u2264 N \u2264 10 000) — сколько камней в куче",
+    "За ход берут 1 или 2 камня",
+    "Берущий последний камень выигрывает",
+    "Оба игрока играют наилучшим образом: выигрывающий торопится, проигрывающий тянет",
+    "Вывести одно число — сколько всего ходов будет сделано"
+  ],
+  sample: { in: ["4"], out: "3" },
+  stdin: ["4"],
+  sets: [["1"], ["3"], ["10"]],
+  starter: "n = int(input())\n# для каждой кучи от 0 до n посчитай, выигрышная она или нет\nprint(0)\n",
+  solution: "n = int(input())\nvyigrysh = [False] * (n + 1)\nhody = [0] * (n + 1)\nfor k in range(1, n + 1):\n    luchshe = -1\n    hudshe = -1\n    for beru in [1, 2]:\n        if beru > k:\n            continue\n        ostalos = k - beru\n        if not vyigrysh[ostalos]:\n            if luchshe < 0 or hody[ostalos] + 1 < luchshe:\n                luchshe = hody[ostalos] + 1\n        else:\n            if hody[ostalos] + 1 > hudshe:\n                hudshe = hody[ostalos] + 1\n    if luchshe >= 0:\n        vyigrysh[k] = True\n        hody[k] = luchshe\n    else:\n        vyigrysh[k] = False\n        hody[k] = hudshe\nprint(hody[n])\n",
+  check: { kind: "output" },
+  note: "Две мысли, и вторая — та, из-за которой задача и стоит на экзамене отдельным номером. " +
+        "Первая: позиция выигрышная, если ЕСТЬ ход в проигрышную для соперника. Вторая: у игроков " +
+        "разные цели по длине. Тот, кто выигрывает, выбирает САМЫЙ КОРОТКИЙ путь к победе; тот, " +
+        "кто проигрывает, тянет как можно дольше. Поэтому в одной ветке берётся минимум, а в " +
+        "другой максимум, и перепутать их — самая частая ошибка здесь.",
+  hints: [
+    "Заведи два списка: выигрышная ли позиция и за сколько ходов она разыгрывается.",
+    "Позиция k выигрышная, если из неё есть ход в позицию, ПРОИГРЫШНУЮ для того, кто пойдёт следующим.",
+    "Если позиция выигрышная — бери минимум ходов среди выигрывающих ходов: победитель торопится.",
+    "Если проигрышная — бери максимум: проигрывающему выгодно тянуть."
+  ]
+},
+{
+  id: "rec-recur", group: "rec", emoji: "🔁",
+  title: "Рекуррентная последовательность",
+  tag: "рекуррентные выражения",
+  intro: "Правило задано через предыдущие члены. Считать его в лоб рекурсией нельзя — программа не доживёт.",
+  goal: "Последовательность задана так: F(1) = 1, F(2) = 1, а дальше F(k) = F(k−1) + 2·F(k−2) + k. " +
+        "Напиши программу, которая печатает F(N).",
+  list: [
+    "На вход одно число N (1 \u2264 N \u2264 50)",
+    "F(1) = 1 и F(2) = 1",
+    "При k > 2: F(k) = F(k\u22121) + 2\u00b7F(k\u22122) + k",
+    "Вывести одно число — F(N)"
+  ],
+   
+  sample: { in: ["5"], out: "29" },
+  stdin: ["5"],
+  sets: [["1"], ["2"], ["12"]],
+  starter: "n = int(input())\nf = [0, 1, 1]\n# добирай члены по одному, пока не дойдёшь до n\nprint(f[1])\n",
+  solution: "n = int(input())\nf = [0, 1, 1]\nfor k in range(3, n + 1):\n    f.append(f[k - 1] + 2 * f[k - 2] + k)\nprint(f[n])\n",
+  check: { kind: "output" },
+  note: "⚠️ Рекурсией «в лоб» такое считать нельзя: F(90) вызовет само себя миллиарды раз, потому " +
+        "что каждый член пересчитывается заново в каждой ветке. Приём тот же, что у робота на " +
+        "таблице: считаем СНИЗУ ВВЕРХ и складываем ответы в список, тогда каждый член вычисляется " +
+        "ровно один раз. Нулевой элемент списка кладётся пустышкой, чтобы номер члена совпадал " +
+        "с индексом, — иначе всю дорогу придётся вычитать единицу и где-нибудь ошибиться.",
+  hints: [
+    "Не пиши рекурсивную функцию: она пересчитает одно и то же миллиарды раз.",
+    "Заведи список и клади в него члены по порядку, начиная с известных F(1) и F(2).",
+    "Пустышка в начале списка (`f = [0, 1, 1]`) делает так, что f[k] — это ровно F(k).",
+    "Проверь на N = 1 и N = 2: цикл не выполнится ни разу, а ответ уже лежит в списке."
+  ]
+}
 
 ]);
 
@@ -17655,11 +17723,29 @@ function makeVariant(exId){
            items: buildItems(exId, seed), done: {}, seen: {} };
 }
  
-function cur(){
-  var v = A.variantGet();
-  if (!v || !v.ex || !Array.isArray(v.items) || !v.items.length) return null;
-  if (!examById(v.ex)) return null;
-  return v;
+function all(){
+  var box = A.variantGet();
+  if (!box || typeof box !== "object") return {};
+  if (box.ex && Array.isArray(box.items)){
+    var old = {};
+    old[box.ex] = box;
+    return old;
+  }
+  return box;
+}
+function isLive(v){
+  return !!(v && v.ex && Array.isArray(v.items) && v.items.length && examById(v.ex));
+}
+ 
+function cur(exId){
+  var v = all()[exId || tab];
+  return isLive(v) ? v : null;
+}
+ 
+function put(v){
+  var box = all();
+  box[v.ex] = v;
+  A.variantSet(box);
 }
  
 function tally(v){
@@ -17683,6 +17769,23 @@ function numsRu(list){
   if (!list.length) return "";
   if (list.length === 1) return String(list[0]);
   return list.slice(0, -1).join(", ") + " и " + list[list.length - 1];
+}
+
+ 
+var tab = "ege";
+function tabsHTML(){
+  return '<div class="roomnav extabs">' +
+    ["ege", "oge"].map(function(id){
+      var ex = examById(id);
+      var v = cur(id), mark = v ? " ✓" : "";
+      return '<button' + (id === tab ? ' class="on"' : '') + ' data-vtab="' + id + '">' +
+        ex.em + " " + A.esc(ex.title) + mark + '</button>';
+    }).join("") + '</div>';
+}
+function wireTabs(){
+  A.app.querySelectorAll("[data-vtab]").forEach(function(b){
+    b.onclick = function(){ tab = b.getAttribute("data-vtab"); screenVariant(); };
+  });
 }
 
  
@@ -17711,11 +17814,12 @@ function rowHTML(v, x, task){
 
  
 function startVariant(exId){
-  var v = cur();
+  tab = exId;
+  var v = cur(exId);
   if (v){
     var t = tally(v);
     if (t.done + t.tried > 0){
-      var ex = examById(v.ex), yes = true;
+      var ex = examById(exId), yes = true;
        
       try {
         yes = confirm("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
@@ -17725,13 +17829,13 @@ function startVariant(exId){
       if (!yes) return screenVariant();
     }
   }
-  A.variantSet(makeVariant(exId));
+  put(makeVariant(exId));
   screenVariant();
 }
  
 function openFor(exId){
-  var v = cur();
-  if (v && v.ex === exId) return screenVariant();
+  tab = exId;
+  if (cur(exId)) return screenVariant();
   startVariant(exId);
 }
 
@@ -17739,9 +17843,13 @@ function openFor(exId){
 function screenPick(){
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
+  var ex = examById(tab);
+  var able = buildItems(tab, "PROBE").filter(function(x){ return x.id; }).length;
+
   var h = '<div class="lvlhead"><div><div class="idx">пробный вариант</div>' +
     '<h1>📝 Вариант целиком</h1></div>' +
     '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML() +
     '<p class="lede">Задачи в разделе «Алгоритмы, ОГЭ и ЕГЭ» разложены по темам — это удобно, ' +
     'когда учишь одну тему. Экзамен так не устроен: там задания идут подряд, по номерам, и ' +
     'каждое про своё. Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>';
@@ -17750,26 +17858,22 @@ function screenPick(){
     '<li><b>Один номер — одна задача.</b> Порядок как на экзамене, с первого номера до последнего.</li>' +
     '<li><b>Решать можно с любого места и в любой день.</b> Вариант никуда не денется: ' +
     'закрыл вкладку — он останется на месте вместе с решённым.</li>' +
+    '<li><b>У каждого экзамена свой вариант.</b> Вкладки не мешают друг другу: собранный ЕГЭ ' +
+    'останется на месте, пока ты решаешь ОГЭ.</li>' +
     '<li><b>Номера, которых мы не даём, из варианта не выкинуты.</b> Против каждого написано ' +
     'почему: на экзамене этот номер всё равно будет.</li>' +
     '<li><b>Баллов здесь нет.</b> Шкала перевода в экзаменационные баллы меняется каждый год, ' +
     'и обещать её мы не будем. Итог говорит проверяемое: какие номера закрыты, а какие нет.</li>' +
     '</ul></div>';
 
-  h += '<div class="vexams">';
-  ["ege", "oge"].forEach(function(id){
-    var ex = examById(id);
-    if (!ex) return;
-    var able = buildItems(id, "PROBE").filter(function(x){ return x.id; }).length;
-    h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
-      '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
-      'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
-      '<div class="admrow"><button class="bigbtn" data-vnew="' + id + '">Собрать вариант</button></div></div>';
-  });
-  h += '</div>';
+  h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
+    '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
+    'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
+    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать вариант</button></div></div>';
 
   h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
     b.onclick = function(){ startVariant(b.getAttribute("data-vnew")); };
   });
@@ -17790,6 +17894,7 @@ function screenVariant(){
     '<h1>📝 Вариант № ' + A.esc(v.seed) + '</h1></div>' +
     '<div class="right"><span class="tag">' + t.done + ' из ' + t.able + '</span>' +
     A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML() +
     '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
     'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
     'это тренировка, а не контрольная.</p>' +
@@ -17820,6 +17925,7 @@ function screenVariant(){
     '<span class="sp"></span><button class="bigbtn ghost" id="vnew">Собрать другой вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
 
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
@@ -17838,18 +17944,21 @@ function openItem(n){
   if (!v) return screenPick();
   var x = itemOf(v, n);
   if (!x || !x.id) return screenVariant();
+  var ex = v.ex;
   v.seen[n] = 1;
-  A.variantSet(v);
+  put(v);
   A.setAlgoBack({
     crumb: "Вариант № " + v.seed,
     backLabel: "В вариант",
     winLabel: "← Вернуться в вариант",
     go: screenVariant,
     onWin: function(){
-      var w = cur();
+       
+      var w = cur(ex);
       if (!w) return;
-      w.done[n] = Date.now();
-      A.variantSet(w);
+       
+      w.done[n] = 1;
+      put(w);
     }
   });
   A.openAlgo(x.id);
@@ -17867,7 +17976,8 @@ function screenVariantDone(){
 
   var h = '<div class="lvlhead"><div><div class="idx">итог варианта № ' + A.esc(v.seed) + '</div>' +
     '<h1>' + ex.em + ' ' + A.esc(ex.title) + ': что закрыто</h1></div>' +
-    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>';
+    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    tabsHTML();
 
   h += '<div class="card"><h3>Закрыто ' + t.done + ' ' +
     A.plural(t.done, "задание", "задания", "заданий") + ' из ' + ex.total + '</h3>' +
@@ -17909,6 +18019,7 @@ function screenVariantDone(){
   h += '<div class="pager"><button class="bigbtn" id="vback">← Вернуться в вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">К тренировкам</button></div>';
   A.app.innerHTML = h;
+  wireTabs();
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
@@ -17920,10 +18031,14 @@ function screenVariantDone(){
 
  
 function variantStat(){
-  var v = cur();
-  if (!v) return "";
-  var ex = examById(v.ex), t = tally(v);
-  return ex.title + ": решено " + t.done + " из " + t.able;
+  var parts = [];
+  ["ege", "oge"].forEach(function(id){
+    var v = cur(id);
+    if (!v) return;
+    var t = tally(v);
+    parts.push(examById(id).title + ": решено " + t.done + " из " + t.able);
+  });
+  return parts.join(" · ");
 }
 
 return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
@@ -23674,7 +23789,20 @@ function mergeProgress(a, b){
   out.mytaskDraft = fresher.mytaskDraft || older.mytaskDraft || null;
 
    
-  out.variant = fresher.variant || older.variant || {};
+  out.variant = {};
+  Object.keys(mergeSet((a.variant || {}), (b.variant || {}))).forEach(function(k){
+    var va = (a.variant || {})[k], vb = (b.variant || {})[k];
+    if (!va || !vb){ out.variant[k] = va || vb; return; }
+    if (va.seed !== vb.seed){
+      out.variant[k] = (vb.at || 0) > (va.at || 0) ? vb : va;
+      return;
+    }
+    var one = { ex: va.ex, seed: va.seed, at: minPos(va.at, vb.at) || va.at || vb.at,
+                endAt: maxN(va.endAt, vb.endAt),
+                items: (va.items && va.items.length) ? va.items : vb.items,
+                done: mergeSet(va.done, vb.done), seen: mergeSet(va.seen, vb.seen) };
+    out.variant[k] = one;
+  });
 
    
   out.gallery = {};
