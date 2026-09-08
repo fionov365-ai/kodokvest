@@ -4194,6 +4194,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   let authorChecked = 0, myPredChecked = 0, shopChecked = 0, backChecked = 0, showChecked = 0;
   let myExamChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
+  let variantChecked = 0;
   let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
 
@@ -8345,6 +8346,154 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (problems.length === p0) algoChecked++;
   }
 
+  /* --- 13в. пробный вариант экзамена целиком ---
+     Вариант — это СБОРКА из уже готовых задач, и ломается такая сборка молча:
+     номер получает задачу не из своей темы, порядок съезжает, один и тот же
+     код собирает разные варианты. Ни одного из этих трёх случаев не увидит
+     ни один другой тест — экран при них рисуется исправно. */
+  if (typeof g.screenVariant === "function"){
+    const p0 = problems.length;
+    const EX = w.EXAMS;
+    const XS = g.algoList();
+    const taskById = id => XS.filter(x => x.id === id)[0] || null;
+
+    /* 13в.1. Сборка: строка на каждое задание, порядок как на экзамене,
+       задача — из тем СВОЕГО номера. */
+    ["ege", "oge"].forEach(id => {
+      const ex = EX[id];
+      const items = g.variantBuild(id, "TEST42");
+      if (items.length !== ex.tasks.length)
+        return bad("[вариант] в " + ex.title + " строк " + items.length + ", а заданий " + ex.tasks.length);
+      items.forEach((it, i) => {
+        const t = ex.tasks[i];
+        if (it.n !== t.n)
+          return bad("[вариант] порядок номеров не как на экзамене: " + it.n + " вместо " + t.n);
+        const pool = XS.filter(x => (t.g || []).indexOf(x.group) >= 0);
+        if (!it.id){
+          if (pool.length)
+            bad("[вариант] номер " + t.n + " остался пустым, хотя задачи по его темам есть");
+          if (!it.why)
+            bad("[вариант] у пустого номера " + t.n + " не написана причина");
+          return;
+        }
+        const task = taskById(it.id);
+        if (!task) return bad("[вариант] номеру " + t.n + " назначена несуществующая задача «" + it.id + "»");
+        if ((t.g || []).indexOf(task.group) < 0)
+          bad("[вариант] номеру " + t.n + " досталась задача из чужой темы: «" + task.group + "»");
+      });
+      /* ⚠️ Одно семя — один вариант. На этом держится следующий шаг: репетитор
+         диктует код, и вся группа получает ОДИН И ТОТ ЖЕ вариант. Сломается
+         тихо — при первой же правке порядка задач. */
+      if (JSON.stringify(items) !== JSON.stringify(g.variantBuild(id, "TEST42")))
+        bad("[вариант] один и тот же код собирает разные варианты " + ex.title);
+      if (JSON.stringify(items) === JSON.stringify(g.variantBuild(id, "ZZZ999")))
+        bad("[вариант] разные коды собирают один и тот же вариант " + ex.title);
+      /* повтор помечается: без пометки «одна задача на два номера» читается
+         как наша небрежность, а это замер наполнения — он должен быть виден */
+      const seen = {};
+      items.forEach(it => {
+        if (!it.id) return;
+        if (seen[it.id] && !it.dup)
+          bad("[вариант] задача «" + it.id + "» стоит дважды, и повтор не помечен");
+        seen[it.id] = 1;
+      });
+    });
+
+    /* 13в.2. Экран: полный список номеров и НИ ОДНОГО обещания про баллы.
+       Шкала перевода меняется каждый год и объявляется не нами. */
+    {
+      g.state.algo = {}; g.state.variant = {};
+      g.screenVariant(); await tick();
+      const pick = doc.querySelector('[data-vnew="ege"]');
+      if (!pick) bad("[вариант] на экране без варианта нечем его собрать");
+      else {
+        pick.click(); await tick();
+        const rows = doc.querySelectorAll(".exrow");
+        if (rows.length !== EX.ege.tasks.length)
+          bad("[вариант] показано " + rows.length + " номеров вместо " + EX.ege.tasks.length);
+        const txt = doc.getElementById("app").textContent;
+        if (/стобалльн|из 100|первичный балл/i.test(txt))
+          bad("[вариант] на экране обещан балл, которого мы не знаем: шкала меняется каждый год");
+        if (!g.state.variant || !g.state.variant.seed)
+          bad("[вариант] собранный вариант не сохранился");
+      }
+    }
+
+    /* 13в.3. Дорога из задачи ведёт ОБРАТНО В ВАРИАНТ, а решённое засчитывается
+       именно в этом варианте. Это и есть весь смысл: пока возврат ведёт в общий
+       список, ребёнок теряет вариант после первой же сданной задачи. */
+    {
+      const v = g.state.variant;
+      const first = (v.items || []).filter(x => x.id)[0];
+      const btn = first ? doc.querySelector('[data-vgo="' + first.n + '"]') : null;
+      if (!btn) bad("[вариант] в собранном варианте нет ни одной кнопки «Решать»");
+      else {
+        btn.click(); await tick();
+        const crumbs = doc.querySelector(".crumbs");
+        if (!crumbs || !/Вариант/.test(crumbs.textContent))
+          bad("[вариант] из задачи не видно, что пришли из варианта: " +
+              (crumbs ? crumbs.textContent : "хлебных крошек нет"));
+        const st = studioOf();
+        if (!st) bad("[вариант] задача из варианта не открылась");
+        else {
+          st.editor.setCode(taskById(first.id).solution);
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (!won()) bad("[вариант] эталон не засчитан: " + msgText());
+          else {
+            const back = doc.getElementById("walgo");
+            if (!/вариант/i.test(back.textContent))
+              bad("[вариант] после победы кнопка ведёт не в вариант: " + back.textContent);
+            back.click(); await tick();
+            if (!(g.state.variant.done || {})[first.n])
+              bad("[вариант] решённый номер " + first.n + " не засчитан в варианте");
+            if (!/Вариант/.test(doc.getElementById("app").textContent))
+              bad("[вариант] после решённой задачи не вернулись в вариант");
+          }
+        }
+        /* ⚠️ Обратное: задача, решённая РАНЬШЕ и вне варианта, номер не
+           закрывает. Иначе вариант мерил бы не сегодняшнее состояние, а
+           историю, и «закрыто 27 из 27» получал бы тот, кто в вариант даже
+           не заглянул. */
+        const second = (v.items || []).filter(x => x.id && x.n !== first.n)[0];
+        if (second){
+          g.state.algo[second.id] = 1;
+          g.screenVariant(); await tick();
+          if ((g.state.variant.done || {})[second.n])
+            bad("[вариант] номер " + second.n + " закрылся сам, потому что задача решалась когда-то раньше");
+        }
+      }
+    }
+
+    /* 13в.4. Итог: говорит проверяемое (номера), а не выдуманное (баллы). */
+    {
+      g.screenVariantDone(); await tick();
+      const txt = doc.getElementById("app").textContent;
+      if (!/Закрыто/i.test(txt)) bad("[вариант] в итоге не сказано, сколько закрыто");
+      if (!new RegExp("из " + EX.ege.total).test(txt))
+        bad("[вариант] итог не назвал общее число заданий экзамена");
+      if (/стобалльн|из 100|первичный балл/i.test(txt))
+        bad("[вариант] итог обещает балл, которого мы не знаем");
+      if (!/просел|Не открывал|Сдано/i.test(txt))
+        bad("[вариант] итог не сказал, где просело");
+    }
+
+    /* 13в.5. Обмен с сервером не склеивает два разных варианта в один. */
+    {
+      const a = { savedAt:1, variant:{ ex:"ege", seed:"AAAAAA", items:[{n:1,id:"x"}], done:{}, seen:{} } };
+      const b = { savedAt:2, variant:{ ex:"oge", seed:"BBBBBB", items:[{n:1,id:"y"}], done:{}, seen:{} } };
+      const m = g.mergeProgress(a, b);
+      if (!m.variant || m.variant.seed !== "BBBBBB")
+        bad("[вариант] при слиянии победил не свежий вариант");
+      if ((m.variant.items || []).length !== 1)
+        bad("[вариант] слияние склеило два разных варианта в один");
+    }
+
+    g.state.algo = {}; g.state.variant = {};
+    viewReset(g);
+    if (problems.length === p0) variantChecked++;
+  }
+
   /* --- 14. чему движок научился --- */
   if (w.MiniPy){
     const p0 = problems.length;
@@ -8468,6 +8617,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`свой проект с именем: ${workChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
+  console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),

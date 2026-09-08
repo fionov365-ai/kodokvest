@@ -2677,6 +2677,17 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
   .exwhy,.excnt{font-size:12px}
 }
 
+/* ---------- пробный вариант ----------
+   Строка варианта — та же строка карты экзамена (.exrow), только под темой
+   задания стоит вторая строчка: наша задача на этот номер. Отдельной сетки
+   она не заводит нарочно — карта и вариант обязаны читаться как одно место,
+   иначе номер 24 в двух списках выглядит как два разных задания. */
+.vartask{display:block;margin-top:3px;font-size:12.5px;color:var(--faint)}
+.vartask b{color:var(--warn);font-weight:600}
+.vexams{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:0 0 18px}
+.vexams .card{margin:0}
+@media (max-width:620px){ .vartask{font-size:12px} }
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте
@@ -17586,6 +17597,344 @@ return { SHOW_LINES: SHOW_LINES, showcaseRun: showcaseRun,
 
 <script>
  
+window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.variant = function(A){
+
+ 
+var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+function newSeed(){
+  var s = "";
+  for (var i = 0; i < 6; i++)
+    s += CODE_ABC.charAt(Math.floor(Math.random() * CODE_ABC.length));
+  return s;
+}
+ 
+function rngFrom(seed){
+  var h = 2166136261;
+  for (var i = 0; i < seed.length; i++){
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return function(){
+    h ^= h << 13; h ^= h >>> 17; h ^= h << 5; h |= 0;
+    return (h >>> 0) / 4294967296;
+  };
+}
+
+function examById(id){ return (window.EXAMS || {})[id] || null; }
+ 
+function tasksIn(groups){
+  return A.algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; })
+                     .map(function(x){ return x.id; }).sort();
+}
+
+ 
+function buildItems(exId, seed){
+  var ex = examById(exId);
+  if (!ex) return [];
+  var rnd = rngFrom(String(seed || "") + ":" + exId), used = {};
+  return ex.tasks.map(function(t){
+    var pool = (t.g && t.g.length) ? tasksIn(t.g) : [];
+    if (!pool.length)
+      return { n: t.n, t: t.t, id: null, dup: 0,
+               why: t.off ? ("судить нечем: " + t.off) : "задач по этой теме пока нет" };
+    var free = pool.filter(function(id){ return !used[id]; });
+    var dup = free.length ? 0 : 1;
+    var from = free.length ? free : pool;
+    var id = from[Math.floor(rnd() * from.length) % from.length];
+    used[id] = 1;
+     
+    return { n: t.n, t: t.t, id: id, dup: dup, why: t.off ? ("кроме: " + t.off) : "" };
+  });
+}
+
+function makeVariant(exId){
+  var seed = newSeed();
+  return { ex: exId, seed: seed, at: Date.now(), endAt: 0,
+           items: buildItems(exId, seed), done: {}, seen: {} };
+}
+ 
+function cur(){
+  var v = A.variantGet();
+  if (!v || !v.ex || !Array.isArray(v.items) || !v.items.length) return null;
+  if (!examById(v.ex)) return null;
+  return v;
+}
+ 
+function tally(v){
+  var t = { total: v.items.length, able: 0, done: 0, tried: 0, left: 0, dup: 0, weak: [] };
+  v.items.forEach(function(x){
+    if (x.dup) t.dup++;
+    if (!x.id) return;
+    t.able++;
+    if (v.done[x.n]) { t.done++; return; }
+    if (v.seen[x.n]) { t.tried++; t.weak.push(x.n); }
+    else t.left++;
+  });
+  return t;
+}
+function itemOf(v, n){
+  for (var i = 0; i < v.items.length; i++) if (v.items[i].n === n) return v.items[i];
+  return null;
+}
+ 
+function numsRu(list){
+  if (!list.length) return "";
+  if (list.length === 1) return String(list[0]);
+  return list.slice(0, -1).join(", ") + " и " + list[list.length - 1];
+}
+
+ 
+function rowHTML(v, x, task){
+  var st, right;
+  if (!x.id){
+    st = "no";
+    right = '<span class="exwhy">' + A.esc(x.why) + '</span>';
+  } else if (v.done[x.n]){
+    st = "yes";
+    right = '<span class="excnt">решено ✓</span>' +
+      '<button class="rbtn sec" data-vgo="' + x.n + '">Открыть снова</button>';
+  } else {
+    st = v.seen[x.n] ? "part" : "soon";
+    right = (v.seen[x.n] ? '<span class="excnt">начато</span>' : "") +
+      (x.why ? '<span class="exwhy">' + A.esc(x.why) + '</span>' : "") +
+      '<button class="rbtn ' + (v.seen[x.n] ? "sec" : "check") + '" data-vgo="' + x.n + '">Решать</button>';
+  }
+  return '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
+    '<span class="ext">' + A.esc(x.t) +
+      (task ? '<span class="vartask">' + task.emoji + " " + A.esc(task.title) +
+              (x.dup ? ' · <b>повтор темы</b>' : "") + '</span>' : "") +
+    '</span>' +
+    '<span class="exact">' + right + '</span></div>';
+}
+
+ 
+function startVariant(exId){
+  var v = cur();
+  if (v){
+    var t = tally(v);
+    if (t.done + t.tried > 0){
+      var ex = examById(v.ex), yes = true;
+       
+      try {
+        yes = confirm("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
+          t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
+          "останутся решёнными в разделе «Алгоритмы».");
+      } catch(e){}
+      if (!yes) return screenVariant();
+    }
+  }
+  A.variantSet(makeVariant(exId));
+  screenVariant();
+}
+ 
+function openFor(exId){
+  var v = cur();
+  if (v && v.ex === exId) return screenVariant();
+  startVariant(exId);
+}
+
+ 
+function screenPick(){
+  A.enterScreen("train", "variant");
+  A.setAlgoBack(null);
+  var h = '<div class="lvlhead"><div><div class="idx">пробный вариант</div>' +
+    '<h1>📝 Вариант целиком</h1></div>' +
+    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    '<p class="lede">Задачи в разделе «Алгоритмы, ОГЭ и ЕГЭ» разложены по темам — это удобно, ' +
+    'когда учишь одну тему. Экзамен так не устроен: там задания идут подряд, по номерам, и ' +
+    'каждое про своё. Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>';
+
+  h += '<div class="card"><h3>Как это устроено</h3><ul class="trrules">' +
+    '<li><b>Один номер — одна задача.</b> Порядок как на экзамене, с первого номера до последнего.</li>' +
+    '<li><b>Решать можно с любого места и в любой день.</b> Вариант никуда не денется: ' +
+    'закрыл вкладку — он останется на месте вместе с решённым.</li>' +
+    '<li><b>Номера, которых мы не даём, из варианта не выкинуты.</b> Против каждого написано ' +
+    'почему: на экзамене этот номер всё равно будет.</li>' +
+    '<li><b>Баллов здесь нет.</b> Шкала перевода в экзаменационные баллы меняется каждый год, ' +
+    'и обещать её мы не будем. Итог говорит проверяемое: какие номера закрыты, а какие нет.</li>' +
+    '</ul></div>';
+
+  h += '<div class="vexams">';
+  ["ege", "oge"].forEach(function(id){
+    var ex = examById(id);
+    if (!ex) return;
+    var able = buildItems(id, "PROBE").filter(function(x){ return x.id; }).length;
+    h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
+      '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
+      'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
+      '<div class="admrow"><button class="bigbtn" data-vnew="' + id + '">Собрать вариант</button></div></div>';
+  });
+  h += '</div>';
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
+  A.app.innerHTML = h;
+  A.app.querySelectorAll("[data-vnew]").forEach(function(b){
+    b.onclick = function(){ startVariant(b.getAttribute("data-vnew")); };
+  });
+  document.getElementById("tovtrain").onclick = A.screenTrain;
+  A.refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+ 
+function screenVariant(){
+  var v = cur();
+  if (!v) return screenPick();
+  A.enterScreen("train", "variant");
+  A.setAlgoBack(null);
+  var ex = examById(v.ex), t = tally(v);
+
+  var h = '<div class="lvlhead"><div><div class="idx">пробный вариант · ' + A.esc(ex.full) + '</div>' +
+    '<h1>📝 Вариант № ' + A.esc(v.seed) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + t.done + ' из ' + t.able + '</span>' +
+    A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
+    '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
+    'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
+    'это тренировка, а не контрольная.</p>' +
+    '<div class="extally">' +
+      '<span class="exok">✓ решено: ' + t.done + '</span>' +
+      '<span class="expart">◐ начато: ' + t.tried + '</span>' +
+      '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
+      '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>';
+
+  h += '<div class="exmap">';
+  v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
+  h += '</div>';
+
+   
+  if (v.ex === "oge")
+    h += '<div class="note"><b>Задание 15 — это две задачи по выбору</b>' +
+      'В варианте стоит 15.2 — обычная программа. Второй вариант того же номера, 15.1, ' +
+      'решается исполнителем «Робот» с русскими командами: у него свой язык и свой раздел ' +
+      'в «Тренировках». Выбирают на экзамене одно из двух.</div>';
+
+  if (t.dup)
+    h += '<div class="note"><b>Повторы в варианте — это про нас, а не про тебя</b>' +
+      'В ' + t.dup + ' ' + A.plural(t.dup, "номере", "номерах", "номерах") + ' стоит задача, ' +
+      'которая в этом варианте уже встречалась: задач по этой теме у нас пока меньше, чем ' +
+      'номеров. Так и должно быть видно — это наш список дел, а не твоя ошибка.</div>';
+
+  h += '<div class="pager"><button class="bigbtn" id="vdone">Показать итог</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="vnew">Собрать другой вариант</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
+  A.app.innerHTML = h;
+
+  A.app.querySelectorAll("[data-vgo]").forEach(function(b){
+    b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
+  });
+  document.getElementById("vdone").onclick = screenVariantDone;
+   
+  document.getElementById("vnew").onclick = function(){ startVariant(v.ex); };
+  document.getElementById("tovtrain").onclick = A.screenTrain;
+  A.refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+ 
+function openItem(n){
+  var v = cur();
+  if (!v) return screenPick();
+  var x = itemOf(v, n);
+  if (!x || !x.id) return screenVariant();
+  v.seen[n] = 1;
+  A.variantSet(v);
+  A.setAlgoBack({
+    crumb: "Вариант № " + v.seed,
+    backLabel: "В вариант",
+    winLabel: "← Вернуться в вариант",
+    go: screenVariant,
+    onWin: function(){
+      var w = cur();
+      if (!w) return;
+      w.done[n] = Date.now();
+      A.variantSet(w);
+    }
+  });
+  A.openAlgo(x.id);
+}
+
+ 
+function screenVariantDone(){
+  var v = cur();
+  if (!v) return screenPick();
+  A.enterScreen("train", "variant");
+  A.setAlgoBack(null);
+  var ex = examById(v.ex), t = tally(v);
+  var notOpened = v.items.filter(function(x){ return x.id && !v.done[x.n] && !v.seen[x.n]; })
+                         .map(function(x){ return x.n; });
+
+  var h = '<div class="lvlhead"><div><div class="idx">итог варианта № ' + A.esc(v.seed) + '</div>' +
+    '<h1>' + ex.em + ' ' + A.esc(ex.title) + ': что закрыто</h1></div>' +
+    '<div class="right">' + A.qm("variant", "Что такое пробный вариант") + '</div></div>';
+
+  h += '<div class="card"><h3>Закрыто ' + t.done + ' ' +
+    A.plural(t.done, "задание", "задания", "заданий") + ' из ' + ex.total + '</h3>' +
+     
+    (t.able < t.total
+      ? '<p>Это все номера экзамена, включая те, которых мы не даём. Из тех, что у нас есть, ' +
+        'закрыто <b>' + t.done + '</b> из <b>' + t.able + '</b>.</p>'
+      : '<p>Это все номера экзамена: задачи у нас есть на каждый.</p>') +
+    (t.weak.length
+      ? '<p>⚠️ <b>Просело на ' + numsRu(t.weak) + '</b> — эти задания ты открывал, но не сдал. ' +
+        'С них и стоит начать в следующий раз.</p>'
+      : (t.done ? '<p>Сдано всё, что открывал. ✓</p>' : "")) +
+     
+    (notOpened.length
+      ? '<p class="dim">' + (notOpened.length > 6
+          ? "Не открывал ещё " + notOpened.length + " " +
+            A.plural(notOpened.length, "номер", "номера", "номеров") + "."
+          : "Не открывал: " + numsRu(notOpened) + ".") + '</p>'
+      : "") +
+    '</div>';
+
+   
+  h += '<div class="card"><h3>⚖️ Почему тут нет баллов</h3>' +
+    '<p>Шкала перевода в экзаменационные баллы меняется каждый год, и она не наша: ' +
+    'её объявляет тот, кто проводит экзамен. Назвать число, которого мы не знаем, ' +
+    'значит соврать в единственном месте, где враньё выяснится в мае.</p>' +
+    '<p class="dim">Поэтому итог здесь такой, каким мы можем за него отвечать: какие номера ' +
+    'закрыты, какие просели, какие ты ещё не открывал. Настоящие баллы за такой вариант ' +
+    'скажет только демоверсия своего года.</p></div>';
+
+  var weakRows = v.items.filter(function(x){ return x.id && !v.done[x.n]; });
+  if (weakRows.length){
+    h += '<div class="sect"><h2>Что осталось</h2><div class="line"></div>' +
+      '<span class="cnt">' + weakRows.length + '</span></div><div class="exmap">';
+    weakRows.forEach(function(x){ h += rowHTML(v, x, A.algoById(x.id)); });
+    h += '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn" id="vback">← Вернуться в вариант</button>' +
+    '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">К тренировкам</button></div>';
+  A.app.innerHTML = h;
+  A.app.querySelectorAll("[data-vgo]").forEach(function(b){
+    b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
+  });
+  document.getElementById("vback").onclick = screenVariant;
+  document.getElementById("tovtrain").onclick = A.screenTrain;
+  A.refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+ 
+function variantStat(){
+  var v = cur();
+  if (!v) return "";
+  var ex = examById(v.ex), t = tally(v);
+  return ex.title + ": решено " + t.done + " из " + t.able;
+}
+
+return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
+         variantStat: variantStat, variantOpenFor: openFor,
+         buildItems: buildItems, makeVariant: makeVariant };
+};
+
+</script>
+
+<script>
+ 
 window.CONTENT = window.CONTENT || {};
 CONTENT.world1 = {
 
@@ -21862,7 +22211,7 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
                      "hours","zan","ptasks","hw","specs","parts","builds","solved","algo",
-                     "notes"];
+                     "notes","variant"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
  
 var KEEP_ON_RESET = ["games","mytasks","gallery"];
@@ -23001,8 +23350,12 @@ function backTarget(){
       return { label:"На главную", go: screenWorlds };
 
     case "warm": case "games": case "sand": case "viz": case "ai": case "algo":
+    case "variant":
       return { label:"К тренировкам", go: screenTrain };
-    case "algoone":  return { label:"Ко всем задачам", go: screenAlgo };
+     
+    case "algoone":  return algoBack
+      ? { label: algoBack.backLabel, go: algoBack.go }
+      : { label:"Ко всем задачам", go: screenAlgo };
      
     case "specs":    return { label:"В «Ты и ИИ»", go: screenAILab };
     case "spec":     return { label:"Ко всем работам", go: screenSpecs };
@@ -23321,6 +23674,9 @@ function mergeProgress(a, b){
   out.mytaskDraft = fresher.mytaskDraft || older.mytaskDraft || null;
 
    
+  out.variant = fresher.variant || older.variant || {};
+
+   
   out.gallery = {};
   Object.keys(mergeSet(a.gallery, b.gallery)).forEach(function(k){
     out.gallery[k] = (fresher.gallery || {})[k] || (older.gallery || {})[k] || null;
@@ -23492,6 +23848,7 @@ var PLACE_RU = {
   game:"играет", games:"выбирает игру", warmup:"делает разминку", warm:"выбирает разминку",
   today:"на экране «Сегодня»", zan:"идёт занятие", review:"повторяет трудное",
   algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена",
+  variant:"проходит пробный вариант",
   ai:"в разделе «Ты и ИИ»", ailesson:"в разделе «Ты и ИИ»",
   hw:"смотрит домашку", hwone:"делает домашку", sand:"в песочнице", viz:"в визуализаторе",
   mytasks:"составляет своё задание", friendtask:"решает задание от друга",
@@ -24833,6 +25190,11 @@ function trainCards(){
         var d = xs.filter(function(x){ return algoDone(x.id); }).length;
         return xs.length ? d + " из " + xs.length + " решено" : "";
       })() },
+     
+    { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
+      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. В конце видно, какие номера закрыты, а какие просели.",
+      when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
+      stat: variantStat() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
       why: "Поиск, сортировка и типовые задания обоих экзаменов. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
       when: "Когда нужна школьная информатика, а не просто Python.",
@@ -27498,6 +27860,9 @@ function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
 var algoTab = "all";
 var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
  
+var algoBack = null;
+function setAlgoBack(ctx){ algoBack = ctx || null; }
+ 
 function algoCountIn(groups){
   return algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; }).length;
 }
@@ -27547,6 +27912,12 @@ function examMapHTML(ex){
       '<span class="exact">' + right + '</span></div>';
   });
   h += '</div>' +
+     
+    '<div class="note"><b>Пройти весь экзамен подряд</b>' +
+    'Карта показывает темы по номерам, а вариант собирает из них то, что бывает в мае: ' +
+    'по одной задаче на каждый номер и по порядку. В конце видно, что закрыто, а что просело.' +
+    '<div class="admrow"><button class="rbtn check" data-exvariant="' + esc(ex.id) + '">' +
+    '📝 Собрать пробный вариант</button></div></div>' +
     (ex.id === "oge"
       ? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
         '15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
@@ -27563,6 +27934,7 @@ function examMapHTML(ex){
 }
 function screenAlgo(){
   enterScreen("train", "algo");
+  setAlgoBack(null);
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = algoList(), done = xs.filter(function(x){ return algoDone(x.id); }).length;
 
@@ -27585,6 +27957,8 @@ function screenAlgo(){
      
     var rb = app.querySelector("[data-exrobot]");
     if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
+    var vb = app.querySelector("[data-exvariant]");
+    if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
       b.onclick = function(){
         var t = algoNextIn(b.getAttribute("data-exgo").split(","));
@@ -27681,7 +28055,8 @@ function openAlgo(id){
   enterScreen("train", "algoone");
   session = { id:id, attempts:0, hints:0, shown:false, algo:true };
 
-  var h = '<div class="crumbs"><span data-go="back">Алгоритмы</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
+  var h = '<div class="crumbs"><span data-go="back">' +
+    esc(algoBack ? algoBack.crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
     '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
     '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
@@ -27699,7 +28074,8 @@ function openAlgo(id){
     '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
     '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
     '<div class="hintout" id="hintout"></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем задачам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
+      esc(algoBack ? algoBack.backLabel : "Ко всем задачам") + '</button></div>';
   app.innerHTML = h;
 
   var studio = makeStudio({
@@ -27721,7 +28097,10 @@ function openAlgo(id){
   studio.editor.onEdit = draftSchedule;
 
   wireHint(x.hints);
-  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+   
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ return algoBack ? algoBack.go() : screenAlgo(); };
+  });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -27804,6 +28183,8 @@ function winAlgo(x, res){
   var first = !algoDone(x.id);
   algoMark(x.id);
   markActiveToday();
+   
+  if (algoBack && algoBack.onWin) algoBack.onWin(x);
   save(); refreshTop();
   document.getElementById("wincard").innerHTML =
     '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
@@ -27816,11 +28197,16 @@ function winAlgo(x, res){
         plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
         'и её всегда можно попробовать сбить.</div>'
       : '') +
-    '<div class="winrow"><button class="bigbtn" id="walgo">Ко всем задачам</button>' +
+    '<div class="winrow"><button class="bigbtn" id="walgo">' +
+    esc(algoBack ? algoBack.winLabel : "Ко всем задачам") + '</button>' +
     '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
   document.getElementById("win").classList.add("show");
   confetti(first ? 2 : 1);
-  document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("walgo").onclick = function(){
+    var back = algoBack;
+    closeWin();
+    return back ? back.go() : screenAlgo();
+  };
   document.getElementById("wstay").onclick = closeWin;
 }
 
@@ -30350,6 +30736,21 @@ var SHOW_LINES = SHOWCASE.SHOW_LINES,
     showcaseProjects = SHOWCASE.showcaseProjects,
     showcaseAfter = SHOWCASE.showcaseAfter,
     screenShowcase = SHOWCASE.screenShowcase;
+
+ 
+var VARIANT = KVSCREENS.variant({
+  app: app, esc: esc, plural: plural, qm: qm,
+  enterScreen: enterScreen, refreshTop: refreshTop,
+  algoList: algoList, algoById: algoById,
+  openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
+  screenTrain: function(){ screenTrain(); },
+  variantGet: function(){ return S.variant || {}; },
+  variantSet: function(v){ S.variant = v || {}; save(); }
+});
+var screenVariant = VARIANT.screenVariant,
+    screenVariantDone = VARIANT.screenVariantDone,
+    variantOpenFor = VARIANT.variantOpenFor,
+    variantStat = VARIANT.variantStat;
  
 var PART_MAX = 40;           
 var PART_CODE_MAX = 900;     
@@ -32383,6 +32784,7 @@ var HASH_SCREENS = {
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
   "#algo":    function(){ screenAlgo(); },
+  "#variant": function(){ screenVariant(); },
   "#about":   function(){ screenAbout(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
@@ -33623,8 +34025,9 @@ function landHowRender(i){
     '<div class="landcard dir" style="' + landWorldVars(3) + '">' +
       '<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
       '<p>Поиск, сортировка, системы счисления, логика, графы. <b>' + c.oge +
-      '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Цену алгоритма тут не ' +
-      'рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
+      '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Есть и <b>пробный вариант ' +
+      'целиком</b>: по одной задаче на каждый номер, по порядку — как в мае. Цену алгоритма ' +
+      'тут не рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
     '<div class="landcard dir" style="' + landWorldVars(4) + '">' +
       '<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
       '<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
@@ -33636,9 +34039,12 @@ function landHowRender(i){
       ': карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. Собранное ' +
       'остаётся у ребёнка.</p></div>' +
     '</div>' +
+     
     '<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
     'Закрываем то, что решается программой. Электронные таблицы — нет, их нечем проверить. ' +
-    'Номера заданий не называем: нумерация между годами меняется.</div>';
+    'Номера заданий стоят только на картах экзаменов и в пробном варианте, и рядом с ними — ' +
+    'год, с которого нумерация снята: между годами она меняется. Баллы не считаем вовсе: ' +
+    'шкала перевода меняется каждый год и объявляется не нами.</div>';
 }
  
 function landElseRender(i){
@@ -36421,6 +36827,30 @@ var HELP = {
     '<li><b>Песочница</b> — чистый лист: пиши что хочешь, никто не проверяет.</li>' +
     '<li><b>Визуализатор</b> — показывает, что происходит в памяти, когда программа работает.</li></ul>' },
 
+   
+  variant: { t:"📝 Пробный вариант — весь экзамен подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Раздел «Алгоритмы, ОГЭ и ЕГЭ» разложен по темам: сегодня графы, завтра циклы. ' +
+    'Экзамен устроен не так — там задания идут <b>подряд, по номерам</b>, и каждое про своё. ' +
+    'Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Жми <b>«Решать»</b> в любой строке — откроется обычный экран задачи, ' +
+    'с подсказками и проверкой. Решил — вернёшься в вариант сам.</li>' +
+    '<li>Порядок свободный, и торопиться некуда: вариант сохраняется. Можно решить три ' +
+    'номера сегодня и вернуться завтра.</li>' +
+    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело.</li></ul>' +
+    '<h4>Как читать строки</h4>' +
+    '<ul><li><b>Номер и тема</b> — как в демоверсии своего года, ниже наша задача на этот номер.</li>' +
+    '<li><b>«повтор темы»</b> значит, что задач по ней у нас пока меньше, чем номеров. ' +
+    'Это наш список дел, а не ошибка ученика.</li>' +
+    '<li><b>Серые строки</b> — задания, которых мы не даём, и против каждого написано почему. ' +
+    'Из варианта они не выкинуты: на настоящем экзамене этот номер всё равно будет.</li></ul>' +
+    '<h4>Про баллы, и это важно для взрослого</h4>' +
+    '<p>Баллов здесь нет и не будет. Шкала перевода в экзаменационные баллы меняется каждый ' +
+    'год и объявляется не нами; назвать число, которого мы не знаем, значит соврать там, где ' +
+    'враньё выяснится в мае. Итог говорит только проверяемое: <b>какие номера закрыты, ' +
+    'а какие просели</b>.</p>' },
+
   sand: { t:"🧪 Песочница — чистый лист", h:
     '<h4>Что это за экран</h4>' +
     '<p>Пустой редактор без задачи и без проверки. Тут ничего нельзя сломать и ничего ' +
@@ -37221,6 +37651,9 @@ window.__game = {
   groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
   showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
+  screenVariant: screenVariant, screenVariantDone: screenVariantDone,
+  variantOpenFor: variantOpenFor, variantStat: variantStat,
+  variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
   solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,
   screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,

@@ -74,7 +74,7 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
                      "hours","zan","ptasks","hw","specs","parts","builds","solved","algo",
-                     "notes"];
+                     "notes","variant"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели репетитора такое не
@@ -1552,8 +1552,14 @@ function backTarget(){
       return { label:"На главную", go: screenWorlds };
 
     case "warm": case "games": case "sand": case "viz": case "ai": case "algo":
+    case "variant":
       return { label:"К тренировкам", go: screenTrain };
-    case "algoone":  return { label:"Ко всем задачам", go: screenAlgo };
+    /* ⚠️ Задача открывается из двух мест, и кнопка обязана называть ТО, куда
+       она правда ведёт. Пока она говорила «Ко всем задачам», а вела в вариант,
+       это была не мелочь: кнопка, соврав один раз, перестаёт читаться вовсе. */
+    case "algoone":  return algoBack
+      ? { label: algoBack.backLabel, go: algoBack.go }
+      : { label:"Ко всем задачам", go: screenAlgo };
     /* Приёмка — ступень раздела «Ты и ИИ», а не сосед по тренировкам:
        и дорога назад обязана это подтверждать. */
     case "specs":    return { label:"В «Ты и ИИ»", go: screenAILab };
@@ -1992,6 +1998,13 @@ function mergeProgress(a, b){
   /* недособранное задание — одна запись, как песочница: свежее побеждает */
   out.mytaskDraft = fresher.mytaskDraft || older.mytaskDraft || null;
 
+  /* пробный вариант экзамена — тоже ОДНА запись, и сложить две нельзя: у
+     каждой свой набор задач по номерам, и «объединение» дало бы вариант,
+     которого не собирал никто. Берём из более свежего сохранения — как
+     песочницу. Решённые в варианте задачи при этом не теряются: они лежат
+     ещё и в общем S.algo, а он объединяется по ключам. */
+  out.variant = fresher.variant || older.variant || {};
+
   /* галерея рисунков: по каждому это КОД, поэтому как свои версии игр —
      берём из более свежего сохранения, но рисунок, сделанный только на одном
      устройстве, не теряем */
@@ -2220,6 +2233,7 @@ var PLACE_RU = {
   game:"играет", games:"выбирает игру", warmup:"делает разминку", warm:"выбирает разминку",
   today:"на экране «Сегодня»", zan:"идёт занятие", review:"повторяет трудное",
   algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена",
+  variant:"проходит пробный вариант",
   ai:"в разделе «Ты и ИИ»", ailesson:"в разделе «Ты и ИИ»",
   hw:"смотрит домашку", hwone:"делает домашку", sand:"в песочнице", viz:"в визуализаторе",
   mytasks:"составляет своё задание", friendtask:"решает задание от друга",
@@ -3805,6 +3819,13 @@ function trainCards(){
         var d = xs.filter(function(x){ return algoDone(x.id); }).length;
         return xs.length ? d + " из " + xs.length + " решено" : "";
       })() },
+    /* ⚠️ Вариант стоит ПЕРЕД разделом по темам, а не после него. Темы — это
+       как учат; вариант — как спрашивают, и родитель ищет второе. Прятать его
+       под темами значит прятать единственное, чего нет у соседей. */
+    { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
+      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. В конце видно, какие номера закрыты, а какие просели.",
+      when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
+      stat: variantStat() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
       why: "Поиск, сортировка и типовые задания обоих экзаменов. Плюс то, чего нет нигде: цену алгоритма тут не рассказывают, а считают шагами.",
       when: "Когда нужна школьная информатика, а не просто Python.",
@@ -6829,6 +6850,18 @@ function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
    не отменено. */
 var algoTab = "all";
 var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
+/* ---- откуда пришли в задачу ----
+   Одна и та же задача открывается из двух мест: из списка тем и из пробного
+   варианта. Экран у неё обязан быть один (два экрана — это две проверки и
+   две подсказки, и однажды они разойдутся), а дорога назад разная: из
+   варианта надо вернуться в вариант, иначе ребёнок после каждой сданной
+   задачи оказывается в общем списке и вариант теряет.
+
+   ⚠️ Ставится ТОЛЬКО тем, кто ведёт в задачу, и снимается общим списком:
+   screenAlgo() — это и есть «я пришёл не из варианта». Забытый контекст
+   увёл бы обратно в вариант того, кто в него не заходил. */
+var algoBack = null;
+function setAlgoBack(ctx){ algoBack = ctx || null; }
 /* Сколько НАШИХ задач закрывает перечисленные группы. Считается по живому
    списку, а не по записанному числу: иначе разойдётся в день наполнения. */
 function algoCountIn(groups){
@@ -6886,6 +6919,15 @@ function examMapHTML(ex){
       '<span class="exact">' + right + '</span></div>';
   });
   h += '</div>' +
+    /* ⚠️ Дверь в пробный вариант стоит именно здесь, под полным списком
+       номеров: человек, который дочитал карту до конца, уже спросил себя
+       «а как это выглядит целиком» — и до 1.120.0 ответа на этот вопрос в
+       продукте не было вовсе. */
+    '<div class="note"><b>Пройти весь экзамен подряд</b>' +
+    'Карта показывает темы по номерам, а вариант собирает из них то, что бывает в мае: ' +
+    'по одной задаче на каждый номер и по порядку. В конце видно, что закрыто, а что просело.' +
+    '<div class="admrow"><button class="rbtn check" data-exvariant="' + esc(ex.id) + '">' +
+    '📝 Собрать пробный вариант</button></div></div>' +
     (ex.id === "oge"
       ? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
         '15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
@@ -6902,6 +6944,7 @@ function examMapHTML(ex){
 }
 function screenAlgo(){
   enterScreen("train", "algo");
+  setAlgoBack(null);
   session = { id:null, attempts:0, hints:0, shown:false };
   var xs = algoList(), done = xs.filter(function(x){ return algoDone(x.id); }).length;
 
@@ -6927,6 +6970,8 @@ function screenAlgo(){
     /* «Решать» ведёт к первой НЕрешённой задаче темы, а не в начало списка. */
     var rb = app.querySelector("[data-exrobot]");
     if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
+    var vb = app.querySelector("[data-exvariant]");
+    if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
       b.onclick = function(){
         var t = algoNextIn(b.getAttribute("data-exgo").split(","));
@@ -7032,7 +7077,8 @@ function openAlgo(id){
   enterScreen("train", "algoone");
   session = { id:id, attempts:0, hints:0, shown:false, algo:true };
 
-  var h = '<div class="crumbs"><span data-go="back">Алгоритмы</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
+  var h = '<div class="crumbs"><span data-go="back">' +
+    esc(algoBack ? algoBack.crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
     '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
     '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
@@ -7051,7 +7097,8 @@ function openAlgo(id){
     '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
     '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
     '<div class="hintout" id="hintout"></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем задачам</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
+      esc(algoBack ? algoBack.backLabel : "Ко всем задачам") + '</button></div>';
   app.innerHTML = h;
 
   var studio = makeStudio({
@@ -7073,7 +7120,11 @@ function openAlgo(id){
   studio.editor.onEdit = draftSchedule;
 
   wireHint(x.hints);
-  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+  /* ⚠️ Дорога назад берётся у контекста ЖИВЫМ вызовом, а не запоминается
+     сейчас: пока задача открыта, ребёнок мог уйти и вернуться другим путём. */
+  app.querySelectorAll("[data-go]").forEach(function(b){
+    b.onclick = function(){ return algoBack ? algoBack.go() : screenAlgo(); };
+  });
   refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -7163,6 +7214,10 @@ function winAlgo(x, res){
   var first = !algoDone(x.id);
   algoMark(x.id);
   markActiveToday();
+  /* Тот, кто привёл сюда, узнаёт о победе ПЕРВЫМ и до отрисовки: вариант
+     считает закрытые номера сам, и его счёт обязан сойтись с тем, что
+     ребёнок сейчас прочитает на карточке победы. */
+  if (algoBack && algoBack.onWin) algoBack.onWin(x);
   save(); refreshTop();
   document.getElementById("wincard").innerHTML =
     '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
@@ -7175,11 +7230,16 @@ function winAlgo(x, res){
         plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
         'и её всегда можно попробовать сбить.</div>'
       : '') +
-    '<div class="winrow"><button class="bigbtn" id="walgo">Ко всем задачам</button>' +
+    '<div class="winrow"><button class="bigbtn" id="walgo">' +
+    esc(algoBack ? algoBack.winLabel : "Ко всем задачам") + '</button>' +
     '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
   document.getElementById("win").classList.add("show");
   confetti(first ? 2 : 1);
-  document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
+  document.getElementById("walgo").onclick = function(){
+    var back = algoBack;
+    closeWin();
+    return back ? back.go() : screenAlgo();
+  };
   document.getElementById("wstay").onclick = closeWin;
 }
 
@@ -10033,6 +10093,28 @@ var SHOW_LINES = SHOWCASE.SHOW_LINES,
     showcaseProjects = SHOWCASE.showcaseProjects,
     showcaseAfter = SHOWCASE.showcaseAfter,
     screenShowcase = SHOWCASE.screenShowcase;
+
+/* ================= пробный вариант экзамена =================
+   Отрезан сразу в свой файл (js/variant.js) — как Робот, и по той же причине:
+   новый экран в app.js увеличивал бы долг, который мы весь день разбирали.
+   Зачем вариант вообще нужен и почему в нём нет баллов — в шапке того файла.
+   ⚠️ Вариант ХРАНИТ своё состояние (какие номера закрыты), поэтому наружу
+   отсюда идут не переменные, а две двери: variantGet читает, variantSet
+   пишет и сохраняет. Копия ссылки на S.variant однажды начала бы читать
+   позапрошлый вариант — правило оплачено ошибкой 08.09.2026. */
+var VARIANT = KVSCREENS.variant({
+  app: app, esc: esc, plural: plural, qm: qm,
+  enterScreen: enterScreen, refreshTop: refreshTop,
+  algoList: algoList, algoById: algoById,
+  openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
+  screenTrain: function(){ screenTrain(); },
+  variantGet: function(){ return S.variant || {}; },
+  variantSet: function(v){ S.variant = v || {}; save(); }
+});
+var screenVariant = VARIANT.screenVariant,
+    screenVariantDone = VARIANT.screenVariantDone,
+    variantOpenFor = VARIANT.variantOpenFor,
+    variantStat = VARIANT.variantStat;
 /* ================= мастерская: полка деталей и верстак =================
    Ставка Г из docs/foresight-2027.md § 3, дешёвый вход по § 12 п. 5:
    НЕ переписывать сто уроков в сквозную линию, а надстроить сверху.
@@ -12401,6 +12483,7 @@ var HASH_SCREENS = {
   "#group":   function(){ screenGroup(); },
   "#specs":   function(){ screenSpecs(); },
   "#algo":    function(){ screenAlgo(); },
+  "#variant": function(){ screenVariant(); },
   "#about":   function(){ screenAbout(); },
   "#help":    function(){ screenGuide(); },
   "#guide":   function(){ screenGuide(); }
@@ -14119,8 +14202,9 @@ function landHowRender(i){
     '<div class="landcard dir" style="' + landWorldVars(3) + '">' +
       '<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
       '<p>Поиск, сортировка, системы счисления, логика, графы. <b>' + c.oge +
-      '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Цену алгоритма тут не ' +
-      'рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
+      '</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Есть и <b>пробный вариант ' +
+      'целиком</b>: по одной задаче на каждый номер, по порядку — как в мае. Цену алгоритма ' +
+      'тут не рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
     '<div class="landcard dir" style="' + landWorldVars(4) + '">' +
       '<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
       '<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
@@ -14132,9 +14216,16 @@ function landHowRender(i){
       ': карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. Собранное ' +
       'остаётся у ребёнка.</p></div>' +
     '</div>' +
+    /* ⚠️ Оговорка переписана 08.09.2026 второй раз за день, и вот почему. Она
+       говорила «номера заданий не называем» — а на соседнем экране с 1.110.0
+       стоят карты ОГЭ и ЕГЭ по номерам, и с 1.120.0 номера стоят ещё и в
+       пробном варианте. Оговорка, которая ловится на вранье первым же
+       нажатием, вредит больше, чем её отсутствие. */
     '<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
     'Закрываем то, что решается программой. Электронные таблицы — нет, их нечем проверить. ' +
-    'Номера заданий не называем: нумерация между годами меняется.</div>';
+    'Номера заданий стоят только на картах экзаменов и в пробном варианте, и рядом с ними — ' +
+    'год, с которого нумерация снята: между годами она меняется. Баллы не считаем вовсе: ' +
+    'шкала перевода меняется каждый год и объявляется не нами.</div>';
 }
 /* Содержимое вкладок «Кроме уроков». Список тренировок берётся из
    trainCards() — из того же места, откуда его берёт сам раздел «Тренировки»:
@@ -17399,6 +17490,32 @@ var HELP = {
     '<li><b>Песочница</b> — чистый лист: пиши что хочешь, никто не проверяет.</li>' +
     '<li><b>Визуализатор</b> — показывает, что происходит в памяти, когда программа работает.</li></ul>' },
 
+  /* ⚠️ Подсказка варианта отвечает сразу двоим. Ребёнок спрашивает «что тут
+     делать», взрослый — «сколько баллов он набрал», и второй вопрос надо
+     закрыть прямо здесь: если не ответить, число придумают за нас. */
+  variant: { t:"📝 Пробный вариант — весь экзамен подряд", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Раздел «Алгоритмы, ОГЭ и ЕГЭ» разложен по темам: сегодня графы, завтра циклы. ' +
+    'Экзамен устроен не так — там задания идут <b>подряд, по номерам</b>, и каждое про своё. ' +
+    'Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Жми <b>«Решать»</b> в любой строке — откроется обычный экран задачи, ' +
+    'с подсказками и проверкой. Решил — вернёшься в вариант сам.</li>' +
+    '<li>Порядок свободный, и торопиться некуда: вариант сохраняется. Можно решить три ' +
+    'номера сегодня и вернуться завтра.</li>' +
+    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело.</li></ul>' +
+    '<h4>Как читать строки</h4>' +
+    '<ul><li><b>Номер и тема</b> — как в демоверсии своего года, ниже наша задача на этот номер.</li>' +
+    '<li><b>«повтор темы»</b> значит, что задач по ней у нас пока меньше, чем номеров. ' +
+    'Это наш список дел, а не ошибка ученика.</li>' +
+    '<li><b>Серые строки</b> — задания, которых мы не даём, и против каждого написано почему. ' +
+    'Из варианта они не выкинуты: на настоящем экзамене этот номер всё равно будет.</li></ul>' +
+    '<h4>Про баллы, и это важно для взрослого</h4>' +
+    '<p>Баллов здесь нет и не будет. Шкала перевода в экзаменационные баллы меняется каждый ' +
+    'год и объявляется не нами; назвать число, которого мы не знаем, значит соврать там, где ' +
+    'враньё выяснится в мае. Итог говорит только проверяемое: <b>какие номера закрыты, ' +
+    'а какие просели</b>.</p>' },
+
   sand: { t:"🧪 Песочница — чистый лист", h:
     '<h4>Что это за экран</h4>' +
     '<p>Пустой редактор без задачи и без проверки. Тут ничего нельзя сломать и ничего ' +
@@ -18323,6 +18440,9 @@ window.__game = {
   groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
   showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
+  screenVariant: screenVariant, screenVariantDone: screenVariantDone,
+  variantOpenFor: variantOpenFor, variantStat: variantStat,
+  variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
   solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,
   screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,
