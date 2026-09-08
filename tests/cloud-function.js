@@ -34,7 +34,7 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   check("ping говорит, что папка доступна на запись", json(r).ok === true);
   check("ping не оставил после себя файлов", fs.readdirSync(DIR).length === 0,
         "осталось: " + fs.readdirSync(DIR).join(", "));
-  check("ping сообщает, задан ли ключ наставника", json(r).adminKeySet === false);
+  check("ping сообщает, задан ли ключ репетитора", json(r).adminKeySet === false);
 
   /* ---------- CORS ---------- */
   r = await call({ httpMethod:"OPTIONS", queryStringParameters:{} });
@@ -110,7 +110,7 @@ const progress = { v:2, xp:160, name:"Миша", stars:{ "print-first":3, "vars"
   check("в списке верный код", st && st[0].code === "misha-7f3a");
   check("в списке верный опыт", st && st[0].xp === 160);
   check("в списке посчитано время", st && st[0].timeMs === 180000);
-  /* без имени наставник видит только коды, а две Ани по кодам не различаются */
+  /* без имени репетитор видит только коды, а две Ани по кодам не различаются */
   check("в списке есть имя ученика", st && st[0].name === "Миша", JSON.stringify(st && st[0]));
 
   /* ---------- второй ученик и порядок в списке ---------- */

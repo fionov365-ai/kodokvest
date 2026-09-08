@@ -7,7 +7,7 @@
      4. у заданий «починить» переписанный с нуля код НЕ засчитывается,
         даже если вывод правильный
      5. кнопка «Вернуть как было» есть только у заданий «починить»
-   Отдельно: панель наставника (код, статистика, снятие замков).
+   Отдельно: панель репетитора (код, статистика, снятие замков).
    Считаем все ошибки JavaScript — их должно быть ноль.
 
    Нужен jsdom:  npm install jsdom
@@ -258,7 +258,7 @@ function checkEncoding(){
   viewReset(g);
   await tick();
 
-  /* ---------- полная панель наставника (замок — пароль взрослого) ---------- */
+  /* ---------- полная панель репетитора (замок — пароль взрослого) ---------- */
   g.screenAdmin();
   await tick();
   const codeInput = doc.getElementById("admcode");
@@ -450,12 +450,12 @@ function checkEncoding(){
     });
     if (mine.schedule.days.length) bad("[смена ученика] расписание прошлого ребёнка осталось");
 
-    /* сброс в панели наставника: результаты стёрты, имя и своё творчество целы */
+    /* сброс в панели репетитора: результаты стёрты, имя и своё творчество целы */
     const res = g.clearResults(Object.assign({}, full, { name:"Аня", sandbox:"мой код" }));
     ["stars","log","warmups","ailab","days","daily","shields","projects","drawDone","gamesPlayed","drafts"]
       .forEach(k => {
         if (Object.keys(res[k] || {}).length)
-          bad(`[сброс] «${k}» не сброшен панелью наставника`);
+          bad(`[сброс] «${k}» не сброшен панелью репетитора`);
       });
     if (res.xp !== 0 || res.badges.length) bad("[сброс] XP или бейджи не сброшены");
     if (res.name !== "Аня") bad("[сброс] имя ученика не должно стираться при сбросе прогресса");
@@ -520,7 +520,7 @@ function checkEncoding(){
   const lst = await w.Cloud.list("kluch-testa").catch(e => { bad("[сервер] список: " + e.message); return null; });
   if (!lst || (lst.students || []).length !== 2) bad(`[сервер] в списке ${lst && (lst.students||[]).length} учеников, ожидалось 2`);
   const badKey = await w.Cloud.list("не тот ключ").then(() => "пустили", () => "отказ");
-  if (badKey !== "отказ") bad("[сервер] список открылся с неверным ключом наставника");
+  if (badKey !== "отказ") bad("[сервер] список открылся с неверным ключом репетитора");
   /* ⚠️ Имя ребёнка на сервер НЕ уходит — и это проверяется как обещание, а не
      как мелочь. Пока на сервере лежат только код и результаты, ребёнок в нашей
      базе неопознаваем, и фраза «о ребёнке мы не храним ничего» остаётся правдой.
@@ -528,7 +528,7 @@ function checkEncoding(){
      клиента такого-то», то есть категория «несовершеннолетние».
      Разбор: docs/zanyatie-i-vzroslyj.md §§ 13–14. */
   const meRow = (lst && lst.students || []).filter(x => x.code === "test-kid")[0];
-  if (!meRow) bad("[сервер] ученик не попал в список наставника");
+  if (!meRow) bad("[сервер] ученик не попал в список репетитора");
   else if (meRow.name) bad("[сервер] ИМЯ РЕБЁНКА УЕХАЛО НА СЕРВЕР: " + JSON.stringify(meRow));
   if (JSON.stringify(g.cloudSnapshot()).indexOf("Миша") >= 0)
     bad("[сервер] имя ребёнка попало в снимок для отправки — проверь CLOUD_SKIP");
@@ -542,7 +542,7 @@ function checkEncoding(){
 
   /* список учеников в самой панели: строка должна называть ребёнка по имени */
   const keyField = doc.getElementById("adminkey");
-  if (!keyField) bad("[панель] нет поля для ключа наставника");
+  if (!keyField) bad("[панель] нет поля для ключа репетитора");
   else {
     keyField.value = "kluch-testa";
     doc.querySelector('[data-act="listall"]').click();
@@ -552,7 +552,7 @@ function checkEncoding(){
     else {
       const txt = Array.prototype.map.call(rows, r => r.textContent).join(" | ");
       /* Имени в списке быть не должно (его нет на сервере), а человеческая
-         подпись заводится наставником у себя и на сервер не уходит. */
+         подпись заводится репетитором у себя и на сервер не уходит. */
       if (txt.indexOf("Миша") >= 0)
         bad("[панель] имя ребёнка показано в списке — оно не должно доезжать: " + txt.slice(0, 160));
       g.adminLabelSet("test-kid", "Петя, 5 класс");
@@ -560,9 +560,9 @@ function checkEncoding(){
       await tick(40);
       const txt2 = Array.prototype.map.call(doc.querySelectorAll(".admlrow"), r => r.textContent).join(" | ");
       if (txt2.indexOf("Петя, 5 класс") < 0)
-        bad("[панель] подпись наставника не показана: " + txt2.slice(0, 160));
+        bad("[панель] подпись репетитора не показана: " + txt2.slice(0, 160));
       if (JSON.stringify(g.cloudSnapshot()).indexOf("Петя, 5 класс") >= 0)
-        bad("[панель] подпись наставника уехала бы на сервер — она должна жить в admin");
+        bad("[панель] подпись репетитора уехала бы на сервер — она должна жить в admin");
       if (txt.indexOf("undefined") >= 0)
         bad("[панель] в списке учеников напечатано «undefined»: " + txt.slice(0, 160));
       if (txt.indexOf("anya-2b") < 0)
@@ -1341,7 +1341,7 @@ function checkEncoding(){
         bad("[замок разминки] не сказано, какой урок откроет закрытую разминку");
     }
 
-    /* «Открыть все уроки» в панели наставника снимает и этот замок */
+    /* «Открыть все уроки» в панели репетитора снимает и этот замок */
     g.state.admin.unlockAll = true;
     if (g.warmupsOpen().length !== WARMUPS.length)
       bad("[замок разминки] «Открыть все уроки» не открывает разминки");
@@ -1427,7 +1427,7 @@ function checkEncoding(){
     const proj = PROJECTS[0];
     const world1 = CUR.world(proj.world);
 
-    /* выше панель наставника включила «Открыть все уроки» — она законно
+    /* выше панель репетитора включила «Открыть все уроки» — она законно
        открывает и проект, поэтому на время проверки замка её выключаем */
     const savedUnlock = g.state.admin.unlockAll;
     g.state.admin.unlockAll = false;
@@ -1510,7 +1510,7 @@ function checkEncoding(){
     if (mp.projects.x.code !== "свеж")
       bad("[проект] слияние взяло не свежий код: " + JSON.stringify(mp.projects.x.code));
 
-    /* проект открыт и мимо замка: «Открыть все уроки» в панели наставника */
+    /* проект открыт и мимо замка: «Открыть все уроки» в панели репетитора */
     g.state.projects = {};
     g.state.admin.unlockAll = true;
     const w1 = CUR.world(proj.world);
@@ -2271,7 +2271,7 @@ function checkEncoding(){
     viewReset(g);
   }
 
-  /* --- отчёт за неделю в панели наставника --- */
+  /* --- отчёт за неделю в панели репетитора --- */
   let weekChecked = 0;
   if (typeof g.weekReportHTML === "function"){
     const p0 = problems.length;
@@ -2329,7 +2329,7 @@ function checkEncoding(){
     g.adminUnlock();
     g.screenAdmin();
     await tick();
-    if (!doc.querySelector(".weekrep")) bad("[отчёт] в панели наставника его нет");
+    if (!doc.querySelector(".weekrep")) bad("[отчёт] в панели репетитора его нет");
 
     if (problems.length === p0) weekChecked++;
     viewReset(g);
@@ -2983,7 +2983,7 @@ function checkEncoding(){
       { mytasks:{ b:{ title:"B", lines:["2"] } }, friendTasks:{ k2:1 }, savedAt:2 });
     if (!tm.mytasks.a || !tm.mytasks.b) bad("[задание] слияние потеряло задание одного из устройств");
     if (!tm.friendTasks.k1 || !tm.friendTasks.k2) bad("[задание] слияние потеряло пройденное чужое задание");
-    /* сброс прогресса в панели наставника не стирает сделанное ребёнком */
+    /* сброс прогресса в панели репетитора не стирает сделанное ребёнком */
     const kept = g.clearResults({ mytasks:{ a:{ title:"A", lines:["1"] } }, stars:{ x:3 } });
     if (!kept.mytasks || !kept.mytasks.a) bad("[задание] сброс прогресса стёр свои задания");
     if (Object.keys(kept.stars).length) bad("[задание] сброс прогресса не стёр звёзды");
@@ -3400,7 +3400,7 @@ function checkEncoding(){
     }
     if (Object.keys(seen).length < 2)
       bad("[ужин] вопрос одинаковый во все дни — выбор не зависит от даты");
-    /* в отчёте наставника вопрос виден */
+    /* в отчёте репетитора вопрос виден */
     if (!/Вопрос за ужином/.test(g.weekReportHTML(st1)))
       bad("[ужин] вопроса нет в недельном отчёте");
     if (problems.length === p0) dinnerChecked++;
@@ -4123,7 +4123,7 @@ function checkEncoding(){
     if (g.lessonSearch("щщщщ").length) bad("[поиск] нашлось то, чего нет");
     if (g.lessonSearch("черепашка").length > 8) bad("[поиск] выдача не ограничена");
 
-    /* Замки должны быть НА МЕСТЕ: панель наставника в проверках выше их
+    /* Замки должны быть НА МЕСТЕ: панель репетитора в проверках выше их
        снимала, а весь смысл этой проверки — что поиск замок не обходит. */
     const admWas = g.state.admin;
     g.state.admin = {};
@@ -4670,7 +4670,7 @@ function checkEncoding(){
     viewReset(g);
   }
 
-  /* --- 4а. домашка от наставника ---
+  /* --- 4а. домашка от репетитора ---
      Проверяем ровно то, ради чего механика построена: задача приходит от
      взрослого, судит её движок, требования конструкции обойти нельзя,
      на прогресс по курсу она не влияет, а просрочка ничего не сжигает. */
@@ -4691,10 +4691,10 @@ function checkEncoding(){
     if (!okList.some(x => x.id === item.id))
       bad("[домашка] урок пройден, а задача-близнец всё равно закрыта");
 
-    /* 4а.2. Семя: одинаковое у ребёнка и у наставника, разное у разных детей. */
+    /* 4а.2. Семя: одинаковое у ребёнка и у репетитора, разное у разных детей. */
     const day = g.dayKey();
     if (g.hwSeed("kid-a", item.id, day) !== g.hwSeed("kid-a", item.id, day))
-      bad("[домашка] семя задачи не воспроизводится — условия у ребёнка и наставника разойдутся");
+      bad("[домашка] семя задачи не воспроизводится — условия у ребёнка и репетитора разойдутся");
     if (g.hwSeed("kid-a", item.id, day) === g.hwSeed("kid-b", item.id, day))
       bad("[домашка] у разных учеников совпало семя — условие будет одно на всех");
 
@@ -4702,7 +4702,7 @@ function checkEncoding(){
     const seed = g.hwSeed("kid-a", item.id, day);
     const key = g.hwKey(item.id, seed);
     g.state.hw[key] = { id:item.id, seed:seed, due:g.hwDefaultDue(),
-                        by:"наставник", at:Date.now(), done:0, tries:0 };
+                        by:"репетитор", at:Date.now(), done:0, tries:0 };
     if (g.hwPending().length !== 1) bad("[домашка] заданная задача не попала в список несделанных");
     const built = g.hwBuild(g.hwPending()[0]);
     if (!built) bad("[домашка] задача не собралась в игре");
@@ -4751,7 +4751,7 @@ function checkEncoding(){
       if (!withNeed) bad("[домашка] в банке нет ни одной задачи с требованием конструкции");
       else {
         const sd = g.hwSeed("kid-a", withNeed.id, day), k2 = g.hwKey(withNeed.id, sd);
-        g.state.hw[k2] = { id:withNeed.id, seed:sd, due:"", by:"наставник",
+        g.state.hw[k2] = { id:withNeed.id, seed:sd, due:"", by:"репетитор",
                            at:Date.now(), done:0, tries:0 };
         const b2 = g.hwBuild(g.hwPending().filter(r => r.key === k2)[0]);
         g.openHW(k2);
@@ -4791,9 +4791,9 @@ function checkEncoding(){
     {
       const kk = "hw-klass#42";
       const given = { hw: { [kk]: { id:"hw-klass", seed:42, due:"2026-09-12",
-                                    by:"наставник", at:2000, done:0, tries:0 } }, savedAt:2 };
+                                    by:"репетитор", at:2000, done:0, tries:0 } }, savedAt:2 };
       const did = { hw: { [kk]: { id:"hw-klass", seed:42, due:"2026-09-12",
-                                  by:"наставник", at:1000, done:5555, tries:3 } }, savedAt:1 };
+                                  by:"репетитор", at:1000, done:5555, tries:3 } }, savedAt:1 };
       const m = g.mergeProgress(given, did);
       if (!m.hw || !m.hw[kk]) bad("[домашка] запись пропала при слиянии");
       else {
@@ -4804,7 +4804,7 @@ function checkEncoding(){
     }
 
     /* 4а.9. Все задачи банка обязаны собираться через игру, а не только в
-       своём тесте: сломанную задачу увидит наставник и решит, что сломан
+       своём тесте: сломанную задачу увидит репетитор и решит, что сломан
        тренажёр. */
     bank.forEach(it => {
       const sd = g.hwSeed("kid-proverka", it.id, day);
@@ -5064,8 +5064,8 @@ function checkEncoding(){
       const admWas = g.state.admin && g.state.admin.unlockAll;
       g.state.stars = {};                 /* новичок: разминок не открыто */
       g.state.warmups = {};
-      /* ⚠️ Снятые замки наставника открывают ВСЕ разминки — без этой строки
-         проверка молча тестировала бы не новичка, а панель наставника. */
+      /* ⚠️ Снятые замки репетитора открывают ВСЕ разминки — без этой строки
+         проверка молча тестировала бы не новичка, а панель репетитора. */
       if (g.state.admin) g.state.admin.unlockAll = false;
       const rec = g.zanStart();
       if (g.zanAll()[rec.key].plan.some(b => b.k === "predict"))
@@ -5651,12 +5651,12 @@ function checkEncoding(){
     if (problems.length === p0) showChecked++;
   }
 
-  /* --- 10. группа: рабочее место наставника --- */
+  /* --- 10. группа: рабочее место репетитора --- */
   if (typeof g.groupRow === "function"){
     const p0 = problems.length;
 
     /* 10.1. Сводка по ученику считается из ЛЮБОГО снимка прогресса, а не из
-       своего: наставник смотрит чужие данные, взятые с сервера. */
+       своего: репетитор смотрит чужие данные, взятые с сервера. */
     {
       const day = 864e5, now = Date.now();
       const st = g.ensureShape({
@@ -5731,20 +5731,20 @@ function checkEncoding(){
         bad("[группа] цифры стоят раньше рамки честности");
       if (doc.querySelectorAll(".grouprow").length !== 2)
         bad("[группа] показаны не все ученики");
-      /* подпись ставится у наставника и никуда не уходит */
+      /* подпись ставится у репетитора и никуда не уходит */
       g.adminLabelSet("misha-7f3a", "Петя, 5 класс");
-      if (g.cloudSnapshot().admin) bad("[группа] настройки наставника уезжают на сервер");
+      if (g.cloudSnapshot().admin) bad("[группа] настройки репетитора уезжают на сервер");
       g.screenGroup();
       await tick();
       if (!/Петя, 5 класс/.test(doc.getElementById("app").textContent))
-        bad("[группа] подпись наставника не показалась");
-      /* вход из полной панели наставника (теперь под #panel; #admin — новый
+        bad("[группа] подпись репетитора не показалась");
+      /* вход из полной панели репетитора (теперь под #panel; #admin — новый
          кабинет со списком учеников) */
       w.location.hash = "#panel";
       g.screenAdmin();
       await tick();
       if (!doc.querySelector('[data-act="togroup"]'))
-        bad("[группа] в панели наставника нет входа в группу");
+        bad("[группа] в панели репетитора нет входа в группу");
       /* ⚠️ Смена хэша ставит в очередь hashchange, а тот перерисовывает экран.
          Без этого ожидания следующая проверка открывала свой экран, и его
          тут же затирал запоздавший screenWorlds. */
@@ -5797,7 +5797,7 @@ function checkEncoding(){
         bad("[группа-домашка] ученику без пройденных уроков что-то уехало — ему дадут необъяснённое");
       Object.keys(hwA).forEach(k => {
         if (hwA[k].due !== due) bad("[группа-домашка] срок не записался");
-        if (hwA[k].by !== "наставник") bad("[группа-домашка] не записано, кто задал");
+        if (hwA[k].by !== "репетитор") bad("[группа-домашка] не записано, кто задал");
       });
       /* строка ученика в группе обновилась без перезагрузки */
       const rowA = g.groupState.rows.filter(r => r.code === "grp-a")[0];
@@ -5832,7 +5832,7 @@ function checkEncoding(){
       viewReset(g);
     }
 
-    /* 10.5. План и факт (корзина 3.5). Наставник спрашивает про ученика не
+    /* 10.5. План и факт (корзина 3.5). Репетитор спрашивает про ученика не
        «сколько пройдено», а «успевает ли», и ответ считается ТОЛЬКО от рамки,
        которую поставил взрослый. Здесь проверяется и арифметика, и три
        ограничения красной линии «это не табель». */
@@ -5962,7 +5962,7 @@ function checkEncoding(){
          не покрытые ничем. Карточка ученика звала frameEditorHTML(frame())
          без второго довода, и стоило поставить выбранному ученику дату
          «успеть к», как экран падал; а paceCheck без снимка считал остаток
-         уроков по прогрессу САМОГО НАСТАВНИКА и обещал родителю чужую дату. */
+         уроков по прогрессу САМОГО РЕПЕТИТОРА и обещал родителю чужую дату. */
       {
         const f = { days:[1,3,5], len:30, goal: g.shiftDay(g.dayKey(), 40),
                     setAt: now - 14*day, breaks: [], mix:"balanced", report:true };
@@ -6007,9 +6007,9 @@ function checkEncoding(){
                          d[g.dayKey(new Date(now - 2*day))] = 1; return d; })(),
       zan: { "z1": { end: now - day, predAll: 2, predOk: 1 } },
       hw: { "hw-klass#7": { id:"hw-klass", seed:7, due:g.shiftDay(g.dayKey(), 2),
-                            by:"наставник", at: now, done: now, tries: 1 },
+                            by:"репетитор", at: now, done: now, tries: 1 },
             "hw-konfety#7": { id:"hw-konfety", seed:7, due:g.shiftDay(g.dayKey(), 2),
-                              by:"наставник", at: now, done: 0, tries: 0 } }
+                              by:"репетитор", at: now, done: 0, tries: 0 } }
     });
     const text = g.parentReportText(st);
     if (text.indexOf("Секретик") >= 0)
@@ -6285,7 +6285,7 @@ function checkEncoding(){
     viewReset(g);
   } else bad("[лестница] функции stuckStep нет");
 
-  /* --- 10б3. заметка наставника к уроку (корзина 3.7) --- */
+  /* --- 10б3. заметка репетитора к уроку (корзина 3.7) --- */
   if (typeof g.noteFor === "function"){
     const p0 = problems.length;
     const now = Date.now(), day = 864e5;
@@ -6324,17 +6324,17 @@ function checkEncoding(){
 
     /* ---- показ ребёнку ---- */
     const st = g.ensureShape({ notes: { "print-first": { t: "Начни со второго примера.",
-                                                         by: "наставник", at: now - 3600e3 } } });
+                                                         by: "репетитор", at: now - 3600e3 } } });
     if (!g.noteFor(st, "print-first")) bad("[заметка] заметка не читается из снимка");
     if (g.noteFor(st, "vars")) bad("[заметка] к уроку без заметки что-то нашлось");
     const card = g.noteCardHTML(g.noteFor(st, "print-first"));
     if (!/Начни со второго примера/.test(card)) bad("[заметка] текст не попал в карточку");
-    if (!/наставник/.test(card)) bad("[заметка] не сказано, кто написал");
+    if (!/репетитор/.test(card)) bad("[заметка] не сказано, кто написал");
     if (g.noteCardHTML(null) !== "") bad("[заметка] без заметки карточка всё равно рисуется");
 
     /* на экране урока — ПЕРВОЙ, до теории: «начни со второго примера»,
        прочитанное после теории, уже бесполезно */
-    g.state.notes = { "print-first": { t: "Смотри на кавычки.", by: "наставник", at: now } };
+    g.state.notes = { "print-first": { t: "Смотри на кавычки.", by: "репетитор", at: now } };
     g.save();
     g.openLesson("print-first");
     await tick();
@@ -6356,8 +6356,8 @@ function checkEncoding(){
        ⚠️ Взрослый снял заметку, а на устройстве ребёнка лежит прежняя, с
        непустым текстом. Если снятие удаляло бы ключ, при следующем обмене
        ребёнок снова прочитал бы то, что уже стёрто. */
-    const было = { notes: { "print-first": { t: "Старая", by: "наставник", at: now - 7200e3 } } };
-    const сняли = { notes: { "print-first": { t: "", by: "наставник", at: now } } };
+    const было = { notes: { "print-first": { t: "Старая", by: "репетитор", at: now - 7200e3 } } };
+    const сняли = { notes: { "print-first": { t: "", by: "репетитор", at: now } } };
     if (g.noteFor(g.mergeProgress(было, сняли), "print-first"))
       bad("[заметка] снятая заметка воскресла при слиянии");
     if (g.noteFor(g.mergeProgress(сняли, было), "print-first"))
@@ -6371,7 +6371,7 @@ function checkEncoding(){
       bad("[заметка] при слиянии победила старая заметка");
 
     /* ---- «дошло ли» считается по журналу, а не по расписке ---- */
-    const свежая = { id: "print-first", at: now - day, t: "x", by: "наставник" };
+    const свежая = { id: "print-first", at: now - day, t: "x", by: "репетитор" };
     if (!/с тех пор урок открывал/.test(g.noteSeenHint(
         { log: { "print-first": { last: now } } }, свежая)))
       bad("[заметка] открытый после заметки урок не отмечен");
@@ -6404,7 +6404,7 @@ function checkEncoding(){
         bad("[пометка] пометка без текста строки к чему-то привязалась");
 
       /* пометка живёт в той же записи, что и заметка, и едет тем же путём */
-      const сМеткой = g.ensureShape({ notes: { "text-vs-num": { t: "", by: "наставник",
+      const сМеткой = g.ensureShape({ notes: { "text-vs-num": { t: "", by: "репетитор",
         at: now, marks: [метка] } } });
       const n2 = g.noteFor(сМеткой, "text-vs-num");
       if (!n2) bad("[пометка] запись только с пометкой, без общего текста, считается пустой");
@@ -6428,7 +6428,7 @@ function checkEncoding(){
          заготовку прямо в редактор уже после открытия — ровно то, что видит
          ребёнок, который ещё ничего не печатал. */
       const строкаЗаготовки = g.noteStarterOf("text-vs-num").split("\n")[1];
-      g.state.notes = { "text-vs-num": { t: "", by: "наставник", at: now,
+      g.state.notes = { "text-vs-num": { t: "", by: "репетитор", at: now,
         marks: [{ ln: 2, src: строкаЗаготовки, t: "вспомни кавычки" }] } };
       g.setStars("print-first", 3);
       g.save();
@@ -6463,7 +6463,7 @@ function checkEncoding(){
       /* ---- сторона взрослого: тыкают в НАШУ заготовку, а не в код ребёнка ----
          ⚠️ Красная линия. Ребёнку обещано в его же профиле: «сам экран и то,
          что ты печатаешь, взрослым не видно», код показывается только когда
-         он сам нажал «Показать экран наставнику». */
+         он сам нажал «Показать экран репетитору». */
       const kid2 = g.ensureShape({
         stars: { "print-first": 3 },
         log: { "print-first": { solvedAt: now - day, last: now - day, attempts: 1 },
@@ -6697,7 +6697,7 @@ function checkEncoding(){
           daily: (function(){ const o = {}; o[g.dayKey()] = 1; return o; })(),
           zan: (function(){ const o = {}; o[g.dayKey() + "#1"] =
             { plan: [{ k:"a" }, { k:"b" }, { k:"c" }], done: ["a"], end: 0 }; return o; })(),
-          hw: { "hw-klass#5": { id:"hw-klass", seed:5, due:"", by:"наставник",
+          hw: { "hw-klass#5": { id:"hw-klass", seed:5, due:"", by:"репетитор",
                                at: now2, done: now2 - 10e3, tries: 1 } }
         });
         const dh = g.presenceDetailHTML(stD, now2 - 10e3).replace(/<[^>]+>/g, " ");
@@ -6836,9 +6836,9 @@ function checkEncoding(){
       /* профиль говорит ребёнку, что видят взрослые */
       g.screenAccount(); await tick();
       const ta = doc.getElementById("app").textContent;
-      if (!/Что видят наставник и родитель/.test(ta))
+      if (!/Что видят репетитор и родитель/.test(ta))
         bad("[профиль] ребёнку не сказано, что видят взрослые");
-      if (!/Показать экран наставнику/.test(ta))
+      if (!/Показать экран репетитору/.test(ta))
         bad("[профиль] в профиле нет кнопки показа экрана");
 
       w.Cloud.forgetCode();
@@ -6962,13 +6962,13 @@ function checkEncoding(){
         bad("[домой] родитель провалился в тренажёр ребёнка");
     }
 
-    /* наставник: домой — список учеников */
+    /* репетитор: домой — список учеников */
     g.state.admin.parentOf = ""; g.state.admin.isAdmin = true; g.state.admin.pass = "x";
     g.goHome(); await tick();
     {
       const t = doc.getElementById("app").textContent;
       if (/Начать первый урок|дальше — урок/.test(t))
-        bad("[домой] наставник провалился в тренажёр ребёнка: " + t.slice(0, 90));
+        bad("[домой] репетитор провалился в тренажёр ребёнка: " + t.slice(0, 90));
     }
 
     /* и сам логотип в шапке зовёт именно goHome, а не детский экран */
@@ -7635,7 +7635,7 @@ function checkEncoding(){
       if (tiles.length < 4) bad("[панель] в макете кабинета плиток " + tiles.length);
       /* ⚠️ Ни одного крупного значения. Выдуманный отчёт про несуществующего
          ребёнка — ровно то враньё, от которого продукт отказывается внутри
-         (в панели наставника имён детей нет). Числа рисует только живая
+         (в панели репетитора имён детей нет). Числа рисует только живая
          плитка, и только настоящие. */
       if (mock.querySelector(".lkval"))
         bad("[панель] в макете кабинета на вывеске появилось число — это выдуманный отчёт");
@@ -7729,11 +7729,11 @@ function checkEncoding(){
     g.screenGroup(); await tick();
     if (!doc.querySelector(".roomnav")) bad("[панель] на экране группы нет навигации кабинета");
 
-    /* --- панель наставника: вкладки, всё отрисовано, показано одно --- */
+    /* --- панель репетитора: вкладки, всё отрисовано, показано одно --- */
     g.screenAdmin(); await tick();
     const atabs = [...doc.querySelectorAll(".admnav .ltab")];
     if (atabs.length !== 4)
-      bad("[панель] в панели наставника не четыре вкладки: " + atabs.length);
+      bad("[панель] в панели репетитора не четыре вкладки: " + atabs.length);
     const apanes = [...doc.querySelectorAll("[data-apane]")];
     if (apanes.length !== 4)
       bad("[панель] панелей под вкладками " + apanes.length + " вместо четырёх");
@@ -7805,8 +7805,8 @@ function checkEncoding(){
     const wasAdmin = !!(g.state.admin && g.state.admin.isAdmin);
     const wasParent = (g.state.admin && g.state.admin.parentOf) || "";
 
-    /* ⚠️ Жалоба фаундера 07.09.2026: в кабинете наставника логотип не делал
-       НИЧЕГО. Он вёл «домой по роли», а дом наставника — тот же кабинет, где
+    /* ⚠️ Жалоба фаундера 07.09.2026: в кабинете репетитора логотип не делал
+       НИЧЕГО. Он вёл «домой по роли», а дом репетитора — тот же кабинет, где
        он уже стоит. Выход на общую страницу оставался только ссылкой в самом
        низу, до которой мало кто долистывает. */
     g.state.admin = g.state.admin || {};
@@ -7815,12 +7815,12 @@ function checkEncoding(){
     g.screenAdminHome(); await tick();
     g.goLogo(); await tick();
     if (!/О тренажёре|Информатика без репетитора|Кодоквест — что это/i.test(doc.getElementById("app").textContent))
-      bad("[логотип] из кабинета наставника логотип не вывел на страницу сайта");
+      bad("[логотип] из кабинета репетитора логотип не вывел на страницу сайта");
     /* и обратно в кабинет — кнопкой в шапке, она обязана остаться видимой */
     const lk = doc.getElementById("tab-lk");
     if (!lk || lk.hidden) bad("[логотип] с вывески не видно кнопки возврата в кабинет");
-    else if (!/Кабинет наставника/.test(lk.textContent))
-      bad("[логотип] кнопка возврата ведёт не в кабинет наставника: " + lk.textContent);
+    else if (!/Кабинет репетитора/.test(lk.textContent))
+      bad("[логотип] кнопка возврата ведёт не в кабинет репетитора: " + lk.textContent);
 
     /* ⚠️ Взрослый, попавший на урок с вывески, обязан видеть, где он и как
        выйти: детская навигация в шапке подменяет взрослую, и кабинет из урока
@@ -8378,10 +8378,10 @@ function checkEncoding(){
   console.log(`занятие как единица: ${zanChecked ? "да" : "нет"}`);
   console.log(`кабинет взрослого и рамка: ${adultChecked ? "да" : "нет"}`);
   console.log(`задание от взрослого: ${ptaskChecked ? "да" : "нет"}`);
-  console.log(`домашка от наставника: ${hwChecked ? "да" : "нет"}`);
+  console.log(`домашка от репетитора: ${hwChecked ? "да" : "нет"}`);
   console.log(`отчёт родителю текстом и вопросы: ${reportChecked ? "да" : "нет"}`);
   console.log(`лестница выхода из затыка: ${ladderChecked ? "да" : "нет"}`);
-  console.log(`заметка наставника к уроку: ${noteChecked ? "да" : "нет"}`);
+  console.log(`заметка репетитора к уроку: ${noteChecked ? "да" : "нет"}`);
   console.log(`кабинеты: место отдельно от роли: ${roomChecked ? "да" : "нет"}`);
   console.log(`кабинет на вкладках: панель, карточка ученика, без дублей: ${dashChecked ? "да" : "нет"}`);
   console.log(`возвращаемость: метрики и крючки: ${returnChecked ? "да" : "нет"}`);
@@ -8398,7 +8398,7 @@ function checkEncoding(){
   console.log(`мастерская (полка деталей и верстак): ${shopChecked ? "да" : "нет"}`);
   console.log(`обратное направление (задача взрослому): ${backChecked ? "да" : "нет"}`);
   console.log(`витрина «что создают ученики»: ${showChecked ? "да" : "нет"}`);
-  console.log(`группа (рабочее место наставника): ${groupChecked ? "да" : "нет"}`);
+  console.log(`группа (рабочее место репетитора): ${groupChecked ? "да" : "нет"}`);
   console.log(`нотация приёмки: ${specChecked ? "да" : "нет"}`);
   console.log(`упаковка раздела «Ты и ИИ»: ${aiPackChecked ? "да" : "нет"}`);
   console.log(`витрина проектов: ${showcaseChecked ? "да" : "нет"}`);

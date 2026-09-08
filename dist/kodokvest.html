@@ -292,7 +292,7 @@ button{font-family:inherit}
    влезать в одну строку она обязана всегда — иначе вторая строка съедает
    у урока целый сантиметр экрана. Число опыта из панели убрано: ранг и
    полоска говорят то же самое, а точная цифра висит подсказкой на ранге,
-   лежит в профиле и в панели наставника. Полоска уходит на телефоне. */
+   лежит в профиле и в панели репетитора. Полоска уходит на телефоне. */
 #xptext{display:none}
 
 /* Панель обязана влезать в ОДНУ строку при ЛЮБОМ прогрессе, и раньше она
@@ -992,7 +992,7 @@ body.focus .lede{display:none}
   .proof .cmp{grid-template-columns:1fr}
 }
 
-/* ---------- панель наставника ---------- */
+/* ---------- панель репетитора ---------- */
 .admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}
 .admgate input:focus{outline:none;border-color:var(--acc)}
@@ -1091,7 +1091,7 @@ body.focus .lede{display:none}
   .shcode{grid-template-columns:1fr}
 }
 
-/* ---------- отчёт за неделю в панели наставника ---------- */
+/* ---------- отчёт за неделю в панели репетитора ---------- */
 .weekrep .wrline{margin:0 0 14px;font-size:15px;color:var(--ink)}
 .weekrep .wrline b{color:var(--acc2)}
 .wrstrip{display:flex;gap:8px;flex-wrap:wrap}
@@ -1347,7 +1347,7 @@ body.focus .lede{display:none}
 .storyerr{margin:8px 0 0;color:var(--bad);font-size:13.5px}
 .storynote{margin:9px 0 0;font-size:12.5px;color:var(--faint)}
 
-/* ---------- вопрос за ужином (в отчёте наставника) ---------- */
+/* ---------- вопрос за ужином (в отчёте репетитора) ---------- */
 .dinner{margin-top:14px;padding:12px 15px;border:1px solid var(--line2);border-radius:12px;
   background:rgba(255,197,61,.07)}
 .dinner b{display:block;color:var(--gold);font-size:13px;margin-bottom:4px}
@@ -1713,13 +1713,13 @@ body.focus .toTop{display:none}
    а найденное расхождение, ради которого приёмка и затевалась. */
 .specone.bad .specmark{color:var(--warn)}
 
-/* ---------- группа: рабочее место наставника ---------- */
+/* ---------- группа: рабочее место репетитора ---------- */
 .grouplist{display:grid;gap:10px;margin-top:8px}
 .grouprow{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}
 .grouprow.ok{border-color:var(--okline)}
 .grphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
   flex-wrap:wrap;font-size:14px}
-/* ⚠️ Ни одной красной пометки: красный на экране наставника читается как
+/* ⚠️ Ни одной красной пометки: красный на экране репетитора читается как
    «поймали ребёнка», а мы никого не ловим. Тишина и трудный урок — жёлтым,
    ровный ход — зелёным. */
 .trmarks li.quiet,.trmarks li.tough,.trmarks li.pred,.trmarks li.stuck{color:var(--warn)}
@@ -2550,7 +2550,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    дошедший до кабинета, обязан узнать то, что видел на витрине.
    ⚠️ Макет на вывеске не показывает НИКАКИХ чисел. Выдуманный отчёт про
    несуществующего ребёнка — ровно то враньё, от которого продукт
-   отказывается внутри (в панели наставника имён детей нет).
+   отказывается внутри (в панели репетитора имён детей нет).
    ⚠️ Плитка не ниже 76 px: это цель для пальца (docs/pravila-sajta.md § 8). */
 .lkmock{border:1px solid var(--line);border-radius:16px;background:var(--panel2);overflow:hidden}
 .lkbar{display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--sunken);
@@ -2585,7 +2585,7 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 }
 
 /* ---------- одна навигация на все экраны кабинета ----------
-   Экранов у наставника три — ученики, группа, панель, — и попасть в «Группу»
+   Экранов у репетитора три — ученики, группа, панель, — и попасть в «Группу»
    можно было только набрав адрес с #group: ссылки на неё не было ни на одном
    экране. Полоса стоит на всех трёх и всегда показывает, где ты сейчас. */
 .roomnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}
@@ -2753,7 +2753,7 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
          ⚠️ Это НЕ четвёртая детская вкладка. Три вкладки — «Главное»,
          «Тренировки», «Моё» — это мир ребёнка, и трогать их нельзя. Эта
          кнопка живёт СНАРУЖИ .tabs и показывается ровно там, где детских
-         вкладок нет: на вывеске, в кабинете родителя и наставника. Что на
+         вкладок нет: на вывеске, в кабинете родителя и репетитора. Что на
          ней написано и куда она ведёт — решает роль (refreshTop). -->
     <button class="lktab" id="tab-lk" hidden></button>
     <div class="xpbox">
@@ -20201,7 +20201,7 @@ function refreshTop(){
       curPlace === "parentlogin" || curPlace === "adminsetup" || curPlace === "adminlogin";
      
     var role = isAdminDevice()
-        ? { em:"🛠", lbl:"Кабинет наставника", go: function(){ screenAdminHome(); } }
+        ? { em:"🛠", lbl:"Кабинет репетитора", go: function(){ screenAdminHome(); } }
       : isParentDevice()
         ? { em:"👨‍👩‍👦", lbl:"Кабинет родителя", go: function(){ screenParent(); } }
       : (myCode() || S.name)
@@ -20746,7 +20746,7 @@ function liveBanner(showIt){
   if (el) return;
   el = document.createElement("div");
   el.id = "livebar"; el.className = "livebar";
-  el.innerHTML = '<span>🔴 <b>Наставник видит твой код</b></span>' +
+  el.innerHTML = '<span>🔴 <b>Репетитор видит твой код</b></span>' +
     '<button class="rbtn sec" id="liveoff">Прекратить</button>';
   document.body.appendChild(el);
   el.querySelector("#liveoff").onclick = function(){ liveOffNow(); };
@@ -20755,8 +20755,8 @@ function liveBanner(showIt){
 function liveRowHTML(){
   if (!serverOn() || !myCode()) return "";
   if (liveShare.on)
-    return '<div class="winrow"><button class="bigbtn ghost" id="zlive">🔴 Наставник видит твой код · выключить</button></div>';
-  return '<div class="winrow"><button class="bigbtn ghost" id="zlive">📺 Показать экран наставнику</button></div>';
+    return '<div class="winrow"><button class="bigbtn ghost" id="zlive">🔴 Репетитор видит твой код · выключить</button></div>';
+  return '<div class="winrow"><button class="bigbtn ghost" id="zlive">📺 Показать экран репетитору</button></div>';
 }
 function bindLiveRow(after){
   var b = document.getElementById("zlive");
@@ -20808,7 +20808,7 @@ function screenLiveView(code, label){
     var rec = liveAccept(watch, raw);
     if (!rec){
       box.innerHTML = '<div class="note"><b>Трансляция сейчас не идёт</b>' +
-        'Попросите ребёнка нажать «📺 Показать экран наставнику» — кнопка на экране занятия ' +
+        'Попросите ребёнка нажать «📺 Показать экран репетитору» — кнопка на экране занятия ' +
         'и в его профиле. Как только он нажмёт, здесь появится код.</div>';
       return;
     }
@@ -22540,7 +22540,7 @@ function screenWorlds(){
         return cd ? '<span>· до конца мира ' + next.world + ' — примерно ' + cd.zan + ' ' +
           plural(cd.zan, "занятие", "занятия", "занятий") + '</span>' : '';
       })() +
-      (hwLeft ? '<span>· домашка от наставника: ' + hwLeft + ' ' +
+      (hwLeft ? '<span>· домашка от репетитора: ' + hwLeft + ' ' +
                 plural(hwLeft, "задача", "задачи", "задач") + '</span>' : '') +
       '<span>' + (dailyOk ? "✓ задача дня сделана" : "· задача дня ещё ждёт") + '</span>' +
       '<span>' + (dues ? "· " + dues + " " + plural(dues, "урок ждёт", "урока ждут", "уроков ждут") + " повтора"
@@ -23382,7 +23382,7 @@ function noteSeenHint(st, n){
   return g.last >= n.at ? "с тех пор урок открывал" : "с тех пор урок не открывал";
 }
  
-function noteWho(){ return (typeof hwWho === "function") ? hwWho() : "наставник"; }
+function noteWho(){ return (typeof hwWho === "function") ? hwWho() : "репетитор"; }
  
 function noteCardHTML(n){
   if (!n) return "";
@@ -24924,11 +24924,11 @@ function screenAccount(){
   }
    
   if (serverOn() && code){
-    h += '<div class="card"><h3>Что видят наставник и родитель</h3>' +
+    h += '<div class="card"><h3>Что видят репетитор и родитель</h3>' +
       '<ul class="trrules">' +
       '<li><b>Когда ты занимаешься и какой урок открыт</b> — по твоему коду ученика. ' +
       'Сам экран и то, что ты печатаешь, им не видно.</li>' +
-      '<li><b>Твой код и вывод</b> — только если ты сам нажмёшь «Показать экран наставнику». ' +
+      '<li><b>Твой код и вывод</b> — только если ты сам нажмёшь «Показать экран репетитору». ' +
       'Пока показ включён, у тебя горит плашка, и выключить его можешь только ты.</li>' +
       '</ul>' + liveRowHTML() + '</div>';
   }
@@ -24938,7 +24938,7 @@ function screenAccount(){
     '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
      
     '<div class="card"><h3>Это не мой кабинет</h3>' +
-    '<p class="dim">Если за устройство сел родитель или наставник — можно перейти в свой кабинет ' +
+    '<p class="dim">Если за устройство сел родитель или репетитор — можно перейти в свой кабинет ' +
     'без набора адресов.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="gorole">⇄ Сменить роль</button></div></div>' +
     '<div class="card"><h3>Что это за тренажёр</h3>' +
@@ -26208,14 +26208,14 @@ function screenHW(){
   session = { id:null, attempts:0, hints:0, shown:false };
   var pend = hwPending(), done = hwDoneRecs();
 
-  var h = '<div class="lvlhead"><div><div class="idx">задал наставник</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">задал репетитор</div>' +
     '<h1>📮 Домашка</h1></div>' +
     '<div class="right"><span class="tag">' +
       (pend.length ? pend.length + " " + plural(pend.length, "задача", "задачи", "задач") : "всё сдано") +
     '</span></div></div>';
 
   if (!pend.length && !done.length){
-    h += '<p class="lede">Здесь появляются задачи, которые задаёт взрослый — наставник или родитель — ' +
+    h += '<p class="lede">Здесь появляются задачи, которые задаёт взрослый — репетитор или родитель — ' +
       'между занятиями. Пока не задано ничего, и это не значит, что ты что-то пропустил.</p>' +
       '<div class="card"><h3>Как это устроено</h3>' +
       '<p>Домашка — это не пройденный урок заново. Это задача на то же умение, но с другими ' +
@@ -26278,7 +26278,7 @@ function openHW(key){
     enterScreen("home", "hw");
     app.innerHTML = '<div class="lvlhead"><div><h1>📮 Домашка</h1></div></div>' +
       '<div class="note"><b>Эту задачу открыть не получилось</b>' +
-      'Похоже, она из старой версии тренажёра. Скажи наставнику — он задаст её заново. ' +
+      'Похоже, она из старой версии тренажёра. Скажи репетитору — он задаст её заново. ' +
       'Твой прогресс от этого не пострадал.</div>' +
       '<div class="pager"><button class="bigbtn ghost" id="tohw">← Ко всей домашке</button></div>';
     document.getElementById("tohw").onclick = screenHW;
@@ -26371,7 +26371,7 @@ function winHW(t, rec){
     '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
     '<h2>' + (first ? "Домашка сдана" : "Решено ещё раз") + '</h2>' +
     '<p>Вывод сошёлся: программа делает ровно то, что просили. ' +
-    'Наставник увидит, что задача сдана, при следующем открытии тренажёра.</p>' +
+    'Репетитор увидит, что задача сдана, при следующем открытии тренажёра.</p>' +
     (session.attempts === 1
       ? '<div class="stepnote">С первой попытки — значит умение из урока держится и на других числах.</div>'
       : '') +
@@ -29355,7 +29355,7 @@ function screenAdult(){
    
   h += weekReportHTML(S);
 
-  h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель наставника →</button>' +
+  h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель репетитора →</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
 
   app.innerHTML = h;
@@ -31553,8 +31553,8 @@ var LAND_ROLES = [
       ["🗓","Расписание","дни и потолок дня"],
       ["📝","Задание","выдать свои задачи"]
     ] },
-  { em:"👨‍🏫", tab:"Репетитору и учителю", how:"вход по паролю, «Панель наставника»",
-    win:"Кабинет · наставник",
+  { em:"👨‍🏫", tab:"Репетитору и учителю", how:"вход по паролю, «Панель репетитора»",
+    win:"Кабинет · репетитор",
     demo:"Домашка, которую не спишешь: одна задача — у каждого свои числа. " +
          "Нажмите «другой ученик».",
     lede:"Всё, что у родителя, плюс группа.",
@@ -31567,7 +31567,7 @@ var LAND_ROLES = [
       ["🔐","Имён на сервере нет","только код и результат"]
     ] },
    
-  { em:"🛠", tab:"Администратору", how:"вход по тому же паролю, что и у наставника",
+  { em:"🛠", tab:"Администратору", how:"вход по тому же паролю, что и у репетитора",
     win:"Кабинет · администратор",
     lede:"Не про учеников, а про устройство: замки, перенос, сервер.",
     tiles:[
@@ -32477,7 +32477,7 @@ function kidWatch(code, seq){
 }
 
  
-function hwWho(){ return parentOf() ? "родитель" : "наставник"; }
+function hwWho(){ return parentOf() ? "родитель" : "репетитор"; }
  
 function hwDefaultDue(){
   for (var i = 1; i <= 14; i++){
@@ -32840,7 +32840,7 @@ function adminGate(after){
   after = after || screenAdmin;
   var setting = !adminHasPass();
   app.innerHTML =
-    '<div class="lvlhead"><div><div class="idx">служебный экран</div><h1>🔐 Панель наставника</h1></div></div>' +
+    '<div class="lvlhead"><div><div class="idx">служебный экран</div><h1>🔐 Панель репетитора</h1></div></div>' +
     '<p class="lede">' + (setting
       ? 'Эти экраны — для взрослого. Придумайте пароль, чтобы ребёнок не открыл их из любопытства.'
       : 'Введите пароль взрослого.') + '</p>' +
@@ -33404,7 +33404,7 @@ function serverCardHTML(){
       '<button class="rbtn sec" data-act="viewother">Посмотреть</button>' +
     '</div>' +
     '<div class="admrow">' +
-      '<label class="admlbl">ключ наставника <input type="password" id="adminkey" ' +
+      '<label class="admlbl">ключ репетитора <input type="password" id="adminkey" ' +
         'value="' + esc(adminKeySaved()) + '" autocomplete="off"></label>' +
       '<button class="rbtn sec" data-act="listall">Список всех учеников</button>' +
     '</div>' +
@@ -33614,7 +33614,7 @@ function bindGroupStats(){
   if (!btn) return;
   btn.onclick = function(){
     var key = ((document.getElementById("grpkey") || {}).value || "").trim() || adminKeySaved();
-    if (!key){ grpStats.error = "Нужен ключ наставника — впишите его выше."; return screenGroup(); }
+    if (!key){ grpStats.error = "Нужен ключ репетитора — впишите его выше."; return screenGroup(); }
     adminKeyRemember(key);
     grpStats.busy = true; grpStats.error = ""; screenGroup();
     Cloud.stats(key).then(function(m){
@@ -33682,7 +33682,7 @@ function groupAssignHW(ids, due){
       mine.forEach(function(id){
         var seed = hwSeed(row.code, id, dayk), key = hwKey(id, seed);
         if (base.hw[key]) return;
-        base.hw[key] = { id:id, seed:seed, due:due || "", by:"наставник",
+        base.hw[key] = { id:id, seed:seed, due:due || "", by:"репетитор",
                          at: Date.now(), done:0, tries:0 };
         added++;
       });
@@ -33754,12 +33754,12 @@ function screenGroup(){
   if (!adminUnlocked()) return adminGate(screenGroup);
   var rows = groupState.rows;
 
-  var h = '<div class="lvlhead"><div><div class="idx">рабочее место наставника</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">рабочее место репетитора</div>' +
     '<h1>👨‍🏫 Группа</h1></div><div class="right"><span class="tag">только чтение</span></div></div>' +
     roomNavHTML("group") +
     '<p class="lede">Код проверил движок. Ваше дело — посмотреть, с кем поговорить.</p>';
 
-  h += '<div class="card"><h3>🔑 Ключ наставника</h3>' +
+  h += '<div class="card"><h3>🔑 Ключ репетитора</h3>' +
     '<div class="admrow"><label class="admlbl">ключ ' +
       '<input type="password" id="grpkey" value="' + esc(adminKeySaved()) + '" autocomplete="off"></label>' +
       '<button class="rbtn check" id="grpload">Загрузить группу</button></div>' +
@@ -33839,11 +33839,11 @@ function screenGroup(){
     h += '</div></div>';
   } else if (!groupState.busy){
     h += '<div class="card"><h3>Группа не загружена</h3>' +
-      '<p class="dim">Введите ключ наставника и нажмите «Загрузить группу». ' +
-      'Если сервер не настроен, сначала пройдите настройку в панели наставника.</p></div>';
+      '<p class="dim">Введите ключ репетитора и нажмите «Загрузить группу». ' +
+      'Если сервер не настроен, сначала пройдите настройку в панели репетитора.</p></div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" data-gback="1">← В панель наставника</button>' +
+  h += '<div class="pager"><button class="bigbtn ghost" data-gback="1">← В панель репетитора</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-ghome="1">На главную</button></div>';
 
   app.innerHTML = h;
@@ -33853,7 +33853,7 @@ function screenGroup(){
   var lb = document.getElementById("grpload");
   if (lb) lb.onclick = function(){
     var key = (document.getElementById("grpkey").value || "").trim();
-    if (!key){ groupState.error = "Нужен ключ наставника."; return screenGroup(); }
+    if (!key){ groupState.error = "Нужен ключ репетитора."; return screenGroup(); }
     adminKeyRemember(key);
     groupState.busy = true; groupState.error = ""; screenGroup();
     groupLoad(key).then(screenGroup, screenGroup);
@@ -33939,7 +33939,7 @@ function screenAdmin(){
   } else {
      
     h += '<div class="lvlhead"><div><div class="idx">служебный экран</div>' +
-      '<h1>🔐 Панель наставника</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
+      '<h1>🔐 Панель репетитора</h1></div><div class="right"><span class="tag">код принят</span></div></div>' +
       roomNavHTML("admin") +
       '<p class="lede">' + (cloudEnabled()
         ? 'Прогресс синхронизируется с сервером — его видно с любого устройства.'
@@ -34117,7 +34117,7 @@ function screenAdmin(){
       srv("warn", "<b>Проверяю…</b>");
       Cloud.ping().then(function(r){
         srv("ok", "<b>Сервер настроен верно</b>Папка: " + esc(r.dir) + ". Учеников в ней: " + r.students +
-          ". Ключ наставника " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
+          ". Ключ репетитора " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
       }, function(err){ srv("bad", "<b>Проверка не прошла</b>" + esc(err.message || err)); });
     }
     else if (act === "togroup"){ location.hash = ""; return screenGroup(); }
@@ -34134,7 +34134,7 @@ function screenAdmin(){
     }
     else if (act === "listall"){
       var key = (document.getElementById("adminkey").value || "").trim();
-      if (!key){ srv("bad", "<b>Пусто</b>Нужен ключ наставника — тот, что задан в настройках функции как ADMIN_KEY."); return; }
+      if (!key){ srv("bad", "<b>Пусто</b>Нужен ключ репетитора — тот, что задан в настройках функции как ADMIN_KEY."); return; }
       adminKeyRemember(key);
       srv("warn", "<b>Загружаю…</b>");
       Cloud.list(key).then(function(r){
@@ -34928,7 +34928,7 @@ var HELP = {
     '<p>Это полная инструкция. А «?» наверху отвечает <b>про тот экран, где ты сейчас</b>, — ' +
     'загляни туда, когда что-то непонятно посреди дела.</p>' },
 
-  admin: { t:"🛠 Панель наставника", h:
+  admin: { t:"🛠 Панель репетитора", h:
     '<p>Экран для взрослого: видно, сколько времени ушло на каждый урок, где было больше всего ' +
     'попыток и какие ошибки повторяются. Отсюда же снимаются замки с уроков.</p>' },
 
@@ -35159,7 +35159,7 @@ function screenGuide(){
     'Огонёк дня сделан ровно для этого.</p>' +
     '<p>Подсказки — не читерство. Ребёнок, который взял подсказку и дошёл до конца, ' +
     'выучил больше, чем тот, кто бросил урок на середине.</p>' +
-    '<p>Есть <b>панель наставника</b>: сколько времени ушло на каждый урок, где было больше ' +
+    '<p>Есть <b>панель репетитора</b>: сколько времени ушло на каждый урок, где было больше ' +
     'всего попыток, какие ошибки повторяются, вопрос за ужином и отчёт за неделю. Оттуда же ' +
     'снимаются замки с уроков. Она открывается адресом сайта с <b>#admin</b> на конце ' +
     'и спрашивает код — в меню её нет, чтобы ребёнок не забрёл туда случайно.</p></div>';

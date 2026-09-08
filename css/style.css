@@ -238,7 +238,7 @@ button{font-family:inherit}
    влезать в одну строку она обязана всегда — иначе вторая строка съедает
    у урока целый сантиметр экрана. Число опыта из панели убрано: ранг и
    полоска говорят то же самое, а точная цифра висит подсказкой на ранге,
-   лежит в профиле и в панели наставника. Полоска уходит на телефоне. */
+   лежит в профиле и в панели репетитора. Полоска уходит на телефоне. */
 #xptext{display:none}
 
 /* Панель обязана влезать в ОДНУ строку при ЛЮБОМ прогрессе, и раньше она
@@ -938,7 +938,7 @@ body.focus .lede{display:none}
   .proof .cmp{grid-template-columns:1fr}
 }
 
-/* ---------- панель наставника ---------- */
+/* ---------- панель репетитора ---------- */
 .admgate{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .admgate input{flex:1 1 220px;min-width:0;background:var(--sunken);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);font-size:14px;font-family:'Inter',sans-serif}
 .admgate input:focus{outline:none;border-color:var(--acc)}
@@ -1037,7 +1037,7 @@ body.focus .lede{display:none}
   .shcode{grid-template-columns:1fr}
 }
 
-/* ---------- отчёт за неделю в панели наставника ---------- */
+/* ---------- отчёт за неделю в панели репетитора ---------- */
 .weekrep .wrline{margin:0 0 14px;font-size:15px;color:var(--ink)}
 .weekrep .wrline b{color:var(--acc2)}
 .wrstrip{display:flex;gap:8px;flex-wrap:wrap}
@@ -1293,7 +1293,7 @@ body.focus .lede{display:none}
 .storyerr{margin:8px 0 0;color:var(--bad);font-size:13.5px}
 .storynote{margin:9px 0 0;font-size:12.5px;color:var(--faint)}
 
-/* ---------- вопрос за ужином (в отчёте наставника) ---------- */
+/* ---------- вопрос за ужином (в отчёте репетитора) ---------- */
 .dinner{margin-top:14px;padding:12px 15px;border:1px solid var(--line2);border-radius:12px;
   background:rgba(255,197,61,.07)}
 .dinner b{display:block;color:var(--gold);font-size:13px;margin-bottom:4px}
@@ -1659,13 +1659,13 @@ body.focus .toTop{display:none}
    а найденное расхождение, ради которого приёмка и затевалась. */
 .specone.bad .specmark{color:var(--warn)}
 
-/* ---------- группа: рабочее место наставника ---------- */
+/* ---------- группа: рабочее место репетитора ---------- */
 .grouplist{display:grid;gap:10px;margin-top:8px}
 .grouprow{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--panel)}
 .grouprow.ok{border-color:var(--okline)}
 .grphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
   flex-wrap:wrap;font-size:14px}
-/* ⚠️ Ни одной красной пометки: красный на экране наставника читается как
+/* ⚠️ Ни одной красной пометки: красный на экране репетитора читается как
    «поймали ребёнка», а мы никого не ловим. Тишина и трудный урок — жёлтым,
    ровный ход — зелёным. */
 .trmarks li.quiet,.trmarks li.tough,.trmarks li.pred,.trmarks li.stuck{color:var(--warn)}
@@ -2496,7 +2496,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    дошедший до кабинета, обязан узнать то, что видел на витрине.
    ⚠️ Макет на вывеске не показывает НИКАКИХ чисел. Выдуманный отчёт про
    несуществующего ребёнка — ровно то враньё, от которого продукт
-   отказывается внутри (в панели наставника имён детей нет).
+   отказывается внутри (в панели репетитора имён детей нет).
    ⚠️ Плитка не ниже 76 px: это цель для пальца (docs/pravila-sajta.md § 8). */
 .lkmock{border:1px solid var(--line);border-radius:16px;background:var(--panel2);overflow:hidden}
 .lkbar{display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--sunken);
@@ -2531,7 +2531,7 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 }
 
 /* ---------- одна навигация на все экраны кабинета ----------
-   Экранов у наставника три — ученики, группа, панель, — и попасть в «Группу»
+   Экранов у репетитора три — ученики, группа, панель, — и попасть в «Группу»
    можно было только набрав адрес с #group: ссылки на неё не было ни на одном
    экране. Полоса стоит на всех трёх и всегда показывает, где ты сейчас. */
 .roomnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}

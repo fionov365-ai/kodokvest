@@ -79,7 +79,7 @@ function summarize(rec){
     if ((g.last || 0) > last) last = g.last;
   });
   /* Имя ребёнок вводит сам при входе и оно едет вместе с прогрессом. В списке
-     наставника без него видны только коды, а две Ани по кодам не различаются. */
+     репетитора без него видны только коды, а две Ани по кодам не различаются. */
   return { name: String(data.name || "").slice(0, 40),
            xp: data.xp || 0, solved: n, stars: sum, badges: (data.badges || []).length,
            timeMs: timeMs, attempts: attempts, lastLesson: last,
@@ -122,7 +122,7 @@ module.exports.handler = async function(event){
     if (op === "list"){
       const key = process.env.ADMIN_KEY;
       if (!key) return reply(403, { ok:false, error:"Список отключён: в настройках функции не задан ADMIN_KEY." });
-      if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ наставника не подошёл." });
+      if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ репетитора не подошёл." });
       let files = [];
       try { files = fs.readdirSync(dir).filter(isStudentFile); }
       catch(e){ return reply(500, { ok:false, error:"Папка прогресса не читается: " + (e.message || e) }); }
@@ -144,12 +144,12 @@ module.exports.handler = async function(event){
        корзина 4): доля вернувшихся в первую неделю после первого занятия и
        доля дошедших до конца каждого мира. Плюс медиана уроков за 4 недели.
        Считается по уже хранимым снимкам — никаких новых данных о ребёнке.
-       Доступ — по тому же ADMIN_KEY, что и список: это цифры наставника.
+       Доступ — по тому же ADMIN_KEY, что и список: это цифры репетитора.
        Плюс топ уроков, где застревают: это цифра не про детей, а про нас. */
     if (op === "stats"){
       const key = process.env.ADMIN_KEY;
       if (!key) return reply(403, { ok:false, error:"Метрики отключены: в настройках функции не задан ADMIN_KEY." });
-      if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ наставника не подошёл." });
+      if (String(q.key || "") !== key) return reply(403, { ok:false, error:"Ключ репетитора не подошёл." });
       let files = [];
       try { files = fs.readdirSync(dir).filter(isStudentFile); }
       catch(e){ return reply(500, { ok:false, error:"Папка прогресса не читается: " + (e.message || e) }); }
@@ -297,7 +297,7 @@ module.exports.handler = async function(event){
        ложиться в отдельный файл; взрослый читает его по коду ученика — та же
        модель доверия, что у прогресса: кто знает код, тот и смотрит.
        ⚠️ Скрытого режима нет по построению: писать сюда умеет только
-       устройство ребёнка, и оно же рисует плашку «наставник видит твой код».
+       устройство ребёнка, и оно же рисует плашку «репетитор видит твой код».
        Файл маленький и живёт недолго: выключение трансляции его удаляет,
        а зритель считает трансляцию законченной, если запись не свежее 20 секунд. */
     if (op === "live_set"){
