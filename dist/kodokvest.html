@@ -385,7 +385,7 @@ button{font-family:inherit}
 @media (max-width:640px){
   /* На телефоне панель складывается в ДВЕ строки: сверху значок, звёзды и
      инструменты, снизу вкладки во всю ширину. Ради этого убираем то, без чего
-     на маленьком экране можно жить: слово «Кодоквест» рядом со значком
+     на маленьком экране можно жить: слово «Фионика» рядом со значком
      (значок и так ведёт на главную), название ранга (полоски опыта тут тоже
      нет) и «фокус» — он про то, чтобы спрятать лишнее на большом экране. */
   .tab{flex:1;padding:8px 4px;font-size:12.5px}
@@ -31221,7 +31221,7 @@ function pyIsDraw(code){
 }
 function pyFileText(title, code){
   code = String(code || "");
-  var head = "# «" + String(title || "программа") + "» — программа из Кодоквеста.\n" +
+  var head = "# «" + String(title || "программа") + "» — программа из Фионики.\n" +
              "# Запустить у себя: сохрани файл рядом и набери в терминале\n" +
              "#     python3 " + pyFileName(title) + "\n";
   if (!pyIsDraw(code)) return head + "\n" + code.replace(/\s*$/, "") + "\n";
@@ -31440,7 +31440,7 @@ function certBodyHTML(kind){
       var pr = projectOfWorld(x.n);
       if (pr) names.push("«" + pr.title + "»");
     });
-    what = 'Курс «Кодоквест» пройден целиком: <b>' + CURRICULUM.total + " " +
+    what = 'Курс «Фионика» пройден целиком: <b>' + CURRICULUM.total + " " +
       plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
       plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
       (names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
@@ -31459,9 +31459,9 @@ function certBodyHTML(kind){
     ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
     : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
   return '<div class="certsheet">' +
-    '<div class="certmark">🐍 Кодоквест</div>' +
+    '<div class="certmark">🐍 Фионика</div>' +
     '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
-    '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
+    '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
     tally +
@@ -31477,9 +31477,9 @@ function accessLink(code){
 }
 function accessCardHTML(code, name){
   return '<div class="certsheet">' +
-    '<div class="certmark">🐍 Кодоквест</div>' +
+    '<div class="certmark">🐍 Фионика</div>' +
     '<div class="certkind">Карточка доступа</div>' +
-    '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
+    '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">Код ученика — это весь вход. По нему занятия открываются ' +
       'на любом устройстве, и по нему же взрослый видит, как идут дела.' +
@@ -35965,7 +35965,7 @@ function screenRoles(){
   enterScreen("home", "roles");
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">общий компьютер</div>' +
-    '<h1>🐍 Кодоквест — кто занимается?</h1></div></div>' +
+    '<h1>🐍 Фионика — кто занимается?</h1></div></div>' +
     '<p class="lede">Выберите, чей это заход. На своём личном устройстве этот экран ' +
     'не появляется — там сразу открывается нужное.</p>' +
     '<div class="rolegrid">' +
@@ -38622,7 +38622,7 @@ function installTipHTML(force){
         ? '<span class="instalhow">Нажми «Поделиться» внизу экрана, потом «На экран „Домой“».</span>'
         : '<span class="instalhow">В меню браузера выбери «Установить приложение» или «Добавить на главный экран».</span>');
   return '<div class="daybanner install" id="instaltip">' +
-    '<b>📲 Поставь Кодоквест на домашний экран</b> ' +
+    '<b>📲 Поставь Фионику на домашний экран</b> ' +
     'Откроется как приложение, без адресной строки, и будет работать без интернета.' +
     '<div class="instalrow">' + how +
       (force ? '' : '<button class="bigbtn ghost" id="instalno">Не сейчас</button>') +
@@ -38764,7 +38764,7 @@ function wireSay(root, texts){
  
  
 var SKINS = [
-  { id:"base",   em:"🐍", name:"Кодоквест",         world:0 },
+  { id:"base",   em:"🐍", name:"Фионика",           world:0 },
   { id:"rostok", em:"🌱", name:"Росток",            world:1 },
   { id:"dannye", em:"📦", name:"Данные",            world:2 },
   { id:"svoi",   em:"🛠", name:"Свой код",          world:3 },
@@ -38900,7 +38900,7 @@ var HELP = {
     'в день — и серия не оборвётся.</p>' },
 
    
-  about: { t:"🐍 Кодоквест — что это", h:
+  about: { t:"🐍 Фионика — что это", h:
     '<h4>Что это за экран</h4>' +
     '<p>Витрина: что тут есть, из чего состоит курс и что видит взрослый. ' +
     'Это единственный экран, где ничего не надо решать, — его просто читают.</p>' +
@@ -39294,7 +39294,7 @@ function screenGuide(){
     '<div class="guide">';
 
   h += '<div class="card"><h3>Что это вообще такое</h3>' +
-    '<p>Кодоквест — тренажёр языка Python. Код пишется и выполняется прямо в браузере: ' +
+    '<p>Фионика — тренажёр языка Python. Код пишется и выполняется прямо в браузере: ' +
     'ничего не надо устанавливать, интернет нужен только чтобы открыть страницу.</p>' +
     '<p class="dim">Курс — сто уроков в пяти мирах. Плюс тренировки, игры и проекты вокруг них.</p></div>';
 
