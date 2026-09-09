@@ -2715,6 +2715,12 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 /* Подвал детской главной: дверь на вывеску для взрослого, взявшего планшет.
    Нарочно тихая — кнопка, а не карточка: ребёнку она не адресована. */
 .landfoot{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);text-align:center}
+/* Строка ссылок на сайт: мельче и тише, чем «О тренажёре» над ней. Ребёнку
+   она не мешает — он до подвала не долистает; взрослый ищет именно тут. */
+.footlinks{margin-top:10px;font-size:12.5px;color:var(--faint);line-height:1.9}
+.footlinks span{color:var(--faint)}
+.footlinks a{color:var(--faint);text-decoration:none;border-bottom:1px solid var(--line)}
+.footlinks a:hover{color:var(--accink);border-bottom-color:var(--accink)}
 .linkbtn{background:none;border:none;padding:6px 10px;cursor:pointer;font:inherit;
   font-size:13.5px;color:var(--faint);border-radius:9px}
 .linkbtn:hover{color:var(--accink);background:var(--sunken)}

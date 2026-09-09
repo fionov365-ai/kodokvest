@@ -13225,9 +13225,32 @@ function openExamMap(id){
    раз я поставил её только в детский дом — а у фаундера устройство родителя,
    и для него ничего не изменилось. Поэтому теперь одна функция и три вызова:
    карта миров, кабинет родителя, кабинет репетитора. */
+/* ⚠️ Второй строкой подвала — дорога НА САЙТ, и до 1.132.0 её не было вовсе:
+   страницы витрины существовали, лежали в sitemap, а попасть на них из
+   продукта было нельзя ни одним нажатием. Страница, на которую нет ни одной
+   ссылки изнутри, для человека не существует, а для поисковика — тем более.
+
+   Почему именно здесь, а не вкладкой наверху: вкладок три и они детские, а
+   это дорога для ВЗРОСЛОГО, который взял устройство ребёнка (см. пояснение к
+   подвалу выше). Проверка [устройство] стережёт «три вкладки и пять
+   инструментов, и ничего больше» — четвёртую добавлять нельзя.
+
+   ⚠️ Ссылки ОТНОСИТЕЛЬНЫЕ и без ведущей косой черты. Сайт живёт по адресу
+   вида .../kodokvest/, и «/vitrina/» увело бы в корень домена, то есть в
+   никуда. После переезда на свой домен относительные тоже верны.
+
+   Это настоящие ссылки, а не кнопки: человек вправе открыть их в новой
+   вкладке, а из приложения он при этом уходит по-настоящему — страницы
+   витрины лежат вне его. */
 function aboutFootHTML(){
   return '<div class="landfoot"><button class="linkbtn" data-goabout="1">' +
-    '🐍 О тренажёре: что это, сколько уроков и что видит взрослый</button></div>';
+    '🐍 О тренажёре: что это, сколько уроков и что видит взрослый</button>' +
+    '<div class="footlinks"><span>Взрослому:</span> ' +
+      '<a href="vitrina/">сайт Фионики</a> · ' +
+      '<a href="repetitoru/">репетитору</a> · ' +
+      '<a href="semeynoe-obuchenie/">семейное обучение</a> · ' +
+      '<a href="individualnyi-proekt/">индивидуальный проект</a> · ' +
+      '<a href="kontakty/">контакты</a></div></div>';
 }
 function wireAboutFoot(box){
   (box || document).querySelectorAll("[data-goabout]").forEach(function(b){
@@ -19014,6 +19037,7 @@ window.__game = {
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
   openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
   openAccessCard: openAccessCard, accessCardHTML: accessCardHTML,
+  aboutFootHTML: aboutFootHTML,
   codeSaved: codeSaved, markCodeSaved: markCodeSaved, screenLostCode: screenLostCode,
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
   certWorldAt: certWorldAt, certCourseAt: certCourseAt,
