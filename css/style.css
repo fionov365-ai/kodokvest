@@ -354,6 +354,11 @@ button{font-family:inherit}
   background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);box-shadow:0 8px 22px -8px rgba(124,92,255,.55);transition:.15s}
 .bigbtn:hover{transform:translateY(-2px)}
 .bigbtn.ghost{background:transparent;border:1px solid var(--line2);color:var(--soft);box-shadow:none}
+/* ⚠️ Ссылка, оформленная кнопкой. Дорога НАРУЖУ (на витрину) делается именно
+   ссылкой, а не кнопкой: человек вправе открыть её в новой вкладке и увидеть
+   адрес. Но у <button> текст центрируется сам, а у <a> — нет, и без этих двух
+   строк надпись прижимается влево и подчёркивается. */
+a.bigbtn{text-align:center;text-decoration:none}
 .bigbtn.ghost:hover{color:var(--ink);border-color:var(--acc)}
 .sect{margin:34px 0 14px;display:flex;align-items:center;gap:12px}
 .sect h2{margin:0;font-size:20px}
