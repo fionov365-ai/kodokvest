@@ -2686,6 +2686,88 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- Главный экран сложен из карточек ---
+     ⚠️ Проверка стережёт ровно то, чего не видит ни один другой тест и не
+     видно глазами на экране. Карточке отдаётся только то, что она назвала в
+     needs. Забыл там имя — карточка получит undefined, и это НЕ падение:
+     `onclick = undefined` тихо оставляет кнопку мёртвой. Экран нарисуется
+     целиком, тесты пройдут, а кнопка перестанет отвечать — ровно та ошибка,
+     которую 08.09.2026 поймал не тест, а руки. Поэтому сверяем объявленное с
+     тем, что карточка трогает на самом деле, по её же исходнику.
+     Заодно ловим лишнее в needs: имя, которое карточка не трогает, — это
+     разрешение, выданное на всякий случай, а такие и превращают узкий доступ
+     обратно в широкий. */
+  let cardsChecked = 0;
+  if (Array.isArray(g.homeCards)){
+    const p0 = problems.length;
+    const CARDS = g.homeCards;
+    if (CARDS.length < 5) bad("[главный] карточек подозрительно мало: " + CARDS.length);
+    const seen = {};
+    CARDS.forEach(c => {
+      if (!c.id) return bad("[главный] у карточки нет id");
+      if (seen[c.id]) bad("[главный] две карточки с одним id: " + c.id);
+      seen[c.id] = 1;
+      if (!Array.isArray(c.needs)) return bad("[главный] карточка «" + c.id + "» не объявила needs");
+      if (typeof c.html !== "function") bad("[главный] у карточки «" + c.id + "» нет разметки");
+      /* исходник без комментариев: «A.что-то» внутри пояснения — не обращение */
+      const src = (String(c.html) + (c.wire ? String(c.wire) : ""))
+        .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+      const used = [...new Set([...src.matchAll(/\bA\.([A-Za-z_$][\w$]*)/g)].map(m => m[1]))];
+      const missing = used.filter(n => c.needs.indexOf(n) < 0);
+      const extra = c.needs.filter(n => used.indexOf(n) < 0);
+      if (missing.length)
+        bad("[главный] карточка «" + c.id + "» трогает необъявленное: " + missing.join(", ") +
+            " — она получит undefined, и кнопка молча умрёт");
+      if (extra.length)
+        bad("[главный] карточка «" + c.id + "» объявила лишнее: " + extra.join(", ") +
+            " — узкий доступ так снова станет широким");
+      /* ⚠️ И главное число: ни одна карточка не должна знать столько, сколько
+         знал весь экран до разреза. Порог не круглый — он взят из замера:
+         самая крупная карточка знает 14 имён, и рост выше двадцати означает,
+         что внутри неё опять слиплись две. */
+      if (c.needs.length > 20)
+        bad("[главный] карточка «" + c.id + "» знает про " + c.needs.length +
+            " вещей — это снова тот самый экран, который резали");
+    });
+    if (problems.length === p0) cardsChecked++;
+  }
+
+  /* --- на Главном нет кнопки без обработчика ---
+     ⚠️ Это проверка на КЛАСС ошибок, а не на одну. Разбор 09.09.2026 нашёл на
+     Главном две мёртвые кнопки, и обе — по одной причине: в договор модуля
+     клали значение (`screenShowcase: screenShowcase`), а само значение
+     присваивается ниже по файлу, из другого модуля. На этой строке оно ещё
+     undefined, и `onclick = undefined` не падает, не жалуется и выглядит
+     нормальной кнопкой. «Что создают ученики» так и стояла мёртвой неизвестно
+     сколько; нашлась не тестом, а нажатием.
+     Теперь ищет тест: показываем Главный и требуем, чтобы у КАЖДОЙ кнопки
+     внутри был обработчик. Исключения перечислены поимённо — каждое со своей
+     причиной, и список короткий нарочно: длинный список исключений отменяет
+     саму проверку. */
+  let liveBtnChecked = 0;
+  if (typeof g.screenWorlds === "function"){
+    const p0 = problems.length;
+    g.state.stars = {}; g.state.log = {};
+    const firstL = w.CURRICULUM[0].lessons[0];
+    g.state.stars[firstL.id] = 3;
+    g.state.log[firstL.id] = { solvedAt: Date.now(), last: Date.now(), attempts: 1 };
+    g.state.codeSaved = 0;
+    g.screenWorlds(); await tick();
+    /* [data-help] и [data-theme-set] разбирает общий обработчик на body,
+       свой onclick им не ставят; у ссылки-подвала своя привязка по классу. */
+    const skip = b => b.hasAttribute("data-help") || b.hasAttribute("data-theme-set") ||
+                      b.hasAttribute("data-sfx-set") || b.hasAttribute("data-voice-set") ||
+                      b.classList.contains("linkbtn") || b.classList.contains("tab");
+    const dead = Array.prototype.slice.call(doc.querySelectorAll("#app button"))
+      .filter(b => !skip(b) && typeof b.onclick !== "function")
+      .map(b => (b.id || b.className || b.textContent.trim().slice(0, 24)));
+    if (dead.length)
+      bad("[главный] кнопки без обработчика: " + dead.join(", ") +
+          " — такая кнопка выглядит живой и молча не отвечает");
+    if (problems.length === p0) liveBtnChecked++;
+    viewReset(g);
+  }
+
   /* --- доступ: код, карточка и «не помню код» ---
      ⚠️ Аккаунта в продукте нет, восстановления тоже — и это не недоделка, а
      плата за обещание «ни почты, ни телефона». Проверяется здесь ровно то,

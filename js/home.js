@@ -31,6 +31,51 @@
 window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.home = function(A){
 
+
+/* ================= экран сложен из КАРТОЧЕК =================
+   ⚠️ Зачем это так. Замер 09.09.2026: Главный экран знал про 62 чужие вещи —
+   больше всех в продукте, и это не чинилось ещё одним отрезанием в отдельный
+   файл (его уже отрезали в 1.119.0, и число только выросло). Чинится это
+   разложением: экран — не одна функция на четыреста строк, а список карточек,
+   и каждая знает ТОЛЬКО своё.
+
+   Тот же замер показал, где проходит граница: из 62 имён 52 нужны РОВНО
+   одной карточке, и общих остаётся девять — esc, plural, qm, myName, myCode,
+   solved, openLesson, trainCards и S. То есть экран и не был единым целым:
+   он был девятью независимыми кусками, слепленными одной функцией и одним
+   хвостом привязок на 28 имён.
+
+   Карточка — это четыре поля:
+     id     имя, по нему её находит проверка и держится порядок на экране;
+     needs  что карточка знает про остальной продукт. ⚠️ Это НЕ комментарий:
+            карточке отдаётся только названное здесь (см. pick), и обращение
+            к чему-то ещё падает на первом же показе экрана, а не через месяц
+            в чужой сессии;
+     html   разметка. Возвращает строку и ничего не трогает снаружи;
+     wire   свои кнопки, и только свои. Чужие тут не привязываются никогда —
+            хвост, который привязывал всё подряд, и был главной бедой.
+
+   ⚠️ Внутри html и wire узкий доступ приходит доводом с именем A и затеняет
+   широкий A модуля. Поэтому разметка переносилась сюда ДОСЛОВНО: заменять
+   «A.» на другое имя не понадобилось, а вместе с заменой исчез и риск попасть
+   ею внутрь строки или комментария — ошибка, оплаченная 08.09.2026.
+
+   Факты экрана (сколько уроков сдано, какой урок следующий, сколько долгов)
+   считаются ОДИН раз в screenWorlds и приходят вторым доводом v. Считать их
+   в каждой карточке значило бы считать одно и то же по пять раз и однажды
+   разойтись в числах между соседними блоками одного экрана.
+   ============================================================ */
+
+/* Узкий доступ: объект ровно из названных имён. Обычная копия, без Proxy, —
+   это код, который выполняется у ребёнка в браузере, и экзотика тут не нужна.
+   Имя, которого нет в договоре модуля, поймается сразу: положить в узкий
+   доступ нечего, и первое же обращение упрётся в undefined. */
+function pick(names){
+  var o = {};
+  names.forEach(function(n){ o[n] = A[n]; });
+  return o;
+}
+
 /* ================= поиск по урокам =================
    Сто уроков разложены по пяти мирам, и пока помнишь номер — всё хорошо.
    А «где было про словари» раньше искалось только глазами по пяти экранам.
@@ -53,74 +98,16 @@ function lessonSearch(q){
   });
   return out.slice(0, 8);
 }
-function wireLessonSearch(){
-  var inp = document.getElementById("lq");
-  var box = document.getElementById("lsfound");
-  if (!inp || !box) return;
-  var draw = function(){
-    var q = String(inp.value || "").trim();
-    if (q.length < 2){ box.hidden = true; box.innerHTML = ""; return; }
-    var found = lessonSearch(q);
-    box.hidden = false;
-    if (!found.length){
-      box.innerHTML = '<p class="lsnone">Ничего не нашлось. Попробуй одно слово: ' +
-        '«список», «цикл», «функция», «черепашка» — или номер урока.</p>';
-      return;
-    }
-    box.innerHTML = found.map(function(l){
-      var open = A.lessonOpen(l);
-      var st = A.solved(l.id)
-        ? new Array(A.starsOf(l.id) + 1).join("★")
-        : (open ? "" : "🔒 позже");
-      return '<button class="lsrow' + (open ? "" : " lock") + '"' +
-        (open ? ' data-open="' + l.id + '"' : "") + '>' +
-        '<span class="lsnum">' + l.num + '</span>' +
-        '<span class="lstitle">' + A.esc(l.title) + '</span>' +
-        '<span class="lssub">' + A.esc(l.sub) + '</span>' +
-        '<span class="lsnum">' + st + '</span></button>';
-    }).join("");
-    box.querySelectorAll("[data-open]").forEach(function(b){
-      b.onclick = function(){ A.openLesson(b.getAttribute("data-open")); };
-    });
-  };
-  inp.oninput = draw;
-  inp.onkeydown = function(e){
-    if (e.key === "Escape"){ inp.value = ""; draw(); return; }
-    /* Enter открывает первый найденный урок: искал — значит уже решил, куда идти */
-    if (e.key === "Enter"){
-      var first = box.querySelector("[data-open]");
-      if (first) first.click();
-    }
-  };
-}
 
-function screenWorlds(){
-  /* ⚠️ Устройство взрослого не показывает детскую карту миров ВООБЩЕ. Иначе
-     «← На главную» из кабинета приводило на неё, а там всплывал остаточный
-     детский профиль этого устройства (имя, что стояло до превращения в кабинет).
-     Для взрослого «главная» — это кабинет, а не уроки. Одна страховка закрывает
-     все пути: и кнопку назад, и загрузку. */
-  if (A.isAdminDevice()) return A.screenAdminHome();
-  A.enterScreen("home", "home");
-  A.newSession({ id:null, attempts:0, hints:0, shown:false });
-  /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
-     только на сайте с раздельными файлами), догружаем всё и перерисовываем —
-     иначе готовые миры показались бы как «в работе». */
-  if (!window.__SINGLE_FILE__ && CURRICULUM.some(function(w){ return !CONTENT["world" + w.n]; })){
-    A.allWorldsContent().then(function(){
-      if (document.querySelector(".worlds")) screenWorlds();
-    });
-  }
-  var doneTotal = Object.keys(A.S().stars).length;
-  var name = A.myName();
-  var next = A.nextLesson();
-  var dues = A.reviewDue().length;
-  var dailyOk = A.dailyDone(A.dayKey());
-  /* Домашка стоит рядом с «Продолжить», а не в отдельной вкладке: её задал
-     человек, и ждёт ответа тоже человек. Спрятанное обязательство перед
-     человеком перестаёт быть обязательством. */
-  var hwLeft = A.hwPending().length;
 
+var CARDS = [
+{
+  id: "now",
+  needs: ["esc", "plural", "worldCountdown", "welcomeBackHTML", "screenPath", "openLesson", "screenWorld", "screenToday", "screenReview", "screenHW", "screenWarmups"],
+  html: function(A, v){
+  var doneTotal = v.doneTotal, name = v.name, next = v.next,
+      dues = v.dues, dailyOk = v.dailyOk, hwLeft = v.hwLeft;
+  var h = "";
   /* ===== блок «Сейчас»: одна главная кнопка и три подсказки рядом ===== */
   var h = '<div class="hero now">' +
     '<div class="nowtop"><div>' +
@@ -168,6 +155,32 @@ function screenWorlds(){
      вернувшемуся важнее всего услышать «всё цело», а не увидеть список миров */
   h += A.welcomeBackHTML();
 
+  return h;
+  },
+  wire: function(A, v){
+    var pathBtn = document.getElementById("go-path");
+    if (pathBtn) pathBtn.onclick = A.screenPath;
+    var goNext = document.getElementById("go-next");
+    if (goNext) goNext.onclick = function(){
+      if (v.next) A.openLesson(v.next.id); else A.screenWorld(1);
+    };
+    document.getElementById("go-today").onclick = A.screenToday;
+    var ga = document.getElementById("go-again");
+    if (ga) ga.onclick = A.screenReview;
+    var gh = document.getElementById("go-hw");
+    if (gh) gh.onclick = A.screenHW;
+    var cbw = document.getElementById("cbwarm");
+    if (cbw) cbw.onclick = A.screenWarmups;
+    var cbg = document.getElementById("cbgo");
+    if (cbg) cbg.onclick = function(){ if (v.next) A.openLesson(v.next.id); };
+  }
+},
+{
+  id: "codesave",
+  needs: ["esc", "serverOn", "myCode", "codeSaved", "myName", "copyText", "markCodeSaved", "openAccessCard"],
+  html: function(A, v){
+  var doneTotal = v.doneTotal;
+  var h = "";
   /* ===== запиши код: одна карточка, и только тому, кто остался =====
      ⚠️ Новичку этого блока НЕ показываем, и это не забывчивость. Правило
      оплачено ошибкой: первое, что видит новичок, — самое дорогое место
@@ -193,6 +206,24 @@ function screenWorlds(){
       'или отдать родителю. Если ты занимаешься с репетитором, код есть и у него.</p></div>';
   }
 
+  return h;
+  },
+  wire: function(A, v){
+    /* Любое из трёх действий гасит карточку навсегда, потому что все три
+       означают одно — код вышел из браузера. */
+    var cp = document.getElementById("hmcopy"), pr = document.getElementById("hmprint"),
+        dn = document.getElementById("hmdone");
+    if (cp) cp.onclick = function(){ A.copyText(A.myCode(), cp); A.markCodeSaved(); };
+    if (pr) pr.onclick = function(){ A.markCodeSaved(); A.openAccessCard(A.myCode(), A.myName()); };
+    if (dn) dn.onclick = function(){ A.markCodeSaved(); screenWorlds(); };
+  }
+},
+{
+  id: "howto",
+  needs: ["screenGuide"],
+  html: function(A, v){
+  var doneTotal = v.doneTotal;
+  var h = "";
   /* ===== как это работает: только пока ни один урок не пройден ===== */
   if (!doneTotal){
     h += '<div class="howto"><h3>Как устроен урок</h3><ol>' +
@@ -208,6 +239,19 @@ function screenWorlds(){
       '<button class="rbtn sec" data-help="tools">🧰 Что за кнопки наверху</button></div></div>';
   }
 
+  return h;
+  },
+  wire: function(A, v){
+    var gg = document.getElementById("go-guide");
+    if (gg) gg.onclick = A.screenGuide;
+  }
+},
+{
+  id: "lessons",
+  needs: ["qm", "solved", "worldReadyLessons", "esc", "starsOf", "lessonOpen", "openLesson", "screenWorld"],
+  html: function(A, v){
+  var doneTotal = v.doneTotal;
+  var h = "";
   /* ===== уроки ===== */
   h += '<div class="sect"><h2>Уроки</h2>' + A.qm("worlds", "Как устроен курс") +
     '<div class="line"></div><span class="cnt">' +
@@ -256,6 +300,63 @@ function screenWorlds(){
   });
   h += '</div>';
 
+  return h;
+  },
+  wire: function(A, v){
+    /* ⚠️ Поиск по урокам живёт ЗДЕСЬ, а не отдельной функцией модуля, и это
+       не про уборку. Пока он был снаружи, карточка объявляла в needs имена,
+       которых сама не трогает, — их трогал он. Проверка это и поймала:
+       объявленное расходилось с делом, а узкий доступ, выданный «на всякий
+       случай», ничем не отличается от широкого. Что отдано карточке, то
+       карточка и должна тратить сама. */
+  var inp = document.getElementById("lq");
+  var box = document.getElementById("lsfound");
+  if (!inp || !box) return;
+  var draw = function(){
+    var q = String(inp.value || "").trim();
+    if (q.length < 2){ box.hidden = true; box.innerHTML = ""; return; }
+    var found = lessonSearch(q);
+    box.hidden = false;
+    if (!found.length){
+      box.innerHTML = '<p class="lsnone">Ничего не нашлось. Попробуй одно слово: ' +
+        '«список», «цикл», «функция», «черепашка» — или номер урока.</p>';
+      return;
+    }
+    box.innerHTML = found.map(function(l){
+      var open = A.lessonOpen(l);
+      var st = A.solved(l.id)
+        ? new Array(A.starsOf(l.id) + 1).join("★")
+        : (open ? "" : "🔒 позже");
+      return '<button class="lsrow' + (open ? "" : " lock") + '"' +
+        (open ? ' data-open="' + l.id + '"' : "") + '>' +
+        '<span class="lsnum">' + l.num + '</span>' +
+        '<span class="lstitle">' + A.esc(l.title) + '</span>' +
+        '<span class="lssub">' + A.esc(l.sub) + '</span>' +
+        '<span class="lsnum">' + st + '</span></button>';
+    }).join("");
+    box.querySelectorAll("[data-open]").forEach(function(b){
+      b.onclick = function(){ A.openLesson(b.getAttribute("data-open")); };
+    });
+  };
+  inp.oninput = draw;
+  inp.onkeydown = function(e){
+    if (e.key === "Escape"){ inp.value = ""; draw(); return; }
+    /* Enter открывает первый найденный урок: искал — значит уже решил, куда идти */
+    if (e.key === "Enter"){
+      var first = box.querySelector("[data-open]");
+      if (first) first.click();
+    }
+  };
+    document.querySelectorAll(".world").forEach(function(b){
+      b.onclick = function(){ A.screenWorld(+b.getAttribute("data-w")); };
+    });
+  }
+},
+{
+  id: "exams",
+  needs: ["esc", "examTally", "variantStat", "openExamMap", "screenVariant", "screenRobot"],
+  html: function(A, v){
+  var h = "";
   /* ===== экзамены: ОГЭ и ЕГЭ =====
      ⚠️ Заведено 08.09.2026 по жалобе фаундера: «на сайте сложно найти про ЕГЭ
      и ОГЭ, спрятано». Так и было — экзамен лежал двумя карточками в ряду
@@ -296,6 +397,24 @@ function screenWorlds(){
       '</div>';
   }
 
+  return h;
+  },
+  wire: function(A, v){
+    document.querySelectorAll("[data-exam]").forEach(function(b){
+      var k = b.getAttribute("data-exam");
+      b.onclick = function(){
+        if (k === "variant") return A.screenVariant();
+        if (k === "robot") return A.screenRobot();
+        A.openExamMap(k);
+      };
+    });
+  }
+},
+{
+  id: "train",
+  needs: ["esc", "qm", "trainCards", "screenTrain"],
+  html: function(A, v){
+  var h = "";
   /* ===== тренировки: короткий ряд, подробности на своём экране ===== */
   h += '<div class="sect"><h2>Тренировки</h2>' + A.qm("train", "Что такое тренировки") +
     '<div class="line"></div>' +
@@ -320,6 +439,27 @@ function screenWorlds(){
     '<b>Все тренировки</b><span class="hubwhy">С объяснением, что зачем.</span></button>' +
     '</div>';
 
+  return h;
+  },
+  wire: function(A, v){
+    document.getElementById("go-train").onclick = A.screenTrain;
+    /* ⚠️ Список карточек берётся ЖИВЫМ вызовом на каждой привязке, а не
+       запоминается модулем: он считается из прогресса, и запомненный
+       однажды повёл бы не туда после первого же сданного урока. */
+    var cards = A.trainCards();
+    document.querySelectorAll("[data-train]").forEach(function(b){
+      var id = b.getAttribute("data-train");
+      b.onclick = function(){
+        for (var i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].go();
+      };
+    });
+  }
+},
+{
+  id: "mine",
+  needs: ["plural", "qm", "solvedCount", "certList", "partsList", "buildsList", "galleryList", "myTasksList", "projectsList", "projectDone", "screenFolio", "screenMyTasks", "screenShowcase", "screenShop"],
+  html: function(A, v){
+  var h = "";
   /* ===== моё ===== */
   var pjAll = A.projectsList(), pjDone = 0;
   pjAll.forEach(function(p){ if (A.projectDone(p.id)) pjDone++; });
@@ -387,6 +527,22 @@ function screenWorlds(){
     '<button class="bigbtn' + (shelfN ? "" : " ghost") + '" id="goshop">Открыть мастерскую</button>' +
     '</div>';
 
+  return h;
+  },
+  wire: function(A, v){
+    document.getElementById("gofolio").onclick = A.screenFolio;
+    document.getElementById("gomine").onclick = function(){ A.screenMyTasks(); };
+    var gw = document.getElementById("goworks");
+    if (gw) gw.onclick = A.screenShowcase;
+    var gs = document.getElementById("goshop");
+    if (gs) gs.onclick = A.screenShop;
+  }
+},
+{
+  id: "badges",
+  needs: ["qm", "S", "BADGES"],
+  html: function(A, v){
+  var h = "";
   /* ===== достижения ===== */
   h += '<div class="sect"><h2>Достижения</h2>' + A.qm("stars", "Откуда берутся звёзды и опыт") +
     '<div class="line"></div>' +
@@ -396,7 +552,14 @@ function screenWorlds(){
       '<span class="em">' + b.em + '</span><span><b>' + b.name + '</b><span>' + b.desc + '</span></span></div>';
   });
   h += '</div>';
-
+  return h;
+  }
+},
+{
+  id: "foot",
+  needs: ["app", "aboutFootHTML", "wireAboutFoot"],
+  html: function(A, v){
+  var h = "";
   /* ⚠️ Подвал — для ВЗРОСЛОГО, который взял устройство ребёнка. Жалоба
      фаундера 06.09.2026: «нажимаю на логотип и остаюсь в профиле ученика».
      Логотип исправен — он ведёт домой, а дома человек уже стоял. Дыра была
@@ -405,67 +568,60 @@ function screenWorlds(){
      в самый низ, дим-строкой. Ребёнку она не мешает: он до неё не долистает
      и ничего не теряет, а взрослый ищет именно внизу. */
   h += A.aboutFootHTML();
+  return h;
+  },
+  wire: function(A, v){
+    A.wireAboutFoot(A.app);
+  }
+}
+];
+
+/* ================= сам экран =================
+   Осталась рама: не пустить взрослого на детскую карту, догрузить содержание,
+   посчитать факты один раз, сложить карточки по порядку и раздать им их
+   кнопки. Ни одной чужой кнопки эта функция больше не знает. */
+function screenWorlds(){
+  /* ⚠️ Устройство взрослого не показывает детскую карту миров ВООБЩЕ. Иначе
+     «← На главную» из кабинета приводило на неё, а там всплывал остаточный
+     детский профиль этого устройства (имя, что стояло до превращения в кабинет).
+     Для взрослого «главная» — это кабинет, а не уроки. Одна страховка закрывает
+     все пути: и кнопку назад, и загрузку. */
+  if (A.isAdminDevice()) return A.screenAdminHome();
+  A.enterScreen("home", "home");
+  A.newSession({ id:null, attempts:0, hints:0, shown:false });
+  /* Страховка: если содержание каких-то миров ещё не подгрузилось (это бывает
+     только на сайте с раздельными файлами), догружаем всё и перерисовываем —
+     иначе готовые миры показались бы как «в работе». */
+  if (!window.__SINGLE_FILE__ && CURRICULUM.some(function(w){ return !CONTENT["world" + w.n]; })){
+    A.allWorldsContent().then(function(){
+      if (document.querySelector(".worlds")) screenWorlds();
+    });
+  }
+  var doneTotal = Object.keys(A.S().stars).length;
+  var name = A.myName();
+  var next = A.nextLesson();
+  var dues = A.reviewDue().length;
+  var dailyOk = A.dailyDone(A.dayKey());
+  /* Домашка стоит рядом с «Продолжить», а не в отдельной вкладке: её задал
+     человек, и ждёт ответа тоже человек. Спрятанное обязательство перед
+     человеком перестаёт быть обязательством. */
+  var hwLeft = A.hwPending().length;
+
+  var v = { doneTotal: doneTotal, name: name, next: next, dues: dues,
+            dailyOk: dailyOk, hwLeft: hwLeft };
+
+  /* ⚠️ Узкий доступ строится ЗДЕСЬ и заново на каждый показ: карточка не
+     хранит его у себя между отрисовками. Копия ссылки на чужое состояние
+     однажды начинает читать позапрошлое — правило оплачено 08.09.2026. */
+  var box = CARDS.map(function(c){ return { c: c, a: pick(c.needs) }; });
+  var h = box.map(function(x){ return x.c.html(x.a, v); }).join("");
 
   A.app.innerHTML = A.installTipHTML() + h;
   A.wireInstallTip(A.app);
-  A.wireAboutFoot(A.app);
-
-  var pathBtn = document.getElementById("go-path");
-  if (pathBtn) pathBtn.onclick = A.screenPath;
-  var goNext = document.getElementById("go-next");
-  if (goNext) goNext.onclick = function(){
-    if (next) A.openLesson(next.id); else A.screenWorld(1);
-  };
-  document.getElementById("go-today").onclick = A.screenToday;
-  var ga = document.getElementById("go-again");
-  if (ga) ga.onclick = A.screenReview;
-  var gh = document.getElementById("go-hw");
-  if (gh) gh.onclick = A.screenHW;
-  var cbw = document.getElementById("cbwarm");
-  if (cbw) cbw.onclick = A.screenWarmups;
-  var cbg = document.getElementById("cbgo");
-  if (cbg) cbg.onclick = function(){ if (next) A.openLesson(next.id); };
-  document.getElementById("go-train").onclick = A.screenTrain;
-  var gg = document.getElementById("go-guide");
-  if (gg) gg.onclick = A.screenGuide;
-  /* Карточка «запиши код»: любое из трёх действий гасит её навсегда, потому
-     что все три означают одно — код вышел из браузера. */
-  (function(){
-    var cp = document.getElementById("hmcopy"), pr = document.getElementById("hmprint"),
-        dn = document.getElementById("hmdone");
-    if (cp) cp.onclick = function(){ A.copyText(A.myCode(), cp); A.markCodeSaved(); };
-    if (pr) pr.onclick = function(){ A.markCodeSaved(); A.openAccessCard(A.myCode(), A.myName()); };
-    if (dn) dn.onclick = function(){ A.markCodeSaved(); screenWorlds(); };
-  })();
-  wireLessonSearch();
-  document.getElementById("gofolio").onclick = A.screenFolio;
-  document.getElementById("gomine").onclick = function(){ A.screenMyTasks(); };
-  var gw = document.getElementById("goworks");
-  if (gw) gw.onclick = A.screenShowcase;
-  var gs = document.getElementById("goshop");
-  if (gs) gs.onclick = A.screenShop;
-  A.app.querySelectorAll("[data-exam]").forEach(function(b){
-    var k = b.getAttribute("data-exam");
-    b.onclick = function(){
-      if (k === "variant") return A.screenVariant();
-      if (k === "robot") return A.screenRobot();
-      A.openExamMap(k);
-    };
-  });
-  var cards = A.trainCards();
-  A.app.querySelectorAll("[data-train]").forEach(function(b){
-    var id = b.getAttribute("data-train");
-    b.onclick = function(){
-      for (var i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].go();
-    };
-  });
-  A.app.querySelectorAll(".world").forEach(function(b){
-    b.onclick = function(){ A.screenWorld(+b.getAttribute("data-w")); };
-  });
+  box.forEach(function(x){ if (x.c.wire) x.c.wire(x.a, v); });
   A.refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-
-return { lessonSearch: lessonSearch, screenWorlds: screenWorlds };
+return { lessonSearch: lessonSearch, screenWorlds: screenWorlds, CARDS: CARDS };
 };

@@ -3918,7 +3918,17 @@ var HOME = KVSCREENS.home({
   enterScreen: enterScreen, refreshTop: refreshTop,
   myName: myName, isAdminDevice: isAdminDevice,
   myCode: myCode, serverOn: serverOn, codeSaved: codeSaved,
-  markCodeSaved: markCodeSaved, openAccessCard: openAccessCard, copyText: copyText,
+  markCodeSaved: markCodeSaved, openAccessCard: openAccessCard,
+  /* ⚠️ Обёртками, а не значениями, и это та же ловушка, что уже описана ниже
+     у variantStat: copyText и screenShowcase присваиваются ПОЗЖЕ по файлу
+     (первый из модуля профиля, второй из модуля витрины), и на этой строке
+     они ещё undefined. Значение undefined в договоре не падает и не видно на
+     экране — оно превращается в `onclick = undefined`, то есть в кнопку,
+     которая молча не отвечает. Кнопка «Что создают ученики» так и стояла
+     мёртвой, и нашлась она не тестом, а нажатием.
+     Правило общее: в договор модуля кладут ВЫЗОВ, если значение приходит из
+     другого модуля. */
+  copyText: function(t, btn){ return copyText(t, btn); },
   BADGES: BADGES, dayKey: dayKey, dailyDone: dailyDone,
   solved: solved, solvedCount: solvedCount, starsOf: starsOf,
   lessonOpen: lessonOpen, nextLesson: nextLesson, openLesson: openLesson,
@@ -3933,7 +3943,7 @@ var HOME = KVSCREENS.home({
   screenWorld: screenWorld, screenTrain: screenTrain, screenFolio: screenFolio,
   screenToday: screenToday, screenReview: screenReview, screenHW: screenHW,
   screenMyTasks: screenMyTasks, screenWarmups: screenWarmups,
-  screenShowcase: screenShowcase, screenShop: screenShop,
+  screenShowcase: function(){ return screenShowcase(); }, screenShop: screenShop,
   screenPath: screenPath, screenGuide: screenGuide,
   screenAdminHome: screenAdminHome,
   /* Экзамены на Главном отдельным блоком: карта по номерам и пробный вариант.
@@ -18995,7 +19005,7 @@ window.__game = {
   MYEXAM_LO: MYEXAM_LO, MYEXAM_HI: MYEXAM_HI, MYEXAM_BOX: MYEXAM_BOX,
   SKINS: SKINS, skinNow: skinNow, skinSet: skinSet, skinOpen: skinOpen,
   skinsOpen: skinsOpen, skinPickHTML: skinPickHTML, skinApply: skinApply,
-  lessonSearch: lessonSearch, lessonOpen: lessonOpen,
+  lessonSearch: lessonSearch, lessonOpen: lessonOpen, homeCards: HOME.CARDS,
   ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
   errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
   beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,
