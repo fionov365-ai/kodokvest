@@ -81,7 +81,14 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                         этому семени, и соберётся у всех один и тот же —
                         сборка есть чистая функция от (экзамен, семя). */
                      "vtask"];
-var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
+/* codeSaved — единственный ответ продукта на «потерял код — потерял прогресс».
+   ⚠️ Это НЕ восстановление: восстанавливать нечем и не будет чем, потому что
+   ни почты, ни телефона мы не спрашиваем, и это обещание на вывеске. Это
+   отметка «код унесён из браузера»: распечатан, скопирован, записан. Пока её
+   нет, тренажёр напоминает. Лежит в прогрессе, а не в настройках устройства,
+   и складывается по максимуму: записал на одном устройстве — записал везде,
+   и напоминание не догоняет на втором. */
+var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect","codeSaved"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели репетитора такое не
    стирает — стирает только смена ученика. */
@@ -1173,6 +1180,12 @@ function ptaskWeekCount(){
    кода ученика (js/cloud.js) и синхронизации, новый бэкенд не нужен. */
 function serverOn(){ return typeof Cloud !== "undefined" && Cloud.hasUrl(); }
 function myCode(){ return (typeof Cloud !== "undefined") ? Cloud.myCode() : ""; }
+/* Код унесён из браузера? ⚠️ Отметка ставится только по ДЕЙСТВИЮ ребёнка
+   (напечатал, скопировал, нажал «записал»), а не по факту «мы показали».
+   Показать код и решить за него, что он его запомнил, — это и есть тот самый
+   способ потерять доступ, от которого всё это заведено. */
+function codeSaved(){ return !!S.codeSaved; }
+function markCodeSaved(){ if (!S.codeSaved){ S.codeSaved = 1; save(); } }
 function myName(){ return S.name || ""; }
 /* сервер настроен, но ученик ещё не выбран — значит показываем регистрацию */
 function needsRegister(){ return serverOn() && !myCode(); }
@@ -1542,6 +1555,7 @@ function backTarget(){
     case "roles": return (isAdminDevice() || isParentDevice() || myCode() || S.name)
       ? null : { label:"О тренажёре", go: screenAbout };
     case "kidlogin": case "parentlogin": return { label:"К выбору", go: screenRoles };
+    case "lostcode": return { label:"Ко входу", go: screenKidLogin };
 
     case "lesson": {
       if (open) return { label:"К занятию", go: screenZan };
@@ -1662,7 +1676,7 @@ function refreshTop(){
   var adminScreen = isAdminDevice() || isParentDevice() ||
     curPlace === "adminsetup" || curPlace === "adminlogin" ||
     curPlace === "kids" || curPlace === "kid" ||
-    curPlace === "roles" || curPlace === "kidlogin" ||
+    curPlace === "roles" || curPlace === "kidlogin" || curPlace === "lostcode" ||
     curPlace === "parentlogin" || curPlace === "parent" ||
     /* Вывеска — тоже не детский экран: «0 XP», «★ 0» и ранг «Новичок» рядом
        с описанием продукта показывают гостю его несуществующий прогресс. */
@@ -1676,7 +1690,7 @@ function refreshTop(){
   var lk = document.getElementById("tab-lk");
   if (lk){
     var gate = !adminScreen ||                 /* на детских экранах есть свои вкладки и 👤 */
-      curPlace === "roles" || curPlace === "kidlogin" ||
+      curPlace === "roles" || curPlace === "kidlogin" || curPlace === "lostcode" ||
       curPlace === "parentlogin" || curPlace === "adminsetup" || curPlace === "adminlogin";
     /* ⚠️ Обработчики завёрнуты в function, а не переданы именем: onclick
        отдаёт первым доводом СОБЫТИЕ, и screenParent(code) принимал его за код
@@ -1825,6 +1839,11 @@ function mergeProgress(a, b){
   out.firstTry = maxN(a.firstTry, b.firstTry);
   out.perfect = maxN(a.perfect, b.perfect);
   out.sandboxRuns = maxN(a.sandboxRuns, b.sandboxRuns);
+  /* ⚠️ «Код записан» складывается по максимуму, а не по свежести: записал на
+     одном устройстве — записал везде, и напоминание не должно догонять на
+     втором. Снять отметку нельзя вовсе, и это правильно: код, унесённый из
+     браузера один раз, обратно в него не возвращается. */
+  out.codeSaved = maxN(a.codeSaved, b.codeSaved);
 
   /* разгаданные разминки: объединяем — разгаданное на любом устройстве
      остаётся разгаданным. Это не звёзды и не входит в сотню уроков. */
@@ -3898,6 +3917,8 @@ var HOME = KVSCREENS.home({
   app: app, esc: esc, plural: plural, qm: qm,
   enterScreen: enterScreen, refreshTop: refreshTop,
   myName: myName, isAdminDevice: isAdminDevice,
+  myCode: myCode, serverOn: serverOn, codeSaved: codeSaved,
+  markCodeSaved: markCodeSaved, openAccessCard: openAccessCard, copyText: copyText,
   BADGES: BADGES, dayKey: dayKey, dailyDone: dailyDone,
   solved: solved, solvedCount: solvedCount, starsOf: starsOf,
   lessonOpen: lessonOpen, nextLesson: nextLesson, openLesson: openLesson,
@@ -6092,6 +6113,7 @@ function screenRegister(){
 var ACCOUNT = KVSCREENS.account({
   app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
   myCode: myCode, myName: myName, serverOn: serverOn, doLogout: doLogout,
+  openAccessCard: openAccessCard, codeSaved: codeSaved, markCodeSaved: markCodeSaved,
   goHome: goHome, screenAbout: screenAbout, screenFolio: screenFolio,
   screenGuide: screenGuide, screenRoles: screenRoles,
   themeGet: themeGet, themeSet: themeSet, sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx,
@@ -9061,6 +9083,51 @@ function certBodyHTML(kind){
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
   '</div>';
+}
+
+/* ================= карточка доступа =================
+   ⚠️ Зачем она есть. Аккаунта в продукте нет — есть код ученика, и
+   восстановить его нечем: ни почты, ни телефона мы не спрашиваем, и это
+   обещание на вывеске. Значит, единственная защита от «потерял код — потерял
+   прогресс» — сделать так, чтобы код УШЁЛ ИЗ БРАУЗЕРА: на бумагу, в дневник,
+   в заметки родителя. Восстановления нет и не будет, а вот потери можно
+   сделать редкими, и это честная работа, а не полумера.
+
+   Лист печатается тем же оверлеем, что и сертификаты: печать берёт документ
+   целиком, а в @media print всё, кроме листа, скрыто. Своего экспорта не
+   делаем — штатный «Сохранить в PDF» лучше любого нашего.
+
+   ⚠️ Карточку печатает и репетитор — своему ученику, поэтому имя и код
+   приходят ДОВОДАМИ, а не берутся из S. Функция, которая лезет в своё
+   состояние, для чужого ученика не годится (правило оплачено 08.09.2026). */
+function accessLink(code){
+  try { return location.origin + location.pathname + "?kid=" + encodeURIComponent(code); }
+  catch(e){ return "?kid=" + code; }
+}
+function accessCardHTML(code, name){
+  return '<div class="certsheet">' +
+    '<div class="certmark">🐍 Кодоквест</div>' +
+    '<div class="certkind">Карточка доступа</div>' +
+    '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
+    '<div class="certrule"></div>' +
+    '<div class="certwhat">Код ученика — это весь вход. По нему занятия открываются ' +
+      'на любом устройстве, и по нему же взрослый видит, как идут дела.' +
+      '<span class="certcode">' + esc(code) + '</span>' +
+      '<span class="certlist">Ссылка-вход: ' + esc(accessLink(code)) + '</span></div>' +
+    '<div class="certnote">Положи этот листок туда, где не потеряется: в дневник, ' +
+      'в папку с документами, сфотографируй родителю. ' +
+      '⚠️ Кода не восстановить: ни почты, ни телефона тренажёр не спрашивает, ' +
+      'и найти твой прогресс без кода нечем. И наоборот: кто знает код, тот видит ' +
+      'занятия — чужим его показывать не надо.</div>' +
+    '<div class="certfoot"><span>Выдана ' + fmtDay(Date.now()) + '</span>' +
+    '<span>Python с нуля · без установки · в браузере</span></div>' +
+  '</div>';
+}
+function openAccessCard(code, name){
+  var el = document.getElementById("cert"), box = document.getElementById("certbox");
+  if (!el || !box || !code) return;
+  box.innerHTML = accessCardHTML(code, name);
+  el.hidden = false;
 }
 
 /* Сертификат живёт ОВЕРЛЕЕМ, как шпаргалка: его печатают, а печать берёт
@@ -14314,9 +14381,16 @@ function screenAbout(){
         'Python, а не считает формулы.</li>' +
       '<li><b>Оценок и живого учителя тут нет.</b> Проверяет программа. ' +
         'Если учитель или репетитор у ребёнка есть — здесь у него своё рабочее место.</li>' +
+      /* ⚠️ Граница осталась границей: восстановления как не было, так и нет,
+         и обещать его нельзя. Но раньше строка кончалась на «код стоит
+         записать» — то есть перекладывала на ребёнка задачу, которой он не
+         занимается. Теперь названо и то, что делает продукт: напоминает,
+         печатает карточку и держит код у взрослого. */
       '<li><b>Аккаунта нет — есть код ученика.</b> По нему прогресс открывается ' +
         'на любом устройстве, но и восстановить его нечем: ни почты, ни телефона ' +
-        'мы не спрашиваем. Код стоит записать.</li>' +
+        'мы не спрашиваем — и не будем. Поэтому тренажёр сам напоминает записать код ' +
+        'после первого урока и печатает карточку доступа; у репетитора и родителя ' +
+        'код тоже есть.</li>' +
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
       '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
@@ -14561,7 +14635,11 @@ function screenKidLogin(){
       '<p class="dim">Код или ссылку дал учитель. Впиши код — откроется твой тренажёр с твоим прогрессом.</p>' +
       '<div class="admgate"><input type="text" id="klcode" placeholder="например, roman-3f7a" ' +
         'autocomplete="off" spellcheck="false"><button class="rbtn check" id="klgo">Войти</button></div>' +
-      '<div class="msg" id="klmsg"></div></div>' +
+      '<div class="msg" id="klmsg"></div>' +
+      /* ⚠️ Дверь «не помню код» стоит прямо здесь, а не в помощи: ищут её
+         ровно в ту минуту, когда код не вспоминается, и уводить человека в
+         инструкцию в эту минуту — значит потерять его. */
+      '<p class="dim" style="margin-top:10px"><button class="linkbtn" id="kllost">Не помню код</button></p></div>' +
     '<div class="card"><h3>Я тут впервые</h3>' +
       '<p class="dim">Кода ещё нет — заведём новый профиль по имени.</p>' +
       '<div class="admrow"><button class="rbtn sec" id="klnew">Завести профиль</button></div></div>' +
@@ -14577,10 +14655,84 @@ function screenKidLogin(){
   document.getElementById("klgo").onclick = go;
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
   document.getElementById("klnew").onclick = function(){ becomeKid(); screenRegister(); };
+  (function(){ var b = document.getElementById("kllost"); if (b) b.onclick = screenLostCode; })();
   document.getElementById("klback").onclick = screenRoles;
   inp.focus();
   refreshTop();
 }
+/* ================= экран: не помню код =================
+   ⚠️ Самый честный экран продукта, и написан он ради одного: НЕ ОБЕЩАТЬ
+   восстановления, которого нет. Аккаунта здесь нет — есть код ученика, и мы
+   сознательно не спрашиваем ни почты, ни телефона (это обещание на вывеске и
+   причина, по которой продуктом можно пользоваться без согласия на обработку
+   персональных данных ребёнка). Обратная сторона ровно одна: искать чужой
+   прогресс нам не по чему. Публичный поиск «найди мой код» завести нельзя
+   тем более: кто знает код — видит занятия, и такая страница выдавала бы
+   чужие коды любому желающему.
+
+   Поэтому здесь не форма восстановления, а три настоящие дороги, по убыванию
+   вероятности, и честный конец, если ни одна не сработала. */
+function screenLostCode(){
+  enterScreen("home", "lostcode");
+  var have = (typeof Cloud !== "undefined") ? Cloud.myCode() : "";
+  var h = '<div class="lvlhead"><div><div class="idx">вход ученика</div>' +
+    '<h1>🔑 Не помню код</h1></div></div>';
+
+  /* Дорога нулевая и самая частая: код никуда не девался, он лежит в этом
+     браузере, а ребёнок просто его не видел. Спрашивать в этом случае «где
+     твоя карточка» — издевательство. */
+  if (have){
+    h += '<div class="card"><h3>Он на месте</h3>' +
+      '<p>Этот браузер помнит код. Вот он:</p>' +
+      '<div class="codebox"><code id="lcode">' + esc(have) + '</code>' +
+      '<button class="rbtn sec" id="lccopy">Скопировать</button>' +
+      '<button class="rbtn sec" id="lcprint">🖨 Карточка</button></div>' +
+      '<p class="dim">Запиши его или распечатай карточку — тогда он не потеряется, ' +
+      'даже если браузер почистят.</p>' +
+      '<div class="winrow"><button class="bigbtn" id="lcgo">Войти под этим кодом</button></div></div>';
+  }
+
+  h += '<div class="card"><h3>Где искать, если браузер не помнит</h3><ul class="trrules">' +
+    '<li><b>У того, кто тебя записал.</b> Если занимаешься с репетитором или в кружке — ' +
+    'у него в кабинете есть список учеников с кодами, и он может распечатать карточку. ' +
+    'У родителя, который смотрит твои занятия, код тоже есть.</li>' +
+    '<li><b>Ссылка-вход.</b> Она выглядит как адрес тренажёра с хвостом ' +
+    '<code>?kid=твой-код</code>. Поищи её в истории браузера, в закладках или там, ' +
+    'куда её сохраняли: открыть такую ссылку — уже войти.</li>' +
+    '<li><b>Карточка доступа.</b> Лист с именем и кодом, если его печатали: в дневнике, ' +
+    'в папке с документами, на фотографии у родителя.</li>' +
+    '</ul></div>';
+
+  /* ⚠️ Здесь кончается помощь и начинается честность. Ни «напишите нам», ни
+     «оставьте почту»: почты у нас нет и ручной поддержки не будет — это
+     требование автономности, а не лень. Врать «попробуйте восстановить»
+     дороже, чем сказать прямо. */
+  h += '<div class="card"><h3>А если код никто не сохранил</h3>' +
+    '<p>Тогда прогресс не вернуть, и это честный ответ, а не отговорка. ' +
+    'Тренажёр не спрашивает ни почты, ни телефона, и по имени найти твои занятия ' +
+    'нельзя: имя ребёнка на сервер вообще не уходит. Поиска «найди мой код» здесь ' +
+    'нет и не будет — по коду видно занятия, и такая страница отдавала бы чужие коды ' +
+    'кому угодно.</p>' +
+    '<p class="dim">Можно завести новый профиль и начать заново — уроки и задачи те же, ' +
+    'а звёзды и решённое останутся на старом коде. Обидно, но лучше, чем ждать ответа, ' +
+    'которого не будет.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="lcnew">Завести новый профиль</button></div></div>';
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="lcback">← Назад ко входу</button></div>';
+  app.innerHTML = h;
+
+  var cp = document.getElementById("lccopy");
+  if (cp) cp.onclick = function(){ copyText(have, cp); markCodeSaved(); };
+  var pr = document.getElementById("lcprint");
+  if (pr) pr.onclick = function(){ markCodeSaved(); openAccessCard(have, myName()); };
+  var go = document.getElementById("lcgo");
+  if (go) go.onclick = function(){ becomeKid(); doLogin(have, function(){}); };
+  document.getElementById("lcnew").onclick = function(){ becomeKid(); screenRegister(); };
+  document.getElementById("lcback").onclick = screenKidLogin;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
 /* Вход родителя на общем компьютере: по коду ребёнка. */
 function screenParentLogin(){
   enterScreen("home", "parentlogin");
@@ -16814,6 +16966,11 @@ function screenGroup(){
         '<div class="partbar">' +
         '<button class="rbtn check" data-gview="' + esc(r.code) + '">Открыть прогресс</button>' +
         '<button class="rbtn sec" data-glabel="' + esc(r.code) + '">Подписать</button>' +
+        /* ⚠️ Репетитор — единственная настоящая дорога восстановления доступа
+           в продукте: почты и телефона мы не спрашиваем, и если код потерян,
+           знать его больше некому. Поэтому карточку можно распечатать прямо
+           отсюда и отдать ученику на бумаге. */
+        '<button class="rbtn sec" data-gcard="' + esc(r.code) + '">🖨 Карточка доступа</button>' +
         /* напоминание — только тому, кто ЗАНИМАЛСЯ и замолчал: тому, кто не
            начинал, нужна ссылка-приглашение, а не «возвращайся» */
         (r.lastAt && r.quiet >= GROUP_QUIET_DAYS
@@ -16857,6 +17014,12 @@ function screenGroup(){
       var code = b.getAttribute("data-gremind");
       var row = (groupState.rows || []).filter(function(r){ return r.code === code; })[0];
       if (row) copyText(quietReminderText(row), b);
+    };
+  });
+  app.querySelectorAll("[data-gcard]").forEach(function(b){
+    b.onclick = function(){
+      var code = b.getAttribute("data-gcard");
+      openAccessCard(code, adminLabel(code) || "");
     };
   });
   app.querySelectorAll("[data-glabel]").forEach(function(b){
@@ -18840,6 +19003,8 @@ window.__game = {
   LEAN_XP: LEAN_XP, LEAN_BADGE_AT: LEAN_BADGE_AT, FRIEND_XP: FRIEND_XP,
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
   openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
+  openAccessCard: openAccessCard, accessCardHTML: accessCardHTML,
+  codeSaved: codeSaved, markCodeSaved: markCodeSaved, screenLostCode: screenLostCode,
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
   certWorldAt: certWorldAt, certCourseAt: certCourseAt,
   certWorldNeed: certWorldNeed, certCourseNeed: certCourseNeed,

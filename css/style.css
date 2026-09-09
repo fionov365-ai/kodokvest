@@ -1141,6 +1141,14 @@ body.focus .lede{display:none}
   margin-left:auto;margin-right:auto;color:#3b332a}
 .certwhat b{color:#26201a}
 .certlist{display:block;margin-top:8px;font-size:13.5px;color:#6a5c48}
+/* Код на карточке доступа — самое крупное, что на ней есть после имени: её
+   печатают ради одной этой строки, и читать её будут второпях. Моноширинный
+   шрифт тут не украшение: в коде встречаются похожие знаки, и «l» от «1»
+   отличает именно он. */
+.certcode{display:block;margin-top:16px;font-family:'JetBrains Mono',monospace;
+  font-size:30px;letter-spacing:.06em;font-weight:700;color:#26201a;word-break:break-all}
+.certnote{margin-top:20px;font-size:13.5px;line-height:1.6;color:#6a5c48;max-width:52ch;
+  border-top:1px solid #d9c99a;padding-top:14px}
 .certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
 .certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
   justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}

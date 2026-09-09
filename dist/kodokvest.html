@@ -9,7 +9,7 @@
      иначе липкая шапка и полоска задания повисают посреди экрана и прыгают.
      iOS и десктоп это слово игнорируют. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<title>Кодоквест — информатика и программирование для школьников</title>
+<title>Фионика — информатика и программирование для школьников</title>
 <meta name="description" content="Тренажёр по информатике для 5–11 классов: сто уроков Python в браузере, проверка понимания и отчёт взрослому. Без установки и без репетитора.">
 <!-- Карточка ссылки: то, что видит человек, которому кинули ссылку в Телеграм,
      ВК или родительский чат. Без этих строк приходит голый адрес — ни картинки,
@@ -33,23 +33,23 @@
      og/make.js, если он там появится. Полный список — в README. -->
 <link rel="canonical" href="https://fionov365-ai.github.io/kodokvest/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Кодоквест">
+<meta property="og:site_name" content="Фионика">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:url" content="https://fionov365-ai.github.io/kodokvest/">
-<meta property="og:title" content="Кодоквест — информатика без репетитора">
+<meta property="og:title" content="Фионика — информатика без репетитора">
 <meta property="og:description" content="Сто уроков программирования на Python прямо в браузере, задачи в формате ОГЭ и ЕГЭ и отчёт взрослому. Код запускается сразу, ошибки объясняются словами. Ничего не надо устанавливать.">
 <meta property="og:image" content="https://fionov365-ai.github.io/kodokvest/og/og.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Кодоквест: информатика без репетитора — 100 уроков, 5 миров, 20 задач ОГЭ и ЕГЭ, 7 проектов, 19 упражнений про ИИ">
+<meta property="og:image:alt" content="Фионика: информатика без репетитора — 100 уроков, 5 миров, 20 задач ОГЭ и ЕГЭ, 7 проектов, 19 упражнений про ИИ">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 <!-- Установка на домашний экран и работа без сети. Ссылки на манифест и иконку
      build.js из одного файла ВЫРЕЗАЕТ: тот файл обещает «ничего не грузится
      извне», а неразрешимая ссылка это обещание бы нарушила. -->
 <meta name="theme-color" content="#f1f4fc" id="themecolor">
-<meta name="apple-mobile-web-app-title" content="Кодоквест">
+<meta name="apple-mobile-web-app-title" content="Фионика">
 <meta name="mobile-web-app-capable" content="yes">
 <style>
 /* ============================================================
@@ -1195,6 +1195,14 @@ body.focus .lede{display:none}
   margin-left:auto;margin-right:auto;color:#3b332a}
 .certwhat b{color:#26201a}
 .certlist{display:block;margin-top:8px;font-size:13.5px;color:#6a5c48}
+/* Код на карточке доступа — самое крупное, что на ней есть после имени: её
+   печатают ради одной этой строки, и читать её будут второпях. Моноширинный
+   шрифт тут не украшение: в коде встречаются похожие знаки, и «l» от «1»
+   отличает именно он. */
+.certcode{display:block;margin-top:16px;font-family:'JetBrains Mono',monospace;
+  font-size:30px;letter-spacing:.06em;font-weight:700;color:#26201a;word-break:break-all}
+.certnote{margin-top:20px;font-size:13.5px;line-height:1.6;color:#6a5c48;max-width:52ch;
+  border-top:1px solid #d9c99a;padding-top:14px}
 .certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
 .certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
   justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}
@@ -2855,7 +2863,7 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
          это «что ещё можно сделать», а это дорога назад, и место ей слева от
          всего остального. -->
     <button class="navback" id="btn-back" title="Назад" hidden>← <span class="lbl">Назад</span></button>
-    <div class="logo" id="logo"><span class="mark">🐍</span><b>Кодоквест</b></div>
+    <div class="logo" id="logo"><span class="mark">🐍</span><b>Фионика</b></div>
     <!-- Три вкладки вместо одиннадцати кнопок. Раньше в панели лежали рядом
          и уроки, и игры, и шпаргалка, и профиль — одиннадцать равных кнопок,
          из которых ребёнку не видно, что главное и с чего начинать. Теперь
@@ -8927,7 +8935,7 @@ print(sum(оценки) / len(оценки))
     { t:"`sum(оценки)` сложит все числа, `len(оценки)` скажет, сколько их." },
     { t:"Среднее — это сумма, делённая на количество: `sum(оценки) / len(оценки)`." }
   ],
-  note: "ИИ уверенно вызвал .average() — а такого метода у списков нет, он его придумал. Движок Кодоквеста тут работает как детектор вранья: «уверенно» не значит «правильно». Настоящий способ короткий: sum / len."
+  note: "ИИ уверенно вызвал .average() — а такого метода у списков нет, он его придумал. Движок Фионики тут работает как детектор вранья: «уверенно» не значит «правильно». Настоящий способ короткий: sum / len."
 },
 
  
@@ -9711,7 +9719,7 @@ window.PROJECTS = [
         "Известный путь — код 200, неизвестный — код 404 и страница с объяснением",
         "Пройди по списку ЗАПРОСЫ и на каждый напечатай «GET /путь → код» и саму страницу"
       ],
-      solution: "def главная():\n    return \"<h1>Мой сайт</h1>\\n<p>Его написал я сам, на Python.</p>\"\n\n\ndef о_проекте():\n    return \"<h1>О проекте</h1>\\n<p>Тут я рассказываю, что уже умею.</p>\"\n\n\ndef контакты():\n    return \"<h1>Контакты</h1>\\n<p>Пишите: ко мне в Кодоквест.</p>\"\n\n\nМАРШРУТЫ = {\n    \"/\": главная,\n    \"/about\": о_проекте,\n    \"/contacts\": контакты,\n}\n\n\ndef обработать(путь):\n    if путь in МАРШРУТЫ:\n        страница = МАРШРУТЫ[путь]\n        return 200, страница()\n    return 404, f\"<h1>404</h1>\\n<p>Страницы «{путь}» здесь нет.</p>\"\n\n\nЗАПРОСЫ = [\"/\", \"/about\", \"/secret\", \"/contacts\"]\n\nfor путь in ЗАПРОСЫ:\n    код, тело = обработать(путь)\n    print(f\"GET {путь} → {код}\")\n    print(тело)\n    print()\n",
+      solution: "def главная():\n    return \"<h1>Мой сайт</h1>\\n<p>Его написал я сам, на Python.</p>\"\n\n\ndef о_проекте():\n    return \"<h1>О проекте</h1>\\n<p>Тут я рассказываю, что уже умею.</p>\"\n\n\ndef контакты():\n    return \"<h1>Контакты</h1>\\n<p>Пишите: ко мне в Фионику.</p>\"\n\n\nМАРШРУТЫ = {\n    \"/\": главная,\n    \"/about\": о_проекте,\n    \"/contacts\": контакты,\n}\n\n\ndef обработать(путь):\n    if путь in МАРШРУТЫ:\n        страница = МАРШРУТЫ[путь]\n        return 200, страница()\n    return 404, f\"<h1>404</h1>\\n<p>Страницы «{путь}» здесь нет.</p>\"\n\n\nЗАПРОСЫ = [\"/\", \"/about\", \"/secret\", \"/contacts\"]\n\nfor путь in ЗАПРОСЫ:\n    код, тело = обработать(путь)\n    print(f\"GET {путь} → {код}\")\n    print(тело)\n    print()\n",
       needCode: ["МАРШРУТЫ", "404"],
       needMsg: "Нужен словарь МАРШРУТЫ и ответ 404 на незнакомый путь — на этом и держится весь сервер.",
       hints: [
@@ -9748,7 +9756,7 @@ window.PROJECTS = [
         "Страницы теперь возвращают два значения: заголовок и тело, а рамку на них надевает обработать()",
         "Каждый запрос записывается в журнал, а в конце — сколько каких кодов и какие пути не нашлись"
       ],
-      solution: "from collections import Counter\n\nСАЙТ = \"Мой сайт\"\n\nСТАТЬИ = [\n    {\"id\": 1, \"заголовок\": \"Как я собрал игру\", \"текст\": \"Сначала было поле, потом герой.\"},\n    {\"id\": 2, \"заголовок\": \"Рюкзак на классах\", \"текст\": \"Класс — это чертёж вещи.\"},\n    {\"id\": 3, \"заголовок\": \"Разбор журнала\", \"текст\": \"Регулярка достаёт из текста что угодно.\"},\n]\n\n\ndef главная():\n    return \"Главная\", \"<p>Его написал я сам, на Python.</p>\"\n\n\ndef о_проекте():\n    return \"О проекте\", \"<p>Тут я рассказываю, что уже умею.</p>\"\n\n\ndef записи():\n    строки = [\"<ul>\"]\n    for статья in СТАТЬИ:\n        строки.append(f'  <li><a href=\"/posts/{статья[\"id\"]}\">{статья[\"заголовок\"]}</a></li>')\n    строки.append(\"</ul>\")\n    return \"Записи\", \"\\n\".join(строки)\n\n\ndef найти_статью(номер):\n    for статья in СТАТЬИ:\n        if статья[\"id\"] == номер:\n            return статья\n    return None\n\n\nМАРШРУТЫ = {\n    \"/\": главная,\n    \"/about\": о_проекте,\n    \"/posts\": записи,\n}\n\n\ndef шаблон(заголовок, тело):\n    меню = \" · \".join(f'<a href=\"{путь}\">{путь}</a>' for путь in МАРШРУТЫ)\n    куски = [\n        \"<html>\",\n        f\"<head><title>{заголовок} — {САЙТ}</title></head>\",\n        \"<body>\",\n        f\"<nav>{меню}</nav>\",\n        f\"<h1>{заголовок}</h1>\",\n        тело,\n        f\"<footer>{САЙТ} · собран на Кодоквесте</footer>\",\n        \"</body>\",\n        \"</html>\",\n    ]\n    return \"\\n\".join(куски)\n\n\ndef обработать(путь):\n    if путь in МАРШРУТЫ:\n        страница = МАРШРУТЫ[путь]\n        заголовок, тело = страница()\n        return 200, шаблон(заголовок, тело)\n    if путь.startswith(\"/posts/\"):\n        хвост = путь[7:]\n        if хвост.isdigit():\n            статья = найти_статью(int(хвост))\n            if статья is not None:\n                тело = f'<p>{статья[\"текст\"]}</p>\\n<a href=\"/posts\">← ко всем записям</a>'\n                return 200, шаблон(статья[\"заголовок\"], тело)\n    return 404, шаблон(\"404\", f\"<p>Страницы «{путь}» здесь нет.</p>\")\n\n\nЗАПРОСЫ = [\"/\", \"/posts\", \"/posts/2\", \"/posts/99\", \"/secret\"]\n\nжурнал = []\nfor путь in ЗАПРОСЫ:\n    код, тело = обработать(путь)\n    журнал.append((путь, код))\n    print(f\"GET {путь} → {код}\")\n    print(тело)\n    print()\n\nкоды = Counter(код for путь, код in журнал)\nбитые = [путь for путь, код in журнал if код == 404]\n\nprint(\"ЖУРНАЛ СЕРВЕРА\")\nfor код, сколько in sorted(коды.items()):\n    print(f\"  {код}: {сколько}\")\nprint(\"Не нашлись: \" + \", \".join(битые))\n",
+      solution: "from collections import Counter\n\nСАЙТ = \"Мой сайт\"\n\nСТАТЬИ = [\n    {\"id\": 1, \"заголовок\": \"Как я собрал игру\", \"текст\": \"Сначала было поле, потом герой.\"},\n    {\"id\": 2, \"заголовок\": \"Рюкзак на классах\", \"текст\": \"Класс — это чертёж вещи.\"},\n    {\"id\": 3, \"заголовок\": \"Разбор журнала\", \"текст\": \"Регулярка достаёт из текста что угодно.\"},\n]\n\n\ndef главная():\n    return \"Главная\", \"<p>Его написал я сам, на Python.</p>\"\n\n\ndef о_проекте():\n    return \"О проекте\", \"<p>Тут я рассказываю, что уже умею.</p>\"\n\n\ndef записи():\n    строки = [\"<ul>\"]\n    for статья in СТАТЬИ:\n        строки.append(f'  <li><a href=\"/posts/{статья[\"id\"]}\">{статья[\"заголовок\"]}</a></li>')\n    строки.append(\"</ul>\")\n    return \"Записи\", \"\\n\".join(строки)\n\n\ndef найти_статью(номер):\n    for статья in СТАТЬИ:\n        if статья[\"id\"] == номер:\n            return статья\n    return None\n\n\nМАРШРУТЫ = {\n    \"/\": главная,\n    \"/about\": о_проекте,\n    \"/posts\": записи,\n}\n\n\ndef шаблон(заголовок, тело):\n    меню = \" · \".join(f'<a href=\"{путь}\">{путь}</a>' for путь in МАРШРУТЫ)\n    куски = [\n        \"<html>\",\n        f\"<head><title>{заголовок} — {САЙТ}</title></head>\",\n        \"<body>\",\n        f\"<nav>{меню}</nav>\",\n        f\"<h1>{заголовок}</h1>\",\n        тело,\n        f\"<footer>{САЙТ} · собран на Фионике</footer>\",\n        \"</body>\",\n        \"</html>\",\n    ]\n    return \"\\n\".join(куски)\n\n\ndef обработать(путь):\n    if путь in МАРШРУТЫ:\n        страница = МАРШРУТЫ[путь]\n        заголовок, тело = страница()\n        return 200, шаблон(заголовок, тело)\n    if путь.startswith(\"/posts/\"):\n        хвост = путь[7:]\n        if хвост.isdigit():\n            статья = найти_статью(int(хвост))\n            if статья is not None:\n                тело = f'<p>{статья[\"текст\"]}</p>\\n<a href=\"/posts\">← ко всем записям</a>'\n                return 200, шаблон(статья[\"заголовок\"], тело)\n    return 404, шаблон(\"404\", f\"<p>Страницы «{путь}» здесь нет.</p>\")\n\n\nЗАПРОСЫ = [\"/\", \"/posts\", \"/posts/2\", \"/posts/99\", \"/secret\"]\n\nжурнал = []\nfor путь in ЗАПРОСЫ:\n    код, тело = обработать(путь)\n    журнал.append((путь, код))\n    print(f\"GET {путь} → {код}\")\n    print(тело)\n    print()\n\nкоды = Counter(код for путь, код in журнал)\nбитые = [путь for путь, код in журнал if код == 404]\n\nprint(\"ЖУРНАЛ СЕРВЕРА\")\nfor код, сколько in sorted(коды.items()):\n    print(f\"  {код}: {сколько}\")\nprint(\"Не нашлись: \" + \", \".join(битые))\n",
       needCode: ["def шаблон", "join"],
       needMsg: "Нужна функция шаблон: рамка должна лежать в одном месте, иначе её придётся править на каждой странице.",
       hints: [
@@ -10343,7 +10351,7 @@ window.CHEATSHEET = [
       code:'print("=" * 12)\nprint("#" * 3 + "." * 7)' },
     { id:"len", sig:"len(что-то)", lesson:"fstrings",
       what:"длина строки, списка, словаря — числом",
-      code:'print(len("Кодоквест"), len([1, 2, 3]))' },
+      code:'print(len("Фионика"), len([1, 2, 3]))' },
     { id:"upper", sig:".upper() и .lower()", lesson:"str-methods",
       what:"строка большими или маленькими буквами. Саму переменную не меняет",
       code:'имя = "Аня"\nprint(имя.upper(), имя.lower(), имя)' },
@@ -18105,7 +18113,12 @@ function screenAccount(){
       '<button class="rbtn sec" id="copycode">Скопировать код</button></div>' +
       '<p class="dim" style="margin-top:12px">Ссылка-вход для другого устройства:</p>' +
       '<div class="codebox"><code id="mylink">' + A.esc(link) + '</code>' +
-      '<button class="rbtn sec" id="copylink">Скопировать ссылку</button></div></div>';
+      '<button class="rbtn sec" id="copylink">Скопировать ссылку</button></div>' +
+       
+      '<div class="winrow" style="margin-top:14px">' +
+      '<button class="bigbtn ghost" id="printcard">🖨 Карточка доступа</button></div>' +
+      '<p class="dim">Лист с именем, кодом и ссылкой — распечатать или сохранить в PDF. ' +
+      'Положить в дневник или отдать родителю.</p></div>';
   } else {
     h += '<div class="card"><p class="lede">Сервер не подключён — прогресс хранится только ' +
       'на этом устройстве, кода нет.</p></div>';
@@ -18120,9 +18133,16 @@ function screenAccount(){
       'Пока показ включён, у тебя горит плашка, и выключить его можешь только ты.</li>' +
       '</ul>' + A.liveRowHTML() + '</div>';
   }
+   
   h += '<div class="card"><h3>Сменить ученика</h3>' +
     '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
     'Прогресс на сервере при этом не удаляется.</p>' +
+    (code
+      ? '<div class="note"><b>Перед выходом запиши код: ' + A.esc(code) + '</b>' +
+        'Без него вернуться к своим занятиям будет нечем: ни почты, ни телефона тренажёр ' +
+        'не спрашивает, и найти твой прогресс по имени нельзя. Если код знает репетитор или ' +
+        'родитель — спросишь у них.</div>'
+      : '') +
     '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
      
     '<div class="card"><h3>Это не мой кабинет</h3>' +
@@ -18180,10 +18200,13 @@ function screenAccount(){
   A.app.innerHTML = h;
 
   A.bindLiveRow(screenAccount);
+   
   var cc = document.getElementById("copycode");
-  if (cc) cc.onclick = function(){ copyText(code, cc); };
+  if (cc) cc.onclick = function(){ copyText(code, cc); A.markCodeSaved(); };
   var cl = document.getElementById("copylink");
-  if (cl) cl.onclick = function(){ copyText(link, cl); };
+  if (cl) cl.onclick = function(){ copyText(link, cl); A.markCodeSaved(); };
+  var pc = document.getElementById("printcard");
+  if (pc) pc.onclick = function(){ A.markCodeSaved(); A.openAccessCard(code, A.myName()); };
   A.wireInstallTip(A.app);
   document.getElementById("goabout").onclick = A.screenAbout;
   document.getElementById("gofolio").onclick = A.screenFolio;
@@ -18363,6 +18386,21 @@ function screenWorlds(){
 
    
   h += A.welcomeBackHTML();
+
+   
+  if (doneTotal && A.serverOn() && A.myCode() && !A.codeSaved()){
+    h += '<div class="card codesave"><h3>🔑 Запиши свой код</h3>' +
+      '<p>Первый урок сдан — теперь есть что терять. Весь вход в твои занятия — вот этот код, ' +
+      'и другого нет: ни почты, ни телефона тренажёр не спрашивает, а значит и восстановить ' +
+      'код нечем.</p>' +
+      '<div class="codebox"><code id="hmcode">' + A.esc(A.myCode()) + '</code>' +
+      '<button class="rbtn sec" id="hmcopy">Скопировать</button>' +
+      '<button class="rbtn sec" id="hmprint">🖨 Карточка</button></div>' +
+      '<div class="winrow" style="margin-top:12px">' +
+      '<button class="bigbtn ghost" id="hmdone">Записал, больше не напоминай</button></div>' +
+      '<p class="dim">Карточка — лист с именем, кодом и ссылкой: распечатать, сохранить в PDF ' +
+      'или отдать родителю. Если ты занимаешься с репетитором, код есть и у него.</p></div>';
+  }
 
    
   if (!doneTotal){
@@ -18566,6 +18604,14 @@ function screenWorlds(){
   document.getElementById("go-train").onclick = A.screenTrain;
   var gg = document.getElementById("go-guide");
   if (gg) gg.onclick = A.screenGuide;
+   
+  (function(){
+    var cp = document.getElementById("hmcopy"), pr = document.getElementById("hmprint"),
+        dn = document.getElementById("hmdone");
+    if (cp) cp.onclick = function(){ A.copyText(A.myCode(), cp); A.markCodeSaved(); };
+    if (pr) pr.onclick = function(){ A.markCodeSaved(); A.openAccessCard(A.myCode(), A.myName()); };
+    if (dn) dn.onclick = function(){ A.markCodeSaved(); screenWorlds(); };
+  })();
   wireLessonSearch();
   document.getElementById("gofolio").onclick = A.screenFolio;
   document.getElementById("gomine").onclick = function(){ A.screenMyTasks(); };
@@ -19827,7 +19873,7 @@ CONTENT.world1 = {
     { h:"Уборка и проверки",
       p:"<code>strip()</code> убирает пробелы по краям, <code>startswith</code> проверяет начало, <code>isdigit()</code> отвечает, состоит ли строка только из цифр.",
       note:"В <code>s</code> лежит число с пробелами по краям. <code>strip()</code> их убирает, и печатается <code>42</code> без отступов. Вторая строка сначала убирает пробелы, а потом спрашивает у остатка, из одних ли он цифр — ответ <code>True</code>. Порядок тут важен: у строки с пробелами ответ был бы обратным, пробел цифрой не считается. Третья проверяет начало слова и тоже отвечает да.",
-      demo:'s = "   42   "\nprint(s.strip())\nprint(s.strip().isdigit())\nprint("Кодоквест".startswith("Код"))' }
+      demo:'s = "   42   "\nprint(s.strip())\nprint(s.strip().isdigit())\nprint("Фионика".startswith("Фио"))' }
   ],
   task: {
     type:"code",
@@ -23434,11 +23480,11 @@ CONTENT.world5 = {
 
     { h:"Ответ — это просто строка",
       p:"Никакой магии: страница — обычная строка с тегами. <code>&lt;h1&gt;</code> — заголовок, <code>&lt;p&gt;</code> — абзац, <code>&lt;ul&gt;&lt;li&gt;</code> — список. Собирается f-строками, как любой другой текст.",
-      demo:'уроков = 100\nимя = "Кодоквест"\nстраница = f"<h1>{имя}</h1><p>Уроков: {уроков}</p>"\nprint(страница)\n\nпункты = "".join(f"<li>{м}</li>" for м in ["Старт", "Логика", "Данные"])\nprint(f"<ul>{пункты}</ul>")' },
+      demo:'уроков = 100\nимя = "Фионика"\nстраница = f"<h1>{имя}</h1><p>Уроков: {уроков}</p>"\nprint(страница)\n\nпункты = "".join(f"<li>{м}</li>" for м in ["Старт", "Логика", "Данные"])\nprint(f"<ul>{пункты}</ul>")' },
 
     { h:"Настоящий Flask выглядит так же",
       p:"Сравни со своим кодом: то же самое, только словарь спрятан внутри библиотеки, а вместо печати страницу отправляют браузеру. Запустить это в тренажёре нельзя — сервер должен слушать сетевой порт, а вкладке браузера этого не разрешают. Зато на компьютере хватит <code>pip install flask</code> и одной команды.",
-      show:'from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.route("/")\ndef главная():\n    return "<h1>Кодоквест</h1>"\n\n\nif __name__ == "__main__":\n    app.run(debug=True)',
+      show:'from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.route("/")\ndef главная():\n    return "<h1>Фионика</h1>"\n\n\nif __name__ == "__main__":\n    app.run(debug=True)',
       showNote:"на компьютере: pip install flask, затем python app.py — и сайт открывается по адресу localhost:5000" }
   ],
   task:{
@@ -23446,14 +23492,14 @@ CONTENT.world5 = {
     goal:"Собери свой мини-Flask: декоратор маршрута, две страницы и функцию, которая по адресу отдаёт страницу.",
     list:[
       "Декоратор маршрут(путь) кладёт функцию в словарь СТРАНИЦЫ и возвращает её неизменной",
-      "Страница «/про-нас» уже написана в заготовке — допиши ниже страницу «/», которая возвращает «&lt;h1&gt;Кодоквест&lt;/h1&gt;&lt;p&gt;Первая страница.&lt;/p&gt;»",
+      "Страница «/про-нас» уже написана в заготовке — допиши ниже страницу «/», которая возвращает «&lt;h1&gt;Фионика&lt;/h1&gt;&lt;p&gt;Первая страница.&lt;/p&gt;»",
       "Функция показать(путь) вызывает нужную функцию и возвращает её ответ",
       "Если такого адреса нет — показать возвращает «404 » и сам путь",
       "Напечатать «адреса:» и все адреса по алфавиту",
       "Затем по строке на каждый из «/», «/про-нас», «/склад»: путь, «->» и ответ"
     ],
     starter:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    """Вешает функцию на адрес: теперь по этому пути сервер вызовет её."""\n    def обёртка(функция):\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\ndef показать(путь):\n    """Отдаёт страницу по адресу или сообщение, что её нет."""\n    return "404 " + путь\n\n\nprint("адреса:", sorted(СТРАНИЦЫ))\nprint("/", "->", показать("/"))\n',
-    solution:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    """Вешает функцию на адрес: теперь по этому пути сервер вызовет её."""\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Кодоквест</h1><p>Первая страница.</p>"\n\n\ndef показать(путь):\n    """Отдаёт страницу по адресу или сообщение, что её нет."""\n    if путь not in СТРАНИЦЫ:\n        return "404 " + путь\n    return СТРАНИЦЫ[путь]()\n\n\nprint("адреса:", sorted(СТРАНИЦЫ))\nfor путь in ["/", "/про-нас", "/склад"]:\n    print(путь, "->", показать(путь))\n',
+    solution:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    """Вешает функцию на адрес: теперь по этому пути сервер вызовет её."""\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Фионика</h1><p>Первая страница.</p>"\n\n\ndef показать(путь):\n    """Отдаёт страницу по адресу или сообщение, что её нет."""\n    if путь not in СТРАНИЦЫ:\n        return "404 " + путь\n    return СТРАНИЦЫ[путь]()\n\n\nprint("адреса:", sorted(СТРАНИЦЫ))\nfor путь in ["/", "/про-нас", "/склад"]:\n    print(путь, "->", показать(путь))\n',
     hints:[
       { t:"Внутренняя функция обёртка получает саму функцию-страницу. Два дела: положить её в словарь — `СТРАНИЦЫ[путь] = функция` — и обязательно вернуть её же, иначе имя `главная` станет None." },
       { t:"Своя страница «/» делается по образцу «/про-нас»: строка `@маршрут(\"/\")` над функцией, а внутри return с разметкой из условия." },
@@ -23560,7 +23606,7 @@ CONTENT.world5 = {
   lede: "Последний шаг: <b>выложить сайт в интернет</b>. Оказывается, для этого чаще всего не нужен никакой сервер.",
   theory: [
     { h:"Два способа отдать страницу",
-      p:"Первый: держать <b>работающую программу</b>, которая отвечает на каждый запрос — это Flask. Нужен компьютер, который включён всегда, и деньги за него. Второй: <b>заранее сложить готовые файлы</b>, и пусть их просто раздают. Так работает GitHub Pages, и так же выложен сам «Кодоквест». Второй способ бесплатный и не ломается.",
+      p:"Первый: держать <b>работающую программу</b>, которая отвечает на каждый запрос — это Flask. Нужен компьютер, который включён всегда, и деньги за него. Второй: <b>заранее сложить готовые файлы</b>, и пусть их просто раздают. Так работает GitHub Pages, и так же выложена сама «Фионика». Второй способ бесплатный и не ломается.",
       demo:'страницы = {"/": "<h1>Главная</h1>", "/про-нас": "<h1>Про нас</h1>"}\n\nfor путь, тело in страницы.items():\n    print(путь, "->", len(тело), "знаков")' },
 
     { h:"Адрес превращается в имя файла",
@@ -23588,8 +23634,8 @@ CONTENT.world5 = {
       "Напечатать «готово:» и этот список",
       "Затем напечатать содержимое index.html целиком"
     ],
-    starter:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Кодоквест</h1><p>Тренажёр Python.</p>"\n\n\nШАБЛОН = """<!doctype html>\n<html lang="ru">\n<head><meta charset="utf-8"><title>{заголовок}</title></head>\n<body>\n{тело}\n</body>\n</html>\n"""\n\n\ndef имя_файла(путь):\n    """Адрес «/» превращает в index.html, «/про-нас» — в про-нас.html."""\n    return "index.html"\n\n\ndef собрать():\n    """Записывает каждую страницу отдельным файлом — готовый сайт без сервера."""\n    return []\n\n\nфайлы = собрать()\nprint("готово:", файлы)\n',
-    solution:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Кодоквест</h1><p>Тренажёр Python.</p>"\n\n\nШАБЛОН = """<!doctype html>\n<html lang="ru">\n<head><meta charset="utf-8"><title>{заголовок}</title></head>\n<body>\n{тело}\n</body>\n</html>\n"""\n\n\ndef имя_файла(путь):\n    """Адрес «/» превращает в index.html, «/про-нас» — в про-нас.html."""\n    if путь == "/":\n        return "index.html"\n    return путь.strip("/") + ".html"\n\n\ndef собрать():\n    """Записывает каждую страницу отдельным файлом — готовый сайт без сервера."""\n    сделано = []\n    for путь in sorted(СТРАНИЦЫ):\n        имя = имя_файла(путь)\n        страница = ШАБЛОН.format(заголовок=путь, тело=СТРАНИЦЫ[путь]())\n        with open(имя, "w", encoding="utf-8") as f:\n            f.write(страница)\n        сделано.append(имя)\n    return сделано\n\n\nфайлы = собрать()\nprint("готово:", файлы)\nwith open("index.html", encoding="utf-8") as f:\n    print(f.read())\n',
+    starter:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Фионика</h1><p>Тренажёр Python.</p>"\n\n\nШАБЛОН = """<!doctype html>\n<html lang="ru">\n<head><meta charset="utf-8"><title>{заголовок}</title></head>\n<body>\n{тело}\n</body>\n</html>\n"""\n\n\ndef имя_файла(путь):\n    """Адрес «/» превращает в index.html, «/про-нас» — в про-нас.html."""\n    return "index.html"\n\n\ndef собрать():\n    """Записывает каждую страницу отдельным файлом — готовый сайт без сервера."""\n    return []\n\n\nфайлы = собрать()\nprint("готово:", файлы)\n',
+    solution:'СТРАНИЦЫ = {}\n\n\ndef маршрут(путь):\n    def обёртка(функция):\n        СТРАНИЦЫ[путь] = функция\n        return функция\n    return обёртка\n\n\n@маршрут("/про-нас")\ndef про_нас():\n    return "<h1>Про нас</h1><p>Тут учат Python.</p>"\n\n\n@маршрут("/")\ndef главная():\n    return "<h1>Фионика</h1><p>Тренажёр Python.</p>"\n\n\nШАБЛОН = """<!doctype html>\n<html lang="ru">\n<head><meta charset="utf-8"><title>{заголовок}</title></head>\n<body>\n{тело}\n</body>\n</html>\n"""\n\n\ndef имя_файла(путь):\n    """Адрес «/» превращает в index.html, «/про-нас» — в про-нас.html."""\n    if путь == "/":\n        return "index.html"\n    return путь.strip("/") + ".html"\n\n\ndef собрать():\n    """Записывает каждую страницу отдельным файлом — готовый сайт без сервера."""\n    сделано = []\n    for путь in sorted(СТРАНИЦЫ):\n        имя = имя_файла(путь)\n        страница = ШАБЛОН.format(заголовок=путь, тело=СТРАНИЦЫ[путь]())\n        with open(имя, "w", encoding="utf-8") as f:\n            f.write(страница)\n        сделано.append(имя)\n    return сделано\n\n\nфайлы = собрать()\nprint("готово:", файлы)\nwith open("index.html", encoding="utf-8") as f:\n    print(f.read())\n',
     hints:[
       { t:"Дырки в шаблоне названы, и format зовёт их по именам: `ШАБЛОН.format(заголовок=путь, тело=...)` — имена должны совпасть с теми, что в фигурных скобках шаблона." },
       { t:"Запись файла: `with open(имя, \"w\", encoding=\"utf-8\") as f:` и внутри `f.write(страница)`." },
@@ -23664,7 +23710,7 @@ CONTENT.world5 = {
       demo:'первая = {1: "строка про кота и собаку"}\nвторая = {1: "строка про КОТА"}\n\nномер = 1\nа = первая.get(номер)\nб = вторая.get(номер)\nif а is not None and б is not None and а != б:\n    print(f"<<< аня: {а} ||| боря: {б} >>>")\nelse:\n    print("конфликта нет")' },
 
     { h:"Как это выглядит вживую",
-      p:"На GitHub правки предлагают через <b>pull request</b>: «вот моя ветка, посмотрите и влейте». Там же видно разницу и там же обсуждают. Кстати, «Кодоквест» лежит именно на GitHub, и обновляется он ровно этими кнопками.",
+      p:"На GitHub правки предлагают через <b>pull request</b>: «вот моя ветка, посмотрите и влейте». Там же видно разницу и там же обсуждают. Кстати, «Фионика» лежит именно на GitHub, и обновляется она ровно этими кнопками.",
       show:'git switch -c моя-правка       # завести свою ветку\ngit commit -am "поправил текст"\ngit push -u origin моя-правка  # отправить ветку на GitHub\n\n# дальше на github.com: Compare & pull request -> Merge\n\ngit switch main                # вернуться в главную ветку\ngit pull                       # забрать то, что влили',
       showNote:"без своего сервера и бесплатно; те же кнопки Add file → Upload files тоже работают" }
   ],
@@ -23859,7 +23905,8 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      "notes","variant",
                       
                      "vtask"];
-var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
+ 
+var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect","codeSaved"];
  
 var KEEP_ON_RESET = ["games","mytasks","gallery"];
 
@@ -24687,6 +24734,9 @@ function ptaskWeekCount(){
  
 function serverOn(){ return typeof Cloud !== "undefined" && Cloud.hasUrl(); }
 function myCode(){ return (typeof Cloud !== "undefined") ? Cloud.myCode() : ""; }
+ 
+function codeSaved(){ return !!S.codeSaved; }
+function markCodeSaved(){ if (!S.codeSaved){ S.codeSaved = 1; save(); } }
 function myName(){ return S.name || ""; }
  
 function needsRegister(){ return serverOn() && !myCode(); }
@@ -24981,6 +25031,7 @@ function backTarget(){
     case "roles": return (isAdminDevice() || isParentDevice() || myCode() || S.name)
       ? null : { label:"О тренажёре", go: screenAbout };
     case "kidlogin": case "parentlogin": return { label:"К выбору", go: screenRoles };
+    case "lostcode": return { label:"Ко входу", go: screenKidLogin };
 
     case "lesson": {
       if (open) return { label:"К занятию", go: screenZan };
@@ -25068,7 +25119,7 @@ function refreshTop(){
   var adminScreen = isAdminDevice() || isParentDevice() ||
     curPlace === "adminsetup" || curPlace === "adminlogin" ||
     curPlace === "kids" || curPlace === "kid" ||
-    curPlace === "roles" || curPlace === "kidlogin" ||
+    curPlace === "roles" || curPlace === "kidlogin" || curPlace === "lostcode" ||
     curPlace === "parentlogin" || curPlace === "parent" ||
      
     curPlace === "about";
@@ -25076,7 +25127,7 @@ function refreshTop(){
   var lk = document.getElementById("tab-lk");
   if (lk){
     var gate = !adminScreen ||                  
-      curPlace === "roles" || curPlace === "kidlogin" ||
+      curPlace === "roles" || curPlace === "kidlogin" || curPlace === "lostcode" ||
       curPlace === "parentlogin" || curPlace === "adminsetup" || curPlace === "adminlogin";
      
     var role = isAdminDevice()
@@ -25190,6 +25241,8 @@ function mergeProgress(a, b){
   out.firstTry = maxN(a.firstTry, b.firstTry);
   out.perfect = maxN(a.perfect, b.perfect);
   out.sandboxRuns = maxN(a.sandboxRuns, b.sandboxRuns);
+   
+  out.codeSaved = maxN(a.codeSaved, b.codeSaved);
 
    
   out.warmups = mergeSet(a.warmups, b.warmups);
@@ -26891,6 +26944,8 @@ var HOME = KVSCREENS.home({
   app: app, esc: esc, plural: plural, qm: qm,
   enterScreen: enterScreen, refreshTop: refreshTop,
   myName: myName, isAdminDevice: isAdminDevice,
+  myCode: myCode, serverOn: serverOn, codeSaved: codeSaved,
+  markCodeSaved: markCodeSaved, openAccessCard: openAccessCard, copyText: copyText,
   BADGES: BADGES, dayKey: dayKey, dailyDone: dailyDone,
   solved: solved, solvedCount: solvedCount, starsOf: starsOf,
   lessonOpen: lessonOpen, nextLesson: nextLesson, openLesson: openLesson,
@@ -28820,6 +28875,7 @@ function screenRegister(){
 var ACCOUNT = KVSCREENS.account({
   app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
   myCode: myCode, myName: myName, serverOn: serverOn, doLogout: doLogout,
+  openAccessCard: openAccessCard, codeSaved: codeSaved, markCodeSaved: markCodeSaved,
   goHome: goHome, screenAbout: screenAbout, screenFolio: screenFolio,
   screenGuide: screenGuide, screenRoles: screenRoles,
   themeGet: themeGet, themeSet: themeSet, sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx,
@@ -31412,6 +31468,37 @@ function certBodyHTML(kind){
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
   '</div>';
+}
+
+ 
+function accessLink(code){
+  try { return location.origin + location.pathname + "?kid=" + encodeURIComponent(code); }
+  catch(e){ return "?kid=" + code; }
+}
+function accessCardHTML(code, name){
+  return '<div class="certsheet">' +
+    '<div class="certmark">🐍 Кодоквест</div>' +
+    '<div class="certkind">Карточка доступа</div>' +
+    '<div class="certname">' + esc(name || "Ученик Кодоквеста") + '</div>' +
+    '<div class="certrule"></div>' +
+    '<div class="certwhat">Код ученика — это весь вход. По нему занятия открываются ' +
+      'на любом устройстве, и по нему же взрослый видит, как идут дела.' +
+      '<span class="certcode">' + esc(code) + '</span>' +
+      '<span class="certlist">Ссылка-вход: ' + esc(accessLink(code)) + '</span></div>' +
+    '<div class="certnote">Положи этот листок туда, где не потеряется: в дневник, ' +
+      'в папку с документами, сфотографируй родителю. ' +
+      '⚠️ Кода не восстановить: ни почты, ни телефона тренажёр не спрашивает, ' +
+      'и найти твой прогресс без кода нечем. И наоборот: кто знает код, тот видит ' +
+      'занятия — чужим его показывать не надо.</div>' +
+    '<div class="certfoot"><span>Выдана ' + fmtDay(Date.now()) + '</span>' +
+    '<span>Python с нуля · без установки · в браузере</span></div>' +
+  '</div>';
+}
+function openAccessCard(code, name){
+  var el = document.getElementById("cert"), box = document.getElementById("certbox");
+  if (!el || !box || !code) return;
+  box.innerHTML = accessCardHTML(code, name);
+  el.hidden = false;
 }
 
  
@@ -35709,9 +35796,12 @@ function screenAbout(){
         'Python, а не считает формулы.</li>' +
       '<li><b>Оценок и живого учителя тут нет.</b> Проверяет программа. ' +
         'Если учитель или репетитор у ребёнка есть — здесь у него своё рабочее место.</li>' +
+       
       '<li><b>Аккаунта нет — есть код ученика.</b> По нему прогресс открывается ' +
         'на любом устройстве, но и восстановить его нечем: ни почты, ни телефона ' +
-        'мы не спрашиваем. Код стоит записать.</li>' +
+        'мы не спрашиваем — и не будем. Поэтому тренажёр сам напоминает записать код ' +
+        'после первого урока и печатает карточку доступа; у репетитора и родителя ' +
+        'код тоже есть.</li>' +
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
       '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
@@ -35916,7 +36006,9 @@ function screenKidLogin(){
       '<p class="dim">Код или ссылку дал учитель. Впиши код — откроется твой тренажёр с твоим прогрессом.</p>' +
       '<div class="admgate"><input type="text" id="klcode" placeholder="например, roman-3f7a" ' +
         'autocomplete="off" spellcheck="false"><button class="rbtn check" id="klgo">Войти</button></div>' +
-      '<div class="msg" id="klmsg"></div></div>' +
+      '<div class="msg" id="klmsg"></div>' +
+       
+      '<p class="dim" style="margin-top:10px"><button class="linkbtn" id="kllost">Не помню код</button></p></div>' +
     '<div class="card"><h3>Я тут впервые</h3>' +
       '<p class="dim">Кода ещё нет — заведём новый профиль по имени.</p>' +
       '<div class="admrow"><button class="rbtn sec" id="klnew">Завести профиль</button></div></div>' +
@@ -35932,10 +36024,68 @@ function screenKidLogin(){
   document.getElementById("klgo").onclick = go;
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
   document.getElementById("klnew").onclick = function(){ becomeKid(); screenRegister(); };
+  (function(){ var b = document.getElementById("kllost"); if (b) b.onclick = screenLostCode; })();
   document.getElementById("klback").onclick = screenRoles;
   inp.focus();
   refreshTop();
 }
+ 
+function screenLostCode(){
+  enterScreen("home", "lostcode");
+  var have = (typeof Cloud !== "undefined") ? Cloud.myCode() : "";
+  var h = '<div class="lvlhead"><div><div class="idx">вход ученика</div>' +
+    '<h1>🔑 Не помню код</h1></div></div>';
+
+   
+  if (have){
+    h += '<div class="card"><h3>Он на месте</h3>' +
+      '<p>Этот браузер помнит код. Вот он:</p>' +
+      '<div class="codebox"><code id="lcode">' + esc(have) + '</code>' +
+      '<button class="rbtn sec" id="lccopy">Скопировать</button>' +
+      '<button class="rbtn sec" id="lcprint">🖨 Карточка</button></div>' +
+      '<p class="dim">Запиши его или распечатай карточку — тогда он не потеряется, ' +
+      'даже если браузер почистят.</p>' +
+      '<div class="winrow"><button class="bigbtn" id="lcgo">Войти под этим кодом</button></div></div>';
+  }
+
+  h += '<div class="card"><h3>Где искать, если браузер не помнит</h3><ul class="trrules">' +
+    '<li><b>У того, кто тебя записал.</b> Если занимаешься с репетитором или в кружке — ' +
+    'у него в кабинете есть список учеников с кодами, и он может распечатать карточку. ' +
+    'У родителя, который смотрит твои занятия, код тоже есть.</li>' +
+    '<li><b>Ссылка-вход.</b> Она выглядит как адрес тренажёра с хвостом ' +
+    '<code>?kid=твой-код</code>. Поищи её в истории браузера, в закладках или там, ' +
+    'куда её сохраняли: открыть такую ссылку — уже войти.</li>' +
+    '<li><b>Карточка доступа.</b> Лист с именем и кодом, если его печатали: в дневнике, ' +
+    'в папке с документами, на фотографии у родителя.</li>' +
+    '</ul></div>';
+
+   
+  h += '<div class="card"><h3>А если код никто не сохранил</h3>' +
+    '<p>Тогда прогресс не вернуть, и это честный ответ, а не отговорка. ' +
+    'Тренажёр не спрашивает ни почты, ни телефона, и по имени найти твои занятия ' +
+    'нельзя: имя ребёнка на сервер вообще не уходит. Поиска «найди мой код» здесь ' +
+    'нет и не будет — по коду видно занятия, и такая страница отдавала бы чужие коды ' +
+    'кому угодно.</p>' +
+    '<p class="dim">Можно завести новый профиль и начать заново — уроки и задачи те же, ' +
+    'а звёзды и решённое останутся на старом коде. Обидно, но лучше, чем ждать ответа, ' +
+    'которого не будет.</p>' +
+    '<div class="winrow"><button class="bigbtn ghost" id="lcnew">Завести новый профиль</button></div></div>';
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="lcback">← Назад ко входу</button></div>';
+  app.innerHTML = h;
+
+  var cp = document.getElementById("lccopy");
+  if (cp) cp.onclick = function(){ copyText(have, cp); markCodeSaved(); };
+  var pr = document.getElementById("lcprint");
+  if (pr) pr.onclick = function(){ markCodeSaved(); openAccessCard(have, myName()); };
+  var go = document.getElementById("lcgo");
+  if (go) go.onclick = function(){ becomeKid(); doLogin(have, function(){}); };
+  document.getElementById("lcnew").onclick = function(){ becomeKid(); screenRegister(); };
+  document.getElementById("lcback").onclick = screenKidLogin;
+  refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
  
 function screenParentLogin(){
   enterScreen("home", "parentlogin");
@@ -37852,6 +38002,8 @@ function screenGroup(){
         '<button class="rbtn check" data-gview="' + esc(r.code) + '">Открыть прогресс</button>' +
         '<button class="rbtn sec" data-glabel="' + esc(r.code) + '">Подписать</button>' +
          
+        '<button class="rbtn sec" data-gcard="' + esc(r.code) + '">🖨 Карточка доступа</button>' +
+         
         (r.lastAt && r.quiet >= GROUP_QUIET_DAYS
           ? '<button class="rbtn sec" data-gremind="' + esc(r.code) + '">✉️ Текст напоминания</button>'
           : '') + '</div></div>';
@@ -37893,6 +38045,12 @@ function screenGroup(){
       var code = b.getAttribute("data-gremind");
       var row = (groupState.rows || []).filter(function(r){ return r.code === code; })[0];
       if (row) copyText(quietReminderText(row), b);
+    };
+  });
+  app.querySelectorAll("[data-gcard]").forEach(function(b){
+    b.onclick = function(){
+      var code = b.getAttribute("data-gcard");
+      openAccessCard(code, adminLabel(code) || "");
     };
   });
   app.querySelectorAll("[data-glabel]").forEach(function(b){
@@ -39575,6 +39733,8 @@ window.__game = {
   LEAN_XP: LEAN_XP, LEAN_BADGE_AT: LEAN_BADGE_AT, FRIEND_XP: FRIEND_XP,
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
   openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
+  openAccessCard: openAccessCard, accessCardHTML: accessCardHTML,
+  codeSaved: codeSaved, markCodeSaved: markCodeSaved, screenLostCode: screenLostCode,
   certWorldReady: certWorldReady, certCourseReady: certCourseReady,
   certWorldAt: certWorldAt, certCourseAt: certCourseAt,
   certWorldNeed: certWorldNeed, certCourseNeed: certCourseNeed,
