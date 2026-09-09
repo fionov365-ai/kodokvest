@@ -8581,6 +8581,111 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         bad("[вариант] решённое на втором устройстве потерялось при слиянии одного и того же варианта");
     }
 
+
+    /* --- 13в.6. РЕЖИМ ЭКЗАМЕНА ---
+       ⚠️ Весь смысл режима в том, чего на экране НЕТ: подсказки, вердикта и
+       второго захода. Проверять «нет» глазами бесполезно — оно исчезает молча
+       и незаметно, стоит кому-нибудь причесать один if. Поэтому здесь на
+       каждое «нет» стоит своя строка.
+       Правило, которое эти строки держат: пока идёт экзамен, НИЧТО на
+       странице не говорит ребёнку, верно ли он решил. */
+    {
+      g.state.algo = {}; g.state.variant = {};
+      g.screenVariant(); await tick();
+      const start = doc.querySelector('[data-vexam="30"]');
+      if (!start) bad("[экзамен] на экране сборки нет режима экзамена");
+      else {
+        start.click(); await tick();
+        const v = g.state.variant.ege || {};
+        if (v.mins !== 30) bad("[экзамен] вариант собрался без времени: mins = " + v.mins);
+        if (!(v.endAt > Date.now())) bad("[экзамен] конец экзамена не в будущем");
+        if (!doc.getElementById("vclock")) bad("[экзамен] на экране варианта нет часов");
+
+        /* 13в.6а. Свод и строки молчат про решённое. */
+        const scr = doc.getElementById("app").textContent;
+        if (/решено/i.test(scr))
+          bad("[экзамен] на экране идущего экзамена сказано «решено» — это вердикт, о котором мы молчим");
+
+        const first = (v.items || []).filter(x => x.id)[0];
+        const btn = doc.querySelector('[data-vgo="' + first.n + '"]');
+        if (!btn) bad("[экзамен] в экзамене нет кнопки «Решать»");
+        else {
+          btn.click(); await tick();
+          /* 13в.6б. Подсказки НЕТ, часы ЕСТЬ. */
+          if (doc.getElementById("hintbtn"))
+            bad("[экзамен] в задаче экзамена есть кнопка подсказки");
+          if (!doc.getElementById("examclock"))
+            bad("[экзамен] в задаче экзамена нет часов");
+
+          const st = studioOf();
+          const task = taskById(first.id);
+          /* 13в.6в. Неверный ответ: ни разбора, ни слова «не то». */
+          st.editor.setCode('print("заведомо не то")\n');
+          st.querySelector('[data-role="check"]').click(); await tick();
+          const badMsg = msgText();
+          if (won()) bad("[экзамен] неверный ответ показал карточку победы");
+          if (/Ещё не то|должно быть|получилось/i.test(badMsg))
+            bad("[экзамен] проверка показала разбор: " + badMsg);
+          if (!/записан/i.test(badMsg))
+            bad("[экзамен] проверка не сказала, что ответ записан: " + badMsg);
+
+          /* 13в.6г. ВЕРНЫЙ ответ отвечает ТЕМ ЖЕ САМЫМ текстом. Это главная
+             строка блока: разойдись эти два сообщения хоть словом — и вердикт
+             читается по ним, а весь режим ничего не стоит. */
+          st.editor.setCode(task.solution);
+          st.querySelector('[data-role="check"]').click(); await tick();
+          const okMsg = msgText();
+          if (won()) bad("[экзамен] верный ответ показал карточку победы — вердикт утёк");
+          if (okMsg !== badMsg)
+            bad("[экзамен] верный и неверный ответы отвечают по-разному:\n  верный:   " +
+                okMsg + "\n  неверный: " + badMsg);
+          /* 13в.6д. И в общий список решённых задача пока НЕ попала: галочка
+             на экране «Алгоритмы» — тот же вердикт, до неё два нажатия. */
+          if (g.state.algo[first.id])
+            bad("[экзамен] решённая на экзамене задача сразу отмечена в общем списке — вердикт утёк");
+          if (!(g.state.variant.ege.done || {})[first.n])
+            bad("[экзамен] верный ответ не записан в самом экзамене");
+          if (!(g.state.variant.ege.sent || {})[first.n])
+            bad("[экзамен] сдача ответа не отмечена");
+        }
+
+        /* 13в.6е. Время вышло — заход закрыт, и в задачу больше не пускают. */
+        {
+          const w2 = g.state.variant.ege;
+          const n = (w2.items || []).filter(x => x.id && !w2.done[x.n])[0];
+          w2.endAt = Date.now() - 1000;
+          g.screenVariant(); await tick();
+          if (!/Заход окончен/.test(doc.getElementById("app").textContent))
+            bad("[экзамен] по истечении времени не показан итог");
+          if (!g.state.variant.ege.closed)
+            bad("[экзамен] по истечении времени заход не закрыт");
+          /* и решённое переехало в общий список — разом, при закрытии */
+          if (!g.state.algo[(w2.items || []).filter(x => x.id)[0].id])
+            bad("[экзамен] после закрытия решённое не попало в общий список");
+
+          /* 13в.6ж. Разбор ПОСЛЕ экзамена: подсказки вернулись, а итог не
+             меняется. Иначе «переиграть нельзя» — пустые слова. */
+          if (n){
+            const doneBefore = JSON.stringify(g.state.variant.ege.done);
+            const go = doc.querySelector('[data-vgo="' + n.n + '"]');
+            if (!go) bad("[экзамен] с итога нельзя открыть нерешённое на разбор");
+            else {
+              go.click(); await tick();
+              if (!doc.getElementById("hintbtn"))
+                bad("[экзамен] после закрытия захода подсказка не вернулась");
+              if (doc.getElementById("examclock"))
+                bad("[экзамен] после закрытия захода часы всё ещё идут");
+              const st2 = studioOf();
+              st2.editor.setCode(taskById(n.id).solution);
+              st2.querySelector('[data-role="check"]').click(); await tick();
+              if (!won()) bad("[экзамен] разбор после экзамена не засчитал эталон: " + msgText());
+              if (JSON.stringify(g.state.variant.ege.done) !== doneBefore)
+                bad("[экзамен] задача, решённая ПОСЛЕ времени, изменила итог захода");
+            }
+          }
+        }
+      }
+    }
     g.state.algo = {}; g.state.variant = {};
     viewReset(g);
     if (problems.length === p0) variantChecked++;

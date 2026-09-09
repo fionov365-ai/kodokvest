@@ -3838,7 +3838,7 @@ function trainCards(){
        как учат; вариант — как спрашивают, и родитель ищет второе. Прятать его
        под темами значит прятать единственное, чего нет у соседей. */
     { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
-      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. В конце видно, какие номера закрыты, а какие просели.",
+      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. Можно тренировкой, а можно в режиме экзамена — со временем, без подсказок и без ответа проверки.",
       when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
       stat: variantStat() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
@@ -7100,12 +7100,19 @@ function openAlgo(id){
   if (capHard()) return screenCapReached();
   enterScreen("train", "algoone");
   session = { id:id, attempts:0, hints:0, shown:false, algo:true };
+  /* ⚠️ Режим экзамена приходит ОТТУДА, ОТКУДА ПРИШЛИ, а не из самой задачи:
+     задача одна и та же, экзаменационным её делает вариант (js/variant.js).
+     Читаем живым вызовом контекста, а не запоминаем: пока задача открыта,
+     время могло выйти. */
+  var exam = !!(algoBack && algoBack.exam);
 
   var h = '<div class="crumbs"><span data-go="back">' +
     esc(algoBack ? algoBack.crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
     '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
+    (exam
+      ? '<div class="right"><span class="examclock" id="examclock">⏱</span></div></div>'
+      : '<div class="right"><span class="tag">звёзд не даёт</span></div></div>') +
     '<p class="lede">' + esc(x.intro) + '</p>' +
     '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
     x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
@@ -7118,8 +7125,14 @@ function openAlgo(id){
       : '') + '</div>';
 
   h += '<div id="studio"></div>' +
-    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
+    /* ⚠️ В режиме экзамена кнопки подсказки НЕ существует — она не спрятана
+       и не отключена. Отключённая кнопка на экране экзамена читается как
+       «подсказка есть, но её зажали», и ребёнок будет на неё давить. */
+    (exam
+      ? '<div class="hintbox"><span class="tip">режим экзамена: подсказок нет, ' +
+        'а верно ли решено — скажет итог варианта, а не эта страница</span></div>'
+      : '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+        '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>') +
     '<div class="hintout" id="hintout"></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
       esc(algoBack ? algoBack.backLabel : "Ко всем задачам") + '</button></div>';
@@ -7143,7 +7156,29 @@ function openAlgo(id){
   if (d) draftApply(studio.editor, d.files);
   studio.editor.onEdit = draftSchedule;
 
-  wireHint(x.hints);
+  if (!exam) wireHint(x.hints);
+  /* ---- часы экзамена ----
+     ⚠️ Часы обязаны идти и ВНУТРИ задачи, а не только на экране варианта.
+     Без них время выходит незаметно: ребёнок дописывает программу, сдаёт её
+     и узнаёт, что вариант закрылся десять минут назад. Сколько осталось,
+     спрашиваем живым вызовом у того, кто привёл (clock): конец времени знает
+     вариант, задача о нём знать не должна.
+     Таймер гасит себя сам по признаку «моего элемента больше нет на
+     странице» — приём тот же, что у плеера визуализатора, и он переживает
+     любой уход с экрана, включая тот, о котором мы не подумали. */
+  var clk = document.getElementById("examclock");
+  if (clk && algoBack && algoBack.clock){
+    var tickClock = function(){
+      if (!document.body.contains(clk)) return clearInterval(clockId);
+      var c = (algoBack && algoBack.clock) ? algoBack.clock() : null;
+      if (!c) return clearInterval(clockId);
+      clk.textContent = "⏱ " + c.text;
+      clk.classList.toggle("soon", !!c.soon);
+      if (c.over){ clearInterval(clockId); algoBack.go(); }
+    };
+    var clockId = setInterval(tickClock, 1000);
+    tickClock();
+  }
   /* ⚠️ Дорога назад берётся у контекста ЖИВЫМ вызовом, а не запоминается
      сейчас: пока задача открыта, ребёнок мог уйти и вернуться другим путём. */
   app.querySelectorAll("[data-go]").forEach(function(b){
@@ -7153,8 +7188,28 @@ function openAlgo(id){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* ---- ответ, сданный в режиме экзамена ----
+   ⚠️ Сообщение здесь ОДНО И ТО ЖЕ при верном и при неверном ответе, и класс
+   у него один. Иначе режим экзамена противоречит сам себе: ребёнок сдаёт что
+   попало и читает вердикт по цвету рамки — а вся ценность режима ровно в том,
+   что до конца никто не говорит, попал ты или нет. По этой же причине здесь
+   нет ни карточки победы, ни отметки в общем списке решённых: и то и другое
+   рассказало бы правду раньше времени. Отметку ставит вариант, когда
+   закрывается (js/variant.js, closeExam).
+   ⚠️ А вот ошибку в самой программе прячь не смей: NameError и опечатку
+   показывает и настоящий Python на настоящем экзамене. Это не вердикт. */
+function examSend(ok){
+  if (algoBack && algoBack.onSend) algoBack.onSend(!!ok);
+  markActiveToday(); save(); refreshTop();
+}
+var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
+  "когда выйдет время или ты нажмёшь «Завершить». Здесь этого не говорят: " +
+  "на экзамене тоже не говорят. Переписать и сдать заново, пока идёт время, можно — " +
+  "считается последний ответ.";
+
 function runAlgoCheck(x, ed, showMsg){
   session.attempts++;
+  var exam = !!(algoBack && algoBack.exam);
   var eng = Runtime.get("mini"), code = ed.getCode();
   var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (x.stdin || []);
 
@@ -7189,7 +7244,14 @@ function runAlgoCheck(x, ed, showMsg){
   }
 
   var res = eng.run(code, { stdin: stdin.slice() });
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+  /* ⚠️ Ошибку в самой программе показываем и на экзамене: опечатку и NameError
+     настоящий Python тоже показывает, это не вердикт. Но ответ при этом всё
+     равно считается сданным — иначе «сдал программу с ошибкой» не попало бы в
+     итог вовсе, и вариант посчитал бы номер просто неоткрытым. */
+  if (res.error){
+    if (exam) examSend(false);
+    ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return;
+  }
 
   var problem = null;
   if (x.check.kind === "tests"){
@@ -7199,7 +7261,10 @@ function runAlgoCheck(x, ed, showMsg){
     if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
       problem = diffBlock(exp, got);
   }
-  if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+  if (problem){
+    if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+    showMsg("bad", "<b>Ещё не то</b>" + problem); return;
+  }
 
   /* ===== скрытые наборы данных =====
      Без них задачу «сколько подходящих» можно сдать строкой print(3): вывод
@@ -7212,6 +7277,7 @@ function runAlgoCheck(x, ed, showMsg){
       var din = x.sets[si].slice();
       var hres = eng.run(code, { stdin: din.slice() });
       if (hres.error){
+        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
         ed.setError(hres.error.line);
         showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
           "а на другом наборе упала. Вход был:<pre>" + esc(din.join("\n")) + "</pre>" +
@@ -7220,6 +7286,7 @@ function runAlgoCheck(x, ed, showMsg){
       }
       var hexp = eng.run(x.solution, { stdin: din.slice() }).lines, hgot = hres.lines;
       if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
+        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
         showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
           "но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
           "Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot));
@@ -7233,12 +7300,14 @@ function runAlgoCheck(x, ed, showMsg){
   if (x.budget){
     var cost = res.steps || 0;
     if (cost > x.budget){
+      if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
       showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
         "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
         "дело не в скорости компьютера, а в плане работы.");
       return;
     }
   }
+  if (exam){ examSend(true); showMsg("info", EXAM_SENT_MSG); return; }
   winAlgo(x, res);
 }
 
@@ -10138,6 +10207,11 @@ var VARIANT = KVSCREENS.variant({
   app: app, esc: esc, plural: plural, qm: qm,
   enterScreen: enterScreen, refreshTop: refreshTop,
   algoList: algoList, algoById: algoById,
+  /* ⚠️ algoMark отдан варианту ради одного места: экзамен переносит решённое в
+     общий список НЕ по ходу дела, а разом при закрытии (js/variant.js,
+     closeExam). Во время экзамена галочка «решено» на экране «Алгоритмы» —
+     это вердикт, о котором режим экзамена молчит. */
+  algoMark: algoMark,
   openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
   screenTrain: function(){ screenTrain(); },
   variantGet: function(){ return S.variant || {}; },
@@ -14044,6 +14118,12 @@ function screenAbout(){
         'где ещё нет, а где не будет никогда — и почему.</li>' +
         '<li><b>Пробный вариант целиком.</b> Весь экзамен подряд, по одной задаче на ' +
         'номер, как в мае. В конце — сколько номеров закрыто и на каких просело.</li>' +
+        /* ⚠️ Про режим экзамена родителю важно ровно одно: что проверка молчит.
+           Именно этого нет у тренажёров, где после каждой задачи говорят «верно»,
+           и именно этим май отличается от подготовки. */
+        '<li><b>И режим экзамена.</b> То же самое, но со временем, без подсказок и ' +
+        'без ответа проверки: она записывает ответ, а верно или нет — видно только ' +
+        'в итоге. Как в мае, где тоже никто не говорит «неверно, попробуй ещё».</li>' +
         '<li><b>Исполнитель «Робот» с русскими командами.</b> Это второе задание ОГЭ ' +
         'по выбору — то самое, где в школе дают КуМир и где Python не примут.</li>' +
         /* ⚠️ Граница стоит ВНУТРИ раздела, а не в общем списке границ внизу:
@@ -17607,12 +17687,23 @@ var HELP = {
     '<p>Раздел «Алгоритмы, ОГЭ и ЕГЭ» разложен по темам: сегодня графы, завтра циклы. ' +
     'Экзамен устроен не так — там задания идут <b>подряд, по номерам</b>, и каждое про своё. ' +
     'Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>' +
+    '<h4>Два режима, и выбирают их при сборке</h4>' +
+    '<ul><li><b>Тренировка</b> — подсказки на месте, проверка объясняет, что не сошлось, ' +
+    'времени сколько угодно. С этого стоит начинать.</li>' +
+    '<li><b>Экзамен</b> — идёт время, подсказок нет, и проверка молчит: она записывает ответ, ' +
+    'а верно или нет, видно только в итоге. Запускать свою программу при этом можно ' +
+    'сколько угодно — за компьютером на экзамене тоже можно.</li></ul>' +
+    '<p>Время экзамена выбираешь ты: 30, 60 или 90 минут. ⚠️ Это наша мерка, а не ' +
+    'экзаменационная: длительность настоящего экзамена объявляет тот, кто его проводит, ' +
+    'и набор заданий у нас другой — только та часть, где надо написать программу.</p>' +
     '<h4>Что делать</h4>' +
     '<ul><li>Жми <b>«Решать»</b> в любой строке — откроется обычный экран задачи, ' +
     'с подсказками и проверкой. Решил — вернёшься в вариант сам.</li>' +
-    '<li>Порядок свободный, и торопиться некуда: вариант сохраняется. Можно решить три ' +
-    'номера сегодня и вернуться завтра.</li>' +
-    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело.</li></ul>' +
+    '<li>Порядок свободный, и в тренировке торопиться некуда: вариант сохраняется. Можно ' +
+    'решить три номера сегодня и вернуться завтра.</li>' +
+    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело. ' +
+    'На экзамене та же кнопка называется <b>«Завершить»</b> и заканчивает заход: ' +
+    'переиграть его нельзя, а разобрать нерешённое — можно, уже с подсказками.</li></ul>' +
     '<h4>Как читать строки</h4>' +
     '<ul><li><b>Номер и тема</b> — как в демоверсии своего года, ниже наша задача на этот номер.</li>' +
     '<li><b>«повтор темы»</b> значит, что задач по ней у нас пока меньше, чем номеров. ' +

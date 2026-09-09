@@ -846,7 +846,16 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .msg.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
 .msg.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
 .msg.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
+/* Нейтральная плашка режима экзамена. ⚠️ Она обязана быть НИ зелёной, ни
+   красной: одно и то же сообщение показывается и на верный, и на неверный
+   ответ, и цвет выдал бы то, о чём молчат слова. */
+.msg.info{background:var(--sunk2);border:1px solid var(--line);color:var(--ink)}
 .msg b{display:block;margin-bottom:4px;font-size:15px}
+/* Часы экзамена: в шапке задачи и на экране варианта. Последние пять минут —
+   тревожным цветом: «осталось 4:12» мелким серым не читается вовсе. */
+.examclock{display:inline-block;font-family:'JetBrains Mono';font-size:15px;font-weight:600;
+  background:var(--sunk2);border:1px solid var(--line);border-radius:11px;padding:6px 11px}
+.examclock.soon{background:var(--badbg);border-color:var(--badline);color:var(--badink)}
 .msg .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-family:'JetBrains Mono';font-size:12.5px}
 .msg .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .msg .cmp u{display:block;text-decoration:none;font-family:'Inter';font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
@@ -18826,10 +18835,37 @@ function buildItems(exId, seed){
   });
 }
 
-function makeVariant(exId){
+ 
+var EXAM_MINS = [30, 60, 90];
+
+ 
+function makeVariant(exId, mins){
   var seed = newSeed();
-  return { ex: exId, seed: seed, at: Date.now(), endAt: 0,
-           items: buildItems(exId, seed), done: {}, seen: {} };
+  var m = EXAM_MINS.indexOf(mins) >= 0 ? mins : 0;
+  var now = Date.now();
+  return { ex: exId, seed: seed, at: now, mins: m,
+           endAt: m ? now + m * 60000 : 0, closed: 0,
+           items: buildItems(exId, seed), done: {}, seen: {}, sent: {} };
+}
+
+ 
+function isExam(v){ return !!(v && v.mins); }
+function msLeft(v){ return isExam(v) ? Math.max(0, (v.endAt || 0) - Date.now()) : 0; }
+function over(v){ return isExam(v) && (!!v.closed || msLeft(v) <= 0); }
+ 
+function clockOf(v){
+  var ms = msLeft(v), sec = Math.ceil(ms / 1000);
+  var mm = Math.floor(sec / 60), ss = sec % 60;
+  return { text: mm + ":" + (ss < 10 ? "0" : "") + ss,
+           soon: ms > 0 && ms <= 5 * 60000, over: over(v) };
+}
+ 
+function closeExam(v){
+  if (!isExam(v) || v.closed) return v;
+  v.closed = 1;
+  put(v);
+  v.items.forEach(function(x){ if (x.id && v.done[x.n]) A.algoMark(x.id); });
+  return v;
 }
  
 function all(){
@@ -18857,12 +18893,22 @@ function put(v){
   A.variantSet(box);
 }
  
+function drop(exId){
+  var box = all();
+  delete box[exId];
+  A.variantSet(box);
+}
+ 
 function tally(v){
-  var t = { total: v.items.length, able: 0, done: 0, tried: 0, left: 0, dup: 0, weak: [] };
+   
+  var sent = v.sent || {};
+  var t = { total: v.items.length, able: 0, done: 0, tried: 0, left: 0, dup: 0,
+            sent: 0, weak: [] };
   v.items.forEach(function(x){
     if (x.dup) t.dup++;
     if (!x.id) return;
     t.able++;
+    if (sent[x.n]) t.sent++;
     if (v.done[x.n]) { t.done++; return; }
     if (v.seen[x.n]) { t.tried++; t.weak.push(x.n); }
     else t.left++;
@@ -18899,10 +18945,17 @@ function wireTabs(){
 
  
 function rowHTML(v, x, task){
-  var st, right;
+  var st, right, molchim = isExam(v) && !over(v);
   if (!x.id){
     st = "no";
     right = '<span class="exwhy">' + A.esc(x.why) + '</span>';
+  } else if (molchim){
+    var sent = !!(v.sent || {})[x.n];
+    st = sent ? "part" : (v.seen[x.n] ? "part" : "soon");
+    right = (sent ? '<span class="excnt">ответ записан</span>'
+                  : v.seen[x.n] ? '<span class="excnt">открывал</span>' : "") +
+      '<button class="rbtn ' + (sent ? "sec" : "check") + '" data-vgo="' + x.n + '">' +
+      (sent ? "Переписать" : "Решать") + '</button>';
   } else if (v.done[x.n]){
     st = "yes";
     right = '<span class="excnt">решено ✓</span>' +
@@ -18911,7 +18964,8 @@ function rowHTML(v, x, task){
     st = v.seen[x.n] ? "part" : "soon";
     right = (v.seen[x.n] ? '<span class="excnt">начато</span>' : "") +
       (x.why ? '<span class="exwhy">' + A.esc(x.why) + '</span>' : "") +
-      '<button class="rbtn ' + (v.seen[x.n] ? "sec" : "check") + '" data-vgo="' + x.n + '">Решать</button>';
+      '<button class="rbtn ' + (v.seen[x.n] ? "sec" : "check") + '" data-vgo="' + x.n + '">' +
+      (isExam(v) ? "Разобрать" : "Решать") + '</button>';
   }
   return '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
     '<span class="ext">' + A.esc(x.t) +
@@ -18922,30 +18976,41 @@ function rowHTML(v, x, task){
 }
 
  
-function startVariant(exId){
+function startVariant(exId, mins){
   tab = exId;
   var v = cur(exId);
   if (v){
     var t = tally(v);
-    if (t.done + t.tried > 0){
+     
+    if (t.done + t.tried > 0 || (isExam(v) && !over(v))){
       var ex = examById(exId), yes = true;
+      var c = clockOf(v);
        
       try {
-        yes = confirm("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
-          t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
-          "останутся решёнными в разделе «Алгоритмы».");
+        yes = confirm(isExam(v) && !over(v)
+          ? ("Сейчас ИДЁТ экзамен " + ex.title + " № " + v.seed + ", осталось " + c.text +
+             ", ответов сдано " + t.sent + " из " + t.able + ". Собрать новый вариант? " +
+             "Этот заход закончится прямо сейчас и вернуть его будет нельзя.")
+          : ("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
+             t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
+             "останутся решёнными в разделе «Алгоритмы»."));
       } catch(e){}
       if (!yes) return screenVariant();
+       
+      closeExam(v);
     }
   }
-  put(makeVariant(exId));
+   
+  if (typeof mins !== "number"){ drop(exId); return screenPick(); }
+  put(makeVariant(exId, mins));
   screenVariant();
 }
  
 function openFor(exId){
   tab = exId;
   if (cur(exId)) return screenVariant();
-  startVariant(exId);
+   
+  screenPick();
 }
 
  
@@ -18978,13 +19043,37 @@ function screenPick(){
   h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
     '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
     'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
-    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать вариант</button></div></div>';
+    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать тренировку</button></div>' +
+    '<p class="dim">Подсказки на месте, проверка объясняет, что не сошлось, времени сколько угодно.</p>' +
+    '</div>';
+
+   
+  h += '<div class="card"><h3>⏱ Режим экзамена</h3>' +
+    '<p>То же самое, но по-настоящему: <b>идёт время</b>, <b>подсказок нет</b>, и ' +
+    '<b>проверка молчит</b> — ответ записывается, а верно или нет, ты узнаёшь в итоге. ' +
+    'Запускать свою программу можно сколько угодно: за компьютером на экзамене тоже можно.</p>' +
+    '<ul class="trrules">' +
+    '<li><b>Время выбираешь ты.</b> Это наша мерка, а не экзаменационная: длительность ' +
+    'настоящего экзамена объявляет тот, кто его проводит, и у нас другой набор заданий — ' +
+    'только та часть, где надо написать программу.</li>' +
+    '<li><b>Заход один.</b> Время вышло — вариант закрыт, и переиграть его нельзя. ' +
+    'Разобрать нерешённое после этого можно: там уже и подсказки, и объяснение.</li>' +
+    '<li><b>Ответ можно переписать,</b> пока идёт время: считается последний.</li>' +
+    '</ul>' +
+    '<div class="admrow">' +
+    EXAM_MINS.map(function(m){
+      return '<button class="bigbtn ghost" data-vexam="' + m + '">' + m + ' минут</button>';
+    }).join('<span class="sp"></span>') +
+    '</div></div>';
 
   h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
-    b.onclick = function(){ startVariant(b.getAttribute("data-vnew")); };
+    b.onclick = function(){ startVariant(b.getAttribute("data-vnew"), 0); };
+  });
+  A.app.querySelectorAll("[data-vexam]").forEach(function(b){
+    b.onclick = function(){ startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10)); };
   });
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
@@ -18995,23 +19084,40 @@ function screenPick(){
 function screenVariant(){
   var v = cur();
   if (!v) return screenPick();
+   
+  if (isExam(v) && !v.closed && msLeft(v) <= 0){ closeExam(v); return screenVariantDone(); }
+  if (isExam(v) && v.closed) return screenVariantDone();
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
-  var ex = examById(v.ex), t = tally(v);
+  var ex = examById(v.ex), t = tally(v), exam = isExam(v), c = clockOf(v);
 
-  var h = '<div class="lvlhead"><div><div class="idx">пробный вариант · ' + A.esc(ex.full) + '</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">' +
+    (exam ? 'экзамен · ' : 'пробный вариант · ') + A.esc(ex.full) + '</div>' +
     '<h1>📝 Вариант № ' + A.esc(v.seed) + '</h1></div>' +
-    '<div class="right"><span class="tag">' + t.done + ' из ' + t.able + '</span>' +
+    '<div class="right">' +
+    (exam
+      ? '<span class="examclock' + (c.soon ? ' soon' : '') + '" id="vclock">⏱ ' + c.text + '</span>'
+      : '<span class="tag">' + t.done + ' из ' + t.able + '</span>') +
     A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
     tabsHTML() +
-    '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
-    'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
-    'это тренировка, а не контрольная.</p>' +
-    '<div class="extally">' +
-      '<span class="exok">✓ решено: ' + t.done + '</span>' +
-      '<span class="expart">◐ начато: ' + t.tried + '</span>' +
-      '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
-      '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>';
+    (exam
+      ? '<p class="lede">Идёт экзамен. Задания по номерам, решать можно в любом порядке. ' +
+        'Подсказок нет, и проверка не говорит, верно ли: она записывает ответ, а итог ' +
+        'покажет всё сразу — когда выйдет время или ты нажмёшь «Завершить».</p>'
+      : '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
+        'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
+        'это тренировка, а не контрольная.</p>') +
+     
+    (exam
+      ? '<div class="extally">' +
+        '<span class="expart">✎ ответ записан: ' + t.sent + '</span>' +
+        '<span class="exsoon">◻ осталось: ' + (t.able - t.sent) + '</span>' +
+        '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>'
+      : '<div class="extally">' +
+        '<span class="exok">✓ решено: ' + t.done + '</span>' +
+        '<span class="expart">◐ начато: ' + t.tried + '</span>' +
+        '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
+        '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>');
 
   h += '<div class="exmap">';
   v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
@@ -19030,7 +19136,8 @@ function screenVariant(){
       'которая в этом варианте уже встречалась: задач по этой теме у нас пока меньше, чем ' +
       'номеров. Так и должно быть видно — это наш список дел, а не твоя ошибка.</div>';
 
-  h += '<div class="pager"><button class="bigbtn" id="vdone">Показать итог</button>' +
+  h += '<div class="pager"><button class="bigbtn" id="vdone">' +
+    (exam ? 'Завершить и показать итог' : 'Показать итог') + '</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="vnew">Собрать другой вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
@@ -19039,7 +19146,29 @@ function screenVariant(){
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
-  document.getElementById("vdone").onclick = screenVariantDone;
+   
+  document.getElementById("vdone").onclick = exam
+    ? function(){
+        var yes = true;
+        try {
+          yes = confirm("Завершить экзамен? Осталось " + clockOf(v).text +
+            ". После этого сдать ответ будет нельзя, а итог покажет, что вышло.");
+        } catch(e){}
+        if (!yes) return;
+        closeExam(v); screenVariantDone();
+      }
+    : screenVariantDone;
+   
+  if (exam){
+    var el = document.getElementById("vclock");
+    var id = setInterval(function(){
+      if (!el || !document.body.contains(el)) return clearInterval(id);
+      var k = clockOf(v);
+      el.textContent = "⏱ " + k.text;
+      el.classList.toggle("soon", !!k.soon);
+      if (k.over){ clearInterval(id); closeExam(v); screenVariantDone(); }
+    }, 1000);
+  }
    
   document.getElementById("vnew").onclick = function(){ startVariant(v.ex); };
   document.getElementById("tovtrain").onclick = A.screenTrain;
@@ -19051,20 +19180,39 @@ function screenVariant(){
 function openItem(n){
   var v = cur();
   if (!v) return screenPick();
+   
+  if (isExam(v) && !v.closed && msLeft(v) <= 0){ closeExam(v); return screenVariantDone(); }
   var x = itemOf(v, n);
   if (!x || !x.id) return screenVariant();
-  var ex = v.ex;
+  var ex = v.ex, exam = isExam(v) && !v.closed;
   v.seen[n] = 1;
   put(v);
   A.setAlgoBack({
-    crumb: "Вариант № " + v.seed,
-    backLabel: "В вариант",
-    winLabel: "← Вернуться в вариант",
+    crumb: (exam ? "Экзамен № " : "Вариант № ") + v.seed,
+    backLabel: exam ? "В экзамен" : "В вариант",
+    winLabel: exam ? "← Вернуться в экзамен" : "← Вернуться в вариант",
     go: screenVariant,
+     
+    exam: exam,
+    clock: exam ? function(){
+      var w = cur(ex);
+      return w ? clockOf(w) : { text: "0:00", soon: false, over: true };
+    } : null,
+     
+    onSend: exam ? function(ok){
+      var w = cur(ex);
+      if (!w || over(w)) return;
+      w.sent = w.sent || {};
+      w.sent[n] = 1;
+      if (ok) w.done[n] = 1; else delete w.done[n];
+      put(w);
+    } : null,
     onWin: function(){
        
       var w = cur(ex);
       if (!w) return;
+       
+      if (isExam(w) && (w.closed || msLeft(w) <= 0)) return;
        
       w.done[n] = 1;
       put(w);
@@ -19077,6 +19225,8 @@ function openItem(n){
 function screenVariantDone(){
   var v = cur();
   if (!v) return screenPick();
+   
+  if (isExam(v)) closeExam(v);
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
   var ex = examById(v.ex), t = tally(v);
@@ -19109,6 +19259,16 @@ function screenVariantDone(){
     '</div>';
 
    
+  if (isExam(v))
+    h += '<div class="card"><h3>⏱ Заход окончен</h3>' +
+      '<p>Это был экзамен на <b>' + v.mins + ' ' + A.plural(v.mins, "минуту", "минуты", "минут") +
+      '</b>: без подсказок и без ответа проверки. Ответов сдано <b>' + t.sent + '</b> из <b>' +
+      t.able + '</b>, из них засчитано <b>' + t.done + '</b>.</p>' +
+      '<p class="dim">Переиграть этот заход нельзя — в этом и был смысл. А вот разобрать то, ' +
+      'что не вышло, можно прямо сейчас: задачи ниже открываются как обычно, с подсказками ' +
+      'и с объяснением. На итог этого захода разбор уже не влияет.</p></div>';
+
+   
   h += '<div class="card"><h3>⚖️ Почему тут нет баллов</h3>' +
     '<p>Шкала перевода в экзаменационные баллы меняется каждый год, и она не наша: ' +
     'её объявляет тот, кто проводит экзамен. Назвать число, которого мы не знаем, ' +
@@ -19125,14 +19285,18 @@ function screenVariantDone(){
     h += '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn" id="vback">← Вернуться в вариант</button>' +
+   
+  h += '<div class="pager"><button class="bigbtn" id="vback">' +
+    (isExam(v) ? 'Собрать новый вариант' : '← Вернуться в вариант') + '</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
-  document.getElementById("vback").onclick = screenVariant;
+  document.getElementById("vback").onclick = isExam(v)
+    ? function(){ drop(v.ex); screenPick(); }
+    : screenVariant;
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -19145,7 +19309,13 @@ function variantStat(){
     var v = cur(id);
     if (!v) return;
     var t = tally(v);
-    parts.push(examById(id).title + ": решено " + t.done + " из " + t.able);
+     
+    parts.push(examById(id).title + ": " +
+      (isExam(v) && !over(v)
+        ? "идёт экзамен, осталось " + clockOf(v).text
+        : isExam(v)
+          ? "экзамен окончен, засчитано " + t.done + " из " + t.able
+          : "решено " + t.done + " из " + t.able));
   });
   return parts.join(" · ");
 }
@@ -26429,7 +26599,7 @@ function trainCards(){
       })() },
      
     { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
-      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. В конце видно, какие номера закрыты, а какие просели.",
+      why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. Можно тренировкой, а можно в режиме экзамена — со временем, без подсказок и без ответа проверки.",
       when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
       stat: variantStat() },
     { id:"algo", em:"🧮", title:"Алгоритмы, ОГЭ и ЕГЭ", go: screenAlgo,
@@ -29297,12 +29467,16 @@ function openAlgo(id){
   if (capHard()) return screenCapReached();
   enterScreen("train", "algoone");
   session = { id:id, attempts:0, hints:0, shown:false, algo:true };
+   
+  var exam = !!(algoBack && algoBack.exam);
 
   var h = '<div class="crumbs"><span data-go="back">' +
     esc(algoBack ? algoBack.crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
     '<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
     '<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
+    (exam
+      ? '<div class="right"><span class="examclock" id="examclock">⏱</span></div></div>'
+      : '<div class="right"><span class="tag">звёзд не даёт</span></div></div>') +
     '<p class="lede">' + esc(x.intro) + '</p>' +
     '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
     x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
@@ -29314,8 +29488,12 @@ function openAlgo(id){
       : '') + '</div>';
 
   h += '<div id="studio"></div>' +
-    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>' +
+     
+    (exam
+      ? '<div class="hintbox"><span class="tip">режим экзамена: подсказок нет, ' +
+        'а верно ли решено — скажет итог варианта, а не эта страница</span></div>'
+      : '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+        '<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>') +
     '<div class="hintout" id="hintout"></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
       esc(algoBack ? algoBack.backLabel : "Ко всем задачам") + '</button></div>';
@@ -29339,7 +29517,21 @@ function openAlgo(id){
   if (d) draftApply(studio.editor, d.files);
   studio.editor.onEdit = draftSchedule;
 
-  wireHint(x.hints);
+  if (!exam) wireHint(x.hints);
+   
+  var clk = document.getElementById("examclock");
+  if (clk && algoBack && algoBack.clock){
+    var tickClock = function(){
+      if (!document.body.contains(clk)) return clearInterval(clockId);
+      var c = (algoBack && algoBack.clock) ? algoBack.clock() : null;
+      if (!c) return clearInterval(clockId);
+      clk.textContent = "⏱ " + c.text;
+      clk.classList.toggle("soon", !!c.soon);
+      if (c.over){ clearInterval(clockId); algoBack.go(); }
+    };
+    var clockId = setInterval(tickClock, 1000);
+    tickClock();
+  }
    
   app.querySelectorAll("[data-go]").forEach(function(b){
     b.onclick = function(){ return algoBack ? algoBack.go() : screenAlgo(); };
@@ -29348,8 +29540,19 @@ function openAlgo(id){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+ 
+function examSend(ok){
+  if (algoBack && algoBack.onSend) algoBack.onSend(!!ok);
+  markActiveToday(); save(); refreshTop();
+}
+var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
+  "когда выйдет время или ты нажмёшь «Завершить». Здесь этого не говорят: " +
+  "на экзамене тоже не говорят. Переписать и сдать заново, пока идёт время, можно — " +
+  "считается последний ответ.";
+
 function runAlgoCheck(x, ed, showMsg){
   session.attempts++;
+  var exam = !!(algoBack && algoBack.exam);
   var eng = Runtime.get("mini"), code = ed.getCode();
   var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (x.stdin || []);
 
@@ -29380,7 +29583,11 @@ function runAlgoCheck(x, ed, showMsg){
   }
 
   var res = eng.run(code, { stdin: stdin.slice() });
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
+   
+  if (res.error){
+    if (exam) examSend(false);
+    ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return;
+  }
 
   var problem = null;
   if (x.check.kind === "tests"){
@@ -29390,7 +29597,10 @@ function runAlgoCheck(x, ed, showMsg){
     if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
       problem = diffBlock(exp, got);
   }
-  if (problem){ showMsg("bad", "<b>Ещё не то</b>" + problem); return; }
+  if (problem){
+    if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+    showMsg("bad", "<b>Ещё не то</b>" + problem); return;
+  }
 
    
   if (x.sets && x.sets.length){
@@ -29398,6 +29608,7 @@ function runAlgoCheck(x, ed, showMsg){
       var din = x.sets[si].slice();
       var hres = eng.run(code, { stdin: din.slice() });
       if (hres.error){
+        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
         ed.setError(hres.error.line);
         showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
           "а на другом наборе упала. Вход был:<pre>" + esc(din.join("\n")) + "</pre>" +
@@ -29406,6 +29617,7 @@ function runAlgoCheck(x, ed, showMsg){
       }
       var hexp = eng.run(x.solution, { stdin: din.slice() }).lines, hgot = hres.lines;
       if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
+        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
         showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
           "но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
           "Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot));
@@ -29418,12 +29630,14 @@ function runAlgoCheck(x, ed, showMsg){
   if (x.budget){
     var cost = res.steps || 0;
     if (cost > x.budget){
+      if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
       showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
         "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
         "дело не в скорости компьютера, а в плане работы.");
       return;
     }
   }
+  if (exam){ examSend(true); showMsg("info", EXAM_SENT_MSG); return; }
   winAlgo(x, res);
 }
 
@@ -31990,6 +32204,8 @@ var VARIANT = KVSCREENS.variant({
   app: app, esc: esc, plural: plural, qm: qm,
   enterScreen: enterScreen, refreshTop: refreshTop,
   algoList: algoList, algoById: algoById,
+   
+  algoMark: algoMark,
   openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
   screenTrain: function(){ screenTrain(); },
   variantGet: function(){ return S.variant || {}; },
@@ -35120,6 +35336,10 @@ function screenAbout(){
         'где ещё нет, а где не будет никогда — и почему.</li>' +
         '<li><b>Пробный вариант целиком.</b> Весь экзамен подряд, по одной задаче на ' +
         'номер, как в мае. В конце — сколько номеров закрыто и на каких просело.</li>' +
+         
+        '<li><b>И режим экзамена.</b> То же самое, но со временем, без подсказок и ' +
+        'без ответа проверки: она записывает ответ, а верно или нет — видно только ' +
+        'в итоге. Как в мае, где тоже никто не говорит «неверно, попробуй ещё».</li>' +
         '<li><b>Исполнитель «Робот» с русскими командами.</b> Это второе задание ОГЭ ' +
         'по выбору — то самое, где в школе дают КуМир и где Python не примут.</li>' +
          
@@ -38128,12 +38348,23 @@ var HELP = {
     '<p>Раздел «Алгоритмы, ОГЭ и ЕГЭ» разложен по темам: сегодня графы, завтра циклы. ' +
     'Экзамен устроен не так — там задания идут <b>подряд, по номерам</b>, и каждое про своё. ' +
     'Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>' +
+    '<h4>Два режима, и выбирают их при сборке</h4>' +
+    '<ul><li><b>Тренировка</b> — подсказки на месте, проверка объясняет, что не сошлось, ' +
+    'времени сколько угодно. С этого стоит начинать.</li>' +
+    '<li><b>Экзамен</b> — идёт время, подсказок нет, и проверка молчит: она записывает ответ, ' +
+    'а верно или нет, видно только в итоге. Запускать свою программу при этом можно ' +
+    'сколько угодно — за компьютером на экзамене тоже можно.</li></ul>' +
+    '<p>Время экзамена выбираешь ты: 30, 60 или 90 минут. ⚠️ Это наша мерка, а не ' +
+    'экзаменационная: длительность настоящего экзамена объявляет тот, кто его проводит, ' +
+    'и набор заданий у нас другой — только та часть, где надо написать программу.</p>' +
     '<h4>Что делать</h4>' +
     '<ul><li>Жми <b>«Решать»</b> в любой строке — откроется обычный экран задачи, ' +
     'с подсказками и проверкой. Решил — вернёшься в вариант сам.</li>' +
-    '<li>Порядок свободный, и торопиться некуда: вариант сохраняется. Можно решить три ' +
-    'номера сегодня и вернуться завтра.</li>' +
-    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело.</li></ul>' +
+    '<li>Порядок свободный, и в тренировке торопиться некуда: вариант сохраняется. Можно ' +
+    'решить три номера сегодня и вернуться завтра.</li>' +
+    '<li><b>«Показать итог»</b> внизу — сколько номеров закрыто и на каких просело. ' +
+    'На экзамене та же кнопка называется <b>«Завершить»</b> и заканчивает заход: ' +
+    'переиграть его нельзя, а разобрать нерешённое — можно, уже с подсказками.</li></ul>' +
     '<h4>Как читать строки</h4>' +
     '<ul><li><b>Номер и тема</b> — как в демоверсии своего года, ниже наша задача на этот номер.</li>' +
     '<li><b>«повтор темы»</b> значит, что задач по ней у нас пока меньше, чем номеров. ' +

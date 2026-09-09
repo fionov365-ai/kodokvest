@@ -40,6 +40,35 @@
    историю. Поэтому S.algo (общий список решённых) здесь не спрашивается
    вовсе — он живёт своей жизнью и пополняется как обычно.
 
+   ⚠️ ДВА РЕЖИМА, и выбираются они ОДИН РАЗ, при сборке.
+     тренировка — как было: подсказки на месте, судья говорит «ещё не то» и
+       показывает, чем твой вывод отличается от нужного, решать можно днями;
+     экзамен — таймер на выбранное время, подсказок нет, и судья МОЛЧИТ до
+       конца: ответ записан, а верно или нет — скажет итог.
+   Переключателя между режимами нет и не будет: экзамен, который посреди
+   работы превращается в тренировку с подсказками, — это тренировка.
+
+   ⚠️ ПРО ВРЕМЯ. Мы НЕ пишем «столько же, сколько на настоящем экзамене».
+   Во-первых, длительность объявляет тот, кто проводит экзамен, и она может
+   поменяться (то же правило, что с нумерацией заданий). Во-вторых, у нас
+   другой набор: мы даём только ту часть, где надо написать программу.
+   Поэтому время выбирает человек — 30, 60 или 90 минут, — и рядом честно
+   написано, что это наша мерка, а не экзаменационная.
+
+   ⚠️ ПОЧЕМУ СУДЬЯ МОЛЧИТ. Это и есть главное отличие экзамена от тренировки,
+   и оно не про строгость. На настоящем экзамене никто не говорит «неверно,
+   попробуй ещё»: ты пишешь программу, гоняешь её сам и уносишь ответ. Наш
+   обычный судья показывает, чем вывод отличается от нужного, — это лучшая
+   подсказка в продукте, и на экзамене её быть не должно. Запускать свою
+   программу при этом можно сколько угодно: на экзамене за компьютером тоже
+   можно. Сдать ответ заново, пока идёт время, тоже можно — считается
+   последний, как последний записанный ответ в бланке.
+
+   ⚠️ И ОТДЕЛЬНО ПРО ОБЩИЙ СПИСОК РЕШЁННЫХ. Пока идёт экзамен, S.algo не
+   трогается вовсе: галочка «решено» на экране «Алгоритмы» — это тот самый
+   вердикт, о котором мы молчим, и добраться до неё две секунды. Всё решённое
+   переносится туда разом, когда вариант закрывается (closeExam).
+
    Договор с app.js — в шапке js/screens-showcase.js. Отсюда наружу торчит
    один экран и одна справка о его состоянии.
    ============================================================ */
@@ -103,10 +132,45 @@ function buildItems(exId, seed){
   });
 }
 
-function makeVariant(exId){
+/* Сколько минут можно взять на экзамен. Три значения, а не поле ввода: выбор
+   из трёх делается за секунду, а поле требует решения, которого у ребёнка
+   нет. Те же три ступени, что у длины занятия у взрослого. */
+var EXAM_MINS = [30, 60, 90];
+
+/* mins === 0 — тренировка (как было). Любое из EXAM_MINS — экзамен. */
+function makeVariant(exId, mins){
   var seed = newSeed();
-  return { ex: exId, seed: seed, at: Date.now(), endAt: 0,
-           items: buildItems(exId, seed), done: {}, seen: {} };
+  var m = EXAM_MINS.indexOf(mins) >= 0 ? mins : 0;
+  var now = Date.now();
+  return { ex: exId, seed: seed, at: now, mins: m,
+           endAt: m ? now + m * 60000 : 0, closed: 0,
+           items: buildItems(exId, seed), done: {}, seen: {}, sent: {} };
+}
+
+/* ---- режим и время ----
+   ⚠️ Конец экзамена хранится АБСОЛЮТНЫМ временем (endAt), а не остатком.
+   Остаток пришлось бы уменьшать самим, и он бы врал после каждой закрытой
+   вкладки: закрыл на десять минут — вернулся, а времени столько же. */
+function isExam(v){ return !!(v && v.mins); }
+function msLeft(v){ return isExam(v) ? Math.max(0, (v.endAt || 0) - Date.now()) : 0; }
+function over(v){ return isExam(v) && (!!v.closed || msLeft(v) <= 0); }
+/* Часы: М:СС, и последние пять минут помечаем — их надо видеть. */
+function clockOf(v){
+  var ms = msLeft(v), sec = Math.ceil(ms / 1000);
+  var mm = Math.floor(sec / 60), ss = sec % 60;
+  return { text: mm + ":" + (ss < 10 ? "0" : "") + ss,
+           soon: ms > 0 && ms <= 5 * 60000, over: over(v) };
+}
+/* Закрыть экзамен. ⚠️ Единственное место, где решённое на экзамене попадает в
+   общий список решённых: во время экзамена галочка «решено» на экране
+   «Алгоритмы» рассказала бы вердикт, о котором мы молчим. Закрытие идёт один
+   раз — по признаку closed, иначе повторный заход на итог отмечал бы заново. */
+function closeExam(v){
+  if (!isExam(v) || v.closed) return v;
+  v.closed = 1;
+  put(v);
+  v.items.forEach(function(x){ if (x.id && v.done[x.n]) A.algoMark(x.id); });
+  return v;
 }
 /* ---- где живут варианты ----
    ⚠️ Вариант хранится ПО ЭКЗАМЕНУ: { ege: …, oge: … }. Один слот на двоих
@@ -140,15 +204,31 @@ function put(v){
   box[v.ex] = v;
   A.variantSet(box);
 }
+/* Убрать вариант своего экзамена. Нужен ровно в одном месте: с итога
+   ЗАКРЫТОГО экзамена, где «собрать новый» обязано привести к выбору режима, а
+   выбор показывается, только когда варианта нет. ⚠️ Результат при этом не
+   теряется: решённое ушло в общий список ещё при закрытии (closeExam). */
+function drop(exId){
+  var box = all();
+  delete box[exId];
+  A.variantSet(box);
+}
 /* Свод по варианту. Считается, а не хранится, — по той же причине, по которой
    считается свод карты экзамена: хранимое число разойдётся с делом в первый
    же день. */
 function tally(v){
-  var t = { total: v.items.length, able: 0, done: 0, tried: 0, left: 0, dup: 0, weak: [] };
+  /* ⚠️ sent читается через запасной пустой объект: варианты, собранные до
+     появления режима экзамена, лежат у людей без этого поля, и обращение к
+     нему уронило бы им экран. Такие варианты — тренировочные, у них sent
+     пустой по смыслу. */
+  var sent = v.sent || {};
+  var t = { total: v.items.length, able: 0, done: 0, tried: 0, left: 0, dup: 0,
+            sent: 0, weak: [] };
   v.items.forEach(function(x){
     if (x.dup) t.dup++;
     if (!x.id) return;
     t.able++;
+    if (sent[x.n]) t.sent++;
     if (v.done[x.n]) { t.done++; return; }
     if (v.seen[x.n]) { t.tried++; t.weak.push(x.n); }
     else t.left++;
@@ -185,12 +265,23 @@ function wireTabs(){
   });
 }
 
-/* ---- строка варианта ---- */
+/* ---- строка варианта ----
+   ⚠️ На идущем экзамене строка не имеет права показывать «решено ✓»: это тот
+   самый вердикт, о котором молчит экран задачи. Видно только то, что ребёнок
+   и так знает про себя: сдавал он этот номер или нет. После закрытия
+   экзамена строка показывает правду — там она уже никому не подсказка. */
 function rowHTML(v, x, task){
-  var st, right;
+  var st, right, molchim = isExam(v) && !over(v);
   if (!x.id){
     st = "no";
     right = '<span class="exwhy">' + A.esc(x.why) + '</span>';
+  } else if (molchim){
+    var sent = !!(v.sent || {})[x.n];
+    st = sent ? "part" : (v.seen[x.n] ? "part" : "soon");
+    right = (sent ? '<span class="excnt">ответ записан</span>'
+                  : v.seen[x.n] ? '<span class="excnt">открывал</span>' : "") +
+      '<button class="rbtn ' + (sent ? "sec" : "check") + '" data-vgo="' + x.n + '">' +
+      (sent ? "Переписать" : "Решать") + '</button>';
   } else if (v.done[x.n]){
     st = "yes";
     right = '<span class="excnt">решено ✓</span>' +
@@ -199,7 +290,8 @@ function rowHTML(v, x, task){
     st = v.seen[x.n] ? "part" : "soon";
     right = (v.seen[x.n] ? '<span class="excnt">начато</span>' : "") +
       (x.why ? '<span class="exwhy">' + A.esc(x.why) + '</span>' : "") +
-      '<button class="rbtn ' + (v.seen[x.n] ? "sec" : "check") + '" data-vgo="' + x.n + '">Решать</button>';
+      '<button class="rbtn ' + (v.seen[x.n] ? "sec" : "check") + '" data-vgo="' + x.n + '">' +
+      (isExam(v) ? "Разобрать" : "Решать") + '</button>';
   }
   return '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
     '<span class="ext">' + A.esc(x.t) +
@@ -212,26 +304,42 @@ function rowHTML(v, x, task){
 /* Собрать новый вариант и открыть его. ⚠️ Единственное место, где вариант
    заводится: спросить «а не потеряется ли начатое» надо один раз и здесь,
    иначе кнопка на карте экзамена молча стёрла бы работу, начатую вчера. */
-function startVariant(exId){
+function startVariant(exId, mins){
   tab = exId;
   var v = cur(exId);
   if (v){
     var t = tally(v);
-    if (t.done + t.tried > 0){
+    /* ⚠️ Идущий экзамен спрашивает ВСЕГДА, даже если не сдано ещё ни одного
+       ответа: у него тикает время, и «собрать новый» тут значит бросить
+       начатый заход, а не переставить задачи. */
+    if (t.done + t.tried > 0 || (isExam(v) && !over(v))){
       var ex = examById(exId), yes = true;
+      var c = clockOf(v);
       /* Спрашиваем через try: окна подтверждения нет ни в проверках, ни в
          некоторых встроенных браузерах, и падать на этом сборке нельзя.
          ⚠️ Спрашиваем только про ТОТ ЖЕ экзамен: вариант соседнего лежит в
          своём ключе и пересборкой не задевается. */
       try {
-        yes = confirm("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
-          t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
-          "останутся решёнными в разделе «Алгоритмы».");
+        yes = confirm(isExam(v) && !over(v)
+          ? ("Сейчас ИДЁТ экзамен " + ex.title + " № " + v.seed + ", осталось " + c.text +
+             ", ответов сдано " + t.sent + " из " + t.able + ". Собрать новый вариант? " +
+             "Этот заход закончится прямо сейчас и вернуть его будет нельзя.")
+          : ("Сейчас идёт вариант " + ex.title + " № " + v.seed + ": решено " +
+             t.done + " из " + t.able + ". Собрать новый? Этот не сохранится — сами задачи " +
+             "останутся решёнными в разделе «Алгоритмы»."));
       } catch(e){}
       if (!yes) return screenVariant();
+      /* Брошенный экзамен всё равно закрывается по-честному: решённое в нём
+         переносится в общий список, а не пропадает вместе с вариантом. */
+      closeExam(v);
     }
   }
-  put(makeVariant(exId));
+  /* ⚠️ Время не названо — значит зовущий не выбрал режим за ребёнка. Тогда мы
+     не строим молча тренировку (это подменило бы экзамен на полпути), а
+     показываем выбор. Именно так работает «Собрать другой вариант» на экране
+     идущего варианта: сначала вопрос «какой», потом сборка. */
+  if (typeof mins !== "number"){ drop(exId); return screenPick(); }
+  put(makeVariant(exId, mins));
   screenVariant();
 }
 /* Дверь с карты экзамена: свой вариант этого экзамена открываем, а если его
@@ -239,7 +347,10 @@ function startVariant(exId){
 function openFor(exId){
   tab = exId;
   if (cur(exId)) return screenVariant();
-  startVariant(exId);
+  /* ⚠️ Раньше дверь молча собирала вариант. С двумя режимами так нельзя:
+     режим — это выбор ребёнка, и сделать его за него значит однажды бросить
+     новичка в экзамен с таймером. */
+  screenPick();
 }
 
 /* ---- экран: варианта этого экзамена ещё нет ----
@@ -274,13 +385,40 @@ function screenPick(){
   h += '<div class="card"><h3>' + ex.em + " " + A.esc(ex.full) + '</h3>' +
     '<p class="dim">' + ex.total + ' заданий по нумерации ' + ex.year + ' года. ' +
     'Задачи у нас есть на <b>' + able + '</b> из них.</p>' +
-    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать вариант</button></div></div>';
+    '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать тренировку</button></div>' +
+    '<p class="dim">Подсказки на месте, проверка объясняет, что не сошлось, времени сколько угодно.</p>' +
+    '</div>';
+
+  /* ---- второй режим ----
+     ⚠️ Он стоит ОТДЕЛЬНОЙ карточкой и ниже тренировки, а не переключателем
+     рядом с кнопкой. Экзамен — это не настройка сборки, это другой заход: у
+     него тикает время и молчит проверка, и выбирают его осознанно. */
+  h += '<div class="card"><h3>⏱ Режим экзамена</h3>' +
+    '<p>То же самое, но по-настоящему: <b>идёт время</b>, <b>подсказок нет</b>, и ' +
+    '<b>проверка молчит</b> — ответ записывается, а верно или нет, ты узнаёшь в итоге. ' +
+    'Запускать свою программу можно сколько угодно: за компьютером на экзамене тоже можно.</p>' +
+    '<ul class="trrules">' +
+    '<li><b>Время выбираешь ты.</b> Это наша мерка, а не экзаменационная: длительность ' +
+    'настоящего экзамена объявляет тот, кто его проводит, и у нас другой набор заданий — ' +
+    'только та часть, где надо написать программу.</li>' +
+    '<li><b>Заход один.</b> Время вышло — вариант закрыт, и переиграть его нельзя. ' +
+    'Разобрать нерешённое после этого можно: там уже и подсказки, и объяснение.</li>' +
+    '<li><b>Ответ можно переписать,</b> пока идёт время: считается последний.</li>' +
+    '</ul>' +
+    '<div class="admrow">' +
+    EXAM_MINS.map(function(m){
+      return '<button class="bigbtn ghost" data-vexam="' + m + '">' + m + ' минут</button>';
+    }).join('<span class="sp"></span>') +
+    '</div></div>';
 
   h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
-    b.onclick = function(){ startVariant(b.getAttribute("data-vnew")); };
+    b.onclick = function(){ startVariant(b.getAttribute("data-vnew"), 0); };
+  });
+  A.app.querySelectorAll("[data-vexam]").forEach(function(b){
+    b.onclick = function(){ startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10)); };
   });
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
@@ -291,23 +429,43 @@ function screenPick(){
 function screenVariant(){
   var v = cur();
   if (!v) return screenPick();
+  /* ⚠️ Время могло выйти, пока экран был закрыт. Проверяем это ПЕРВЫМ делом и
+     до отрисовки: показать идущий экзамен, который на самом деле кончился, —
+     значит дать сдать ответ задним числом. */
+  if (isExam(v) && !v.closed && msLeft(v) <= 0){ closeExam(v); return screenVariantDone(); }
+  if (isExam(v) && v.closed) return screenVariantDone();
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
-  var ex = examById(v.ex), t = tally(v);
+  var ex = examById(v.ex), t = tally(v), exam = isExam(v), c = clockOf(v);
 
-  var h = '<div class="lvlhead"><div><div class="idx">пробный вариант · ' + A.esc(ex.full) + '</div>' +
+  var h = '<div class="lvlhead"><div><div class="idx">' +
+    (exam ? 'экзамен · ' : 'пробный вариант · ') + A.esc(ex.full) + '</div>' +
     '<h1>📝 Вариант № ' + A.esc(v.seed) + '</h1></div>' +
-    '<div class="right"><span class="tag">' + t.done + ' из ' + t.able + '</span>' +
+    '<div class="right">' +
+    (exam
+      ? '<span class="examclock' + (c.soon ? ' soon' : '') + '" id="vclock">⏱ ' + c.text + '</span>'
+      : '<span class="tag">' + t.done + ' из ' + t.able + '</span>') +
     A.qm("variant", "Что такое пробный вариант") + '</div></div>' +
     tabsHTML() +
-    '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
-    'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
-    'это тренировка, а не контрольная.</p>' +
-    '<div class="extally">' +
-      '<span class="exok">✓ решено: ' + t.done + '</span>' +
-      '<span class="expart">◐ начато: ' + t.tried + '</span>' +
-      '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
-      '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>';
+    (exam
+      ? '<p class="lede">Идёт экзамен. Задания по номерам, решать можно в любом порядке. ' +
+        'Подсказок нет, и проверка не говорит, верно ли: она записывает ответ, а итог ' +
+        'покажет всё сразу — когда выйдет время или ты нажмёшь «Завершить».</p>'
+      : '<p class="lede">Задания идут по номерам, как на экзамене. Решать можно в любом порядке ' +
+        'и в любой день — сделанное сохраняется. Подсказки и проверка работают как обычно: ' +
+        'это тренировка, а не контрольная.</p>') +
+    /* ⚠️ На идущем экзамене свод не имеет права называть число решённых: это
+       и есть вердикт. Считаем только то, что ребёнок и так про себя знает. */
+    (exam
+      ? '<div class="extally">' +
+        '<span class="expart">✎ ответ записан: ' + t.sent + '</span>' +
+        '<span class="exsoon">◻ осталось: ' + (t.able - t.sent) + '</span>' +
+        '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>'
+      : '<div class="extally">' +
+        '<span class="exok">✓ решено: ' + t.done + '</span>' +
+        '<span class="expart">◐ начато: ' + t.tried + '</span>' +
+        '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
+        '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>');
 
   h += '<div class="exmap">';
   v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
@@ -329,7 +487,8 @@ function screenVariant(){
       'которая в этом варианте уже встречалась: задач по этой теме у нас пока меньше, чем ' +
       'номеров. Так и должно быть видно — это наш список дел, а не твоя ошибка.</div>';
 
-  h += '<div class="pager"><button class="bigbtn" id="vdone">Показать итог</button>' +
+  h += '<div class="pager"><button class="bigbtn" id="vdone">' +
+    (exam ? 'Завершить и показать итог' : 'Показать итог') + '</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="vnew">Собрать другой вариант</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
@@ -338,7 +497,34 @@ function screenVariant(){
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
-  document.getElementById("vdone").onclick = screenVariantDone;
+  /* ⚠️ У экзамена «Завершить» — действие без возврата, и спрашивать про него
+     обязательно: у тренировки та же кнопка просто показывает свод и ничего не
+     закрывает. Одна кнопка, два смысла — значит два разных вопроса. */
+  document.getElementById("vdone").onclick = exam
+    ? function(){
+        var yes = true;
+        try {
+          yes = confirm("Завершить экзамен? Осталось " + clockOf(v).text +
+            ". После этого сдать ответ будет нельзя, а итог покажет, что вышло.");
+        } catch(e){}
+        if (!yes) return;
+        closeExam(v); screenVariantDone();
+      }
+    : screenVariantDone;
+  /* ---- часы на экране варианта ----
+     Тот же самоубирающийся таймер, что и в задаче: гаснет, как только его
+     элемента не стало на странице. Дойдя до нуля — закрывает вариант сам,
+     а не ждёт, пока ребёнок куда-нибудь нажмёт. */
+  if (exam){
+    var el = document.getElementById("vclock");
+    var id = setInterval(function(){
+      if (!el || !document.body.contains(el)) return clearInterval(id);
+      var k = clockOf(v);
+      el.textContent = "⏱ " + k.text;
+      el.classList.toggle("soon", !!k.soon);
+      if (k.over){ clearInterval(id); closeExam(v); screenVariantDone(); }
+    }, 1000);
+  }
   /* ⚠️ Пересборка спрашивает подтверждения: она стирает сделанное в этом
      варианте, а кнопка стоит рядом с «Показать итог». Разница между ними на
      вид в одно слово, а по последствиям — во всё. */
@@ -355,21 +541,47 @@ function screenVariant(){
 function openItem(n){
   var v = cur();
   if (!v) return screenPick();
+  /* ⚠️ Время могло выйти, пока ребёнок смотрел на список. Пускать в задачу
+     после этого нельзя: ответ был бы сдан задним числом. */
+  if (isExam(v) && !v.closed && msLeft(v) <= 0){ closeExam(v); return screenVariantDone(); }
   var x = itemOf(v, n);
   if (!x || !x.id) return screenVariant();
-  var ex = v.ex;
+  var ex = v.ex, exam = isExam(v) && !v.closed;
   v.seen[n] = 1;
   put(v);
   A.setAlgoBack({
-    crumb: "Вариант № " + v.seed,
-    backLabel: "В вариант",
-    winLabel: "← Вернуться в вариант",
+    crumb: (exam ? "Экзамен № " : "Вариант № ") + v.seed,
+    backLabel: exam ? "В экзамен" : "В вариант",
+    winLabel: exam ? "← Вернуться в экзамен" : "← Вернуться в вариант",
     go: screenVariant,
+    /* Признак экзамена и часы — всё, что задача о нём знает. Сколько осталось,
+       она спрашивает живым вызовом: время идёт, пока она открыта. */
+    exam: exam,
+    clock: exam ? function(){
+      var w = cur(ex);
+      return w ? clockOf(w) : { text: "0:00", soon: false, over: true };
+    } : null,
+    /* Сданный ответ на экзамене. ⚠️ Записываем и ВЕРНЫЙ, и неверный, но
+       наружу не говорим ни слова — вердикт живёт только здесь, до итога.
+       Неверный ответ поверх верного СНИМАЕТ отметку: считается последний,
+       как последняя запись в бланке. */
+    onSend: exam ? function(ok){
+      var w = cur(ex);
+      if (!w || over(w)) return;
+      w.sent = w.sent || {};
+      w.sent[n] = 1;
+      if (ok) w.done[n] = 1; else delete w.done[n];
+      put(w);
+    } : null,
     onWin: function(){
       /* ⚠️ Вариант перечитывается ЗАНОВО и по своему экзамену: между открытием
          задачи и победой могло пройти полчаса, а вкладка — смениться. */
       var w = cur(ex);
       if (!w) return;
+      /* ⚠️ Закрытый экзамен итога не меняет. Решённое после времени — это
+         разбор, а не результат, и подмешивать его в итог значило бы врать в
+         единственном числе, ради которого весь режим и заведён. */
+      if (isExam(w) && (w.closed || msLeft(w) <= 0)) return;
       /* Единица, а не время: значение нигде не читается, а слияние двух
          устройств складывает именно множества ключей. */
       w.done[n] = 1;
@@ -383,6 +595,10 @@ function openItem(n){
 function screenVariantDone(){
   var v = cur();
   if (!v) return screenPick();
+  /* ⚠️ Итог экзамена и есть его конец: попасть сюда, не закрыв заход, нельзя.
+     Иначе «посмотрю итог и вернусь дорешивать» превращает экзамен в
+     тренировку с задержкой. */
+  if (isExam(v)) closeExam(v);
   A.enterScreen("train", "variant");
   A.setAlgoBack(null);
   var ex = examById(v.ex), t = tally(v);
@@ -418,6 +634,18 @@ function screenVariantDone(){
       : "") +
     '</div>';
 
+  /* ⚠️ Про режим экзамена итог обязан сказать ПЕРВЫМ делом: это единственное
+     место, где ребёнок наконец узнаёт вердикт, и он должен понимать, за что
+     этот вердикт получен — за сколько минут и когда заход кончился. */
+  if (isExam(v))
+    h += '<div class="card"><h3>⏱ Заход окончен</h3>' +
+      '<p>Это был экзамен на <b>' + v.mins + ' ' + A.plural(v.mins, "минуту", "минуты", "минут") +
+      '</b>: без подсказок и без ответа проверки. Ответов сдано <b>' + t.sent + '</b> из <b>' +
+      t.able + '</b>, из них засчитано <b>' + t.done + '</b>.</p>' +
+      '<p class="dim">Переиграть этот заход нельзя — в этом и был смысл. А вот разобрать то, ' +
+      'что не вышло, можно прямо сейчас: задачи ниже открываются как обычно, с подсказками ' +
+      'и с объяснением. На итог этого захода разбор уже не влияет.</p></div>';
+
   /* ⚠️ Эта карточка стоит не для красоты и убирать её нельзя. Ровно здесь
      родитель ждёт число «сколько баллов», и ровно здесь любой тренажёр это
      число выдумывает. Мы не выдумываем — и говорим, почему. */
@@ -437,14 +665,20 @@ function screenVariantDone(){
     h += '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn" id="vback">← Вернуться в вариант</button>' +
+  /* ⚠️ У закрытого экзамена «вернуться в вариант» вело бы само в себя:
+     screenVariant у закрытого экзамена показывает этот же итог. Поэтому там
+     стоит другая дверь — собрать новый заход. */
+  h += '<div class="pager"><button class="bigbtn" id="vback">' +
+    (isExam(v) ? 'Собрать новый вариант' : '← Вернуться в вариант') + '</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
   });
-  document.getElementById("vback").onclick = screenVariant;
+  document.getElementById("vback").onclick = isExam(v)
+    ? function(){ drop(v.ex); screenPick(); }
+    : screenVariant;
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -458,7 +692,16 @@ function variantStat(){
     var v = cur(id);
     if (!v) return;
     var t = tally(v);
-    parts.push(examById(id).title + ": решено " + t.done + " из " + t.able);
+    /* ⚠️ У идущего экзамена карточка в «Тренировках» не называет число
+       решённых: карточка видна с общего экрана, и вердикт утёк бы через неё
+       мимо всех запретов. Пишем то, что торопит и не рассказывает: сколько
+       осталось времени. */
+    parts.push(examById(id).title + ": " +
+      (isExam(v) && !over(v)
+        ? "идёт экзамен, осталось " + clockOf(v).text
+        : isExam(v)
+          ? "экзамен окончен, засчитано " + t.done + " из " + t.able
+          : "решено " + t.done + " из " + t.able));
   });
   return parts.join(" · ");
 }

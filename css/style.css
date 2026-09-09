@@ -792,7 +792,16 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .msg.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--okink)}
 .msg.bad{background:var(--badbg);border:1px solid var(--badline);color:var(--badink)}
 .msg.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink)}
+/* Нейтральная плашка режима экзамена. ⚠️ Она обязана быть НИ зелёной, ни
+   красной: одно и то же сообщение показывается и на верный, и на неверный
+   ответ, и цвет выдал бы то, о чём молчат слова. */
+.msg.info{background:var(--sunk2);border:1px solid var(--line);color:var(--ink)}
 .msg b{display:block;margin-bottom:4px;font-size:15px}
+/* Часы экзамена: в шапке задачи и на экране варианта. Последние пять минут —
+   тревожным цветом: «осталось 4:12» мелким серым не читается вовсе. */
+.examclock{display:inline-block;font-family:'JetBrains Mono';font-size:15px;font-weight:600;
+  background:var(--sunk2);border:1px solid var(--line);border-radius:11px;padding:6px 11px}
+.examclock.soon{background:var(--badbg);border-color:var(--badline);color:var(--badink)}
 .msg .cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-family:'JetBrains Mono';font-size:12.5px}
 .msg .cmp div{background:var(--sunk2);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:pre}
 .msg .cmp u{display:block;text-decoration:none;font-family:'Inter';font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
