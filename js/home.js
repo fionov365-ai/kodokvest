@@ -1,5 +1,5 @@
 /* ============================================================
-   Кодоквест — Главный экран и поиск по урокам.
+   Фионика — Главный экран и поиск по урокам.
 
    ⚠️ СЕДЬМОЕ И САМОЕ СВЯЗАННОЕ ОТРЕЗАНИЕ по договору из
    js/screens-showcase.js. Наружу торчат два имени — lessonSearch и
@@ -167,6 +167,31 @@ function screenWorlds(){
   /* карточка возвращения — сразу под «Сейчас», выше всего остального:
      вернувшемуся важнее всего услышать «всё цело», а не увидеть список миров */
   h += A.welcomeBackHTML();
+
+  /* ===== запиши код: одна карточка, и только тому, кто остался =====
+     ⚠️ Новичку этого блока НЕ показываем, и это не забывчивость. Правило
+     оплачено ошибкой: первое, что видит новичок, — самое дорогое место
+     экрана, а ребёнок пришёл писать код, а не заниматься сохранностью
+     доступа. Поэтому карточка появляется после ПЕРВОГО сданного урока — то
+     есть тому, кому уже есть что терять, — и гаснет навсегда, как только код
+     унесён из браузера: скопирован, распечатан или записан своей рукой.
+     Почему вообще напоминаем: аккаунта в продукте нет, восстановить код
+     нечем — ни почты, ни телефона мы не спрашиваем. Значит, единственная
+     защита от потери — вынести код наружу, и сказать об этом надо один раз,
+     но вовремя. */
+  if (doneTotal && A.serverOn() && A.myCode() && !A.codeSaved()){
+    h += '<div class="card codesave"><h3>🔑 Запиши свой код</h3>' +
+      '<p>Первый урок сдан — теперь есть что терять. Весь вход в твои занятия — вот этот код, ' +
+      'и другого нет: ни почты, ни телефона тренажёр не спрашивает, а значит и восстановить ' +
+      'код нечем.</p>' +
+      '<div class="codebox"><code id="hmcode">' + A.esc(A.myCode()) + '</code>' +
+      '<button class="rbtn sec" id="hmcopy">Скопировать</button>' +
+      '<button class="rbtn sec" id="hmprint">🖨 Карточка</button></div>' +
+      '<div class="winrow" style="margin-top:12px">' +
+      '<button class="bigbtn ghost" id="hmdone">Записал, больше не напоминай</button></div>' +
+      '<p class="dim">Карточка — лист с именем, кодом и ссылкой: распечатать, сохранить в PDF ' +
+      'или отдать родителю. Если ты занимаешься с репетитором, код есть и у него.</p></div>';
+  }
 
   /* ===== как это работает: только пока ни один урок не пройден ===== */
   if (!doneTotal){
@@ -403,6 +428,15 @@ function screenWorlds(){
   document.getElementById("go-train").onclick = A.screenTrain;
   var gg = document.getElementById("go-guide");
   if (gg) gg.onclick = A.screenGuide;
+  /* Карточка «запиши код»: любое из трёх действий гасит её навсегда, потому
+     что все три означают одно — код вышел из браузера. */
+  (function(){
+    var cp = document.getElementById("hmcopy"), pr = document.getElementById("hmprint"),
+        dn = document.getElementById("hmdone");
+    if (cp) cp.onclick = function(){ A.copyText(A.myCode(), cp); A.markCodeSaved(); };
+    if (pr) pr.onclick = function(){ A.markCodeSaved(); A.openAccessCard(A.myCode(), A.myName()); };
+    if (dn) dn.onclick = function(){ A.markCodeSaved(); screenWorlds(); };
+  })();
   wireLessonSearch();
   document.getElementById("gofolio").onclick = A.screenFolio;
   document.getElementById("gomine").onclick = function(){ A.screenMyTasks(); };

@@ -1,5 +1,5 @@
 /* ============================================================
-   Кодоквест — экран профиля ученика: имя, код, ссылка на другое устройство,
+   Фионика — экран профиля ученика: имя, код, ссылка на другое устройство,
    тема, звук, озвучка, наборы оформления и выход.
 
    ⚠️ ШЕСТОЕ ОТРЕЗАНИЕ ПО ДОГОВОРУ из js/screens-showcase.js. Наружу торчат
@@ -70,7 +70,16 @@ function screenAccount(){
       '<button class="rbtn sec" id="copycode">Скопировать код</button></div>' +
       '<p class="dim" style="margin-top:12px">Ссылка-вход для другого устройства:</p>' +
       '<div class="codebox"><code id="mylink">' + A.esc(link) + '</code>' +
-      '<button class="rbtn sec" id="copylink">Скопировать ссылку</button></div></div>';
+      '<button class="rbtn sec" id="copylink">Скопировать ссылку</button></div>' +
+      /* ⚠️ Бумага здесь не архаизм. Код живёт в браузере, а браузер чистят,
+         меняют и теряют вместе с устройством; восстановить код нечем — ни
+         почты, ни телефона мы не спрашиваем. Единственный способ не потерять
+         доступ — вынести код ИЗ браузера, и лист бумаги делает это надёжнее
+         всего остального. */
+      '<div class="winrow" style="margin-top:14px">' +
+      '<button class="bigbtn ghost" id="printcard">🖨 Карточка доступа</button></div>' +
+      '<p class="dim">Лист с именем, кодом и ссылкой — распечатать или сохранить в PDF. ' +
+      'Положить в дневник или отдать родителю.</p></div>';
   } else {
     h += '<div class="card"><p class="lede">Сервер не подключён — прогресс хранится только ' +
       'на этом устройстве, кода нет.</p></div>';
@@ -87,9 +96,19 @@ function screenAccount(){
       'Пока показ включён, у тебя горит плашка, и выключить его можешь только ты.</li>' +
       '</ul>' + A.liveRowHTML() + '</div>';
   }
+  /* ⚠️ Выход — единственное место в продукте, где доступ теряется НАСОВСЕМ и
+     по нажатию одной кнопки: код забывается, а восстановить его нечем.
+     Поэтому здесь он написан прямо в предупреждении — чтобы последнее, что
+     ребёнок видит перед выходом, был сам код, а не слово «выйти». */
   h += '<div class="card"><h3>Сменить ученика</h3>' +
     '<p class="dim">Выйти — забыть код на этом устройстве и войти под другим именем или кодом. ' +
     'Прогресс на сервере при этом не удаляется.</p>' +
+    (code
+      ? '<div class="note"><b>Перед выходом запиши код: ' + A.esc(code) + '</b>' +
+        'Без него вернуться к своим занятиям будет нечем: ни почты, ни телефона тренажёр ' +
+        'не спрашивает, и найти твой прогресс по имени нельзя. Если код знает репетитор или ' +
+        'родитель — спросишь у них.</div>'
+      : '') +
     '<div class="winrow"><button class="bigbtn ghost" id="logout">Выйти / сменить</button></div></div>' +
     /* Дверь к другим кабинетам — здесь, в профиле, а не на главном экране:
        ребёнку она в глаза не бросается, а взрослый, взявший его устройство,
@@ -153,10 +172,16 @@ function screenAccount(){
   A.app.innerHTML = h;
 
   A.bindLiveRow(screenAccount);
+  /* ⚠️ Любое из трёх действий — скопировал код, скопировал ссылку, напечатал
+     карточку — значит «код унесён из браузера», и напоминание на Главном
+     гаснет. Отметку ставит ДЕЙСТВИЕ, а не показ экрана: решить за ребёнка,
+     что он запомнил увиденное, — это и есть способ потерять доступ. */
   var cc = document.getElementById("copycode");
-  if (cc) cc.onclick = function(){ copyText(code, cc); };
+  if (cc) cc.onclick = function(){ copyText(code, cc); A.markCodeSaved(); };
   var cl = document.getElementById("copylink");
-  if (cl) cl.onclick = function(){ copyText(link, cl); };
+  if (cl) cl.onclick = function(){ copyText(link, cl); A.markCodeSaved(); };
+  var pc = document.getElementById("printcard");
+  if (pc) pc.onclick = function(){ A.markCodeSaved(); A.openAccessCard(code, A.myName()); };
   A.wireInstallTip(A.app);
   document.getElementById("goabout").onclick = A.screenAbout;
   document.getElementById("gofolio").onclick = A.screenFolio;

@@ -90,7 +90,7 @@ h1{font-size:82px;line-height:1.02;letter-spacing:-.015em;margin:20px 0 0;font-w
     <div class="num"><b>${N.projects}</b><span>проектов</span></div>
     <div class="num"><b>${N.ai}</b><span>упражнений про ИИ</span></div>
   </div>
-  <div class="foot"><b>🐍 Кодоквест</b><span class="dot"></span>
+  <div class="foot"><b>🐍 Фионика</b><span class="dot"></span>
     <span>ничего не надо устанавливать</span></div>
 </div>
 </body></html>`;

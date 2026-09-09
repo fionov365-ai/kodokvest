@@ -178,7 +178,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
 (async function(){
   await tick(60);
   checkEncoding();
-  if (!/Кодоквест/.test(doc.title))
+  if (!/Фионика/.test(doc.title))
     bad(`[каркас] в заголовке страницы нет названия: «${doc.title}»`);
 
   if (!w.__game){ console.log("Игра не запустилась: window.__game не появился"); process.exit(1); }
@@ -7064,7 +7064,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   }
 
   /* --- 10ж. «домой» у каждой роли своё ---
-     Жалоба с боя: родитель нажал «Кодоквест» в шапке и оказался в тренажёре
+     Жалоба с боя: родитель нажал «Фионика» в шапке и оказался в тренажёре
      ребёнка. У взрослого детская навигация спрятана, и логотип был там
      единственной кнопкой — то есть единственная кнопка вела не туда. */
   if (typeof g.goHome === "function"){
@@ -7941,7 +7941,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     g.state.admin.parentOf = "";
     g.screenAdminHome(); await tick();
     g.goLogo(); await tick();
-    if (!/О тренажёре|Информатика без репетитора|Кодоквест — что это/i.test(doc.getElementById("app").textContent))
+    if (!/О тренажёре|Информатика без репетитора|Фионика — что это/i.test(doc.getElementById("app").textContent))
       bad("[логотип] из кабинета репетитора логотип не вывел на страницу сайта");
     /* и обратно в кабинет — кнопкой в шапке, она обязана остаться видимой */
     const lk = doc.getElementById("tab-lk");
