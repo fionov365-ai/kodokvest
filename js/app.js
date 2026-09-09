@@ -7168,7 +7168,15 @@ function runAlgoCheck(x, ed, showMsg){
                    "oge-min-even":["min(", "sorted("],
                    "oge-two-even":["max(", "sorted(", ".sort("],
                    "ege-sub":[".count("],
-                   "ege-maxsum":["max("] };
+                   "ege-maxsum":["max("],
+                   /* Тонкие темы, 09.09.2026. ⚠️ Правило простое: запрет,
+                      написанный в условии словами, обязан стоять и здесь.
+                      Иначе условие врёт, и ребёнок узнаёт об этом сам —
+                      сдав сортировку подсчётом одной строкой sorted(). */
+                   "sort-count":["sorted(", ".sort("],
+                   "cost-bubble":["sorted(", ".sort("],
+                   "cost-divisors":["sqrt", "**"],
+                   "cost-double":["/"] };
     var ban = banned[x.id] || [];
     for (var b = 0; b < ban.length; b++){
       if (code.indexOf(ban[b]) >= 0){
