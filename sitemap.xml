@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ⚠️ Адреса здесь АБСОЛЮТНЫЕ: карту сайта читает робот со своей машины.
+     В день переезда на домен меняется весь список — он же перечислен
+     в docs/pereezd-na-domen.md. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/individualnyi-proekt/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/semeynoe-obuchenie/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/repetitoru/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/o-proekte/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/kontakty/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/pravo/politika/</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  <url>
+    <loc>https://fionov365-ai.github.io/kodokvest/pravo/soglashenie/</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
+</urlset>

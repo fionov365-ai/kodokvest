@@ -1,0 +1,21 @@
+# Фионика — тренажёр по информатике
+# ⚠️ На github.io этот файл НЕ читается: robots.txt берётся только из корня
+# домена (fionov365-ai.github.io/robots.txt), а мы лежим в папке /kodokvest/.
+# Он заработает в день переезда на свой домен — и потому написан заранее,
+# чтобы переезд был перекладыванием файлов, а не сочинением с нуля.
+
+User-agent: *
+Allow: /
+
+# Служебное: одностраничное приложение, скрипты и сборка в один файл.
+# Индексировать надо посадочные страницы, а не внутренности.
+Disallow: /js/
+Disallow: /css/
+Disallow: /content/
+Disallow: /dist/
+Disallow: /vendor/
+Disallow: /tests/
+Disallow: /tools/
+Disallow: /node_modules/
+
+Sitemap: https://fionov365-ai.github.io/kodokvest/sitemap.xml
