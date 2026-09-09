@@ -74,7 +74,13 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      "days","daily","shields","projects","review","drafts",
                      "mytasks","friendTasks","errs","gallery","certAt",
                      "hours","zan","ptasks","hw","specs","parts","builds","solved","algo",
-                     "notes","variant"];
+                     "notes","variant",
+                     /* Вариант, назначенный репетитором: по ключу на экзамен,
+                        { ege:{ seed, mins, at, due }, oge:… }. ⚠️ Это НАЗНАЧЕНИЕ,
+                        а не сам вариант: вариант ребёнок соберёт у себя по
+                        этому семени, и соберётся у всех один и тот же —
+                        сборка есть чистая функция от (экзамен, семя). */
+                     "vtask"];
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели репетитора такое не
@@ -2013,11 +2019,34 @@ function mergeProgress(a, b){
       out.variant[k] = (vb.at || 0) > (va.at || 0) ? vb : va;
       return;
     }
+    /* ⚠️ Поля режима экзамена (1.127.0) обязаны переезжать вместе с остальным.
+       Забудь их здесь — и экзамен, открытый на втором устройстве, приедет
+       обратно как тренировка: без времени, без сданных ответов и незакрытым.
+       Одно и то же семя — один и тот же заход, поэтому:
+         mins   берём непустое: режим у одного варианта один;
+         closed закрыт хоть где-то — закрыт везде. Заход один, и «открыть его
+                заново с другого устройства» — это ровно то, чего режим не даёт;
+         sent   объединяем, как done: это множество сданных номеров. */
     var one = { ex: va.ex, seed: va.seed, at: minPos(va.at, vb.at) || va.at || vb.at,
+                mins: va.mins || vb.mins || 0,
                 endAt: maxN(va.endAt, vb.endAt),
+                closed: (va.closed || vb.closed) ? 1 : 0,
                 items: (va.items && va.items.length) ? va.items : vb.items,
-                done: mergeSet(va.done, vb.done), seen: mergeSet(va.seen, vb.seen) };
+                done: mergeSet(va.done, vb.done), seen: mergeSet(va.seen, vb.seen),
+                sent: mergeSet(va.sent, vb.sent) };
     out.variant[k] = one;
+  });
+
+  /* Назначенный репетитором вариант: по ключу на экзамен. Складывать тут
+     нечего — назначение это факт от взрослого, и свежее отменяет прежнее.
+     ⚠️ Сравниваем по at, а не по «чьё сохранение новее»: репетитор пишет
+     назначение прямо в запись ученика на сервере, и оно может приехать
+     вместе со СТАРЫМ снимком с планшета, который лежал закрытым. */
+  out.vtask = {};
+  Object.keys(mergeSet((a.vtask || {}), (b.vtask || {}))).forEach(function(k){
+    var ta = (a.vtask || {})[k], tb = (b.vtask || {})[k];
+    if (!ta || !tb){ out.vtask[k] = ta || tb; return; }
+    out.vtask[k] = (tb.at || 0) > (ta.at || 0) ? tb : ta;
   });
 
   /* галерея рисунков: по каждому это КОД, поэтому как свои версии игр —
@@ -10215,7 +10244,15 @@ var VARIANT = KVSCREENS.variant({
   openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
   screenTrain: function(){ screenTrain(); },
   variantGet: function(){ return S.variant || {}; },
-  variantSet: function(v){ S.variant = v || {}; save(); }
+  variantSet: function(v){ S.variant = v || {}; save(); },
+  /* ⚠️ Только чтение: назначение пишет РЕПЕТИТОР в запись ученика на сервере,
+     а не ребёнок у себя. Дай сюда запись — и первая же ошибка сотрёт ученику
+     то, что ему задали, ровно перед занятием. */
+  vtaskGet: function(){ return S.vtask || {}; },
+  /* Срок словами — тот же, что у домашки: «на завтра», «срок был вчера».
+     ⚠️ Своего перевода даты здесь не заводим: два перевода одной и той же
+     даты однажды разойдутся, и ребёнок увидит на двух экранах разные сроки. */
+  dueText: function(due){ return hwDueText({ due: due }); }
 });
 var screenVariant = VARIANT.screenVariant,
     screenVariantDone = VARIANT.screenVariantDone,
@@ -16179,6 +16216,21 @@ function groupRow(code, st, serverAt){
              return t;
            })(),
            hwOpenIds: hwAllRecs.filter(function(r){ return !r.done; }).map(function(r){ return r.id; }),
+           /* Пробные варианты ученика и заданное ему — по экзамену.
+              ⚠️ Всё берётся из снимка st (правило: сводка по ученику считается
+              из ЛЮБОГО снимка, а не из своего S), и копируется, а не даётся
+              ссылкой: строка живёт дольше, чем ответ сервера. */
+           vr: (function(){
+             var out = {};
+             Object.keys(st.variant || {}).forEach(function(k){
+               var v = (st.variant || {})[k];
+               if (!v || !v.seed) return;
+               out[k] = { seed: v.seed, mins: v.mins || 0, closed: v.closed ? 1 : 0,
+                          done: v.done || {}, sent: v.sent || {} };
+             });
+             return out;
+           })(),
+           vtask: st.vtask || {},
            /* Чем выше, тем раньше показать. Молчание весит больше всего:
               «не сел вовсе» — самая частая и самая дорогая из трёх подмен.
               Сразу за ним — затык: этот ребёнок ещё ходит, но стоит на месте,
@@ -16243,6 +16295,205 @@ function groupHwHTML(rows){
         "а способ бросить всё в среду.") + '</p>' +
     '<div class="msg" id="ghwmsg"></div></div>';
   return h;
+}
+
+/* ===== вариант всей группе =====
+   ⚠️ Здесь не рассылается ни одной задачи. Рассылается КОД: шесть букв,
+   экзамен и режим. Вариант каждый ребёнок собирает у себя, и собирается ровно
+   тот же самый — сборка есть чистая функция от (экзамен, семя). Из этого
+   следует всё остальное: запись в прогресс ученика весит десятки байт, работа
+   идёт офлайн после первой загрузки, а группе из тридцати человек достаётся
+   один и тот же вариант, то есть результаты СРАВНИМЫ между собой.
+
+   ⚠️ И ровно поэтому семя одно на всю группу — в отличие от домашки, где у
+   каждого своё. Домашка меряет одного ученика, и одинаковые числа у соседей
+   там вредны. Вариант меряет группу целиком, и разные варианты сделали бы
+   отчёт бессмысленным: «просели на 17-м» можно сказать только про тех, кому
+   17-й достался один и тот же.
+
+   ⚠️ Чего здесь НЕ происходит: экзамен не начинается сам. Таймер пойдёт с той
+   минуты, когда ребёнок нажмёт «Начать», а не когда репетитор нажал «Задать».
+   Иначе заданный в понедельник экзамен истёк бы к среде, не открывшись. */
+var grpVarState = { busy:false, done:0, total:0, note:"", ex:"ege", mins:0 };
+
+/* Что задано группе сейчас: берём из самих учеников, а не из памяти
+   устройства. ⚠️ Так отчёт переживает смену компьютера репетитора и работает
+   у второго репетитора той же группы. Свежее назначение побеждает. */
+function grpAssignOf(rows, exId){
+  var best = null;
+  (rows || []).forEach(function(r){
+    var t = (r.vtask || {})[exId];
+    if (!t || !t.seed) return;
+    if (!best || (t.at || 0) > (best.at || 0)) best = t;
+  });
+  return best;
+}
+
+function groupVariantHTML(rows){
+  var h = '<div class="card"><h3>📝 Вариант всей группе</h3>' +
+    '<p class="dim">Одинаковый вариант каждому: по коду он собирается один и тот же на любом ' +
+    'устройстве. Пересылать ничего не надо — уезжает только код. Кому кабинет не завели, ' +
+    'тому код можно просто продиктовать: у ребёнка на экране варианта есть поле для него.</p>';
+  if (grpVarState.note) h += '<div class="msg show ok">' + grpVarState.note + '</div>';
+  h += '<div class="admrow"><label class="admlbl">экзамен ' +
+    '<select id="gvex">' +
+      ["ege", "oge"].map(function(id){
+        var ex = (window.EXAMS || {})[id] || { title:id };
+        return '<option value="' + id + '"' + (grpVarState.ex === id ? " selected" : "") + '>' +
+          esc(ex.title) + '</option>';
+      }).join("") +
+    '</select></label>' +
+    '<span class="sp"></span>' +
+    '<label class="admlbl">режим ' +
+    '<select id="gvmins">' +
+      '<option value="0"' + (grpVarState.mins ? "" : " selected") + '>тренировка, без времени</option>' +
+      [30, 60, 90].map(function(m){
+        return '<option value="' + m + '"' + (grpVarState.mins === m ? " selected" : "") + '>' +
+          'экзамен, ' + m + ' минут</option>';
+      }).join("") +
+    '</select></label>' +
+    '<span class="sp"></span>' +
+    '<label class="admlbl">срок <input type="date" id="gvdue" value="' +
+      esc(shiftDay(dayKey(), 7)) + '"></label>' +
+    '<span class="sp"></span>' +
+    '<button class="rbtn check" id="gvgive">Задать группе</button></div>' +
+    '<p class="dim" id="gvbar">' + (grpVarState.busy
+      ? "Записано " + grpVarState.done + " из " + grpVarState.total + "…"
+      : "Заданное отменяет прежнее назначение по этому экзамену. Начатые варианты " +
+        "у детей при этом не стираются: новый встанет отдельной карточкой с кнопкой.") + '</p>' +
+    '<div class="msg" id="gvmsg"></div></div>';
+  return h;
+}
+
+/* ===== как группа прошла вариант =====
+   ⚠️ Эта карточка про ЗАДАНИЯ, а не про детей. Список «кто сколько набрал» —
+   это лидерборд, которого в продукте нет и не будет; здесь считается другое:
+   на каких номерах просела ГРУППА, то есть где недоработали мы. Ровно за этим
+   репетитор задаёт вариант всей группе, а не по одному. */
+function groupVarReportHTML(rows){
+  var out = "";
+  ["ege", "oge"].forEach(function(exId){
+    var task = grpAssignOf(rows, exId);
+    if (!task || !task.seed) return;
+    var ex = (window.EXAMS || {})[exId];
+    if (!ex) return;
+    var seed = String(task.seed);
+
+    /* считаем только тех, у кого собран ИМЕННО этот вариант: сравнивать
+       результаты по разным вариантам нельзя, и молчаливо смешивать их — врать */
+    var mine = rows.filter(function(r){ return ((r.vr || {})[exId] || {}).seed === seed; });
+    var closed = mine.filter(function(r){ return (r.vr[exId] || {}).closed; }).length;
+
+    var items = VARIANT.buildItems(exId, seed).filter(function(x){ return x.id; });
+    var lines = items.map(function(x){
+      var n = mine.filter(function(r){ return ((r.vr[exId] || {}).done || {})[x.n]; }).length;
+      var t = algoById(x.id);
+      return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n };
+    });
+    var weak = lines.slice().sort(function(a, b){ return a.ok - b.ok || a.n - b.n; });
+
+    out += '<div class="card"><h3>📊 Как группа прошла вариант ' + esc(ex.title) + '</h3>' +
+      '<p class="dim">Код <b>' + esc(seed) + '</b>' +
+      (task.mins ? ' · экзамен на ' + task.mins + ' ' + plural(task.mins, "минуту", "минуты", "минут")
+                 : ' · тренировка') +
+      (task.due ? ' · срок ' + esc(task.due) : '') + '. ' +
+      'Собрали его у себя: <b>' + mine.length + '</b> из ' + rows.length +
+      ', довели до итога: <b>' + closed + '</b>.</p>';
+
+    if (!mine.length){
+      out += '<p class="dim">Пока никто не открывал. Отчёт появится, как только вариант ' +
+        'соберут: до этого у нас нет ни одного ответа, и показывать нули значило бы ' +
+        'выдать «никто не решил» за «никто не начинал».</p></div>';
+      return;
+    }
+
+    /* ⚠️ Честность к малым числам — то же правило, что в «Возвращаемости»:
+       на трёх учениках «просело на 17-м» это случай, а не замер. */
+    if (mine.length < 5)
+      out += '<p class="dim">⚠️ Вариант собрали меньше пяти человек: ниже случаи, а не замер. ' +
+        'Числа начнут что-то значить с пятого-десятого.</p>';
+
+    out += '<div class="exmap">';
+    weak.slice(0, 8).forEach(function(l){
+      var st = l.ok === 0 ? "no" : (l.ok * 2 <= mine.length ? "part" : "yes");
+      out += '<div class="exrow ' + st + '"><span class="exn">' + l.n + '</span>' +
+        '<span class="ext">' + esc(l.t) +
+        '<span class="vartask">' + esc(l.title) + '</span></span>' +
+        '<span class="exact"><span class="excnt">закрыли ' + l.ok + ' из ' + mine.length +
+        '</span></span></div>';
+    });
+    out += '</div>';
+    var allOk = lines.filter(function(l){ return l.ok === mine.length; }).length;
+    out += '<p class="dim">Показаны восемь самых трудных номеров из ' + lines.length +
+      '. Закрыли все, кто собирал: ' + allOk + '.</p></div>';
+  });
+  return out;
+}
+
+/* Записать назначение каждому. Пишем по одному и с перечитыванием записи —
+   по тем же двум причинам, что groupLoad тянет по одному, а kidSave
+   перечитывает: тридцать одновременных запросов к облачной функции это
+   очередь, а чужую запись нельзя затирать своей копией. */
+function groupAssignVariant(exId, mins, due){
+  var msg = document.getElementById("gvmsg");
+  function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+  var rows = groupState.rows || [];
+  if (!rows.length) return say("warn", "<b>Группа не загружена</b>Сначала загрузите группу.");
+  if (grpVarState.busy) return;
+  var ex = (window.EXAMS || {})[exId];
+  if (!ex) return say("warn", "<b>Не выбран экзамен</b>");
+
+  /* семя одно на всех — в этом весь смысл (см. шапку раздела) */
+  var seed = VARIANT.makeVariant(exId, mins).seed;
+  var at = Date.now();
+  grpVarState.busy = true; grpVarState.done = 0; grpVarState.total = rows.length; grpVarState.note = "";
+  say("warn", "<b>Записываю…</b>");
+  var okN = 0, failed = 0, i = 0;
+
+  function bar(){
+    var el = document.getElementById("gvbar");
+    if (el) el.textContent = "Записано " + grpVarState.done + " из " + grpVarState.total + "…";
+  }
+  function finish(){
+    grpVarState.busy = false;
+    grpVarState.note = "<b>Задано</b>Вариант " + esc(ex.title) + " № <b>" + esc(seed) + "</b> — " +
+      (mins ? "экзамен на " + mins + " " + plural(mins, "минуту", "минуты", "минут") : "тренировка") +
+      ". Получили: " + okN + " из " + rows.length +
+      (failed ? ", не записалось: " + failed : "") +
+      ". Код можно продиктовать и тем, кого в группе нет.";
+    screenGroup();
+  }
+  function next(){
+    if (i >= rows.length) return finish();
+    var row = rows[i++];
+    return Cloud.load(row.code).then(function(r){
+      var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+      base.vtask = base.vtask || {};
+      base.vtask[exId] = { seed: seed, mins: mins || 0, at: at, due: due || "", by: "репетитор" };
+      return Cloud.save(base, row.code).then(function(){
+        okN++; grpVarState.done++; bar(); return next();
+      });
+    }, function(){ failed++; grpVarState.done++; bar(); return next(); });
+  }
+  /* Промис наружу — чтобы тест мог дождаться конца записи. Через
+     Promise.resolve по той же причине, что и в выдаче домашки: пустая группа
+     доходит до finish() синхронно и вернула бы undefined. */
+  return Promise.resolve(next()).catch(function(err){
+    grpVarState.busy = false;
+    say("bad", "<b>Не записалось</b>" + esc((err && err.message) || err));
+  });
+}
+
+function wireGroupVariant(){
+  var btn = document.getElementById("gvgive");
+  if (!btn) return;
+  btn.onclick = function(){
+    var exId = (document.getElementById("gvex") || {}).value || "ege";
+    var mins = parseInt((document.getElementById("gvmins") || {}).value || "0", 10) || 0;
+    var due = (document.getElementById("gvdue") || {}).value || "";
+    grpVarState.ex = exId; grpVarState.mins = mins;
+    groupAssignVariant(exId, mins, due);
+  };
 }
 
 /* ===== метрики возвращаемости =====
@@ -16529,6 +16780,11 @@ function screenGroup(){
       '</ul></div>';
 
     h += groupHwHTML(rows);
+    /* ⚠️ Задать — выше отчёта: репетитор чаще приходит сюда задавать, чем
+       смотреть. А отчёт стоит сразу под ним, чтобы «задал» и «что вышло»
+       читались одной мыслью, а не в разных концах экрана. */
+    h += groupVariantHTML(rows);
+    h += groupVarReportHTML(rows);
 
     h += '<div class="card"><h3>👥 Кто как шёл</h3><div class="grouplist">';
     rows.forEach(function(r){
@@ -16623,6 +16879,7 @@ function screenGroup(){
       };
     };
   });
+  wireGroupVariant();
   app.querySelectorAll("[data-gback]").forEach(function(b){
     b.onclick = function(){ location.hash = "#panel"; screenAdmin(); };
   });
@@ -18680,6 +18937,8 @@ window.__game = {
   livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
   liveWatcher: liveWatcher, liveAccept: liveAccept,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
+  groupAssignVariant: groupAssignVariant, grpVarState: grpVarState,
+  grpAssignOf: grpAssignOf,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
   setLessonForTest: function(id){ curLessonId = id; }

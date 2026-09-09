@@ -5849,6 +5849,102 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
       viewReset(g);
     }
 
+    /* 10.4б. ВАРИАНТ ВСЕЙ ГРУППЕ.
+       ⚠️ Главное, что здесь проверяется, — семя ОДНО на всех. В домашке
+       наоборот: там у каждого своё, чтобы не списывали. Перепутать эти два
+       правила проще всего, а последствия разные и оба тихие: одинаковая
+       домашка списывается, а разные варианты делают отчёт по группе
+       бессмысленным — «просели на 17-м» можно сказать только про тех, кому
+       17-й достался ОДИН И ТОТ ЖЕ. */
+    if (typeof g.groupAssignVariant === "function"){
+      const vDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-grp-var-"));
+      process.env.DATA_DIR = vDir;
+      w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      const stA = g.ensureShape({}), stB = g.ensureShape({}), stC = g.ensureShape({});
+      await w.Cloud.save(stA, "var-a");
+      await w.Cloud.save(stB, "var-b");
+      await w.Cloud.save(stC, "var-c");
+      g.groupState.rows = [g.groupRow("var-a", stA), g.groupRow("var-b", stB),
+                           g.groupRow("var-c", stC)];
+      g.adminUnlock();
+      g.screenGroup(); await tick();
+      if (!doc.getElementById("gvgive"))
+        bad("[группа-вариант] на экране группы нечем задать вариант");
+
+      const due = g.shiftDay(g.dayKey(), 5);
+      await g.groupAssignVariant("ege", 60, due);
+      const got = [];
+      for (const code of ["var-a", "var-b", "var-c"]){
+        const r = await w.Cloud.load(code);
+        got.push(((r.data || {}).vtask || {}).ege || null);
+      }
+      if (got.some(x => !x || !x.seed))
+        bad("[группа-вариант] назначение уехало не всем: " + JSON.stringify(got));
+      else {
+        if (got[0].seed !== got[1].seed || got[1].seed !== got[2].seed)
+          bad("[группа-вариант] семя у учеников РАЗНОЕ — отчёт по группе станет бессмысленным: " +
+              got.map(x => x.seed).join(", "));
+        if (got[0].mins !== 60) bad("[группа-вариант] режим не записался: " + got[0].mins);
+        if (got[0].due !== due) bad("[группа-вариант] срок не записался");
+        if (got[0].by !== "репетитор") bad("[группа-вариант] не записано, кто задал");
+        /* ⚠️ Один и тот же код обязан собрать один и тот же вариант — это
+           единственное, на чём держится вся затея: заданий не пересылаем. */
+        const one = g.variantBuild("ege", got[0].seed).map(x => x.id).join(",");
+        const two = g.variantBuild("ege", got[2].seed).map(x => x.id).join(",");
+        if (one !== two)
+          bad("[группа-вариант] по одному коду собрались РАЗНЫЕ варианты");
+      }
+
+      /* новое назначение отменяет прежнее: свежее побеждает по at */
+      const first = got[0] && got[0].seed;
+      await g.groupAssignVariant("ege", 0, "");
+      const after = await w.Cloud.load("var-a");
+      const now2 = ((after.data || {}).vtask || {}).ege || {};
+      if (now2.seed === first) bad("[группа-вариант] повторное назначение не сменило вариант");
+      if (now2.mins !== 0) bad("[группа-вариант] режим нового назначения не записался");
+
+      /* ⚠️ Отчёт считает только тех, у кого собран ИМЕННО этот вариант.
+         Смешать два варианта в одну строку — соврать числом. */
+      {
+        const seed = now2.seed;
+        const items = g.variantBuild("ege", seed).filter(x => x.id);
+        const mk = (sd, doneN) => {
+          const st = g.ensureShape({});
+          st.vtask = { ege: { seed: seed, mins: 0, at: Date.now(), due: "" } };
+          st.variant = { ege: { ex:"ege", seed: sd, at: Date.now(), mins:0, endAt:0,
+                                closed:1, items: g.variantBuild("ege", sd),
+                                done: doneN, seen: {}, sent: {} } };
+          return st;
+        };
+        const n1 = items[0].n;
+        g.groupState.rows = [
+          g.groupRow("var-a", mk(seed, { [n1]: 1 })),
+          g.groupRow("var-b", mk(seed, {})),
+          g.groupRow("var-c", mk("ZZZZZZ", { [n1]: 1 }))   /* чужой вариант */
+        ];
+        g.screenGroup(); await tick();
+        const txt = doc.getElementById("app").textContent;
+        if (!/Как группа прошла вариант/.test(txt))
+          bad("[группа-вариант] отчёта по варианту нет");
+        if (!/Собрали его у себя: 2 из 3/.test(txt))
+          bad("[группа-вариант] в отчёт попал ученик с ДРУГИМ вариантом: " +
+              (txt.match(/Собрали его у себя[^.]*/) || [""])[0]);
+        if (!new RegExp("закрыли 1 из 2").test(txt) && !new RegExp("закрыли 0 из 2").test(txt))
+          bad("[группа-вариант] отчёт не считает закрытые номера по группе");
+        /* ⚠️ Отчёт про ЗАДАНИЯ, а не про детей: ни одного кода ученика в нём
+           быть не должно — иначе это лидерборд, которого в продукте нет. */
+        const card = Array.prototype.slice.call(doc.querySelectorAll(".card"))
+          .filter(c => /Как группа прошла вариант/.test(c.textContent))[0];
+        if (card && /var-a|var-b|var-c/.test(card.textContent))
+          bad("[группа-вариант] в отчёте названы ученики — это лидерборд, а не разбор заданий");
+      }
+
+      g.groupState.rows = null;
+      g.grpVarState.note = "";
+      try { fs.rmSync(vDir, { recursive:true, force:true }); } catch(e){}
+      viewReset(g);
+    }
+
     /* 10.5. План и факт (корзина 3.5). Репетитор спрашивает про ученика не
        «сколько пройдено», а «успевает ли», и ответ считается ТОЛЬКО от рамки,
        которую поставил взрослый. Здесь проверяется и арифметика, и три
@@ -8579,6 +8675,21 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         { savedAt:2, variant:{ ege:{ ex:"ege", seed:"DDDDDD", at:5, items:[{n:1,id:"x"}], done:{ 2:1 }, seen:{} } } });
       if (Object.keys(m3.variant.ege.done || {}).length !== 2)
         bad("[вариант] решённое на втором устройстве потерялось при слиянии одного и того же варианта");
+
+      /* ⚠️ Режим экзамена обязан пережить слияние. Забудь его здесь — и заход,
+         открытый на планшете, приедет обратно тренировкой: без времени, без
+         сданных ответов и незакрытым. Ошибка молчаливая: экран нарисуется. */
+      const m4 = g.mergeProgress(
+        { savedAt:1, variant:{ ege:{ ex:"ege", seed:"EEEEEE", at:5, mins:60, endAt:900, closed:0,
+            items:[{n:1,id:"x"}], done:{}, seen:{}, sent:{ 1:1 } } } },
+        { savedAt:2, variant:{ ege:{ ex:"ege", seed:"EEEEEE", at:5, mins:60, endAt:900, closed:1,
+            items:[{n:1,id:"x"}], done:{}, seen:{}, sent:{ 2:1 } } } });
+      if (m4.variant.ege.mins !== 60)
+        bad("[экзамен] слияние потеряло время экзамена — заход стал тренировкой");
+      if (m4.variant.ege.closed !== 1)
+        bad("[экзамен] заход, закрытый на одном устройстве, после слияния снова открыт");
+      if (Object.keys(m4.variant.ege.sent || {}).length !== 2)
+        bad("[экзамен] слияние потеряло сданные ответы");
     }
 
 
@@ -8685,6 +8796,82 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
           }
         }
       }
+    }
+
+    /* --- 13в.7. ВАРИАНТ, НАЗНАЧЕННЫЙ РЕПЕТИТОРОМ (сторона ученика) ---
+       ⚠️ Смысл всей затеи в том, что заданий никто не пересылает: приезжает
+       код из шести букв, а вариант собирается на месте и получается тот же
+       самый. Поэтому здесь проверяется не «показалась ли карточка», а то,
+       что собранный по коду вариант СОВПАДАЕТ с тем, что собрал бы сосед. */
+    {
+      g.state.algo = {}; g.state.variant = {}; g.state.vtask = {};
+      const SEED = "ABCDEF";
+      g.state.vtask = { ege: { seed: SEED, mins: 60, at: Date.now(), due: "2026-09-20",
+                               by: "репетитор" } };
+      g.screenVariant(); await tick();
+      const txt = doc.getElementById("app").textContent;
+      if (!/Репетитор задал вариант/.test(txt))
+        bad("[вариант-группа] заданное репетитором не показано ученику");
+      if (txt.indexOf(SEED) < 0)
+        bad("[вариант-группа] на экране нет кода заданного варианта");
+      if (!/60/.test(txt))
+        bad("[вариант-группа] не сказано, на сколько минут задан экзамен");
+
+      const go = doc.querySelector('[data-vassign="ege"]');
+      if (!go) bad("[вариант-группа] заданное нечем начать");
+      else {
+        go.click(); await tick();
+        const v = g.state.variant.ege || {};
+        if (v.seed !== SEED)
+          bad("[вариант-группа] по заданию собрался ДРУГОЙ вариант: " + v.seed);
+        if (v.mins !== 60)
+          bad("[вариант-группа] режим из задания не применился: " + v.mins);
+        /* ⚠️ Время идёт от НАЖАТИЯ, а не от того, когда репетитор задал:
+           иначе заданный в понедельник экзамен истёк бы к среде. */
+        if (!(v.endAt > Date.now() + 59 * 60000))
+          bad("[вариант-группа] время экзамена пошло не с нажатия");
+        /* и собранное по коду совпадает с тем, что соберёт сосед */
+        const mine = (v.items || []).map(x => x.id).join(",");
+        const other = g.variantBuild("ege", SEED).map(x => x.id).join(",");
+        if (mine !== other)
+          bad("[вариант-группа] у соседа по тому же коду собрался бы другой вариант");
+        /* начатое задание больше не предлагается вторым экраном */
+        g.screenVariant(); await tick();
+        if (/Репетитор задал вариант/.test(doc.getElementById("app").textContent))
+          bad("[вариант-группа] уже начатое задание предлагается заново");
+      }
+
+      /* 13в.7б. Код, продиктованный голосом: то же самое, но без всякого
+         сервера. Это единственная дорога, которая работает у ребёнка без
+         кабинета, и ломаться ей нельзя. */
+      g.state.variant = {}; g.state.vtask = {};
+      g.screenVariant(); await tick();
+      const inp = doc.getElementById("vseed");
+      if (!inp) bad("[вариант-группа] некуда вписать продиктованный код");
+      else {
+        inp.value = "hjk234";               /* строчными и с голоса — тоже код */
+        doc.querySelector('[data-vnew="ege"]').click(); await tick();
+        if ((g.state.variant.ege || {}).seed !== "HJK234")
+          bad("[вариант-группа] вариант по вписанному коду собрался не тот: " +
+              (g.state.variant.ege || {}).seed);
+      }
+
+      /* 13в.7в. ⚠️ Кривой код — это ошибка, о которой обязаны сказать. Молча
+         собрать «похожий» вариант хуже всего: ребёнок будет уверен, что решает
+         то же, что и все, а решать будет другое. */
+      g.state.variant = {};
+      g.screenVariant(); await tick();
+      const inp2 = doc.getElementById("vseed");
+      if (inp2){
+        inp2.value = "ABC";
+        doc.querySelector('[data-vnew="ege"]').click(); await tick();
+        if (g.state.variant.ege)
+          bad("[вариант-группа] по негодному коду молча собрался вариант");
+        const m = doc.getElementById("vseedmsg");
+        if (!m || !/не подходит/i.test(m.textContent))
+          bad("[вариант-группа] про негодный код ничего не сказано");
+      }
+      g.state.vtask = {};
     }
     g.state.algo = {}; g.state.variant = {};
     viewReset(g);

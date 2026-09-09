@@ -85,6 +85,18 @@ function newSeed(){
     s += CODE_ABC.charAt(Math.floor(Math.random() * CODE_ABC.length));
   return s;
 }
+/* Код, названный человеком: с голоса, из строки ввода или из назначения
+   репетитора. ⚠️ Приводим к верхнему регистру и проверяем КАЖДУЮ букву по той
+   же азбуке, что и выдаём. Буква не из азбуки значит ровно одно: код записан
+   с ошибкой, и собранный по нему вариант будет ДРУГИМ — а ребёнок будет
+   уверен, что решает тот же самый. Молчать тут нельзя. */
+function cleanSeed(raw){
+  var t = String(raw == null ? "" : raw).trim().toUpperCase();
+  if (t.length !== 6) return null;
+  for (var i = 0; i < t.length; i++)
+    if (CODE_ABC.indexOf(t.charAt(i)) < 0) return null;
+  return t;
+}
 /* Поток чисел из кода. Годится любой воспроизводимый: важно только, чтобы
    одно семя всегда давало одну последовательность — на этом держится
    обещание «по коду соберётся тот же вариант». */
@@ -137,9 +149,13 @@ function buildItems(exId, seed){
    нет. Те же три ступени, что у длины занятия у взрослого. */
 var EXAM_MINS = [30, 60, 90];
 
-/* mins === 0 — тренировка (как было). Любое из EXAM_MINS — экзамен. */
-function makeVariant(exId, mins){
-  var seed = newSeed();
+/* mins === 0 — тренировка (как было). Любое из EXAM_MINS — экзамен.
+   seed можно назвать снаружи: так собирается вариант, назначенный репетитором,
+   и вариант по продиктованному коду. Сборка — чистая функция от (экзамен,
+   семя), поэтому у всей группы получится ОДИН И ТОТ ЖЕ вариант, и пересылать
+   задания не нужно вовсе. */
+function makeVariant(exId, mins, seed){
+  seed = cleanSeed(seed) || newSeed();
   var m = EXAM_MINS.indexOf(mins) >= 0 ? mins : 0;
   var now = Date.now();
   return { ex: exId, seed: seed, at: now, mins: m,
@@ -304,7 +320,7 @@ function rowHTML(v, x, task){
 /* Собрать новый вариант и открыть его. ⚠️ Единственное место, где вариант
    заводится: спросить «а не потеряется ли начатое» надо один раз и здесь,
    иначе кнопка на карте экзамена молча стёрла бы работу, начатую вчера. */
-function startVariant(exId, mins){
+function startVariant(exId, mins, seed){
   tab = exId;
   var v = cur(exId);
   if (v){
@@ -339,7 +355,7 @@ function startVariant(exId, mins){
      показываем выбор. Именно так работает «Собрать другой вариант» на экране
      идущего варианта: сначала вопрос «какой», потом сборка. */
   if (typeof mins !== "number"){ drop(exId); return screenPick(); }
-  put(makeVariant(exId, mins));
+  put(makeVariant(exId, mins, seed));
   screenVariant();
 }
 /* Дверь с карты экзамена: свой вариант этого экзамена открываем, а если его
@@ -351,6 +367,52 @@ function openFor(exId){
      режим — это выбор ребёнка, и сделать его за него значит однажды бросить
      новичка в экзамен с таймером. */
   screenPick();
+}
+
+/* ---- вариант, назначенный репетитором ----
+   ⚠️ Здесь не приезжает ни одной задачи. Приезжает КОД: шесть букв, экзамен и
+   режим. Вариант ребёнок собирает у себя, и собирается ровно тот же самый —
+   сборка есть чистая функция от (экзамен, семя). Из этого следует всё
+   остальное: назначение весит несколько десятков байт, работает офлайн после
+   первой загрузки и одинаково приходит хоть в группу из тридцати человек.
+   ⚠️ Назначение НЕ собирает вариант само. Экзамен, начавшийся без ведома
+   ребёнка, потратил бы его время на то, что он не открывал: таймер идёт от
+   сборки, а не от того, когда репетитор нажал кнопку. */
+function assignedOf(exId){
+  var box = (A.vtaskGet && A.vtaskGet()) || {};
+  var t = box && box[exId];
+  if (!t || !cleanSeed(t.seed)) return null;
+  return t;
+}
+/* Назначение уже начато? Сравниваем по семени: собранный по коду вариант и
+   есть выполненное назначение, второй раз показывать его незачем. */
+function assignStarted(exId){
+  var t = assignedOf(exId), v = cur(exId);
+  return !!(t && v && v.seed === cleanSeed(t.seed));
+}
+function assignCardHTML(exId){
+  var t = assignedOf(exId);
+  if (!t || assignStarted(exId)) return "";
+  var ex = examById(exId);
+  return '<div class="card"><h3>📮 Репетитор задал вариант</h3>' +
+    '<p>' + ex.em + ' <b>' + A.esc(ex.full) + '</b>, код <b>' + A.esc(cleanSeed(t.seed)) + '</b> — ' +
+    (t.mins ? 'режим экзамена на <b>' + t.mins + ' ' +
+      A.plural(t.mins, "минуту", "минуты", "минут") + '</b>' : 'тренировка, без времени') +
+    (t.due && A.dueText ? ', срок: <b>' + A.esc(A.dueText(t.due)) + '</b>' : '') + '.</p>' +
+    '<p class="dim">У всех в группе этот вариант одинаковый — по коду он собирается один и тот же. ' +
+    (t.mins ? 'Время пойдёт с нажатия, а не с той минуты, когда его задали.' :
+              'Торопиться некуда: решать можно в любой день.') + '</p>' +
+    '<div class="admrow"><button class="bigbtn" data-vassign="' + exId + '">' +
+    (t.mins ? 'Начать экзамен' : 'Открыть вариант') + '</button></div></div>';
+}
+function wireAssign(){
+  A.app.querySelectorAll("[data-vassign]").forEach(function(b){
+    b.onclick = function(){
+      var id = b.getAttribute("data-vassign"), t = assignedOf(id);
+      if (!t) return;
+      startVariant(id, t.mins || 0, cleanSeed(t.seed));
+    };
+  });
 }
 
 /* ---- экран: варианта этого экзамена ещё нет ----
@@ -370,6 +432,10 @@ function screenPick(){
     'когда учишь одну тему. Экзамен так не устроен: там задания идут подряд, по номерам, и ' +
     'каждое про своё. Вариант собирает такой же порядок из наших задач: по одной на каждый номер.</p>';
 
+  /* ⚠️ Заданное репетитором стоит ПЕРВЫМ и до объяснений: ребёнок, которому
+     задали вариант, пришёл сюда за ним, а не читать, как всё устроено. */
+  h += assignCardHTML(tab);
+
   h += '<div class="card"><h3>Как это устроено</h3><ul class="trrules">' +
     '<li><b>Один номер — одна задача.</b> Порядок как на экзамене, с первого номера до последнего.</li>' +
     '<li><b>Решать можно с любого места и в любой день.</b> Вариант никуда не денется: ' +
@@ -388,6 +454,19 @@ function screenPick(){
     '<div class="admrow"><button class="bigbtn" data-vnew="' + tab + '">Собрать тренировку</button></div>' +
     '<p class="dim">Подсказки на месте, проверка объясняет, что не сошлось, времени сколько угодно.</p>' +
     '</div>';
+
+  /* ---- код от репетитора ----
+     ⚠️ Одно поле на обе кнопки, а не своя пара кнопок рядом с полем: код
+     задаёт, КАКОЙ вариант собрать, и не задаёт режим. Режим ребёнок всё равно
+     выбирает сам — репетитор говорит его словами, когда диктует код.
+     Работает и без всякого кабинета: код можно продиктовать голосом, и это
+     единственная дорога, которая не зависит ни от сервера, ни от группы. */
+  h += '<div class="card"><h3>🔤 Код от репетитора</h3>' +
+    '<p class="dim">Продиктовали код варианта — впиши его сюда, и соберётся ровно тот же ' +
+    'вариант, что у всех остальных. Пусто — соберём новый, случайный.</p>' +
+    '<div class="admrow"><input id="vseed" class="kidcode" maxlength="6" ' +
+    'placeholder="ABC123" autocomplete="off" spellcheck="false"></div>' +
+    '<div class="msg" id="vseedmsg"></div></div>';
 
   /* ---- второй режим ----
      ⚠️ Он стоит ОТДЕЛЬНОЙ карточкой и ниже тренировки, а не переключателем
@@ -414,12 +493,43 @@ function screenPick(){
   h += '<div class="pager"><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
+  /* ⚠️ Код читается ЗДЕСЬ, а не в момент нажатия каждой кнопки: поле одно, и
+     разбирать его в двух местах значит однажды разойтись в проверке. Пустое
+     поле — обычный случай, а не ошибка: соберём случайный вариант. Кривой код
+     — ошибка, и молчать о ней нельзя: по нему собрался бы ДРУГОЙ вариант, а
+     ребёнок был бы уверен, что решает тот же, что и все. */
+  var seedFail = function(raw){
+    var m = document.getElementById("vseedmsg");
+    if (m){
+      m.className = "msg show bad";
+      m.innerHTML = "<b>Код не подходит</b>Нужно ровно шесть знаков из тех, что мы выдаём: " +
+        "цифры 2–9 и заглавные латинские буквы без похожих (нет нуля, буквы O, единицы и I). " +
+        "Набрано: <code>" + A.esc(String(raw)) + "</code>. Проверь по бумажке или переспроси.";
+    }
+  };
+  var takeSeed = function(){
+    var el = document.getElementById("vseed");
+    var raw = el ? el.value : "";
+    if (!String(raw).trim()) return "";
+    var ok = cleanSeed(raw);
+    if (!ok){ seedFail(raw); return null; }
+    return ok;
+  };
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
-    b.onclick = function(){ startVariant(b.getAttribute("data-vnew"), 0); };
+    b.onclick = function(){
+      var sd = takeSeed();
+      if (sd === null) return;
+      startVariant(b.getAttribute("data-vnew"), 0, sd);
+    };
   });
   A.app.querySelectorAll("[data-vexam]").forEach(function(b){
-    b.onclick = function(){ startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10)); };
+    b.onclick = function(){
+      var sd = takeSeed();
+      if (sd === null) return;
+      startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10), sd);
+    };
   });
+  wireAssign();
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
@@ -467,6 +577,13 @@ function screenVariant(){
         '<span class="exsoon">◻ не открывал: ' + t.left + '</span>' +
         '<span class="exno">— не даём: ' + (t.total - t.able) + '</span></div>');
 
+  /* ⚠️ Новое назначение видно и с идущего варианта: репетитор мог задать
+     общий вариант, пока ребёнок решал свой. Молча подменять начатое нельзя,
+     поэтому это карточка с кнопкой, а не подмена.
+     Своё же назначение, уже начатое, здесь не показывается — assignCardHTML
+     сравнивает семена. */
+  h += assignCardHTML(v.ex);
+
   h += '<div class="exmap">';
   v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
   h += '</div>';
@@ -493,6 +610,7 @@ function screenVariant(){
     '<span class="sp"></span><button class="bigbtn ghost" id="tovtrain">← К тренировкам</button></div>';
   A.app.innerHTML = h;
   wireTabs();
+  wireAssign();
 
   A.app.querySelectorAll("[data-vgo]").forEach(function(b){
     b.onclick = function(){ openItem(parseInt(b.getAttribute("data-vgo"), 10)); };
@@ -689,6 +807,13 @@ function screenVariantDone(){
 function variantStat(){
   var parts = [];
   ["ege", "oge"].forEach(function(id){
+    var name = examById(id).title;
+    /* ⚠️ Заданное репетитором видно с общего экрана и ДО того, как ребёнок
+       зашёл в раздел: иначе назначение ждёт, пока про него вспомнят. Пока
+       оно не начато — это отдельная строка, а не замена своей. */
+    var task = assignedOf(id);
+    if (task && !assignStarted(id))
+      parts.push(name + ": задан вариант " + cleanSeed(task.seed));
     var v = cur(id);
     if (!v) return;
     var t = tally(v);
@@ -696,7 +821,7 @@ function variantStat(){
        решённых: карточка видна с общего экрана, и вердикт утёк бы через неё
        мимо всех запретов. Пишем то, что торопит и не рассказывает: сколько
        осталось времени. */
-    parts.push(examById(id).title + ": " +
+    parts.push(name + ": " +
       (isExam(v) && !over(v)
         ? "идёт экзамен, осталось " + clockOf(v).text
         : isExam(v)
