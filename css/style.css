@@ -348,7 +348,7 @@ button{font-family:inherit}
 /* ---------- герой и секции ---------- */
 .hero{background:var(--herobg);border:1px solid var(--line);border-radius:22px;padding:28px 30px;box-shadow:var(--sh)}
 .hero h1{margin:0 0 8px;font-size:34px;line-height:1.12}
-.hero p{margin:0;color:var(--soft);max-width:60ch}
+.hero p{margin:0;color:var(--soft)}
 .hero .row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .bigbtn{border:0;border-radius:13px;padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer;
   background:linear-gradient(135deg,var(--acc),var(--acc-lt));color:var(--onacc);box-shadow:0 8px 22px -8px rgba(124,92,255,.55);transition:.15s}
@@ -444,7 +444,12 @@ a.bigbtn{text-align:center;text-decoration:none}
    краем — переносим, как уже сделано на сертификате. */
 .lvlhead h1{margin:3px 0 0;font-size:29px;line-height:1.15;overflow-wrap:anywhere}
 .lvlhead .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.lede{color:var(--soft);margin:8px 0 22px;font-size:16px;max-width:66ch}
+/* ⚠️⚠️ ПРАВИЛО ПОЛНОЙ ШИРИНЫ — здесь его исток, см. разбор у .secthead.
+   У лида НЕТ max-width: он занимает всю ширину своего блока, а ширину блока
+   держит .wrap (1080 px). Стояло 66ch — и лид обрывался на 645 при доступных
+   1044, ровно то, на что фаундер жаловался словами «опять текст режется».
+   Строка кажется длинной — сокращай ТЕКСТ, а не колонку. */
+.lede{color:var(--soft);margin:8px 0 22px;font-size:16px}
 
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
 .card h3{margin:0 0 8px;font-size:17px}
@@ -2004,12 +2009,12 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .hlite{position:relative;white-space:nowrap;
   background:linear-gradient(var(--acc-lt),var(--acc-lt)) 0 96%/100% .14em no-repeat}
 :root[data-theme="dark"] .hlite{background-image:linear-gradient(var(--acc-lt),var(--acc-lt))}
-.landlede{margin:0;font-size:18px;line-height:1.55;color:var(--soft);max-width:640px}
+.landlede{margin:0;font-size:18px;line-height:1.55;color:var(--soft)}
 .landcta{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0}
 /* Главная кнопка на вывеске светится. Единственное место на сайте, где это
    уместно: у гостя на экране два десятка карточек и одно действие. */
 .landcta .bigbtn:first-child{box-shadow:0 10px 30px -10px var(--acc)}
-.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint);max-width:640px}
+.landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint)}
 /* Четыре факта строкой. Это ответ на возражения, которые родитель проговаривает
    про себя, пока читает заголовок: «опять что-то ставить», «опять интернет»,
    «опять телефон оставлять». Отвечать на них абзацем поздно — он до абзаца
@@ -2189,22 +2194,28 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
   color:var(--acc2);font-weight:700;margin-bottom:7px}
 .landsect h2{margin:0 0 8px;font-size:27px;line-height:1.15;letter-spacing:-.015em}
 .landsect .lede{margin:0;font-size:15.5px}
-/* Лид стоит ПОД заголовком, а не отдельной колонкой справа.
-   История правила в два хода, и оба оплачены переделкой.
+/* ⚠️⚠️ ПРАВИЛО ПОЛНОЙ ШИРИНЫ. Абзац занимает ВСЮ ширину своей колонки.
+   Никаких max-width, режущих строку раньше края блока.
+   История в три хода, каждый оплачен переделкой.
    06.09.2026: лид в одну колонку на 1080 px обрывался на 720 и читался как
    сломанная вёрстка — развели на две колонки, справа от узкой строки оказался
    не воздух, а заголовок.
    08.09.2026: после сокращения текстов лид стал в ОДНУ строку, и та же
    конструкция обернулась своей противоположностью — одинокая строка висела в
    правой половине на уровне второй строки заголовка, «как плевок, брошенный
-   почти по центру» (слова фаундера).
-   ⚠️ Вывод не «две колонки плохо», а «раскладка обязана отвечать длине
-   текста». Короткой строке правая колонка не нужна вовсе: она встаёт под
-   заголовком, а от растягивания её держит max-width, а не соседняя колонка. */
+   почти по центру» (слова фаундера). Свели обратно в одну колонку, а от
+   растягивания поставили max-width:62ch.
+   10.09.2026: max-width и оказался виноват. Колонка раздела — 1044 px, лид
+   обрывался на 606 и переносился на вторую строку при том, что справа
+   пустовала половина блока: текст «режется», а страница от этого ДЛИННЕЕ.
+   Все шесть лидов вывески короче 110 знаков и в полную ширину встают в одну
+   строку. Каппы сняты здесь и у .landlede, .landsub, .lwbody p.
+   ⚠️ Вывод, который и есть правило: длину выбирает ТЕКСТ, а не колонка.
+   Строка кажется длинной — сокращай текст, а не ширину. */
 .secthead{margin-bottom:18px}
 .secthead .sechl{min-width:0}
 .secthead h2{margin:0}
-.secthead .lede{margin:7px 0 0;max-width:62ch}
+.secthead .lede{margin:7px 0 0}
 
 /* ---------- четыре шага урока ----------
    Дорожка с узлами, а не список: у шагов есть порядок, и линия между ними
@@ -2254,7 +2265,7 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
 .lwkick{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--wc);font-weight:700}
 .lwbody b{font-size:18px}
-.lwbody p{margin:3px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5;max-width:640px}
+.lwbody p{margin:3px 0 0;color:var(--soft);font-size:14.5px;line-height:1.5}
 /* Названия уроков — фишками, а не строкой через точку. Строка читалась как
    один длинный текст, из которого не видно, что это перечень тем. */
 .lwlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
