@@ -1597,7 +1597,7 @@ function backTarget(){
     case "shop":      return { label:"В портфолио", go: screenFolio };
     case "friendtask":return { label:"К заданиям", go: function(){ screenMyTasks(); } };
     case "trace":     return { label:"В кабинет", go: screenAdult };
-    case "group":     return { label:"В панель", go: function(){ location.hash = "#panel"; screenAdmin(); } };
+    case "group":     return { label:"В панель", go: function(){ screenAdmin(); } };
     default:          return { label:"На главную", go: screenWorlds };
   }
 }
@@ -3961,8 +3961,8 @@ var HOME = KVSCREENS.home({
   /* Экзамены на Главном отдельным блоком: карта по номерам и пробный вариант.
      Числа приходят готовым сводом, чтобы Главный не считал их сам. */
   examTally: examTally, openExamMap: openExamMap,
-  screenVariant: function(){ location.hash = "#variant"; screenVariant(); },
-  screenRobot: function(){ location.hash = "#robot"; screenRobot(); },
+  screenVariant: function(){ screenVariant(); },
+  screenRobot: function(){ screenRobot(); },
   /* ⚠️ Обёрткой, а не значением: variantStat присваивается НИЖЕ по файлу
      (вариант отрезан в свой модуль), и на этой строке он ещё undefined.
      Ровно на этом упала сборка — тест поймал за минуту. */
@@ -4020,6 +4020,9 @@ function screenTrain(){
 function screenWorld(n){
   var seq = enterScreen(undefined, "world");
   var w = CURRICULUM.world(n);
+  /* Адрес мира пишется ПОСЛЕ enterScreen: тот уже поставил пустой адрес
+     (места «world» в таблице нет — оно с параметром), и мы дописываем номер. */
+  if (w) setRoute("#world=" + w.n, "Мир " + w.n + ". " + w.title);
   worldContent(n).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
     var ready = worldReadyLessons(w);
@@ -4325,6 +4328,11 @@ function openLesson(id){
   if (capHard() && !lessonStarted(id)) return screenCapReached();
   curTab = "home";              /* урок — это «Главное», а не отдельный раздел */
   curPlace = "lesson";          /* а помощь «?» — про урок */
+  /* ⚠️ Урок — самый нужный адрес во всём продукте: именно его репетитор
+     диктует ученику («открой урок 37»), и именно на него ссылаются из
+     домашки. Заголовок вкладки берётся из самого урока, а не пишется
+     строкой: список уроков меняется, а заголовок остался бы прежним. */
+  setRoute("#lesson=" + l.id, "Урок " + l.num + ". " + l.title);
   var seq = claimScreen();
   worldContent(l.world).then(function(){
     if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
@@ -7066,7 +7074,7 @@ function screenAlgo(){
     });
     /* «Решать» ведёт к первой НЕрешённой задаче темы, а не в начало списка. */
     var rb = app.querySelector("[data-exrobot]");
-    if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
+    if (rb) rb.onclick = function(){ screenRobot(); };
     var vb = app.querySelector("[data-exvariant]");
     if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
@@ -8509,6 +8517,10 @@ function openProject(id, forceStep){
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
     enterScreen(undefined, "project");
+    /* ⚠️ Адрес проекта routeHash читал с самого начала (`#project-w3`), а вот
+       писать его было некому — то есть ссылка работала только у того, кто её
+       набрал руками. Теперь обе половины на месте. */
+    setRoute("#" + p.id, "Проект «" + p.title + "»");
     /* Черновик шага проекта — тем же механизмом, что у уроков: ключ шага
        вместо id урока. До этого код шага сохранялся ТОЛЬКО на победе, и уход
        за подсказкой в шпаргалку стирал написанное. */
@@ -11134,7 +11146,7 @@ function screenAdult(){
      и запоздавшая отрисовка затирала уже показанный кабинет: завёл ребёнка,
      сразу пошёл в кабинет — и оказался на главном экране. Заодно здесь
      сохраняется черновик урока и замолкает чтение вслух. */
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("adult"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenAdult);
   var f = frame();
   var last = zanLast();
@@ -11474,7 +11486,7 @@ function wireAdult(){
     var act = b.getAttribute("data-act");
     b.onclick = function(){
       if (act === "tomap") return screenWorlds();
-      if (act === "toadmin"){ location.hash = "#panel"; return screenAdmin(); }
+      if (act === "toadmin"){ return screenAdmin(); }
       if (act === "totrace") return screenTrace();
       if (act === "toworks") return screenShowcase();
       if (act === "toai") return screenAILab();
@@ -12641,7 +12653,11 @@ function enterScreen(tab, place){
   /* Уходя с экрана — замолчать: иначе синтезатор дочитывает урок поверх
      следующего экрана, и остановить его нечем. */
   voiceStop();
-  clearAdminHash();
+  clearAdminQuery();
+  /* ⚠️ Адрес пишется ЗДЕСЬ, а не в каждом экране по отдельности: через
+     enterScreen проходят все 52 перехода, а россыпь из одиннадцати ручных
+     присваиваний и была причиной, по которой «Назад» работал через раз. */
+  routeFor(curPlace);
   return claimScreen();
 }
 
@@ -12656,18 +12672,20 @@ var screenSeq = 0;
    местом на все переходы, включая переход с урока сразу на другой урок. */
 function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
 function screenStale(n){ return n !== screenSeq; }
-function clearAdminHash(){
+/* ⚠️ Хэш отсюда ушёл: адресом теперь целиком заведует routeFor. Осталась
+   вторая половина, к хэшу отношения не имевшая, — `?admin` в запросе.
+   Это дверь из 404.html (`.../kodokvest/admin` превращается в `?admin`), и
+   убрать её из адреса обязательно: иначе обновление страницы на любом экране
+   снова открывает панель. Остальные параметры, например `?kid=`, целы. */
+function clearAdminQuery(){
   try {
     if (!history.replaceState) return;
-    var hl = (location.hash || "").toLowerCase();
-    var hash = (hl === "#admin" || hl === "#panel" || hl === "#group") ? "" : location.hash;
-    /* убираем admin из ?query, остальные параметры (например ?kid=) сохраняем */
     var search = (location.search || "").replace(/([?&])admin(=[^&]*)?(&|$)/i, function(m, p1, v, tail){
       return tail === "&" ? p1 : (p1 === "?" ? "" : "");
     });
     if (search === "?") search = "";
-    if (hash !== location.hash || search !== location.search)
-      history.replaceState(null, "", location.pathname + search + hash);
+    if (search !== location.search)
+      history.replaceState(null, "", location.pathname + search + location.hash);
   } catch(e){}
 }
 function adminUnlocked(){
@@ -12684,42 +12702,142 @@ function adminLock(){
 /* Панель репетитора открывается любым из способов:
    .../kodokvest/#admin, .../kodokvest/?admin и просто .../kodokvest/admin
    (последнее ловит 404.html и превращает в ?admin). */
+/* ================= адреса экранов: ОДНА таблица =================
+   ⚠️ До 1.136.0 таблиц было ДВЕ, и вторая была не таблицей, а россыпью.
+   Читающая половина существовала: HASH_SCREENS, 24 адреса, по которым экран
+   открывался. Пишущей не было вовсе — `enterScreen` адрес не трогал, а
+   одиннадцать экранов присваивали `location.hash` руками, по одному, в
+   разных концах файла. Из этого следовали три вещи, и все три видно руками:
+
+     — репетитор не мог продиктовать ссылку на то, что видит: какой экран ни
+       открой, адрес один и тот же;
+     — «Назад» в браузере работал ЧЕРЕЗ РАЗ. С тех одиннадцати экранов он
+       возвращал на прошлый экран, с остальных сорока — выбрасывал из
+       продукта целиком. На телефоне «назад» это системный жест, и худшего
+       места для непредсказуемости в продукте нет;
+     — заголовок вкладки был один на все 55 экранов.
+
+   Теперь источник один — ROUTES. Из него собирается и чтение (`routeHash`),
+   и запись (`setRoute` из `enterScreen`), и заголовок вкладки. Разойтись им
+   больше нечем, и это сторожит тест «кругооборот»: адрес, записанный при
+   заходе на экран, обязан открыть ТОТ ЖЕ экран.
+
+   ⚠️ Ключ — `place`, то самое второе имя места, по которому находит текст
+   помощь «?». Имена НЕ переименовывались, хотя десять из них разошлись с
+   адресами (`#again` при месте `review`, `#mine` при `mytasks`, `#works`
+   при `works`): к `place` привязаны тексты подсказок, и переименование
+   сломало бы их молча — правило § 4.3 «замена имён ломает `data-*` тихо».
+   Поэтому таблица связывает то, что есть, а не то, что было бы красиво.
+
+   ⚠️ Кабинеты — такие же маршруты, как всё остальное, и это перепроверено, а
+   не унаследовано. `clearAdminHash` стирал `#admin`, `#panel` и `#group` при
+   каждом заходе на экран, и выглядело это как «прячем панель от ребёнка». На
+   деле смысл был другой: уходя с кабинета на «Игры», нельзя тащить за собой
+   его адрес. Ровно это и делает теперь `routeFor` — пишет `#games`. Прятать
+   же панель адресом бессмысленно: замок на ней пароль, а не незнание слова
+   «panel», и надпись, говорящая, ГДЕ человек, — правило § 4.16.
+
+   ⚠️ Названия для заголовка вкладки взяты с самих экранов, без эмодзи.
+   Эмодзи в `<title>` в поиске и в списке вкладок читается мусором. */
+var BASE_TITLE = "Фионика — информатика и программирование для школьников";
+var ROUTES = [
+  { h:"#today",   place:"today",   t:"Сегодня",                    open:function(){ screenToday(); } },
+  { h:"#train",   place:"train",   t:"Тренировки",                 open:function(){ screenTrain(); } },
+  { h:"#games",   place:"games",   t:"Игры",                       open:function(){ screenGames(); } },
+  { h:"#warmup",  place:"warm",    t:"Разминка",                   open:function(){ screenWarmups(); } },
+  { h:"#viz",     place:"viz",     t:"Визуализатор",               open:function(){ screenViz(); } },
+  { h:"#ai",      place:"ai",      t:"Ты и ИИ",                    open:function(){ screenAILab(); } },
+  { h:"#again",   place:"review",  t:"Повторить",                  open:function(){ screenReview(); } },
+  { h:"#hw",      place:"hw",      t:"Домашка",                    open:function(){ screenHW(); } },
+  { h:"#folio",   place:"folio",   t:"Моё: работы и сертификаты",                  open:function(){ screenFolio(); } },
+  { h:"#myexam",  place:"myexam",  t:"Задача по своей программе",
+    open:function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); } },
+  { h:"#mine",    place:"mytasks", t:"Своё задание",               open:function(){ screenMyTasks(); } },
+  { h:"#works",   place:"works",   t:"Что создают ученики",        open:function(){ screenShowcase(); } },
+  { h:"#robot",   place:"robot",   t:"Робот",                      open:function(){ screenRobot(); } },
+  { h:"#specs",   place:"specs",   t:"Приёмка",                    open:function(){ screenSpecs(); } },
+  { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
+  { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
+  { h:"#shop",    place:"shop",    t:"Мастерская: полка и верстак",open:function(){ screenShop(); } },
+  { h:"#sand",    place:"sand",    t:"Песочница",                  open:function(){ screenSandbox(); } },
+  { h:"#path",    place:"path",    t:"Карта пути",                 open:function(){ screenPath(); } },
+  { h:"#account", place:"account", t:"Профиль",                    open:function(){ screenAccount(); } },
+  { h:"#zan",     place:"zan",     t:"Занятие",                    open:function(){ screenZan(); } },
+  { h:"#about",   place:"about",   t:"Информатика для школьников", open:function(){ screenAbout(); } },
+  { h:"#guide",   place:"guide",   t:"Как пользоваться",           open:function(){ screenGuide(); } },
+  /* #help — второе имя того же экрана: оно было в ссылках и в помощи раньше,
+     чем #guide, и ломать разосланные ссылки нельзя. Читается, но НЕ пишется:
+     иначе у одного экрана вышло бы два адреса, и «кругооборот» не сошёлся. */
+  { h:"#help",    place:"guide",   t:"Как пользоваться",           open:function(){ screenGuide(); }, alias:1 },
+  /* ⚠️ #adult ведёт в РАЗНЫЕ экраны по роли устройства, и это не небрежность:
+     на устройстве взрослого это его личный кабинет, на детском — занятийная
+     рамка самого ребёнка. Место у них поэтому тоже разное, и в таблице
+     записаны оба: иначе «кругооборот» ловил бы ложную ошибку. */
+  { h:"#adult",   place:"adult",   t:"Кабинет взрослого",
+    open:function(){ if (isAdminDevice()) screenAdminHome(); else screenAdult(); } },
+  /* --- кабинеты взрослого --- */
+  { h:"#panel",   place:"admin",   t:"Панель репетитора",          open:function(){ screenAdmin(); } },
+  { h:"#group",   place:"group",   t:"Группа",                     open:function(){ screenGroup(); } },
+  { h:"#admin",   place:"kids",    t:"Мои ученики",                open:function(){ screenAdminHome(); } }
+];
+/* Два указателя по одной таблице: искать приходится в обе стороны — по адресу
+   (пришли по ссылке) и по месту (ушли на экран кнопкой). */
+var ROUTE_BY_HASH = {}, ROUTE_BY_PLACE = {};
+ROUTES.forEach(function(r){
+  ROUTE_BY_HASH[r.h] = r;
+  /* Первый выигрывает: у #help стоит alias, и место «guide» обязано писаться
+     как #guide, иначе один экран получил бы два адреса. */
+  if (!r.alias && !ROUTE_BY_PLACE[r.place]) ROUTE_BY_PLACE[r.place] = r;
+});
+
+/* Адрес следует за экраном. Одно место на весь продукт.
+   ⚠️ pushState, а не `location.hash = …`: присваивание хэша стреляет
+   `hashchange`, наш слушатель зовёт `routeHash()`, и экран рисуется ВТОРОЙ
+   раз — с потерей уже введённого и с перезапуском счётчика времени урока.
+   pushState событий не стреляет, а «Назад» браузера всё равно приходит к нам
+   тем же `hashchange`. */
+function setRoute(hash, title){
+  /* ⚠️ Заголовок ставится ПЕРВЫМ и всегда, даже если адрес не менялся.
+     Обратный порядок был ошибкой, и нашлась она не тестом, а нажатием
+     (правило § 4.7): человек открывает присланную ссылку на урок, адрес уже
+     нужный — запись отваливается ранним выходом, а вместе с ней отваливался
+     и заголовок. Получалось, что урок, открытый по ссылке, сидел во вкладке
+     без имени: как раз в том случае, ради которого адрес и заводили. */
+  setTitle(title);
+  try {
+    if (!history.pushState) return;
+    var want = hash || "";
+    if ((location.hash || "") === want) return;
+    history.pushState(null, "", location.pathname + location.search + want);
+  } catch(e){}
+}
+function setTitle(title){
+  try { document.title = title ? (title + " — Фионика") : BASE_TITLE; } catch(e){}
+}
+/* Адрес по месту, на котором стоит человек.
+   ⚠️ Первая версия этого места решала по ВРЕМЕНИ: заводился флаг «сейчас
+   разбираем адрес», и пока он поднят, писать было нельзя. Флаг оказался
+   негодным, и показала это не голова, а диагностика: экраны дорисовываются
+   асинхронно, продолжение приходит уже со сброшенным флагом, и один и тот же
+   заход давал то один адрес, то другой — гонка. Признак был виден и раньше:
+   тест на это правило мигал.
+   Теперь решение принимается по СОСТОЯНИЮ, а не по моменту, и потому
+   повторяемо: стираем только ЧУЖОЙ адрес — тот, что записан в таблице за
+   другим экраном. Адрес, которого в таблице нет, не наш: его поставил либо
+   сам экран (у урока, мира и проекта адрес с параметром), либо человек,
+   пришедший по присланной ссылке (#task=…, #play=…, #work=…, #assign=…).
+   Стереть такой значит увести человека с присланной ему задачи при первом же
+   обновлении страницы. */
+function routeFor(place){
+  var r = ROUTE_BY_PLACE[place];
+  if (r) return setRoute(r.h, r.t);
+  if (ROUTE_BY_HASH[(location.hash || "").toLowerCase()]) setRoute("", "");
+}
 function wantsAdmin(){
   var h = (location.hash || "").toLowerCase();
   var q = (location.search || "").toLowerCase();
   return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
 }
-var HASH_SCREENS = {
-  "#zan":     function(){ screenZan(); },
-  /* #adult вёл в старый смешанный кабинет; теперь на устройстве взрослого это
-     дверь в его личный кабинет. На детском устройстве адрес по-прежнему открывает
-     занятийную рамку самого ребёнка. */
-  "#adult":   function(){ if (isAdminDevice()) screenAdminHome(); else screenAdult(); },
-  /* Полная панель репетитора (группа, просмотр по коду) — под своим адресом,
-     отдельно от нового кабинета на #admin. Замок общий. */
-  "#panel":   function(){ screenAdmin(); },
-  "#games":   function(){ screenGames(); },
-  "#warmup":  function(){ screenWarmups(); },
-  "#today":   function(){ screenToday(); },
-  "#account": function(){ screenAccount(); },
-  "#viz":     function(){ screenViz(); },
-  "#ai":      function(){ screenAILab(); },
-  "#again":   function(){ screenReview(); },
-  "#hw":      function(){ screenHW(); },
-  "#folio":   function(){ screenFolio(); },
-  "#myexam":  function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); },
-  "#mine":    function(){ screenMyTasks(); },
-  "#train":   function(){ screenTrain(); },
-  "#works":   function(){ screenShowcase(); },
-  "#robot":   function(){ screenRobot(); },
-  "#group":   function(){ screenGroup(); },
-  "#specs":   function(){ screenSpecs(); },
-  "#algo":    function(){ screenAlgo(); },
-  "#variant": function(){ screenVariant(); },
-  "#about":   function(){ screenAbout(); },
-  "#help":    function(){ screenGuide(); },
-  "#guide":   function(){ screenGuide(); }
-};
 function routeHash(){
   if (wantsAdmin()){ screenAdminHome(); return true; }
   /* Задание из ссылки разбираем ДО приведения к нижнему регистру: base64
@@ -12759,8 +12877,16 @@ function routeHash(){
     if (gotw) screenWork(gotw); else screenWorkBroken();
     return true;
   }
+  /* Урок и мир — единственные экраны с ПАРАМЕТРОМ в адресе. Разбираются до
+     приведения к нижнему регистру не из-за base64 (id урока — латиница с
+     дефисом), а чтобы правило было одно для всех адресов с «=». */
+  var lpk = /^#lesson=([\w-]+)$/.exec(location.hash || "");
+  if (lpk && CURRICULUM.byId(lpk[1])){ openLesson(lpk[1]); return true; }
+  var wpn = /^#world=(\d+)$/.exec(location.hash || "");
+  if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }
+
   var h = (location.hash || "").toLowerCase();
-  if (HASH_SCREENS[h]){ HASH_SCREENS[h](); return true; }
+  if (ROUTE_BY_HASH[h]){ ROUTE_BY_HASH[h].open(); return true; }
   var ph = h.replace(/^#/, "");
   if (ph && projectById(ph)){ openProject(ph); return true; }
   return false;
@@ -13228,7 +13354,6 @@ function examTally(id){
    бы его глазами. */
 function openExamMap(id){
   algoTab = (id === "oge" || id === "ege") ? id : "all";
-  location.hash = "#algo";
   screenAlgo();
 }
 /* Подвал дома — один на все роли. Заведён по жалобе фаундера 06.09.2026,
@@ -13904,9 +14029,8 @@ function wireRoomNav(box){
   (box || document).querySelectorAll("[data-room]").forEach(function(b){
     b.onclick = function(){
       var k = b.getAttribute("data-room");
-      if (k === "group"){ location.hash = "#group"; return screenGroup(); }
-      if (k === "admin"){ location.hash = "#panel"; return screenAdmin(); }
-      clearAdminHash();
+      if (k === "group") return screenGroup();
+      if (k === "admin") return screenAdmin();
       return screenKids();
     };
   });
@@ -16889,7 +17013,7 @@ function groupLoad(key){
 function screenGroup(){
   curPlace = "group";
   stopTimer(); vizStopPlay();
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("group"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenGroup);
   var rows = groupState.rows;
 
@@ -17063,7 +17187,7 @@ function screenGroup(){
   });
   wireGroupVariant();
   app.querySelectorAll("[data-gback]").forEach(function(b){
-    b.onclick = function(){ location.hash = "#panel"; screenAdmin(); };
+    b.onclick = function(){ screenAdmin(); };
   });
   app.querySelectorAll("[data-ghome]").forEach(function(b){ b.onclick = goHome; });
   refreshTop();
@@ -17085,7 +17209,7 @@ function screenAdmin(){
   /* без clearAdminHash: этот экран открывается по #panel и живёт под ним */
   curPlace = "admin";
   stopTimer(); vizStopPlay();
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("admin"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenAdmin);
 
   var h = "";
@@ -17210,7 +17334,7 @@ function screenAdmin(){
     if (act === "tomap"){ viewState = null; screenWorlds(); }
     else if (act === "myown"){ viewState = null; screenAdmin(); }
     else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
-    else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }
+    else if (act === "toadult"){ screenAdult(); }
     else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
       /* ⚠️ Спрашиваем, потому что отменить нечем: настоящие звёзды затираются
@@ -17306,7 +17430,7 @@ function screenAdmin(){
           ". Ключ репетитора " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
       }, function(err){ srv("bad", "<b>Проверка не прошла</b>" + esc(err.message || err)); });
     }
-    else if (act === "togroup"){ location.hash = ""; return screenGroup(); }
+    else if (act === "togroup") return screenGroup();
     else if (act === "viewother"){
       var code = (document.getElementById("othercode").value || "").trim().toLowerCase();
       if (!code){ srv("bad", "<b>Пусто</b>Введите код ученика."); return; }
@@ -18921,6 +19045,13 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) goHome(); })
 })();
 
 window.__game = {
+  /* адреса экранов — целиком, чтобы проверка «кругооборот» ходила по той же
+     таблице, что и продукт, а не по своему списку рядом (правило § 4.6) */
+  ROUTES: ROUTES, ROUTE_BY_HASH: ROUTE_BY_HASH, ROUTE_BY_PLACE: ROUTE_BY_PLACE,
+  routeHash: routeHash, setRoute: setRoute, routeFor: routeFor, BASE_TITLE: BASE_TITLE,
+  /* где мы сейчас — ВЫЗОВОМ, а не значением: curPlace меняется на каждом
+     переходе, и снятая один раз копия соврала бы (правило § 4.5) */
+  place: function(){ return curPlace; }, tab: function(){ return curTab; },
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
   screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,

@@ -25199,7 +25199,7 @@ function backTarget(){
     case "shop":      return { label:"В портфолио", go: screenFolio };
     case "friendtask":return { label:"К заданиям", go: function(){ screenMyTasks(); } };
     case "trace":     return { label:"В кабинет", go: screenAdult };
-    case "group":     return { label:"В панель", go: function(){ location.hash = "#panel"; screenAdmin(); } };
+    case "group":     return { label:"В панель", go: function(){ screenAdmin(); } };
     default:          return { label:"На главную", go: screenWorlds };
   }
 }
@@ -27099,8 +27099,8 @@ var HOME = KVSCREENS.home({
   screenAdminHome: screenAdminHome,
    
   examTally: examTally, openExamMap: openExamMap,
-  screenVariant: function(){ location.hash = "#variant"; screenVariant(); },
-  screenRobot: function(){ location.hash = "#robot"; screenRobot(); },
+  screenVariant: function(){ screenVariant(); },
+  screenRobot: function(){ screenRobot(); },
    
   variantStat: function(){ return typeof variantStat === "function" ? variantStat() : ""; },
   S: function(){ return S; },
@@ -27151,6 +27151,8 @@ function screenTrain(){
 function screenWorld(n){
   var seq = enterScreen(undefined, "world");
   var w = CURRICULUM.world(n);
+   
+  if (w) setRoute("#world=" + w.n, "Мир " + w.n + ". " + w.title);
   worldContent(n).then(function(){
     if (screenStale(seq)) return;           
     var ready = worldReadyLessons(w);
@@ -27401,6 +27403,8 @@ function openLesson(id){
   if (capHard() && !lessonStarted(id)) return screenCapReached();
   curTab = "home";               
   curPlace = "lesson";           
+   
+  setRoute("#lesson=" + l.id, "Урок " + l.num + ". " + l.title);
   var seq = claimScreen();
   worldContent(l.world).then(function(){
     if (screenStale(seq)) return;           
@@ -29824,7 +29828,7 @@ function screenAlgo(){
     });
      
     var rb = app.querySelector("[data-exrobot]");
-    if (rb) rb.onclick = function(){ location.hash = "#robot"; screenRobot(); };
+    if (rb) rb.onclick = function(){ screenRobot(); };
     var vb = app.querySelector("[data-exvariant]");
     if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
@@ -31075,6 +31079,8 @@ function openProject(id, forceStep){
     if (i >= p.steps.length) return screenProjectDone(p.id);
     var step = p.steps[i];
     enterScreen(undefined, "project");
+     
+    setRoute("#" + p.id, "Проект «" + p.title + "»");
      
     var draftId = projectDraftId(p.id, i);
     var startCode = projectStartCode(p, i);
@@ -33350,7 +33356,7 @@ function screenAdult(){
   curPlace = "adult";
   stopTimer(); vizStopPlay();
    
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("adult"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenAdult);
   var f = frame();
   var last = zanLast();
@@ -33669,7 +33675,7 @@ function wireAdult(){
     var act = b.getAttribute("data-act");
     b.onclick = function(){
       if (act === "tomap") return screenWorlds();
-      if (act === "toadmin"){ location.hash = "#panel"; return screenAdmin(); }
+      if (act === "toadmin"){ return screenAdmin(); }
       if (act === "totrace") return screenTrace();
       if (act === "toworks") return screenShowcase();
       if (act === "toai") return screenAILab();
@@ -34675,7 +34681,9 @@ function enterScreen(tab, place){
   vizStopPlay();
    
   voiceStop();
-  clearAdminHash();
+  clearAdminQuery();
+   
+  routeFor(curPlace);
   return claimScreen();
 }
 
@@ -34684,18 +34692,16 @@ var screenSeq = 0;
  
 function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
 function screenStale(n){ return n !== screenSeq; }
-function clearAdminHash(){
+ 
+function clearAdminQuery(){
   try {
     if (!history.replaceState) return;
-    var hl = (location.hash || "").toLowerCase();
-    var hash = (hl === "#admin" || hl === "#panel" || hl === "#group") ? "" : location.hash;
-     
     var search = (location.search || "").replace(/([?&])admin(=[^&]*)?(&|$)/i, function(m, p1, v, tail){
       return tail === "&" ? p1 : (p1 === "?" ? "" : "");
     });
     if (search === "?") search = "";
-    if (hash !== location.hash || search !== location.search)
-      history.replaceState(null, "", location.pathname + search + hash);
+    if (search !== location.search)
+      history.replaceState(null, "", location.pathname + search + location.hash);
   } catch(e){}
 }
 function adminUnlocked(){
@@ -34710,39 +34716,76 @@ function adminLock(){
   try { sessionStorage.removeItem("kodokvest_admin"); } catch(e){}
 }
  
+ 
+var BASE_TITLE = "Фионика — информатика и программирование для школьников";
+var ROUTES = [
+  { h:"#today",   place:"today",   t:"Сегодня",                    open:function(){ screenToday(); } },
+  { h:"#train",   place:"train",   t:"Тренировки",                 open:function(){ screenTrain(); } },
+  { h:"#games",   place:"games",   t:"Игры",                       open:function(){ screenGames(); } },
+  { h:"#warmup",  place:"warm",    t:"Разминка",                   open:function(){ screenWarmups(); } },
+  { h:"#viz",     place:"viz",     t:"Визуализатор",               open:function(){ screenViz(); } },
+  { h:"#ai",      place:"ai",      t:"Ты и ИИ",                    open:function(){ screenAILab(); } },
+  { h:"#again",   place:"review",  t:"Повторить",                  open:function(){ screenReview(); } },
+  { h:"#hw",      place:"hw",      t:"Домашка",                    open:function(){ screenHW(); } },
+  { h:"#folio",   place:"folio",   t:"Моё: работы и сертификаты",                  open:function(){ screenFolio(); } },
+  { h:"#myexam",  place:"myexam",  t:"Задача по своей программе",
+    open:function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); } },
+  { h:"#mine",    place:"mytasks", t:"Своё задание",               open:function(){ screenMyTasks(); } },
+  { h:"#works",   place:"works",   t:"Что создают ученики",        open:function(){ screenShowcase(); } },
+  { h:"#robot",   place:"robot",   t:"Робот",                      open:function(){ screenRobot(); } },
+  { h:"#specs",   place:"specs",   t:"Приёмка",                    open:function(){ screenSpecs(); } },
+  { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
+  { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
+  { h:"#shop",    place:"shop",    t:"Мастерская: полка и верстак",open:function(){ screenShop(); } },
+  { h:"#sand",    place:"sand",    t:"Песочница",                  open:function(){ screenSandbox(); } },
+  { h:"#path",    place:"path",    t:"Карта пути",                 open:function(){ screenPath(); } },
+  { h:"#account", place:"account", t:"Профиль",                    open:function(){ screenAccount(); } },
+  { h:"#zan",     place:"zan",     t:"Занятие",                    open:function(){ screenZan(); } },
+  { h:"#about",   place:"about",   t:"Информатика для школьников", open:function(){ screenAbout(); } },
+  { h:"#guide",   place:"guide",   t:"Как пользоваться",           open:function(){ screenGuide(); } },
+   
+  { h:"#help",    place:"guide",   t:"Как пользоваться",           open:function(){ screenGuide(); }, alias:1 },
+   
+  { h:"#adult",   place:"adult",   t:"Кабинет взрослого",
+    open:function(){ if (isAdminDevice()) screenAdminHome(); else screenAdult(); } },
+   
+  { h:"#panel",   place:"admin",   t:"Панель репетитора",          open:function(){ screenAdmin(); } },
+  { h:"#group",   place:"group",   t:"Группа",                     open:function(){ screenGroup(); } },
+  { h:"#admin",   place:"kids",    t:"Мои ученики",                open:function(){ screenAdminHome(); } }
+];
+ 
+var ROUTE_BY_HASH = {}, ROUTE_BY_PLACE = {};
+ROUTES.forEach(function(r){
+  ROUTE_BY_HASH[r.h] = r;
+   
+  if (!r.alias && !ROUTE_BY_PLACE[r.place]) ROUTE_BY_PLACE[r.place] = r;
+});
+
+ 
+function setRoute(hash, title){
+   
+  setTitle(title);
+  try {
+    if (!history.pushState) return;
+    var want = hash || "";
+    if ((location.hash || "") === want) return;
+    history.pushState(null, "", location.pathname + location.search + want);
+  } catch(e){}
+}
+function setTitle(title){
+  try { document.title = title ? (title + " — Фионика") : BASE_TITLE; } catch(e){}
+}
+ 
+function routeFor(place){
+  var r = ROUTE_BY_PLACE[place];
+  if (r) return setRoute(r.h, r.t);
+  if (ROUTE_BY_HASH[(location.hash || "").toLowerCase()]) setRoute("", "");
+}
 function wantsAdmin(){
   var h = (location.hash || "").toLowerCase();
   var q = (location.search || "").toLowerCase();
   return h === "#admin" || /(^|[?&])admin([=&]|$)/.test(q);
 }
-var HASH_SCREENS = {
-  "#zan":     function(){ screenZan(); },
-   
-  "#adult":   function(){ if (isAdminDevice()) screenAdminHome(); else screenAdult(); },
-   
-  "#panel":   function(){ screenAdmin(); },
-  "#games":   function(){ screenGames(); },
-  "#warmup":  function(){ screenWarmups(); },
-  "#today":   function(){ screenToday(); },
-  "#account": function(){ screenAccount(); },
-  "#viz":     function(){ screenViz(); },
-  "#ai":      function(){ screenAILab(); },
-  "#again":   function(){ screenReview(); },
-  "#hw":      function(){ screenHW(); },
-  "#folio":   function(){ screenFolio(); },
-  "#myexam":  function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); },
-  "#mine":    function(){ screenMyTasks(); },
-  "#train":   function(){ screenTrain(); },
-  "#works":   function(){ screenShowcase(); },
-  "#robot":   function(){ screenRobot(); },
-  "#group":   function(){ screenGroup(); },
-  "#specs":   function(){ screenSpecs(); },
-  "#algo":    function(){ screenAlgo(); },
-  "#variant": function(){ screenVariant(); },
-  "#about":   function(){ screenAbout(); },
-  "#help":    function(){ screenGuide(); },
-  "#guide":   function(){ screenGuide(); }
-};
 function routeHash(){
   if (wantsAdmin()){ screenAdminHome(); return true; }
    
@@ -34779,8 +34822,14 @@ function routeHash(){
     if (gotw) screenWork(gotw); else screenWorkBroken();
     return true;
   }
+   
+  var lpk = /^#lesson=([\w-]+)$/.exec(location.hash || "");
+  if (lpk && CURRICULUM.byId(lpk[1])){ openLesson(lpk[1]); return true; }
+  var wpn = /^#world=(\d+)$/.exec(location.hash || "");
+  if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }
+
   var h = (location.hash || "").toLowerCase();
-  if (HASH_SCREENS[h]){ HASH_SCREENS[h](); return true; }
+  if (ROUTE_BY_HASH[h]){ ROUTE_BY_HASH[h].open(); return true; }
   var ph = h.replace(/^#/, "");
   if (ph && projectById(ph)){ openProject(ph); return true; }
   return false;
@@ -35110,7 +35159,6 @@ function examTally(id){
  
 function openExamMap(id){
   algoTab = (id === "oge" || id === "ege") ? id : "all";
-  location.hash = "#algo";
   screenAlgo();
 }
  
@@ -35549,9 +35597,8 @@ function wireRoomNav(box){
   (box || document).querySelectorAll("[data-room]").forEach(function(b){
     b.onclick = function(){
       var k = b.getAttribute("data-room");
-      if (k === "group"){ location.hash = "#group"; return screenGroup(); }
-      if (k === "admin"){ location.hash = "#panel"; return screenAdmin(); }
-      clearAdminHash();
+      if (k === "group") return screenGroup();
+      if (k === "admin") return screenAdmin();
       return screenKids();
     };
   });
@@ -38031,7 +38078,7 @@ function groupLoad(key){
 function screenGroup(){
   curPlace = "group";
   stopTimer(); vizStopPlay();
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("group"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenGroup);
   var rows = groupState.rows;
 
@@ -38189,7 +38236,7 @@ function screenGroup(){
   });
   wireGroupVariant();
   app.querySelectorAll("[data-gback]").forEach(function(b){
-    b.onclick = function(){ location.hash = "#panel"; screenAdmin(); };
+    b.onclick = function(){ screenAdmin(); };
   });
   app.querySelectorAll("[data-ghome]").forEach(function(b){ b.onclick = goHome; });
   refreshTop();
@@ -38211,7 +38258,7 @@ function screenAdmin(){
    
   curPlace = "admin";
   stopTimer(); vizStopPlay();
-  voiceStop(); claimScreen();
+  voiceStop(); routeFor("admin"); claimScreen();
   if (!adminUnlocked()) return adminGate(screenAdmin);
 
   var h = "";
@@ -38329,7 +38376,7 @@ function screenAdmin(){
     if (act === "tomap"){ viewState = null; screenWorlds(); }
     else if (act === "myown"){ viewState = null; screenAdmin(); }
     else if (act === "lock"){ viewState = null; adminLock(); screenWorlds(); }
-    else if (act === "toadult"){ location.hash = "#adult"; screenAdult(); }
+    else if (act === "toadult"){ screenAdult(); }
     else if (act === "unlockall"){ S.admin.unlockAll = !S.admin.unlockAll; saveLocal(); screenAdmin(); }
     else if (act === "passready"){
        
@@ -38413,7 +38460,7 @@ function screenAdmin(){
           ". Ключ репетитора " + (r.adminKeySet ? "задан" : "не задан — список учеников будет закрыт") + ".");
       }, function(err){ srv("bad", "<b>Проверка не прошла</b>" + esc(err.message || err)); });
     }
-    else if (act === "togroup"){ location.hash = ""; return screenGroup(); }
+    else if (act === "togroup") return screenGroup();
     else if (act === "viewother"){
       var code = (document.getElementById("othercode").value || "").trim().toLowerCase();
       if (!code){ srv("bad", "<b>Пусто</b>Введите код ученика."); return; }
@@ -39746,6 +39793,11 @@ window.addEventListener("hashchange", function(){ if (!routeHash()) goHome(); })
 })();
 
 window.__game = {
+   
+  ROUTES: ROUTES, ROUTE_BY_HASH: ROUTE_BY_HASH, ROUTE_BY_PLACE: ROUTE_BY_PLACE,
+  routeHash: routeHash, setRoute: setRoute, routeFor: routeFor, BASE_TITLE: BASE_TITLE,
+   
+  place: function(){ return curPlace; }, tab: function(){ return curTab; },
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
   screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
