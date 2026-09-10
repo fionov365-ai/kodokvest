@@ -2763,6 +2763,147 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- страницы сайта: ссылки ведут в существующее, карта сайта полна ---
+     ⚠️ Заведено 10.09.2026 вместе со страницей `shkole/`. Ловит класс ошибок,
+     которого не видит ни один другой тест и не видно глазами: статические
+     страницы связаны РУКАМИ — у каждой десяток ссылок в шапке и подвале, и
+     новая страница вписывается в них по одной. Опечатка не ломает ни сборку,
+     ни приложение: она молча отдаёт человеку 404, и узнаём мы об этом от
+     него. Сегодня страниц 13 и ссылок между ними больше сотни — руками это
+     уже не пересчитывается.
+     Спрашиваем три вещи:
+       1) каждая ссылка ведёт в существующий файл;
+       2) ни одна не начинается с косой черты — на адресе вида
+          .../kodokvest/ такая уводит в корень домена, то есть в никуда
+          (та же ловушка, что у подвала приложения выше);
+       3) страницы и `sitemap.xml` совпадают в обе стороны: страницы без
+          строки в карте поисковик не найдёт, а строка без страницы — 404
+          в глазах робота. */
+  let pagesChecked = 0;
+  {
+    const p0 = problems.length;
+    const site = "https://fionov365-ai.github.io/kodokvest/";
+    /* все index.html репозитория, кроме сборки и зависимостей */
+    const html = [];
+    (function walk(dir, rel){
+      fs.readdirSync(dir, { withFileTypes:true }).forEach(e => {
+        if (e.name === "node_modules" || e.name === "dist" || e.name.charAt(0) === ".") return;
+        const full = path.join(dir, e.name), r = rel ? rel + "/" + e.name : e.name;
+        if (e.isDirectory()) return walk(full, r);
+        if (e.name === "index.html") html.push(r);
+      });
+    })(root, "");
+
+    if (html.length < 12) bad("[страницы] найдено всего " + html.length + " страниц — обход сломался");
+
+    html.forEach(rel => {
+      const src = fs.readFileSync(path.join(root, rel), "utf8");
+      const dir = path.dirname(rel) === "." ? "" : path.dirname(rel);
+      [...src.matchAll(/(?:href|src)="([^"]+)"/g)].map(m => m[1]).forEach(href => {
+        if (/^(https?:|mailto:|tel:|data:|#)/.test(href)) return;
+        if (href.charAt(0) === "/")
+          return bad("[страницы] " + rel + ": ссылка «" + href + "» начинается с косой черты — " +
+                     "на адресе вида .../kodokvest/ она ведёт в корень домена, то есть в никуда");
+        const clean = href.split("#")[0].split("?")[0];
+        if (!clean) return;
+        let target = path.normalize(path.join(dir, clean));
+        if (/[\\/]$/.test(clean) || clean === "." || clean === "..")
+          target = path.join(target, "index.html");
+        if (!fs.existsSync(path.join(root, target)))
+          bad("[страницы] " + rel + ": ссылка «" + href + "» ведёт в никуда (" + target + ")");
+      });
+    });
+
+    /* карта сайта — в обе стороны */
+    const map = fs.readFileSync(path.join(root, "sitemap.xml"), "utf8");
+    const locs = [...map.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+    if (!locs.length) bad("[страницы] в sitemap.xml нет ни одного адреса");
+    const inMap = {};
+    locs.forEach(loc => {
+      if (loc.indexOf(site) !== 0)
+        return bad("[страницы] адрес карты сайта не с нашей площадки: " + loc);
+      const rel = loc.slice(site.length) + "index.html";
+      inMap[rel] = 1;
+      if (!fs.existsSync(path.join(root, rel)))
+        bad("[страницы] в sitemap.xml есть «" + loc + "», а страницы нет — робот получит 404");
+    });
+    html.forEach(rel => {
+      if (!inMap[rel])
+        bad("[страницы] страница «" + rel + "» не попала в sitemap.xml — из поиска её не существует");
+    });
+    if (problems.length === p0) pagesChecked++;
+  }
+
+  /* --- числа на страницах сайта сверены с продуктом ---
+     ⚠️ Числа на витрине пишутся РУКАМИ: посчитать их страница не может, там
+     нет ни строчки кода. Значит они стареют молча. Так и вышло: 09.09.2026 на
+     странице репетитора стояло «1 065 сверок», к 10.09 их стало 1 178, и
+     заметить это было нечем — та строка была правдой ровно один день.
+     Числа со сроком годности со страниц убраны (сверки), а те, что остались,
+     сверяются здесь с самими данными продукта. Правило то же, что на вывеске
+     приложения: число, записанное руками, расходится с делом в первый же день
+     наполнения. */
+  let siteNumsChecked = 0;
+  {
+    const p0 = problems.length;
+    const надо = [
+      { rx: /(\d+)\s+урок/g,                  сколько: w.CURRICULUM.total,          что: "уроков" },
+      { rx: /(\d+)\s+проект/g,                сколько: (w.PROJECTS || []).length,   что: "проектов" },
+      { rx: /(\d+)\s+упражнени\S*\s+про\s+ИИ/g, сколько: (w.AILAB || []).length,    что: "упражнений про ИИ" }
+    ];
+    ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie", "individualnyi-proekt"].forEach(page => {
+      const f = path.join(root, page, "index.html");
+      if (!fs.existsSync(f)) return bad("[числа-сайта] нет страницы " + page);
+      const текст = fs.readFileSync(f, "utf8").replace(/<[^>]+>/g, " ");
+      надо.forEach(n => {
+        n.rx.lastIndex = 0;
+        let m;
+        while ((m = n.rx.exec(текст)))
+          if (Number(m[1]) !== n.сколько)
+            bad("[числа-сайта] " + page + ": написано «" + m[0].trim() + "», а в продукте " +
+                n.сколько + " " + n.что + " — страница врёт посетителю");
+      });
+    });
+    if (problems.length === p0) siteNumsChecked++;
+  }
+
+  /* --- ряд карточек кончается ровно, без дыры справа ---
+     ⚠️ Продолжение правила полной ширины, только про сетку, а не про строку.
+     Колонка страницы 1044 px делится на три карточки по 340 или на четыре по
+     251. Любое ДРУГОЕ число карточек оставляет в последнем ряду пустое место:
+     четыре карточки до 10.09.2026 ложились 3 + 1 и дыра занимала треть
+     ширины — та самая, на которую фаундер жаловался четырежды. Чинится это
+     в `css/pages.css` правилом «ровно четыре — ровно один ряд», а здесь
+     сторожится с двух сторон:
+       1) правило из pages.css никуда не делось;
+       2) ни одна сетка не набрана числом, которое ряд не заполняет.
+     Полными считаются 1, 2, 3, 4 и 6: 4 — по правилу выше, 6 — это 3 + 3.
+     Пять или семь карточек ряд не заполняют ничем, и такую сетку надо
+     переписать, а не подпирать стилем. */
+  let cardRowChecked = 0;
+  {
+    const p0 = problems.length;
+    const cssP = fs.readFileSync(path.join(root, "css/pages.css"), "utf8");
+    if (!/:has\(>\s*\.card:nth-child\(4\):nth-last-child\(1\)\)/.test(cssP))
+      bad("[ряд карточек] из pages.css пропало правило «ровно четыре — ровно один ряд» — " +
+          "четвёртая карточка снова уедет вниз одна, и справа откроется пустая треть");
+
+    const ПОЛНЫЕ = [1, 2, 3, 4, 6];
+    ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie",
+     "individualnyi-proekt", "baza"].forEach(page => {
+      const f = path.join(root, page, "index.html");
+      if (!fs.existsSync(f)) return;
+      const src = fs.readFileSync(f, "utf8");
+      [...src.matchAll(/<div class="cards">([\s\S]*?)\n  <\/div>/g)].forEach(m => {
+        const n = (m[1].match(/class="card"/g) || []).length;
+        if (ПОЛНЫЕ.indexOf(n) < 0)
+          bad("[ряд карточек] " + page + ": в сетке " + n + " карточек — такой ряд " +
+              "не заполняется, справа останется дыра. Полные числа: " + ПОЛНЫЕ.join(", "));
+      });
+    });
+    if (problems.length === p0) cardRowChecked++;
+  }
+
   /* --- на Главном нет кнопки без обработчика ---
      ⚠️ Это проверка на КЛАСС ошибок, а не на одну. Разбор 09.09.2026 нашёл на
      Главном две мёртвые кнопки, и обе — по одной причине: в договор модуля
@@ -9231,6 +9372,9 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
+  console.log(`страницы сайта: ссылки и карта сайта: ${pagesChecked ? "да" : "нет"}`);
+  console.log(`числа на страницах сверены с продуктом: ${siteNumsChecked ? "да" : "нет"}`);
+  console.log(`ряд карточек без дыры справа: ${cardRowChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),
      а значит каждый файл проходит через разборщик. Разборщик, съевший строку

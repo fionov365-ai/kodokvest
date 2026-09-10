@@ -1,6 +1,7 @@
 # Переезд на свой домен: список всех мест с адресом
 
-Заведён 09.09.2026 вместе с первыми статическими страницами. Смысл файла один:
+Заведён 09.09.2026 вместе с первыми статическими страницами; страницы
+справочника и `shkole/` дописаны 10.09.2026. Смысл файла один:
 **в день покупки домена переезд должен быть заменой строк по списку, а не
 поиском по репозиторию.**
 
@@ -44,6 +45,10 @@ location.pathname`; манифест ходит по «.», service worker — �
 | `individualnyi-proekt/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `semeynoe-obuchenie/index.html` | то же | статика |
 | `repetitoru/index.html` | то же | статика |
+| `shkole/index.html` | то же | статика |
+| `baza/index.html` | `canonical` | статика |
+| `baza/rebenok-ne-hochet-uchitsya/index.html` | `canonical` | статика |
+| `baza/skolko-stoit-repetitor-po-informatike/index.html` | `canonical` | статика |
 | `o-proekte/index.html` | `canonical` | статика |
 | `kontakty/index.html` | `canonical` | статика |
 | `pravo/politika/index.html` | `canonical` | статика |
