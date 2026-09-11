@@ -9107,15 +9107,22 @@ function certBodyHTML(kind){
   var tally = sect
     ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
     : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
+  /* ⚠️ Лист за курс называется «Курс пройден», а не «Сертификат об окончании
+     курса» (решение фаундера 11.09.2026). Старая надпись была единственной
+     строкой продукта, которая сама объявляла себя документом об обучении, —
+     а лицензия нам не нужна ровно потому, что мы даём доступ к программе, а не
+     обучение с документом на выходе. Отсюда же мелкая строка внизу листа.
+     Разбор: vitrina-litsenziya-napravleniya-2026-09-09.md § 1.3. */
   return '<div class="certsheet">' +
     '<div class="certmark">🐍 Фионика</div>' +
-    '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
+    '<div class="certkind">' + (course ? "Курс пройден" : "Сертификат") + '</div>' +
     '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
     tally +
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
+    '<div class="certlegal">Не является документом об образовании</div>' +
   '</div>';
 }
 

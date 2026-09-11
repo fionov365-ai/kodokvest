@@ -1216,6 +1216,7 @@ body.focus .lede{display:none}
 .certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
 .certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
   justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}
+.certlegal{margin-top:10px;font-size:11px;color:#9a8c74}
 .certbar{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
 
 @media (max-width:720px){
@@ -31598,15 +31599,17 @@ function certBodyHTML(kind){
   var tally = sect
     ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
     : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
+   
   return '<div class="certsheet">' +
     '<div class="certmark">🐍 Фионика</div>' +
-    '<div class="certkind">' + (course ? "Сертификат об окончании курса" : "Сертификат") + '</div>' +
+    '<div class="certkind">' + (course ? "Курс пройден" : "Сертификат") + '</div>' +
     '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
     tally +
     '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
     '<span>Python с нуля · без установки · в браузере</span></div>' +
+    '<div class="certlegal">Не является документом об образовании</div>' +
   '</div>';
 }
 

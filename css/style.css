@@ -1162,6 +1162,7 @@ body.focus .lede{display:none}
 .certstars{margin-top:18px;font-family:'Fredoka','Inter',sans-serif;font-size:22px;color:#a5822a}
 .certfoot{margin-top:26px;padding-top:14px;border-top:1px solid #e0d6bd;display:flex;
   justify-content:space-between;gap:12px;font-size:12px;color:#7a6c56;flex-wrap:wrap}
+.certlegal{margin-top:10px;font-size:11px;color:#9a8c74}
 .certbar{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
 
 @media (max-width:720px){
