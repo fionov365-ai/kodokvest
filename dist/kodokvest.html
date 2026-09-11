@@ -844,6 +844,15 @@ a.bigbtn{text-align:center;text-decoration:none}
 .console{background:var(--sunken);min-height:90px;max-height:280px;overflow:auto;white-space:pre-wrap;
   color:var(--outink);font-size:13px;line-height:1.55;padding:12px 14px;font-family:'JetBrains Mono',monospace}
 .console .empty,.varlist .empty{color:var(--faint);font-style:italic;font-family:'Inter'}
+/* «Показать страницей» (js/studio.js): HTML из вывода — настоящей страницей.
+   Лист белый в ЛЮБОЙ теме: так его увидит посетитель сайта, и тёмная рамка
+   вокруг чужой страницы читалась бы как часть самой страницы. */
+.pagebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 13px;border-top:1px solid var(--line)}
+.pagebar .tip{font-size:12.5px;color:var(--faint)}
+.pagebox{border-top:1px solid var(--line);padding:10px 13px}
+.pageframe{display:block;width:100%;height:220px;border:1px solid var(--line2);border-radius:10px;background:#fff}
+.pagenote{margin-top:8px;font-size:13.5px;color:var(--soft)}
+.pagenote:empty{display:none}
 canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .varlist{display:flex;flex-direction:column;gap:5px}
 .varrow{display:flex;gap:8px;align-items:baseline;font-size:13px}
@@ -17592,6 +17601,20 @@ window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.studio = function(A){
 
  
+var PAGE_TAG = /<(html|body|h[1-6]|p|ul|ol|li|a|div|span|table|tr|td|th|b|i|u|em|strong|img|br|hr|section|header|footer|nav|main|article|style|title|button|pre|code|blockquote)(\s[^<>]*)?\/?>/i;
+function looksLikePage(text){ return !!text && PAGE_TAG.test(text); }
+var PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; " +
+               "media-src data:; form-action 'none'; base-uri 'none'";
+var PAGE_UNSAFE = /<(\/?)(script|meta|base|link|iframe|frame|frameset|object|embed|noscript|template)\b/gi;
+function pageDoc(text){
+  var body = String(text || "").replace(PAGE_UNSAFE, "&lt;$1$2");
+  return '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta http-equiv="Content-Security-Policy" content="' + PAGE_CSP + '">' +
+    '<style>body{margin:16px;font:16px/1.5 system-ui,sans-serif;color:#111;background:#fff}</style>' +
+    '</head><body>' + body + '</body></html>';
+}
+
+ 
 function makeStudio(cfg){
   cfg = cfg || {};
   var eng = Runtime.get(cfg.engine || "mini");
@@ -17619,7 +17642,12 @@ function makeStudio(cfg){
     side.appendChild(cp); canvas = cp.querySelector("canvas");
   }
   var conPane = document.createElement("div"); conPane.className = "pane";
-  conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>';
+  conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>' +
+    '<div class="pagebar" style="display:none"><button class="rbtn sec" data-role="page">🌐 Показать страницей</button>' +
+      '<span class="tip">так этот HTML нарисует браузер</span></div>' +
+    '<div class="pagebox" style="display:none">' +
+      '<iframe class="pageframe" title="страница, которую напечатала программа" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>' +
+      '<div class="pagenote"></div></div>';
   var varsPane = document.createElement("div"); varsPane.className = "pane"; varsPane.style.display = "none";
   varsPane.innerHTML = '<div class="ph">переменные сейчас</div><div class="pb"><div class="varlist"></div></div>';
    
@@ -17669,6 +17697,49 @@ function makeStudio(cfg){
   var con = conPane.querySelector(".console");
   var stepper = null;
 
+   
+  var pageBar = conPane.querySelector(".pagebar"), pageBox = conPane.querySelector(".pagebox");
+  var pageBtn = pageBar.querySelector('[data-role="page"]');
+  var pageFrame = conPane.querySelector(".pageframe"), pageNote = conPane.querySelector(".pagenote");
+  var pageOut = "";
+  function pageRender(){
+    pageNote.textContent = "";
+    pageFrame.setAttribute("srcdoc", pageDoc(pageOut));
+  }
+  function pageClose(){
+    pageBox.style.display = "none";
+    pageBtn.textContent = "🌐 Показать страницей";
+  }
+   
+  function pageSync(text){
+    pageOut = text || "";
+    var is = looksLikePage(pageOut);
+    pageBar.style.display = is ? "" : "none";
+    if (!is) pageClose();
+    else if (pageBox.style.display !== "none") pageRender();
+  }
+  pageBtn.onclick = function(){
+    if (pageBox.style.display !== "none") return pageClose();
+    pageBox.style.display = "";
+    pageBtn.textContent = "✕ Скрыть страницу";
+    pageRender();
+  };
+  pageFrame.addEventListener("load", function(){
+    var d = null;
+    try { d = pageFrame.contentDocument; } catch(e){}
+    if (!d || !d.body) return;
+    pageFrame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
+     
+    d.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a) return;
+      e.preventDefault();
+      pageNote.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
+        "На настоящем сайте браузер попросил бы эту страницу у сервера — здесь показано " +
+        "только то, что напечатала программа.";
+    });
+  });
+
   function showDisk(files){
     if (!files || !Object.keys(files).length){
       if (!hasData) return;
@@ -17688,6 +17759,7 @@ function makeStudio(cfg){
   function hideMsg(){ msg.className = "msg"; }
   function setConsole(text){
     con.innerHTML = text ? A.esc(text) : '<span class="empty">программа ничего не вывела</span>';
+    pageSync(text);
   }
 
   function doRun(){
@@ -17765,6 +17837,7 @@ function makeStudio(cfg){
     varsPane.style.display = "none";
     if (playPane) playPane.style.display = "none";
     con.innerHTML = '<span class="empty">пока пусто — нажми «Запустить»</span>';
+    pageSync("");
     if (canvas && eng.newTurtle) A.drawTurtle(canvas, eng.newTurtle());
   }
 

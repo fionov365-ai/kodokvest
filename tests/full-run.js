@@ -2795,6 +2795,78 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- «Показать страницей»: HTML из вывода — в запертой рамке (1.140.0) ---
+     ⚠️ Стережётся не красота, а обещание «ноль ПДн». Страница ребёнка — чужой
+     для нас HTML: одна строка <img src="https://…"> отправила бы браузер к
+     постороннему серверу. Поэтому проверяются замки (разбор в шапке
+     js/studio.js): рамка без скриптов, правило безопасности РАНЬШЕ вывода и
+     без сети, опасные теги из вывода мертвы. И два поведения: новый запуск
+     перерисовывает открытую страницу, «Очистить» её прячет. */
+  let pageChecked = 0;
+  {
+    const p0 = problems.length;
+    const песочницаБыла = g.state.sandbox;
+    g.screenSandbox(); await tick();
+    const st = studioOf();
+    if (!st) bad("[страница] песочница не отдала студию");
+    else {
+      const bar = st.querySelector(".pagebar"), btn = st.querySelector('[data-role="page"]');
+      const frame = st.querySelector(".pageframe"), box = st.querySelector(".pagebox");
+      const run = code => { st.editor.setCode(code); st.querySelector('[data-role="run"]').click(); };
+      if (!bar || !btn || !frame || !box) bad("[страница] у вывода нет кнопки и рамки страницы");
+      else {
+        /* 1. Вывод без HTML — кнопки нет. <class 'int'> и сравнения — не теги */
+        run("print(type(5))\nprint(2 < 3 > 1)\nprint(\"ответ: 42\")"); await tick();
+        if (bar.style.display !== "none")
+          bad("[страница] кнопка «Показать страницей» вышла у вывода без HTML: " + st.querySelector(".console").textContent);
+
+        /* 2. HTML — кнопка есть, рамка заперта */
+        run("print(\"<h1>Мой сайт</h1>\")\n" +
+            "print(\"<img src='https://example.com/x.png'>\")\n" +
+            "print(\"<script>alert(1)</script>\")\n" +
+            "print(\"<meta http-equiv='refresh' content='0;url=https://example.com'>\")"); await tick();
+        if (bar.style.display === "none") bad("[страница] программа напечатала HTML, а кнопки нет");
+        else {
+          btn.click(); await tick();
+          if (box.style.display === "none") bad("[страница] кнопка не открыла страницу");
+          if (!frame.hasAttribute("sandbox"))
+            bad("[страница] у рамки нет sandbox — чужой HTML выполняется как свой");
+          else if (/\ballow-scripts\b/.test(frame.getAttribute("sandbox")))
+            bad("[страница] в рамке разрешены скрипты — вместе с allow-same-origin это ключи от всего продукта");
+          const src = frame.getAttribute("srcdoc") || "";
+          const тело = src.indexOf("<body>");
+          if (src.indexOf("<h1>Мой сайт</h1>") < 0) bad("[страница] в страницу не попал вывод программы");
+          const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(src);
+          if (!csp || !/default-src 'none'/.test(csp[1]))
+            bad("[страница] у страницы нет правила «из сети ничего» — картинка с чужого адреса загрузится");
+          else {
+            if (/-src[^;]*(https?:|\*)/.test(csp[1]))
+              bad("[страница] правило безопасности пускает в сеть: " + csp[1]);
+            if (src.indexOf(csp[0]) > тело)
+              bad("[страница] правило безопасности стоит после вывода — до него всё уже загрузится");
+          }
+          if (/<script/i.test(src.slice(тело)))
+            bad("[страница] тег script из вывода попал в страницу живым");
+          if (/<meta http-equiv='refresh'/i.test(src))
+            bad("[страница] meta refresh из вывода живой — он увёл бы рамку на чужой адрес");
+
+          /* 3. Новый запуск перерисовывает открытую страницу */
+          run("print(\"<h2>Вторая версия</h2>\")"); await tick();
+          if ((frame.getAttribute("srcdoc") || "").indexOf("Вторая версия") < 0)
+            bad("[страница] после нового запуска рамка показывает старую страницу");
+
+          /* 4. «Очистить» прячет и кнопку, и страницу */
+          st.querySelector('[data-role="reset"]').click(); await tick();
+          if (bar.style.display !== "none" || box.style.display !== "none")
+            bad("[страница] «Очистить» оставил страницу от прошлого запуска");
+        }
+      }
+    }
+    g.state.sandbox = песочницаБыла;
+    if (problems.length === p0) pageChecked++;
+    viewReset(g);
+  }
+
   /* --- Главный экран сложен из карточек ---
      ⚠️ Проверка стережёт ровно то, чего не видит ни один другой тест и не
      видно глазами на экране. Карточке отдаётся только то, что она назвала в
@@ -9637,6 +9709,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`портфолио и сертификаты: ${folioChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вход: сначала урок, имя после победы: ${entryChecked ? "да" : "нет"}`);
+  console.log(`HTML из вывода — страницей, в запертой рамке: ${pageChecked ? "да" : "нет"}`);
   console.log(`цель по шагам: ${leanChecked ? "да" : "нет"}`);
   console.log(`разбор своей программы: ${ownVizChecked ? "да" : "нет"}`);
   console.log(`свои задания и ссылки: ${taskChecked ? "да" : "нет"}`);

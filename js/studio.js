@@ -22,6 +22,41 @@
 window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.studio = function(A){
 
+/* ================= «Показать страницей» =================
+   Решение фаундера 11.09.2026 (1.140.0): HTML, который печатает программа,
+   ребёнок видит не только текстом, но и страницей — так, как его нарисует
+   браузер. Мир 5 учит, что страница сайта — это функция, возвращающая HTML,
+   и проект «Свой сайт» собирает такой сайт целиком; до этой версии всё это
+   было видно только как `<h1>Мой сайт</h1>`.
+
+   ⚠️⚠️ Рамка ЗАПЕРТА, и это условие, а не предосторожность. Одна строка
+   `<img src="https://чужой-сайт/…">` в выводе — и браузер ребёнка сходил бы
+   к постороннему серверу: адрес, время, отпечаток устройства. Это ломает
+   «ноль ПДн» ровно так, как сломало бы видео с чужого хостинга (RAZVITIE § 7).
+   Поэтому замков четыре, и каждый закрывает своё:
+     1) sandbox БЕЗ allow-scripts — скрипты и обработчики onclick не
+        выполняются вовсе. allow-same-origin оставлен НАМЕРЕННО: без скриптов
+        он безопасен, а нам он нужен, чтобы перехватить нажатие на ссылку;
+     2) правило безопасности (CSP) первым тегом страницы: ни картинок, ни
+        шрифтов, ни стилей из сети — только то, что написано в самом выводе;
+     3) теги, которые что-то грузят или уводят (script, meta, base, link,
+        iframe, object, embed…), показываются ТЕКСТОМ: meta refresh увёл бы
+        рамку на чужой адрес, и CSP этого не запрещает;
+     4) нажатие на ссылку не уводит страницу, а объясняет, куда она ведёт.
+   Стили (<style>, style="…") разрешены: следующий шаг — задания на CSS. */
+var PAGE_TAG = /<(html|body|h[1-6]|p|ul|ol|li|a|div|span|table|tr|td|th|b|i|u|em|strong|img|br|hr|section|header|footer|nav|main|article|style|title|button|pre|code|blockquote)(\s[^<>]*)?\/?>/i;
+function looksLikePage(text){ return !!text && PAGE_TAG.test(text); }
+var PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; " +
+               "media-src data:; form-action 'none'; base-uri 'none'";
+var PAGE_UNSAFE = /<(\/?)(script|meta|base|link|iframe|frame|frameset|object|embed|noscript|template)\b/gi;
+function pageDoc(text){
+  var body = String(text || "").replace(PAGE_UNSAFE, "&lt;$1$2");
+  return '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta http-equiv="Content-Security-Policy" content="' + PAGE_CSP + '">' +
+    '<style>body{margin:16px;font:16px/1.5 system-ui,sans-serif;color:#111;background:#fff}</style>' +
+    '</head><body>' + body + '</body></html>';
+}
+
 /* ================= рабочая станция ================= */
 function makeStudio(cfg){
   cfg = cfg || {};
@@ -54,7 +89,12 @@ function makeStudio(cfg){
     side.appendChild(cp); canvas = cp.querySelector("canvas");
   }
   var conPane = document.createElement("div"); conPane.className = "pane";
-  conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>';
+  conPane.innerHTML = '<div class="ph">вывод программы</div><div class="console"><span class="empty">пока пусто — нажми «Запустить»</span></div>' +
+    '<div class="pagebar" style="display:none"><button class="rbtn sec" data-role="page">🌐 Показать страницей</button>' +
+      '<span class="tip">так этот HTML нарисует браузер</span></div>' +
+    '<div class="pagebox" style="display:none">' +
+      '<iframe class="pageframe" title="страница, которую напечатала программа" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>' +
+      '<div class="pagenote"></div></div>';
   var varsPane = document.createElement("div"); varsPane.className = "pane"; varsPane.style.display = "none";
   varsPane.innerHTML = '<div class="ph">переменные сейчас</div><div class="pb"><div class="varlist"></div></div>';
   /* Урокам про файлы нужно видеть, что лежит «на диске» до и после запуска. */
@@ -109,6 +149,52 @@ function makeStudio(cfg){
   var con = conPane.querySelector(".console");
   var stepper = null;
 
+  /* ===== страница из вывода (разбор замков — в шапке файла) ===== */
+  var pageBar = conPane.querySelector(".pagebar"), pageBox = conPane.querySelector(".pagebox");
+  var pageBtn = pageBar.querySelector('[data-role="page"]');
+  var pageFrame = conPane.querySelector(".pageframe"), pageNote = conPane.querySelector(".pagenote");
+  var pageOut = "";
+  function pageRender(){
+    pageNote.textContent = "";
+    pageFrame.setAttribute("srcdoc", pageDoc(pageOut));
+  }
+  function pageClose(){
+    pageBox.style.display = "none";
+    pageBtn.textContent = "🌐 Показать страницей";
+  }
+  /* Вывод сменился: кнопка есть только у HTML, открытая страница перерисовывается
+     вместе с выводом — иначе рядом стояли бы новый текст и старая страница. */
+  function pageSync(text){
+    pageOut = text || "";
+    var is = looksLikePage(pageOut);
+    pageBar.style.display = is ? "" : "none";
+    if (!is) pageClose();
+    else if (pageBox.style.display !== "none") pageRender();
+  }
+  pageBtn.onclick = function(){
+    if (pageBox.style.display !== "none") return pageClose();
+    pageBox.style.display = "";
+    pageBtn.textContent = "✕ Скрыть страницу";
+    pageRender();
+  };
+  pageFrame.addEventListener("load", function(){
+    var d = null;
+    try { d = pageFrame.contentDocument; } catch(e){}
+    if (!d || !d.body) return;
+    pageFrame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
+    /* ⚠️ Замок 4: ссылка не уводит рамку. Путь вроде «/posts/1» ушёл бы в
+       корень нашего же сайта и показал бы 404, а внешний адрес — к чужому
+       серверу. Вместо перехода объясняем, что сделал бы настоящий сайт. */
+    d.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a) return;
+      e.preventDefault();
+      pageNote.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
+        "На настоящем сайте браузер попросил бы эту страницу у сервера — здесь показано " +
+        "только то, что напечатала программа.";
+    });
+  });
+
   function showDisk(files){
     if (!files || !Object.keys(files).length){
       if (!hasData) return;
@@ -128,6 +214,7 @@ function makeStudio(cfg){
   function hideMsg(){ msg.className = "msg"; }
   function setConsole(text){
     con.innerHTML = text ? A.esc(text) : '<span class="empty">программа ничего не вывела</span>';
+    pageSync(text);
   }
 
   function doRun(){
@@ -211,6 +298,7 @@ function makeStudio(cfg){
     varsPane.style.display = "none";
     if (playPane) playPane.style.display = "none";
     con.innerHTML = '<span class="empty">пока пусто — нажми «Запустить»</span>';
+    pageSync("");
     if (canvas && eng.newTurtle) A.drawTurtle(canvas, eng.newTurtle());
   }
 
