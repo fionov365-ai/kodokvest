@@ -3558,7 +3558,18 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     g.state.stars[firstL.id] = 3;
     g.state.log[firstL.id] = { solvedAt: Date.now(), last: Date.now(), attempts: 1 };
     g.state.codeSaved = 0;
+    /* ⚠️ Кнопка домашки рисуется, только когда домашка ЗАДАНА, — без этого
+       проверка её не видела вовсе. А она ровно из этого класса: в 1.146.0
+       экраны домашки уехали в js/screens-hw.js, screenHW стал присваиваться
+       ниже по файлу, и отданный значением в договор Главного он был бы
+       undefined. Поэтому перед показом ребёнку задана одна задача. */
+    const hwOne = (w.HOMEWORK || [])[0];
+    g.state.hw = {};
+    if (hwOne) g.state.hw[g.hwKey(hwOne.id, 1)] =
+      { id: hwOne.id, seed: 1, due: "", by: "репетитор", at: Date.now(), done: 0, tries: 0 };
     g.screenWorlds(); await tick();
+    if (hwOne && !doc.getElementById("go-hw"))
+      bad("[главный] домашка задана, а кнопки домашки на Главном нет — проверка ниже её не увидит");
     /* [data-help] и [data-theme-set] разбирает общий обработчик на body,
        свой onclick им не ставят; у ссылки-подвала своя привязка по классу. */
     const skip = b => b.hasAttribute("data-help") || b.hasAttribute("data-theme-set") ||
@@ -3570,6 +3581,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (dead.length)
       bad("[главный] кнопки без обработчика: " + dead.join(", ") +
           " — такая кнопка выглядит живой и молча не отвечает");
+    g.state.hw = {};                 /* заданная выше задача не должна протечь дальше */
     if (problems.length === p0) liveBtnChecked++;
     viewReset(g);
   }

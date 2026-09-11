@@ -4009,7 +4009,7 @@ var HOME = KVSCREENS.home({
   installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
   aboutFootHTML: aboutFootHTML, wireAboutFoot: wireAboutFoot,
   screenWorld: screenWorld, screenTrain: screenTrain, screenFolio: screenFolio,
-  screenToday: screenToday, screenReview: screenReview, screenHW: screenHW,
+  screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
   screenMyTasks: screenMyTasks, screenWarmups: screenWarmups,
   screenShowcase: function(){ return screenShowcase(); }, screenShop: screenShop,
   screenPath: screenPath, screenGuide: screenGuide,
@@ -7827,194 +7827,25 @@ function hwAvailableFor(st){
   return HW.available(Object.keys(stars));
 }
 
-/* ===== экран ребёнка: список домашки ===== */
-function screenHW(){
-  enterScreen("home", "hw");
-  session = { id:null, attempts:0, hints:0, shown:false };
-  var pend = hwPending(), done = hwDoneRecs();
-
-  var h = '<div class="lvlhead"><div><div class="idx">задал репетитор</div>' +
-    '<h1>📮 Домашка</h1></div>' +
-    '<div class="right"><span class="tag">' +
-      (pend.length ? pend.length + " " + plural(pend.length, "задача", "задачи", "задач") : "всё сдано") +
-    '</span></div></div>';
-
-  if (!pend.length && !done.length){
-    h += '<p class="lede">Здесь появляются задачи, которые задаёт взрослый — репетитор или родитель — ' +
-      'между занятиями. Пока не задано ничего, и это не значит, что ты что-то пропустил.</p>' +
-      '<div class="card"><h3>Как это устроено</h3>' +
-      '<p>Домашка — это не пройденный урок заново. Это задача на то же умение, но с другими ' +
-      'числами: решение из урока к ней не подойдёт.</p>' +
-      '<p class="dim">Звёзд домашка не даёт и на прогресс по курсу не влияет. ' +
-      'Проверяет её тренажёр: сверяется то, что напечатала твоя программа.</p></div>';
-  } else {
-    h += '<p class="lede">Задачи на то же умение, что и уроки, но с другими числами — ' +
-      'своё решение из урока сюда не подойдёт. Проверяет тренажёр: сверяется напечатанное. ' +
-      'Звёзд домашка не даёт.</p>';
-  }
-
-  if (pend.length){
-    h += '<div class="sect"><h2>Сделать</h2><div class="line"></div></div><div class="gamegrid">';
-    pend.forEach(function(r){
-      var b = hwBuild(r);
-      if (!b) return;
-      var late = hwDaysLeft(r);
-      h += '<button class="gamecard" data-hw="' + esc(r.key) + '">' +
-        '<span class="gemoji">' + b.emoji + '</span>' +
-        '<b>' + esc(b.title) + '</b>' +
-        '<span>' + esc(b.goal.slice(0, 110)) + (b.goal.length > 110 ? "…" : "") + '</span>' +
-        '<span class="wtag">' + esc(b.tag) + ' · ' + esc(hwDueText(r)) +
-        (late !== null && late < 0 ? " · сделать всё равно стоит" : "") + '</span></button>';
-    });
-    h += '</div>';
-  }
-  if (done.length){
-    h += '<div class="sect"><h2>Сдано</h2><div class="line"></div>' +
-      '<span class="cnt">' + done.length + '</span></div><div class="gamegrid">';
-    done.forEach(function(r){
-      var b = hwBuild(r);
-      if (!b) return;
-      h += '<button class="gamecard" data-hw="' + esc(r.key) + '">' +
-        '<span class="gemoji">' + b.emoji + '</span>' +
-        '<b>' + esc(b.title) + ' <span class="edittag done">сдано ✓</span></b>' +
-        '<span>' + esc(b.tag) + '</span>' +
-        '<span class="wtag">попыток: ' + (r.tries || 1) + '</span></button>';
-    });
-    h += '</div>';
-  }
-
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
-  app.innerHTML = h;
-  app.querySelectorAll("[data-hw]").forEach(function(b){
-    b.onclick = function(){ openHW(b.getAttribute("data-hw")); };
-  });
-  document.getElementById("tomap").onclick = goHome;
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-/* ===== экран ребёнка: решаем одну задачу домашки ===== */
-function openHW(key){
-  var rec = hwMine().filter(function(x){ return x.key === key; })[0];
-  if (!rec) return screenHW();
-  var t = hwBuild(rec);
-  if (!t){
-    /* Задача из ссылки есть, а в банке её больше нет — такое бывает только
-       после обновления сайта. Молчать нельзя: ребёнок будет думать, что
-       домашку он потерял. */
-    enterScreen("home", "hw");
-    app.innerHTML = '<div class="lvlhead"><div><h1>📮 Домашка</h1></div></div>' +
-      '<div class="note"><b>Эту задачу открыть не получилось</b>' +
-      'Похоже, она из старой версии тренажёра. Скажи репетитору — он задаст её заново. ' +
-      'Твой прогресс от этого не пострадал.</div>' +
-      '<div class="pager"><button class="bigbtn ghost" id="tohw">← Ко всей домашке</button></div>';
-    document.getElementById("tohw").onclick = screenHW;
-    refreshTop();
-    return;
-  }
-  if (capHard()) return screenCapReached();
-  enterScreen("home", "hwone");
-  session = { id:null, attempts:0, hints:0, shown:false };
-
-  var already = !!rec.done;
-  var h = '<div class="crumbs"><span data-go="back">Домашка</span> › ' + t.emoji + ' ' + esc(t.title) + '</div>' +
-    '<div class="lvlhead"><div><div class="idx">' + esc(t.tag) +
-      (t.by ? " · задал " + esc(t.by) : "") + '</div>' +
-    '<h1>' + t.emoji + ' ' + esc(t.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">' + esc(hwDueText(rec)) + '</span></div></div>' +
-    '<p class="lede">' + (already
-      ? 'Эта задача уже сдана. Можно решить её ещё раз — на «сдано» это не повлияет.'
-      : 'Задача на то же умение, что и в уроке, но числа другие: решение из урока не подойдёт. ' +
-        'Сверяется то, что напечатает твоя программа.') + '</p>';
-
-  h += '<div class="goal"><h3>🎯 Задача</h3><p>' + esc(t.goal) + '</p><ul>' +
-    (t.list || []).map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") +
-    '</ul></div>';
-
-  h += '<div id="studio"></div>' +
-    '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    '<span class="tip">подсказки тут ничего не стоят — звёзд в домашке нет</span></div>' +
-    '<div class="hintout" id="hintout"></div>' +
-    '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всей домашке</button></div>';
-  app.innerHTML = h;
-
-  var studio = makeStudio({
-    engine: "mini", code: t.starter, lint: true, label: "твоя программа",
-    viz: function(o){
-      screenViz({ code: o.code, env: o.env,
-        backTo: { label: "← Вернуться к задаче", go: function(){ openHW(key); } } });
-    },
-    check: function(ed, showMsg){ hwCheck(t, rec, ed, showMsg); }
-  });
-  document.getElementById("studio").appendChild(studio);
-  session.studio = studio;
-  session.lesson = "hw-" + key;
-  session.starter = [{ name:"main.py", code: t.starter }];
-  var d = draftGet(session.lesson);
-  if (d) draftApply(studio.editor, d.files);
-  studio.editor.onEdit = draftSchedule;
-
-  wireHint(t.hints);
-  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenHW; });
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function hwCheck(t, rec, ed, showMsg){
-  session.attempts++;
-  var code = ed.getCode();
-
-  /* Требования конструкции — до запуска: «напиши функцию» нельзя закрыть
-     тремя print с готовыми числами, и сказать об этом надо раньше, чем
-     ребёнок обрадуется совпавшему выводу. */
-  for (var i = 0; i < (t.need || []).length; i++){
-    if (!codeHas(code, t.need[i])){
-      showMsg("warn", "<b>Почти</b>" + esc(t.needMsg || "Не хватает нужной конструкции."));
-      return;
-    }
-  }
-  for (var j = 0; j < (t.ban || []).length; j++){
-    if (codeHas(code, t.ban[j])){
-      showMsg("warn", "<b>Так нельзя</b>" + esc(t.banMsg || "Эта конструкция в задаче запрещена."));
-      return;
-    }
-  }
-
-  var res = hwRunner(code);
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
-  var got = res.lines, exp = t.lines;
-  if (!(exp.length === got.length && exp.every(function(x, k){ return x === got[k]; }))){
-    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
-    return;
-  }
-  winHW(t, rec);
-}
-
-function winHW(t, rec){
-  var first = !rec.done;
-  hwMark(rec.key, session.attempts);
-  markActiveToday();
-  save(); refreshTop();
-  var left = hwPending().length;
-  document.getElementById("wincard").innerHTML =
-    '<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
-    '<h2>' + (first ? "Домашка сдана" : "Решено ещё раз") + '</h2>' +
-    '<p>Вывод сошёлся: программа делает ровно то, что просили. ' +
-    'Репетитор увидит, что задача сдана, при следующем открытии тренажёра.</p>' +
-    (session.attempts === 1
-      ? '<div class="stepnote">С первой попытки — значит умение из урока держится и на других числах.</div>'
-      : '') +
-    '<div class="stepnote">' + (left
-      ? "Осталось задач: <b>" + left + "</b>."
-      : "Это была последняя задача из заданных. Домашка закрыта.") + '</div>' +
-    '<div class="winrow"><button class="bigbtn" id="whw">' +
-      (left ? "К остальным задачам" : "Ко всей домашке") + '</button>' +
-    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
-  document.getElementById("win").classList.add("show");
-  confetti(first ? 2 : 1);
-  document.getElementById("whw").onclick = function(){ closeWin(); screenHW(); };
-  document.getElementById("wstay").onclick = closeWin;
-}
+/* ===== экраны домашки у ребёнка =====
+   ⚠️ Переехали в js/screens-hw.js (1.146.0), вторая половина пункта D.13.
+   Слой данных домашки — выше, он общий с кабинетом репетитора и группой.
+   Все имена ниже — объявления function (подняты) или присвоены выше по
+   файлу, поэтому идут значениями. ⚠️ А вот в договор ГЛАВНОГО (HOME,
+   выше по файлу) screenHW отдан обёрткой: на той строке его ещё нет. */
+var HW_SCREENS = KVSCREENS.hw({
+  app: app, capHard: capHard, closeWin: closeWin, codeHas: codeHas, confetti: confetti,
+  diffBlock: diffBlock, draftApply: draftApply, draftGet: draftGet,
+  draftSchedule: draftSchedule, enterScreen: enterScreen, errHTML: errHTML, esc: esc,
+  goHome: goHome, hwBuild: hwBuild, hwDaysLeft: hwDaysLeft, hwDoneRecs: hwDoneRecs,
+  hwDueText: hwDueText, hwMark: hwMark, hwMine: hwMine, hwPending: hwPending,
+  hwRunner: hwRunner, makeStudio: makeStudio, markActiveToday: markActiveToday, plural: plural,
+  refreshTop: refreshTop, save: save, screenCapReached: screenCapReached, screenViz: screenViz,
+  wireHint: wireHint,
+  session: function(){ return session; },
+  newSession: function(v){ session = v; return v; }
+});
+var screenHW = HW_SCREENS.screenHW, openHW = HW_SCREENS.openHW;
 
 /* ================= раздел «Ты и ИИ»: экраны =================
    ⚠️ Переехали в js/screens-ailab.js (1.145.0), пункт D.13 архитектурного
