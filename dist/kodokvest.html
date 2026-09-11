@@ -22145,6 +22145,494 @@ return { SHOW_LINES: SHOW_LINES, showcaseRun: showcaseRun,
 <script>
  
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.ailab = function(A){
+
+ 
+var AI_STAGES = [
+  { id:"ask",  em:"🎯", title:"Поставить задачу",
+    why:"Машина понимает буквально. Размытая просьба даёт мусор — и виноват в этом не ИИ.",
+    tags:["ставим задачу"] },
+  { id:"read", em:"📖", title:"Прочитать ответ",
+    why:"Прежде чем судить, надо понять, что прислали, и предсказать, что оно напечатает.",
+    tags:["читаем код", "проверяем вывод"] },
+  { id:"judge",em:"⚖️", title:"Вынести вердикт",
+    why:"Работает или нет — решаешь ты, а не уверенный тон ответа. И чинишь то, что сломано.",
+    tags:["выносим вердикт", "проверяем и чиним"] },
+  { id:"catch",em:"🔍", title:"Доказать, что ошибся",
+    why:"Мнения мало: пишешь проверку, которая ловит ошибку, и запускает её движок.",
+    tags:["ловим ИИ"] },
+  { id:"boss", em:"🤝", title:"Ответить за результат",
+    why:"Ты тимлид, ИИ — джун. Он пишет быстро и уверенно, а отвечаешь за работу ты.",
+    tags:["финальный проект"] }
+];
+function aiStageOf(x){
+  for (var i = 0; i < AI_STAGES.length; i++)
+    if (AI_STAGES[i].tags.indexOf(x.tag) >= 0) return AI_STAGES[i].id;
+  return "";
+}
+
+function screenAILab(){
+  A.enterScreen("train", "ai");
+  A.newSession({ id:null, attempts:0, hints:0, shown:false });
+  var xs = A.ailabList();
+  var done = xs.filter(function(x){ return A.ailabDone(x.id); }).length;
+  var specs = A.specsList(), specsOk = specs.filter(function(x){ return A.specDone(x.id); }).length;
+
+  var h = '<div class="lvlhead"><div><div class="idx">командуй, не подчиняйся</div><h1>🤖 Ты и ИИ</h1></div>' +
+    '<div class="right"><span class="tag">пройдено ' + done + ' из ' + xs.length + '</span></div></div>' +
+    '<p class="lede">Код всё чаще пишет машина — и тем дороже то, чего она не забирает: ' +
+    'точно поставить задачу, прочитать чужой код и <b>принять работу</b>. ' +
+    'Здесь этому учат по шагам, а судья правды — движок: он запускает ответ ИИ и показывает, где тот врёт. ' +
+    'Звёзд тут не дают.</p>';
+
+   
+  h += '<div class="card"><h3>Чему тут учат — и чем это отличается</h3>' +
+    '<div class="aidiff">' +
+    '<div><b>Курсы про нейросети</b><span>как попросить: формулы промптов, списки заклинаний, ' +
+    '«скажи модели, что она эксперт».</span></div>' +
+    '<div><b>Здесь</b><span>как <b>принять работу</b>: прочитать ответ, найти, где машина ' +
+    'уверенно врёт, написать проверку и вернуть на доработку.</span></div>' +
+    '</div>' +
+    '<p class="dim">⚠️ Живого ИИ здесь нет намеренно. «Ответ ИИ» — заранее написанный код, ' +
+    'и это не экономия: модель, которая пишет за ребёнка, несовместима с разделом, ' +
+    'который учит её проверять. Судит движок, а не мнение, — поэтому себя не обманешь.</p></div>';
+
+   
+  var used = {};
+  AI_STAGES.forEach(function(st){
+    var items = xs.filter(function(x){ return aiStageOf(x) === st.id; });
+    items.forEach(function(x){ used[x.id] = 1; });
+    if (!items.length) return;
+    var d = items.filter(function(x){ return A.ailabDone(x.id); }).length;
+    h += '<div class="sect"><h2>' + st.em + ' ' + A.esc(st.title) + '</h2><div class="line"></div>' +
+      '<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
+      '<p class="dim">' + A.esc(st.why) + '</p>' +
+      '<div class="gamegrid">';
+    items.forEach(function(x){
+      h += '<button class="gamecard" data-id="' + x.id + '">' +
+        '<span class="gemoji">' + x.emoji + '</span>' +
+        '<b>' + A.esc(x.title) + (x.boss ? ' <span class="wtag">финал</span>' : '') +
+        (A.ailabDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+        '<span>' + A.esc(x.intro) + '</span>' +
+        '<span class="wtag">' + A.esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
+  });
+   
+  var rest = xs.filter(function(x){ return !used[x.id]; });
+  if (rest.length){
+    h += '<div class="sect"><h2>Остальное</h2><div class="line"></div>' +
+      '<span class="cnt">' + rest.length + '</span></div><div class="gamegrid">';
+    rest.forEach(function(x){
+      h += '<button class="gamecard" data-id="' + x.id + '">' +
+        '<span class="gemoji">' + x.emoji + '</span><b>' + A.esc(x.title) + '</b>' +
+        '<span>' + A.esc(x.intro) + '</span>' +
+        '<span class="wtag">' + A.esc(x.tag) + '</span></button>';
+    });
+    h += '</div>';
+  }
+
+   
+  h += '<div class="projcard' + (specsOk ? " done" : "") + '"><span class="pjemoji">📋</span>' +
+    '<span class="pjbody"><span class="pjkicker">Ступень 6 · приёмка работы</span>' +
+    '<b>Пиши правила, а не код</b>' +
+    '<span>напарник присылает программу, а ты записываешь, что должно быть верно, — ' +
+    'и движок судит его код по твоим правилам</span>' +
+    '<span class="pjnote">' + (specs.length
+      ? "Работ принято: " + specsOk + " из " + specs.length + ". Каждая твоя строка — настоящий Python."
+      : "Работы появятся вместе с разделом.") + '</span></span>' +
+    '<button class="bigbtn' + (specsOk ? "" : " ghost") + '" id="toaispecs">Открыть приёмку</button>' +
+    '</div>';
+
+   
+  var aproj = A.projectOfWorld(0);
+  if (aproj){
+    var apopen = A.projectOpen(aproj), apdone = A.projectDone(aproj.id), apst = A.projectState(aproj.id);
+    h += '<div class="projcard' + (apopen ? "" : " locked") + (apdone ? " done" : "") + '">' +
+      '<span class="pjemoji">' + aproj.emoji + '</span>' +
+      '<span class="pjbody"><span class="pjkicker">Проект раздела · звёзд не даёт</span>' +
+      '<b>' + A.esc(aproj.title) + (apdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
+      '<span>' + A.esc(aproj.tagline) + '</span>' +
+      '<span class="pjnote">' + A.esc(apdone
+        ? "Собран целиком. Можно открыть, запустить и забрать код себе."
+        : (apopen
+            ? (apst.step > 0 ? "Начат: пройдено шагов " + apst.step + " из " + aproj.steps.length + "."
+                             : "Все задания раздела пройдены — можно браться за проект.")
+            : "Откроется, когда пройдёшь все задания этого раздела.")) + '</span></span>' +
+      (apopen ? '<button class="bigbtn" id="openaiproj">' +
+                  (apdone ? "Открыть" : (apst.step > 0 ? "Продолжить" : "Собрать проект")) + '</button>'
+              : '<span class="soontag">закрыт</span>') +
+    '</div>';
+  }
+
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  A.app.innerHTML = h;
+  var tas = document.getElementById("toaispecs");
+  if (tas) tas.onclick = A.screenSpecs;
+  A.app.querySelectorAll(".gamecard").forEach(function(b){
+    b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
+  });
+  var aop = document.getElementById("openaiproj");
+  if (aop) aop.onclick = function(){
+    if (A.projectDone(aproj.id)) A.screenProjectDone(aproj.id); else A.openProject(aproj.id);
+  };
+  document.getElementById("tomap").onclick = A.goHome;
+  A.refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openAILesson(id){
+  var xs = A.ailabList();
+  var x = xs.filter(function(e){ return e.id === id; })[0];
+  if (!x) return screenAILab();
+   
+  if (A.capHard()) return A.screenCapReached();
+  A.enterScreen("train", "ailesson");
+  A.newSession({ id:id, attempts:0, hints:0, shown:false });
+  var pos = xs.indexOf(x);
+  var next = pos < xs.length - 1 ? xs[pos+1] : null;
+  var prev = pos > 0 ? xs[pos-1] : null;
+
+  var isPredict = x.type === "predict";
+  var isFix = x.type === "fix";
+  var isReview = x.type === "review";
+  var isCatch = x.type === "catch";
+  var kindLabel = isPredict ? "угадай вывод"
+                : isFix ? "почини код ИИ"
+                : isReview ? "вынеси вердикт"
+                : isCatch ? "докажи ошибку" : "напиши код";
+
+  var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + A.esc(x.title) + '</div>' +
+    '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + A.esc(x.title) + '</h1></div>' +
+    '<div class="right"><span class="tag">' + A.esc(x.tag) + '</span></div></div>' +
+    '<p class="lede">' + A.esc(x.intro) + '</p>';
+
+  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини"
+                                       : isReview ? "⚖️ Задача: вынеси вердикт"
+                                       : isCatch ? "🕵️ Задача: докажи, что код неправ" : "🎯 Твоя задача") + '</h3><p>' + A.esc(x.brief) + '</p>' +
+    (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
+
+  var bug = isFix
+    ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + A.esc(x.symptom) + '</p>' +
+      '<span class="bugtip">Код ниже нужно проверить и починить, а не переписать заново. Кнопка «↩ Вернуть как было» вернёт исходный вариант от ИИ.</span></div>'
+    : isReview
+    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + A.esc(x.claim) + '»</p>' +
+      '<span class="claimtip">Никто не сказал тебе заранее, правда это или нет — в этом и задание. Код можно запускать и менять как угодно: дописывай свои проверки, подставляй свои данные. Вердикт ниже.</span></div>'
+    : isCatch
+    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + A.esc(x.claim) + '»</p>' +
+      '<span class="claimtip">На своём примере код отвечает верно — иначе задания бы не было. Твоё дело найти ДРУГИЕ данные, на которых обещание перестаёт сбываться. Строки кода ИИ менять нельзя, дописывай свои снизу.</span></div>'
+    : "";
+
+  var hints = '<div class="hintbox">' +
+    '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">' + (isCatch ? "Показать готовую проверку" : "Показать решение") + '</button>') +
+    '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
+    '<div class="hintout" id="hintout"></div>';
+
+  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем заданиям</button><span class="sp"></span>' +
+    (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
+    (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
+
+  A.app.innerHTML = head + goal + bug + '<div id="studio"></div>' +
+    (isReview ? reviewPanelHTML() : "") + hints + pager;
+
+  var studio;
+  if (isPredict){
+    studio = A.makePredictStudio({ code: x.code, check: function(ed, showMsg){ runAIPredict(x, ed, showMsg); } });
+  } else if (isReview){
+     
+    studio = A.makeStudio({
+      engine: "mini", code: x.code,
+      label: "код от ИИ — читай, запускай, пробуй свои данные",
+      restore: x.code
+    });
+  } else if (isCatch){
+     
+    studio = A.makeStudio({
+      engine: "mini", code: catchStart(x),
+      label: "код от ИИ — не трогай его, дописывай проверку снизу",
+      restore: catchStart(x),
+      check: function(ed, showMsg){ runAICatch(x, ed, showMsg); }
+    });
+  } else {
+    studio = A.makeStudio({
+      engine: "mini", code: x.starter,
+      label: isFix ? "код от ИИ — проверь и почини" : "твой код",
+      restore: isFix ? x.starter : null,
+      check: function(ed, showMsg){ runAICheck(x, ed, showMsg); }
+    });
+  }
+  document.getElementById("studio").appendChild(studio);
+  A.session().studio = studio;
+
+  if (isReview) wireReview(x);
+  A.wireHint(x.hints);
+  var solb = document.getElementById("solbtn");
+  if (solb) solb.onclick = function(){
+    A.session().shown = true;
+    studio.editor.setCode(isCatch ? (catchStart(x) + x.probe) : x.solution);
+    studio.showMsg("warn", isCatch
+      ? "<b>Вот проверка, которая ловит ошибку</b>Запусти и сравни с обещанием ИИ. Своя проверка, если она тоже разводит две версии, засчитывается ничуть не хуже — эта просто одна из возможных."
+      : "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой и запусти. Звёзд в разделе нет — смотреть решение можно без потерь, но сначала попробуй сам.");
+  };
+  A.app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = function(){ screenAILab(); }; });
+  A.app.querySelectorAll("[data-next]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-next")); }; });
+  A.app.querySelectorAll("[data-prev]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-prev")); }; });
+  A.refreshTop();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+ 
+function runAIPredict(x, ed, showMsg){
+  A.session().attempts++;
+  var eng = Runtime.get("mini");
+  var res = eng.run(x.code, {});
+  if (res.error){ showMsg("bad", A.errHTML(res.error)); return; }
+  A.session().studio.reveal(res.output);
+  if (A.normPred(res.output) === A.normPred(ed.getCode())){
+    winAI(x);
+  } else {
+    showMsg("bad", "<b>Ещё не совпало</b>" + A.predictDiff(res.output, ed.getCode()) +
+      "Смотри на настоящий вывод справа, найди, где разошлось, и попробуй снова.");
+  }
+}
+
+ 
+function runAICheck(x, ed, showMsg){
+  A.session().attempts++;
+  var eng = Runtime.get("mini"), code = ed.getCode();
+  if (x.needCode){
+    for (var i = 0; i < x.needCode.length; i++){
+      if (!A.codeHas(code, x.needCode[i])){ showMsg("warn", "<b>Почти</b>" + (x.needMsg || "Не хватает нужной конструкции.")); return; }
+    }
+  }
+  var res = eng.run(code, {});
+  if (res.error){ ed.setError(res.error.line); showMsg("bad", A.errHTML(res.error)); return; }
+  var exp = eng.run(x.solution, {}).lines, got = res.lines;
+  if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; }))){
+    showMsg("bad", "<b>Ещё не то</b>" + A.diffBlock(exp, got));
+    return;
+  }
+  if (x.type === "fix"){
+    var budget = x.fixBudget || (A.editUnits(x.starter, x.solution) + 1);
+    if (A.editUnits(x.starter, code) > budget){
+      showMsg("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно. " +
+        "Смысл в другом: найти поломку и тронуть только её. Нажми «↩ Вернуть как было» и попробуй ещё раз.");
+      return;
+    }
+  }
+  winAI(x);
+}
+
+ 
+function catchStart(x){
+  return String(x.code).replace(/\n+$/, "") +
+    "\n\n# ↓ ниже пиши свою проверку: вызови функцию своими данными и напечатай ответ\n";
+}
+function catchRun(src){
+  var res = Runtime.get("mini").run(src, {});
+  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
+}
+ 
+function catchProbe(x, code){
+  var base = String(x.code).replace(/\n+$/, "").split("\n");
+  var cur = String(code).split("\n");
+  if (cur.length < base.length) return null;
+  for (var i = 0; i < base.length; i++)
+    if (cur[i].replace(/\s+$/, "") !== base[i].replace(/\s+$/, "")) return null;
+  return cur.slice(base.length).join("\n");
+}
+function catchProof(x, probe){
+  var got  = catchRun(x.code  + "\n" + probe).split("\n");
+  var want = catchRun(x.truth + "\n" + probe).split("\n");
+  while (got.length  && got[got.length-1]  === "") got.pop();
+  while (want.length && want[want.length-1] === "") want.pop();
+  return '<div class="proof"><u>Вот твоё доказательство</u>' + A.diffBlock(want, got) + '</div>';
+}
+function runAICatch(x, ed, showMsg){
+  A.session().attempts++;
+  var probe = catchProbe(x, ed.getCode());
+  if (probe === null){
+    showMsg("warn", "<b>Код ИИ изменён</b>Чинить его не надо — надо доказать, что он неправ. " +
+      "Нажми «↩ Вернуть как было» и дописывай свои строки СНИЗУ, ничего не трогая выше.");
+    return;
+  }
+  var body = probe.split("\n").filter(function(l){
+    var t = l.trim(); return t !== "" && t[0] !== "#";
+  }).join("\n");
+  if (!body){
+    showMsg("warn", "<b>Проверки пока нет</b>Внизу только комментарий. Допиши хотя бы одну строку: " +
+      "вызови функцию своими данными и напечатай, что она вернула.");
+    return;
+  }
+  var mine = catchRun(x.code + "\n" + probe);
+  var right = catchRun(x.truth + "\n" + probe);
+   
+  if (mine !== catchRun(x.code + "\n" + probe) || right !== catchRun(x.truth + "\n" + probe)){
+    showMsg("warn", "<b>Так доказать нельзя</b>Твоя проверка при каждом запуске печатает разное " +
+      "(случайность или время). Тогда расхождение ничего не значит: оно было бы и у двух одинаковых программ. " +
+      "Возьми конкретные данные, которые ты выбрал сам.");
+    return;
+  }
+  if (right.charAt(0) === "!"){
+    showMsg("bad", "<b>Проверка сама не работает</b>На ПРАВИЛЬНОЙ версии функции твои строки падают: " +
+      A.esc(right.slice(1)) + ". Значит дело не в коде ИИ, а в самой проверке — почини её и попробуй снова.");
+    return;
+  }
+  if (mine === right){
+    showMsg("bad", "<b>Не поймала</b>На твоих данных код ИИ отвечает ровно то же, что и правильная версия — " +
+      "значит эти данные больное место не задевают. Ищи другие: думай, при каких значениях обещание " +
+      "«" + A.esc(x.claim) + "» может не сбыться.");
+    return;
+  }
+  winAI(x, catchProof(x, probe));
+}
+
+ 
+var VERDICTS = [
+  { v:"ok",     label:"Работает верно",           sub:"делает обещанное на любых данных" },
+  { v:"partly", label:"Работает, но не всегда",   sub:"на своём примере верно, на других врёт" },
+  { v:"wrong",  label:"Врёт сразу",               sub:"расходится с обещанием на своём же примере" }
+];
+
+function reviewPanelHTML(){
+  return '<div class="verdict" id="verdict"><h3>⚖️ Твой вердикт</h3>' +
+    '<p>Прочитал, запустил, попробовал свои данные — теперь решай. Ответ «работает верно» тут такой же настоящий, как и остальные.</p>' +
+    '<div class="vbtns">' +
+    VERDICTS.map(function(o){
+      return '<button class="vbtn" data-v="' + o.v + '"><b>' + o.label + '</b><span>' + o.sub + '</span></button>';
+    }).join("") +
+    '</div><div class="msg" id="vmsg"></div><div class="vpick" id="vpick"></div></div>';
+}
+
+ 
+function reviewRun(src){
+  var res = Runtime.get("mini").run(src, {});
+  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
+}
+function reviewTruth(x){
+  var own  = reviewRun(x.code)                  !== reviewRun(x.truth);
+  var wide = reviewRun(x.code + "\n" + x.probe) !== reviewRun(x.truth + "\n" + x.probe);
+  return own ? "wrong" : (wide ? "partly" : "ok");
+}
+
+ 
+function reviewProof(x, real){
+  if (real === "ok") return "";
+  var suffix = real === "wrong" ? "" : "\n" + x.probe;
+  var got  = reviewRun(x.code  + suffix).split("\n");
+  var want = reviewRun(x.truth + suffix).split("\n");
+  while (got.length  && got[got.length-1]  === "") got.pop();
+  while (want.length && want[want.length-1] === "") want.pop();
+  return '<div class="proof"><u>' +
+    (real === "wrong" ? "Вот на его же примере" : "Вот на других данных") +
+    '</u>' + A.diffBlock(want, got) + '</div>';
+}
+
+function vmsg(cls, html){
+  var m = document.getElementById("vmsg");
+  if (!m) return;
+  m.className = "msg show " + cls;
+  m.innerHTML = html;
+}
+
+ 
+function verdictNudge(said, real){
+  if (said === "ok")
+    return "<b>Не так быстро</b>Ты решил, что всё в порядке. Возьми свои данные, а не авторские: допиши в код свою строку с вызовом и запусти. Если хоть на одном примере вывод расходится с обещанием — вердикт другой.";
+  if (real === "ok")
+    return "<b>Тут подозрение напрасно</b>Ты решил, что код где-то врёт. Тогда покажи это себе: найди данные, на которых он расходится с обещанием. Не находится ни одних — значит вердикт другой.";
+  if (said === "wrong" && real === "partly")
+    return "<b>Почти, но нет</b>«Врёт сразу» значит, что ошибка видна на том самом примере, который показал автор. Запусти код как есть: на его примере ответ верный. Значит врёт он не сразу.";
+  return "<b>Почти, но нет</b>«Работает, но не всегда» значит, что на примере автора всё сходится. Запусти код как есть и сравни вывод с обещанием — сходится ли?";
+}
+
+function wireReview(x){
+  var panel = document.getElementById("verdict");
+  if (!panel) return;
+   
+  var real = reviewTruth(x);
+  panel.querySelectorAll(".vbtn").forEach(function(b){
+    b.onclick = function(){
+      A.session().attempts++;
+      var said = b.getAttribute("data-v");
+      panel.querySelectorAll(".vbtn").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (said !== real){
+        document.getElementById("vpick").innerHTML = "";
+        vmsg("bad", verdictNudge(said, real));
+        return;
+      }
+      if (real === "ok"){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("ok", "<b>Вердикт верный</b>Осталось показать, где именно поломка: ткни в строку кода от ИИ.");
+      showLinePicker(x, real);
+    };
+  });
+}
+
+ 
+function showLinePicker(x, real){
+  var box = document.getElementById("vpick");
+  var lines = String(x.code).replace(/\n+$/, "").split("\n");
+  box.innerHTML = '<div class="lines">' +
+    lines.map(function(t, i){
+      var empty = t.trim() === "";
+      return '<button class="lrow' + (empty ? " off" : "") + '"' + (empty ? " disabled" : "") +
+        ' data-line="' + (i+1) + '"><span class="ln">' + (i+1) + '</span><code>' + (A.hl(t) || "&nbsp;") + '</code></button>';
+    }).join("") + '</div>';
+  box.querySelectorAll(".lrow").forEach(function(b){
+    b.onclick = function(){
+      A.session().attempts++;
+      var n = +b.getAttribute("data-line");
+      box.querySelectorAll(".lrow").forEach(function(o){ o.classList.toggle("on", o === b); });
+      if (n === x.badLine){ winAI(x, reviewProof(x, real)); return; }
+      vmsg("bad", "<b>Строка не та</b>Эта строка делает своё дело правильно. Ищи ту, из-за которой ответ расходится с обещанием: сравни, что в ней написано, с тем, что должно получиться.");
+    };
+  });
+}
+
+function winAI(x, extra){
+  A.ailabMark(x.id);
+  A.markActiveToday();                  
+  A.save();
+  var xs = A.ailabList(), pos = xs.indexOf(x);
+  var next = (pos >= 0 && pos < xs.length - 1) ? xs[pos+1] : null;
+  var firstTry = A.session().attempts === 1 && A.session().hints === 0 && !A.session().shown;
+  var big = x.boss ? "🏆" : (firstTry ? "🎯" : "🤖");
+  var h2 = x.boss ? "Проект готов!" : (firstTry ? "Верно, с первого раза!" : "Верно!");
+  var buttons = (next
+      ? '<button class="bigbtn" id="wnext">Следующее →</button>'
+      : '<button class="bigbtn" id="wlist">Ко всем заданиям</button>') +
+    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
+  document.getElementById("wincard").innerHTML =
+    '<div class="big">' + big + '</div><h2>' + h2 + '</h2>' +
+    '<p>' + A.esc(x.note || "Ты справился с заданием.") + '</p>' + (extra || "") +
+    '<div class="winrow">' + buttons + '</div>';
+  document.getElementById("win").classList.add("show");
+  A.confetti(x.boss ? 3 : 2);
+  var wn = document.getElementById("wnext");
+  if (wn) wn.onclick = function(){ A.closeWin(); openAILesson(next.id); };
+  var wl = document.getElementById("wlist");
+  if (wl) wl.onclick = function(){ A.closeWin(); screenAILab(); };
+  document.getElementById("wstay").onclick = A.closeWin;
+}
+
+return {
+  AI_STAGES: AI_STAGES,
+  aiStageOf: aiStageOf,
+  screenAILab: screenAILab,
+  openAILesson: openAILesson,
+  reviewTruth: reviewTruth,
+  catchProbe: catchProbe,
+  catchRun: catchRun,
+  catchStart: catchStart
+};
+};
+
+</script>
+
+<script>
+ 
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.variant = function(A){
 
  
@@ -32565,6 +33053,8 @@ function winWarmup(w){
  
 function ailabList(){ return (window.AILAB || []); }
 function ailabDone(id){ return !!(S.ailab && S.ailab[id]); }
+ 
+function ailabMark(id){ S.ailab = S.ailab || {}; S.ailab[id] = 1; }
 
  
 var sheetOut = {};
@@ -33581,474 +34071,28 @@ function winHW(t, rec){
 }
 
  
-var AI_STAGES = [
-  { id:"ask",  em:"🎯", title:"Поставить задачу",
-    why:"Машина понимает буквально. Размытая просьба даёт мусор — и виноват в этом не ИИ.",
-    tags:["ставим задачу"] },
-  { id:"read", em:"📖", title:"Прочитать ответ",
-    why:"Прежде чем судить, надо понять, что прислали, и предсказать, что оно напечатает.",
-    tags:["читаем код", "проверяем вывод"] },
-  { id:"judge",em:"⚖️", title:"Вынести вердикт",
-    why:"Работает или нет — решаешь ты, а не уверенный тон ответа. И чинишь то, что сломано.",
-    tags:["выносим вердикт", "проверяем и чиним"] },
-  { id:"catch",em:"🔍", title:"Доказать, что ошибся",
-    why:"Мнения мало: пишешь проверку, которая ловит ошибку, и запускает её движок.",
-    tags:["ловим ИИ"] },
-  { id:"boss", em:"🤝", title:"Ответить за результат",
-    why:"Ты тимлид, ИИ — джун. Он пишет быстро и уверенно, а отвечаешь за работу ты.",
-    tags:["финальный проект"] }
-];
-function aiStageOf(x){
-  for (var i = 0; i < AI_STAGES.length; i++)
-    if (AI_STAGES[i].tags.indexOf(x.tag) >= 0) return AI_STAGES[i].id;
-  return "";
-}
-
-function screenAILab(){
-  enterScreen("train", "ai");
-  session = { id:null, attempts:0, hints:0, shown:false };
-  var xs = ailabList();
-  var done = xs.filter(function(x){ return ailabDone(x.id); }).length;
-  var specs = specsList(), specsOk = specs.filter(function(x){ return specDone(x.id); }).length;
-
-  var h = '<div class="lvlhead"><div><div class="idx">командуй, не подчиняйся</div><h1>🤖 Ты и ИИ</h1></div>' +
-    '<div class="right"><span class="tag">пройдено ' + done + ' из ' + xs.length + '</span></div></div>' +
-    '<p class="lede">Код всё чаще пишет машина — и тем дороже то, чего она не забирает: ' +
-    'точно поставить задачу, прочитать чужой код и <b>принять работу</b>. ' +
-    'Здесь этому учат по шагам, а судья правды — движок: он запускает ответ ИИ и показывает, где тот врёт. ' +
-    'Звёзд тут не дают.</p>';
-
-   
-  h += '<div class="card"><h3>Чему тут учат — и чем это отличается</h3>' +
-    '<div class="aidiff">' +
-    '<div><b>Курсы про нейросети</b><span>как попросить: формулы промптов, списки заклинаний, ' +
-    '«скажи модели, что она эксперт».</span></div>' +
-    '<div><b>Здесь</b><span>как <b>принять работу</b>: прочитать ответ, найти, где машина ' +
-    'уверенно врёт, написать проверку и вернуть на доработку.</span></div>' +
-    '</div>' +
-    '<p class="dim">⚠️ Живого ИИ здесь нет намеренно. «Ответ ИИ» — заранее написанный код, ' +
-    'и это не экономия: модель, которая пишет за ребёнка, несовместима с разделом, ' +
-    'который учит её проверять. Судит движок, а не мнение, — поэтому себя не обманешь.</p></div>';
-
-   
-  var used = {};
-  AI_STAGES.forEach(function(st){
-    var items = xs.filter(function(x){ return aiStageOf(x) === st.id; });
-    items.forEach(function(x){ used[x.id] = 1; });
-    if (!items.length) return;
-    var d = items.filter(function(x){ return ailabDone(x.id); }).length;
-    h += '<div class="sect"><h2>' + st.em + ' ' + esc(st.title) + '</h2><div class="line"></div>' +
-      '<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
-      '<p class="dim">' + esc(st.why) + '</p>' +
-      '<div class="gamegrid">';
-    items.forEach(function(x){
-      h += '<button class="gamecard" data-id="' + x.id + '">' +
-        '<span class="gemoji">' + x.emoji + '</span>' +
-        '<b>' + esc(x.title) + (x.boss ? ' <span class="wtag">финал</span>' : '') +
-        (ailabDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
-        '<span>' + esc(x.intro) + '</span>' +
-        '<span class="wtag">' + esc(x.tag) + '</span></button>';
-    });
-    h += '</div>';
-  });
-   
-  var rest = xs.filter(function(x){ return !used[x.id]; });
-  if (rest.length){
-    h += '<div class="sect"><h2>Остальное</h2><div class="line"></div>' +
-      '<span class="cnt">' + rest.length + '</span></div><div class="gamegrid">';
-    rest.forEach(function(x){
-      h += '<button class="gamecard" data-id="' + x.id + '">' +
-        '<span class="gemoji">' + x.emoji + '</span><b>' + esc(x.title) + '</b>' +
-        '<span>' + esc(x.intro) + '</span>' +
-        '<span class="wtag">' + esc(x.tag) + '</span></button>';
-    });
-    h += '</div>';
-  }
-
-   
-  h += '<div class="projcard' + (specsOk ? " done" : "") + '"><span class="pjemoji">📋</span>' +
-    '<span class="pjbody"><span class="pjkicker">Ступень 6 · приёмка работы</span>' +
-    '<b>Пиши правила, а не код</b>' +
-    '<span>напарник присылает программу, а ты записываешь, что должно быть верно, — ' +
-    'и движок судит его код по твоим правилам</span>' +
-    '<span class="pjnote">' + (specs.length
-      ? "Работ принято: " + specsOk + " из " + specs.length + ". Каждая твоя строка — настоящий Python."
-      : "Работы появятся вместе с разделом.") + '</span></span>' +
-    '<button class="bigbtn' + (specsOk ? "" : " ghost") + '" id="toaispecs">Открыть приёмку</button>' +
-    '</div>';
-
-   
-  var aproj = projectOfWorld(0);
-  if (aproj){
-    var apopen = projectOpen(aproj), apdone = projectDone(aproj.id), apst = projectState(aproj.id);
-    h += '<div class="projcard' + (apopen ? "" : " locked") + (apdone ? " done" : "") + '">' +
-      '<span class="pjemoji">' + aproj.emoji + '</span>' +
-      '<span class="pjbody"><span class="pjkicker">Проект раздела · звёзд не даёт</span>' +
-      '<b>' + esc(aproj.title) + (apdone ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
-      '<span>' + esc(aproj.tagline) + '</span>' +
-      '<span class="pjnote">' + esc(apdone
-        ? "Собран целиком. Можно открыть, запустить и забрать код себе."
-        : (apopen
-            ? (apst.step > 0 ? "Начат: пройдено шагов " + apst.step + " из " + aproj.steps.length + "."
-                             : "Все задания раздела пройдены — можно браться за проект.")
-            : "Откроется, когда пройдёшь все задания этого раздела.")) + '</span></span>' +
-      (apopen ? '<button class="bigbtn" id="openaiproj">' +
-                  (apdone ? "Открыть" : (apst.step > 0 ? "Продолжить" : "Собрать проект")) + '</button>'
-              : '<span class="soontag">закрыт</span>') +
-    '</div>';
-  }
-
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
-  app.innerHTML = h;
-  var tas = document.getElementById("toaispecs");
-  if (tas) tas.onclick = screenSpecs;
-  app.querySelectorAll(".gamecard").forEach(function(b){
-    b.onclick = function(){ openAILesson(b.getAttribute("data-id")); };
-  });
-  var aop = document.getElementById("openaiproj");
-  if (aop) aop.onclick = function(){
-    if (projectDone(aproj.id)) screenProjectDone(aproj.id); else openProject(aproj.id);
-  };
-  document.getElementById("tomap").onclick = goHome;
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function openAILesson(id){
-  var xs = ailabList();
-  var x = xs.filter(function(e){ return e.id === id; })[0];
-  if (!x) return screenAILab();
-   
-  if (capHard()) return screenCapReached();
-  enterScreen("train", "ailesson");
-  session = { id:id, attempts:0, hints:0, shown:false };
-  var pos = xs.indexOf(x);
-  var next = pos < xs.length - 1 ? xs[pos+1] : null;
-  var prev = pos > 0 ? xs[pos-1] : null;
-
-  var isPredict = x.type === "predict";
-  var isFix = x.type === "fix";
-  var isReview = x.type === "review";
-  var isCatch = x.type === "catch";
-  var kindLabel = isPredict ? "угадай вывод"
-                : isFix ? "почини код ИИ"
-                : isReview ? "вынеси вердикт"
-                : isCatch ? "докажи ошибку" : "напиши код";
-
-  var head = '<div class="crumbs"><span data-go="back">🤖 Ты и ИИ</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
-    '<div class="lvlhead"><div><div class="idx">' + (x.boss ? "финал раздела" : kindLabel) + '</div><h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">' + esc(x.tag) + '</span></div></div>' +
-    '<p class="lede">' + esc(x.intro) + '</p>';
-
-  var goal = '<div class="goal"><h3>' + (isFix ? "🔧 Задача: проверь и почини"
-                                       : isReview ? "⚖️ Задача: вынеси вердикт"
-                                       : isCatch ? "🕵️ Задача: докажи, что код неправ" : "🎯 Твоя задача") + '</h3><p>' + esc(x.brief) + '</p>' +
-    (x.list ? '<ul>' + x.list.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
-
-  var bug = isFix
-    ? '<div class="bugcard"><h3>🐞 Что сейчас не так</h3><p>' + esc(x.symptom) + '</p>' +
-      '<span class="bugtip">Код ниже нужно проверить и починить, а не переписать заново. Кнопка «↩ Вернуть как было» вернёт исходный вариант от ИИ.</span></div>'
-    : isReview
-    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
-      '<span class="claimtip">Никто не сказал тебе заранее, правда это или нет — в этом и задание. Код можно запускать и менять как угодно: дописывай свои проверки, подставляй свои данные. Вердикт ниже.</span></div>'
-    : isCatch
-    ? '<div class="claimcard"><h3>🤖 ИИ уверяет</h3><p>«' + esc(x.claim) + '»</p>' +
-      '<span class="claimtip">На своём примере код отвечает верно — иначе задания бы не было. Твоё дело найти ДРУГИЕ данные, на которых обещание перестаёт сбываться. Строки кода ИИ менять нельзя, дописывай свои снизу.</span></div>'
-    : "";
-
-  var hints = '<div class="hintbox">' +
-    '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-    (isPredict || isReview ? '' : '<button class="rbtn sec" id="solbtn">' + (isCatch ? "Показать готовую проверку" : "Показать решение") + '</button>') +
-    '<span class="tip">это раздел без звёзд — подсказки ничего не отнимают</span></div>' +
-    '<div class="hintout" id="hintout"></div>';
-
-  var pager = '<div class="pager"><button class="bigbtn ghost" data-go="back">← Ко всем заданиям</button><span class="sp"></span>' +
-    (prev ? '<button class="bigbtn ghost" data-prev="' + prev.id + '">Назад</button>' : '') +
-    (next ? '<button class="bigbtn ghost" data-next="' + next.id + '">Дальше →</button>' : '') + '</div>';
-
-  app.innerHTML = head + goal + bug + '<div id="studio"></div>' +
-    (isReview ? reviewPanelHTML() : "") + hints + pager;
-
-  var studio;
-  if (isPredict){
-    studio = makePredictStudio({ code: x.code, check: function(ed, showMsg){ runAIPredict(x, ed, showMsg); } });
-  } else if (isReview){
-     
-    studio = makeStudio({
-      engine: "mini", code: x.code,
-      label: "код от ИИ — читай, запускай, пробуй свои данные",
-      restore: x.code
-    });
-  } else if (isCatch){
-     
-    studio = makeStudio({
-      engine: "mini", code: catchStart(x),
-      label: "код от ИИ — не трогай его, дописывай проверку снизу",
-      restore: catchStart(x),
-      check: function(ed, showMsg){ runAICatch(x, ed, showMsg); }
-    });
-  } else {
-    studio = makeStudio({
-      engine: "mini", code: x.starter,
-      label: isFix ? "код от ИИ — проверь и почини" : "твой код",
-      restore: isFix ? x.starter : null,
-      check: function(ed, showMsg){ runAICheck(x, ed, showMsg); }
-    });
-  }
-  document.getElementById("studio").appendChild(studio);
-  session.studio = studio;
-
-  if (isReview) wireReview(x);
-  wireHint(x.hints);
-  var solb = document.getElementById("solbtn");
-  if (solb) solb.onclick = function(){
-    session.shown = true;
-    studio.editor.setCode(isCatch ? (catchStart(x) + x.probe) : x.solution);
-    studio.showMsg("warn", isCatch
-      ? "<b>Вот проверка, которая ловит ошибку</b>Запусти и сравни с обещанием ИИ. Своя проверка, если она тоже разводит две версии, засчитывается ничуть не хуже — эта просто одна из возможных."
-      : "<b>Вот рабочее решение</b>Прочитай его строчку за строчкой и запусти. Звёзд в разделе нет — смотреть решение можно без потерь, но сначала попробуй сам.");
-  };
-  app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = function(){ screenAILab(); }; });
-  app.querySelectorAll("[data-next]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-next")); }; });
-  app.querySelectorAll("[data-prev]").forEach(function(b){ b.onclick = function(){ openAILesson(b.getAttribute("data-prev")); }; });
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
- 
-function runAIPredict(x, ed, showMsg){
-  session.attempts++;
-  var eng = Runtime.get("mini");
-  var res = eng.run(x.code, {});
-  if (res.error){ showMsg("bad", errHTML(res.error)); return; }
-  session.studio.reveal(res.output);
-  if (normPred(res.output) === normPred(ed.getCode())){
-    winAI(x);
-  } else {
-    showMsg("bad", "<b>Ещё не совпало</b>" + predictDiff(res.output, ed.getCode()) +
-      "Смотри на настоящий вывод справа, найди, где разошлось, и попробуй снова.");
-  }
-}
-
- 
-function runAICheck(x, ed, showMsg){
-  session.attempts++;
-  var eng = Runtime.get("mini"), code = ed.getCode();
-  if (x.needCode){
-    for (var i = 0; i < x.needCode.length; i++){
-      if (!codeHas(code, x.needCode[i])){ showMsg("warn", "<b>Почти</b>" + (x.needMsg || "Не хватает нужной конструкции.")); return; }
-    }
-  }
-  var res = eng.run(code, {});
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
-  var exp = eng.run(x.solution, {}).lines, got = res.lines;
-  if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; }))){
-    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
-    return;
-  }
-  if (x.type === "fix"){
-    var budget = x.fixBudget || (editUnits(x.starter, x.solution) + 1);
-    if (editUnits(x.starter, code) > budget){
-      showMsg("warn", "<b>Работает, но это не починка</b>Вывод правильный — только строк изменено больше, чем нужно. " +
-        "Смысл в другом: найти поломку и тронуть только её. Нажми «↩ Вернуть как было» и попробуй ещё раз.");
-      return;
-    }
-  }
-  winAI(x);
-}
-
- 
-function catchStart(x){
-  return String(x.code).replace(/\n+$/, "") +
-    "\n\n# ↓ ниже пиши свою проверку: вызови функцию своими данными и напечатай ответ\n";
-}
-function catchRun(src){
-  var res = Runtime.get("mini").run(src, {});
-  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
-}
- 
-function catchProbe(x, code){
-  var base = String(x.code).replace(/\n+$/, "").split("\n");
-  var cur = String(code).split("\n");
-  if (cur.length < base.length) return null;
-  for (var i = 0; i < base.length; i++)
-    if (cur[i].replace(/\s+$/, "") !== base[i].replace(/\s+$/, "")) return null;
-  return cur.slice(base.length).join("\n");
-}
-function catchProof(x, probe){
-  var got  = catchRun(x.code  + "\n" + probe).split("\n");
-  var want = catchRun(x.truth + "\n" + probe).split("\n");
-  while (got.length  && got[got.length-1]  === "") got.pop();
-  while (want.length && want[want.length-1] === "") want.pop();
-  return '<div class="proof"><u>Вот твоё доказательство</u>' + diffBlock(want, got) + '</div>';
-}
-function runAICatch(x, ed, showMsg){
-  session.attempts++;
-  var probe = catchProbe(x, ed.getCode());
-  if (probe === null){
-    showMsg("warn", "<b>Код ИИ изменён</b>Чинить его не надо — надо доказать, что он неправ. " +
-      "Нажми «↩ Вернуть как было» и дописывай свои строки СНИЗУ, ничего не трогая выше.");
-    return;
-  }
-  var body = probe.split("\n").filter(function(l){
-    var t = l.trim(); return t !== "" && t[0] !== "#";
-  }).join("\n");
-  if (!body){
-    showMsg("warn", "<b>Проверки пока нет</b>Внизу только комментарий. Допиши хотя бы одну строку: " +
-      "вызови функцию своими данными и напечатай, что она вернула.");
-    return;
-  }
-  var mine = catchRun(x.code + "\n" + probe);
-  var right = catchRun(x.truth + "\n" + probe);
-   
-  if (mine !== catchRun(x.code + "\n" + probe) || right !== catchRun(x.truth + "\n" + probe)){
-    showMsg("warn", "<b>Так доказать нельзя</b>Твоя проверка при каждом запуске печатает разное " +
-      "(случайность или время). Тогда расхождение ничего не значит: оно было бы и у двух одинаковых программ. " +
-      "Возьми конкретные данные, которые ты выбрал сам.");
-    return;
-  }
-  if (right.charAt(0) === "!"){
-    showMsg("bad", "<b>Проверка сама не работает</b>На ПРАВИЛЬНОЙ версии функции твои строки падают: " +
-      esc(right.slice(1)) + ". Значит дело не в коде ИИ, а в самой проверке — почини её и попробуй снова.");
-    return;
-  }
-  if (mine === right){
-    showMsg("bad", "<b>Не поймала</b>На твоих данных код ИИ отвечает ровно то же, что и правильная версия — " +
-      "значит эти данные больное место не задевают. Ищи другие: думай, при каких значениях обещание " +
-      "«" + esc(x.claim) + "» может не сбыться.");
-    return;
-  }
-  winAI(x, catchProof(x, probe));
-}
-
- 
-var VERDICTS = [
-  { v:"ok",     label:"Работает верно",           sub:"делает обещанное на любых данных" },
-  { v:"partly", label:"Работает, но не всегда",   sub:"на своём примере верно, на других врёт" },
-  { v:"wrong",  label:"Врёт сразу",               sub:"расходится с обещанием на своём же примере" }
-];
-
-function reviewPanelHTML(){
-  return '<div class="verdict" id="verdict"><h3>⚖️ Твой вердикт</h3>' +
-    '<p>Прочитал, запустил, попробовал свои данные — теперь решай. Ответ «работает верно» тут такой же настоящий, как и остальные.</p>' +
-    '<div class="vbtns">' +
-    VERDICTS.map(function(o){
-      return '<button class="vbtn" data-v="' + o.v + '"><b>' + o.label + '</b><span>' + o.sub + '</span></button>';
-    }).join("") +
-    '</div><div class="msg" id="vmsg"></div><div class="vpick" id="vpick"></div></div>';
-}
-
- 
-function reviewRun(src){
-  var res = Runtime.get("mini").run(src, {});
-  return res.error ? "!" + res.error.kind + ": " + res.error.msg : res.output;
-}
-function reviewTruth(x){
-  var own  = reviewRun(x.code)                  !== reviewRun(x.truth);
-  var wide = reviewRun(x.code + "\n" + x.probe) !== reviewRun(x.truth + "\n" + x.probe);
-  return own ? "wrong" : (wide ? "partly" : "ok");
-}
-
- 
-function reviewProof(x, real){
-  if (real === "ok") return "";
-  var suffix = real === "wrong" ? "" : "\n" + x.probe;
-  var got  = reviewRun(x.code  + suffix).split("\n");
-  var want = reviewRun(x.truth + suffix).split("\n");
-  while (got.length  && got[got.length-1]  === "") got.pop();
-  while (want.length && want[want.length-1] === "") want.pop();
-  return '<div class="proof"><u>' +
-    (real === "wrong" ? "Вот на его же примере" : "Вот на других данных") +
-    '</u>' + diffBlock(want, got) + '</div>';
-}
-
-function vmsg(cls, html){
-  var m = document.getElementById("vmsg");
-  if (!m) return;
-  m.className = "msg show " + cls;
-  m.innerHTML = html;
-}
-
- 
-function verdictNudge(said, real){
-  if (said === "ok")
-    return "<b>Не так быстро</b>Ты решил, что всё в порядке. Возьми свои данные, а не авторские: допиши в код свою строку с вызовом и запусти. Если хоть на одном примере вывод расходится с обещанием — вердикт другой.";
-  if (real === "ok")
-    return "<b>Тут подозрение напрасно</b>Ты решил, что код где-то врёт. Тогда покажи это себе: найди данные, на которых он расходится с обещанием. Не находится ни одних — значит вердикт другой.";
-  if (said === "wrong" && real === "partly")
-    return "<b>Почти, но нет</b>«Врёт сразу» значит, что ошибка видна на том самом примере, который показал автор. Запусти код как есть: на его примере ответ верный. Значит врёт он не сразу.";
-  return "<b>Почти, но нет</b>«Работает, но не всегда» значит, что на примере автора всё сходится. Запусти код как есть и сравни вывод с обещанием — сходится ли?";
-}
-
-function wireReview(x){
-  var panel = document.getElementById("verdict");
-  if (!panel) return;
-   
-  var real = reviewTruth(x);
-  panel.querySelectorAll(".vbtn").forEach(function(b){
-    b.onclick = function(){
-      session.attempts++;
-      var said = b.getAttribute("data-v");
-      panel.querySelectorAll(".vbtn").forEach(function(o){ o.classList.toggle("on", o === b); });
-      if (said !== real){
-        document.getElementById("vpick").innerHTML = "";
-        vmsg("bad", verdictNudge(said, real));
-        return;
-      }
-      if (real === "ok"){ winAI(x, reviewProof(x, real)); return; }
-      vmsg("ok", "<b>Вердикт верный</b>Осталось показать, где именно поломка: ткни в строку кода от ИИ.");
-      showLinePicker(x, real);
-    };
-  });
-}
-
- 
-function showLinePicker(x, real){
-  var box = document.getElementById("vpick");
-  var lines = String(x.code).replace(/\n+$/, "").split("\n");
-  box.innerHTML = '<div class="lines">' +
-    lines.map(function(t, i){
-      var empty = t.trim() === "";
-      return '<button class="lrow' + (empty ? " off" : "") + '"' + (empty ? " disabled" : "") +
-        ' data-line="' + (i+1) + '"><span class="ln">' + (i+1) + '</span><code>' + (hl(t) || "&nbsp;") + '</code></button>';
-    }).join("") + '</div>';
-  box.querySelectorAll(".lrow").forEach(function(b){
-    b.onclick = function(){
-      session.attempts++;
-      var n = +b.getAttribute("data-line");
-      box.querySelectorAll(".lrow").forEach(function(o){ o.classList.toggle("on", o === b); });
-      if (n === x.badLine){ winAI(x, reviewProof(x, real)); return; }
-      vmsg("bad", "<b>Строка не та</b>Эта строка делает своё дело правильно. Ищи ту, из-за которой ответ расходится с обещанием: сравни, что в ней написано, с тем, что должно получиться.");
-    };
-  });
-}
-
-function winAI(x, extra){
-  S.ailab = S.ailab || {};
-  S.ailab[x.id] = 1;
-  markActiveToday();                  
-  save();
-  var xs = ailabList(), pos = xs.indexOf(x);
-  var next = (pos >= 0 && pos < xs.length - 1) ? xs[pos+1] : null;
-  var firstTry = session.attempts === 1 && session.hints === 0 && !session.shown;
-  var big = x.boss ? "🏆" : (firstTry ? "🎯" : "🤖");
-  var h2 = x.boss ? "Проект готов!" : (firstTry ? "Верно, с первого раза!" : "Верно!");
-  var buttons = (next
-      ? '<button class="bigbtn" id="wnext">Следующее →</button>'
-      : '<button class="bigbtn" id="wlist">Ко всем заданиям</button>') +
-    '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>';
-  document.getElementById("wincard").innerHTML =
-    '<div class="big">' + big + '</div><h2>' + h2 + '</h2>' +
-    '<p>' + esc(x.note || "Ты справился с заданием.") + '</p>' + (extra || "") +
-    '<div class="winrow">' + buttons + '</div>';
-  document.getElementById("win").classList.add("show");
-  confetti(x.boss ? 3 : 2);
-  var wn = document.getElementById("wnext");
-  if (wn) wn.onclick = function(){ closeWin(); openAILesson(next.id); };
-  var wl = document.getElementById("wlist");
-  if (wl) wl.onclick = function(){ closeWin(); screenAILab(); };
-  document.getElementById("wstay").onclick = closeWin;
-}
+var AI_SCREENS = KVSCREENS.ailab({
+  ailabDone: ailabDone, ailabList: ailabList, app: app, capHard: capHard, closeWin: closeWin,
+  codeHas: codeHas, confetti: confetti, diffBlock: diffBlock, editUnits: editUnits,
+  enterScreen: enterScreen, errHTML: errHTML, esc: esc, goHome: goHome, hl: hl,
+  makePredictStudio: makePredictStudio, makeStudio: makeStudio,
+  markActiveToday: markActiveToday, normPred: normPred, openProject: openProject,
+  predictDiff: predictDiff, projectDone: projectDone, projectOfWorld: projectOfWorld,
+  projectOpen: projectOpen, projectState: projectState, refreshTop: refreshTop, save: save,
+  screenCapReached: screenCapReached, screenProjectDone: screenProjectDone,
+  screenSpecs: screenSpecs, specDone: specDone, specsList: specsList, wireHint: wireHint,
+  ailabMark: ailabMark,
+  session: function(){ return session; },
+  newSession: function(v){ session = v; return v; }
+});
+var AI_STAGES = AI_SCREENS.AI_STAGES,
+    aiStageOf = AI_SCREENS.aiStageOf,
+    screenAILab = AI_SCREENS.screenAILab,
+    openAILesson = AI_SCREENS.openAILesson,
+    reviewTruth = AI_SCREENS.reviewTruth,
+    catchProbe = AI_SCREENS.catchProbe,
+    catchRun = AI_SCREENS.catchRun,
+    catchStart = AI_SCREENS.catchStart;
 
  
 function projectsList(){ return (window.PROJECTS || []); }
