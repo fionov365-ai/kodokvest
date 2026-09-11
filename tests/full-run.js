@@ -2867,6 +2867,110 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- раздел «HTML и CSS» (1.141.0) ---
+     ⚠️ Судья здесь — не человек и не наш Python, а разбор страницы, и его
+     ошибка молчит: задание, которое принимает заготовку, «решается» без
+     единой строки, а задание, которое не принимает эталон, не решается никем.
+     Поэтому по КАЖДОМУ заданию: эталон проходит все проверки, заготовка и
+     пример — нет (пример «про другое» не должен становиться ответом —
+     правило подсказок, memory/hints-philosophy). Плюс сам разборщик CSS, путь
+     по экрану и сертификат раздела. */
+  let webChecked = 0;
+  {
+    const p0 = problems.length;
+    const WB = w.WEB, TS = w.WEB_TASKS || [], TP = w.WEB_TOPICS || [];
+    if (!WB || !TS.length) bad("[html] раздела нет: судья или задания не подключены");
+    else {
+      if (TS.length < 20) bad("[html] заданий меньше двадцати: " + TS.length);
+      TP.forEach(tp => {
+        const n = TS.filter(t => t.topic === tp.id).length;
+        if (n < 5) bad("[html] в теме «" + tp.title + "» " + n + " заданий — меньше пяти");
+      });
+      const ids = {};
+      TS.forEach(t => {
+        if (!/^web-/.test(t.id))
+          bad("[html] id «" + t.id + "» без приставки web- — пересечётся с задачами экзамена в S.algo");
+        if (ids[t.id]) bad("[html] id «" + t.id + "» повторяется");
+        ids[t.id] = 1;
+        if (!TP.some(tp => tp.id === t.topic)) bad("[html] у «" + t.id + "» нет темы");
+        ["id","emoji","title","intro","goal","learn","example","starter","solution","note"].forEach(f => {
+          if (!t[f]) bad("[html] у «" + t.id + "» пустое поле «" + f + "»");
+        });
+        if (!Array.isArray(t.checks) || t.checks.length < 3) bad("[html] у «" + t.id + "» меньше трёх проверок");
+        if (!Array.isArray(t.hints) || t.hints.length < 3) bad("[html] у «" + t.id + "» меньше трёх подсказок");
+        const упало = WB.judge(t, t.solution).filter(x => !x.ok).map(x => x.t);
+        if (упало.length) bad("[html] эталон «" + t.id + "» не проходит: " + упало.join("; "));
+        if (WB.passed(WB.judge(t, t.starter)))
+          bad("[html] заготовка «" + t.id + "» уже проходит все проверки — задание сдаётся само");
+        if (WB.passed(WB.judge(t, t.example)))
+          bad("[html] пример в «" + t.id + "» проходит все проверки — пример стал ответом");
+      });
+
+      /* разборщик CSS: комментарии, @import, @media и список селекторов */
+      const r = WB.parseCSS("/* x */ @import url(a.css); h1 { color: red; } " +
+                            "@media (max-width: 500px) { p { font-size: 12px } } .a, .b{margin:0}");
+      if (r.map(x => x.sel).join("|") !== "h1|p|.a, .b")
+        bad("[html] разборщик CSS ошибся: " + JSON.stringify(r.map(x => x.sel)));
+      const W = WB.make('<style>p{color:red} .x{color:blue}</style>' +
+                        '<div style="color:green"><p class="x">a</p><span>b</span></div>');
+      if (W.css(W.q("p"), "color") !== "blue")
+        bad("[html] судья не учёл порядок правил: у p вышло «" + W.css(W.q("p"), "color") + "»");
+      if (W.css(W.q("span"), "color", true) !== "green")
+        bad("[html] судья не учёл наследование цвета от родителя");
+      if (W.css(W.q("span"), "color") !== null)
+        bad("[html] без наследования у span цвета быть не должно");
+      if (WB.make("<p>без стилей</p>").css(null, "color") !== null)
+        bad("[html] судья падает или врёт на отсутствующем элементе");
+
+      /* экран: список → задание → неудача → эталон → разбор */
+      const algoБыл = JSON.parse(JSON.stringify(g.state.algo || {}));
+      const certБыл = JSON.parse(JSON.stringify(g.state.certAt || {}));
+      g.state.algo = {};
+      const t0 = TS[0];
+      g.screenWeb(); await tick();
+      if (doc.querySelectorAll("[data-wb]").length !== TS.length)
+        bad("[html] в списке " + doc.querySelectorAll("[data-wb]").length + " заданий из " + TS.length);
+      const c0 = doc.querySelector('[data-wb="' + t0.id + '"]');
+      if (!c0) bad("[html] карточки первого задания нет");
+      else {
+        c0.click(); await tick();
+        const ta = doc.getElementById("wbcode"), fr = doc.querySelector(".wbframe");
+        if (!ta || !fr) bad("[html] у задания нет поля кода или окна страницы");
+        else {
+          const sb = fr.getAttribute("sandbox") || "";
+          if (!fr.hasAttribute("sandbox") || /allow-scripts/.test(sb))
+            bad("[html] окно страницы не заперто: sandbox=«" + sb + "»");
+          if ((fr.getAttribute("srcdoc") || "").indexOf("default-src 'none'") < 0)
+            bad("[html] окно страницы без правила «из сети ничего»");
+          if (doc.querySelectorAll("#wbchecks li").length !== t0.checks.length)
+            bad("[html] требований на экране не столько, сколько проверок");
+          doc.getElementById("wbcheck").click(); await tick();
+          if (g.algoDone(t0.id)) bad("[html] заготовка засчитана");
+          if (!doc.querySelector("#wbchecks li.bad"))
+            bad("[html] после неудачной проверки не отмечено, чего не хватает");
+          const ta2 = doc.getElementById("wbcode");
+          ta2.value = t0.solution;
+          ta2.dispatchEvent(new w.Event("input"));
+          doc.getElementById("wbcheck").click(); await tick();
+          if (!g.algoDone(t0.id))
+            bad("[html] эталон не засчитан: " + ((doc.getElementById("wbmsg") || {}).textContent || ""));
+          if (!/Разбор/.test(doc.getElementById("app").textContent))
+            bad("[html] после решения не открылся разбор");
+          if (g.place() !== "web") bad("[html] экран задания стоит не на своём месте: " + g.place());
+        }
+      }
+
+      /* сертификат раздела: не на половине, да на всех */
+      if (g.certSectionReady("web")) bad("[html] сертификат выдан за одно задание");
+      TS.forEach(t => { g.state.algo[t.id] = 1; });
+      if (!g.certSectionReady("web")) bad("[html] сертификат не выдан, хотя сделаны все задания");
+
+      g.state.algo = algoБыл; g.state.certAt = certБыл;
+    }
+    if (problems.length === p0) webChecked++;
+    viewReset(g);
+  }
+
   /* --- Главный экран сложен из карточек ---
      ⚠️ Проверка стережёт ровно то, чего не видит ни один другой тест и не
      видно глазами на экране. Карточке отдаётся только то, что она назвала в
@@ -3237,7 +3341,8 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
          «девяносто пять задач» ПРОПИСЬЮ — проверка цифр его не видела, а задач
          к тому дню стало 97. Число прописью — это число, спрятанное от теста;
          на страницах пишем цифрами. */
-      { rx: /(\d+)\s+задач/g,                 сколько: (w.ALGO || []).length,       что: "задач экзамена" }
+      { rx: /(\d+)\s+задач/g,                 сколько: (w.ALGO || []).length,       что: "задач экзамена" },
+      { rx: /(\d+)\s+задани\S*\s+по\s+HTML/g, сколько: (w.WEB_TASKS || []).length,  что: "заданий по HTML и CSS" }
     ];
     ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie", "individualnyi-proekt",
      "baza/informatika-na-semeynom-obuchenii"].forEach(page => {
@@ -9710,6 +9815,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
   console.log(`вход: сначала урок, имя после победы: ${entryChecked ? "да" : "нет"}`);
   console.log(`HTML из вывода — страницей, в запертой рамке: ${pageChecked ? "да" : "нет"}`);
+  console.log(`раздел «HTML и CSS»: эталоны, заготовки, примеры, экран: ${webChecked ? "да" : "нет"}`);
   console.log(`цель по шагам: ${leanChecked ? "да" : "нет"}`);
   console.log(`разбор своей программы: ${ownVizChecked ? "да" : "нет"}`);
   console.log(`свои задания и ссылки: ${taskChecked ? "да" : "нет"}`);

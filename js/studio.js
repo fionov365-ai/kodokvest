@@ -56,6 +56,30 @@ function pageDoc(text){
     '<style>body{margin:16px;font:16px/1.5 system-ui,sans-serif;color:#111;background:#fff}</style>' +
     '</head><body>' + body + '</body></html>';
 }
+/* Высота рамки по содержимому и ЗАМОК 4 — в одном месте для всех, кто
+   показывает страницу: студия и раздел «HTML и CSS» (js/screens-web.js).
+   Защита от класса ошибок живёт в одном месте (RAZVITIE § 4.18).
+   whose — чью страницу видно: «то, что напечатала программа» в студии,
+   «твоя страница» в разделе вёрстки. */
+function pageFrameWire(frame, note, whose){
+  frame.addEventListener("load", function(){
+    var d = null;
+    try { d = frame.contentDocument; } catch(e){}
+    if (!d || !d.body) return;
+    frame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
+    /* ⚠️ Замок 4: ссылка не уводит рамку. Путь вроде «/posts/1» ушёл бы в
+       корень нашего же сайта и показал бы 404, а внешний адрес — к чужому
+       серверу. Вместо перехода объясняем, что сделал бы настоящий сайт. */
+    d.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a) return;
+      e.preventDefault();
+      if (note) note.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
+        "На настоящем сайте браузер открыл бы эту страницу — здесь показана " +
+        (whose || "только то, что напечатала программа") + ".";
+    });
+  });
+}
 
 /* ================= рабочая станция ================= */
 function makeStudio(cfg){
@@ -177,23 +201,7 @@ function makeStudio(cfg){
     pageBtn.textContent = "✕ Скрыть страницу";
     pageRender();
   };
-  pageFrame.addEventListener("load", function(){
-    var d = null;
-    try { d = pageFrame.contentDocument; } catch(e){}
-    if (!d || !d.body) return;
-    pageFrame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
-    /* ⚠️ Замок 4: ссылка не уводит рамку. Путь вроде «/posts/1» ушёл бы в
-       корень нашего же сайта и показал бы 404, а внешний адрес — к чужому
-       серверу. Вместо перехода объясняем, что сделал бы настоящий сайт. */
-    d.addEventListener("click", function(e){
-      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
-      if (!a) return;
-      e.preventDefault();
-      pageNote.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
-        "На настоящем сайте браузер попросил бы эту страницу у сервера — здесь показано " +
-        "только то, что напечатала программа.";
-    });
-  });
+  pageFrameWire(pageFrame, pageNote);
 
   function showDisk(files){
     if (!files || !Object.keys(files).length){
@@ -390,5 +398,5 @@ function makeStudio(cfg){
   return wrap;
 }
 
-return { makeStudio: makeStudio };
+return { makeStudio: makeStudio, pageDoc: pageDoc, pageFrameWire: pageFrameWire };
 };

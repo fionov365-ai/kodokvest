@@ -2323,7 +2323,7 @@ var PLACE_RU = {
   play:"играет в игру по ссылке", specs:"в приёмке", spec:"в приёмке",
   folio:"в портфолио", works:"на витрине", home:"на главном экране",
   world:"выбирает урок", train:"выбирает тренировку", guide:"читает инструкцию",
-  account:"в профиле", trace:"смотрит, как шла работа"
+  account:"в профиле", trace:"смотрит, как шла работа", web:"в разделе «HTML и CSS»"
 };
 /* Чем занят, по чужому снимку. serverAt — серверное время последней записи:
    сравнивать его с часами зрителя чуть нечестно, но дрейф часов много меньше
@@ -3441,6 +3441,9 @@ var STUDIO = KVSCREENS.studio({
   session: function(){ return session; }
 });
 var makeStudio = STUDIO.makeStudio;
+/* Запертая страница — одна на продукт: её показывает и студия, и раздел
+   «HTML и CSS». Разбор замков — в шапке js/studio.js. */
+var pageDoc = STUDIO.pageDoc, pageFrameWire = STUDIO.pageFrameWire;
 
 /* ================= проверка ================= */
 function normSeg(s, pen){
@@ -3893,6 +3896,15 @@ function trainCards(){
         var sOk = sAll ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
+      })() },
+    /* go обёрткой: screenWeb присваивается ниже по файлу (раздел — свой модуль) */
+    { id:"web", em:"🌐", title:"HTML и CSS", go: function(){ screenWeb(); },
+      why: "Страница сайта своими руками: теги, списки, таблицы, цвета и раскладка. Страницу видно сразу, пока пишешь, а проверяет её сам браузер.",
+      when: "Когда хочется сделать то, что можно показать всем, — сайт.",
+      stat: (function(){
+        var xs = window.WEB_TASKS || [];
+        var d = xs.filter(function(x){ return algoDone(x.id); }).length;
+        return xs.length ? d + " из " + xs.length + " готово" : "";
       })() },
     { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
       why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
@@ -9056,6 +9068,18 @@ var SECTION_CERTS = [
         plural(t, "задание", "задания", "заданий") +
         (p ? ', проект «' + esc(p.title) + '» собран' : '') +
         '. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
+    } },
+  { id:"web", icon:"🌐", title:"Раздел «HTML и CSS» пройден",
+    what:"HTML и CSS",
+    all: function(){ return (window.WEB_TASKS || []).length; },
+    done: function(){
+      return (window.WEB_TASKS || []).filter(function(x){ return algoDone(x.id); }).length;
+    },
+    unit: ["задание", "задания", "заданий"],
+    line: function(d, t){
+      return 'Раздел «HTML и CSS» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "задания", "заданий", "заданий") +
+        ' — от первого тега до страницы с раскладкой. Каждую страницу проверял браузер.';
     } }
 ];
 function sectionCert(id){
@@ -10370,6 +10394,15 @@ var ROBOTS = KVSCREENS.robot({
   algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain
 });
 var screenRobot = ROBOTS.screenRobot, openRobot = ROBOTS.openRobot;
+
+/* Раздел «HTML и CSS» (1.141.0) — тоже сразу своим файлом, по образцу Робота:
+   экраны в js/screens-web.js, судья в js/web.js, задания в js/web-tasks.js. */
+var WEBS = KVSCREENS.web({
+  app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop,
+  algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain,
+  pageDoc: pageDoc, pageFrameWire: pageFrameWire
+});
+var screenWeb = WEBS.screenWeb, openWeb = WEBS.openWeb;
 
 var SHOWCASE = KVSCREENS.showcase({
   app: app,
@@ -12818,6 +12851,7 @@ var ROUTES = [
   { h:"#mine",    place:"mytasks", t:"Своё задание",               open:function(){ screenMyTasks(); } },
   { h:"#works",   place:"works",   t:"Что создают ученики",        open:function(){ screenShowcase(); } },
   { h:"#robot",   place:"robot",   t:"Робот",                      open:function(){ screenRobot(); } },
+  { h:"#html",    place:"web",     t:"HTML и CSS",                 open:function(){ screenWeb(); } },
   { h:"#specs",   place:"specs",   t:"Приёмка",                    open:function(){ screenSpecs(); } },
   { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
   { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
@@ -18294,6 +18328,17 @@ var HELP = {
     '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div></div>' +
     '<p>Написанное <b>не пропадает</b>: уйдёшь с урока и вернёшься — код будет на месте.</p>' },
 
+  web: { t:"🌐 HTML и CSS — страница своими руками", h:
+    '<h4>Что это за раздел</h4>' +
+    '<p>Задания про то, из чего сделан любой сайт. HTML говорит, ЧТО на странице — заголовок, ' +
+    'список, таблица. CSS — КАК это выглядит: цвета, шрифты, раскладка.</p>' +
+    '<h4>Как решать</h4>' +
+    '<ul><li>Пиши код слева — справа сразу видно страницу.</li>' +
+    '<li>«Проверить» разбирает страницу и отмечает в списке «Что нужно сделать», что уже есть, а чего нет.</li>' +
+    '<li>Пример в карточке «Как это пишется» — про другое: он показывает тег, но ответом не является.</li></ul>' +
+    '<h4>Почему не видно картинок из интернета</h4>' +
+    '<p>Нарочно: страница в тренажёре не ходит в сеть, чтобы ничего не рассказать о тебе чужому сайту. ' +
+    'Вместо картинки браузер показывает её описание из alt.</p>' },
   train: { t:"🎯 Тренировки — зачем они", h:
     '<h4>Что это за экран</h4>' +
     '<p>Всё, что <b>вне сотни уроков</b>. Звёзд тут не дают и по порядку проходить не надо — ' +
@@ -19119,6 +19164,7 @@ window.__game = {
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
   screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
   algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
+  screenWeb: function(){ screenWeb(); }, openWeb: function(id){ openWeb(id); },
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,

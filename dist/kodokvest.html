@@ -853,6 +853,22 @@ a.bigbtn{text-align:center;text-decoration:none}
 .pageframe{display:block;width:100%;height:220px;border:1px solid var(--line2);border-radius:10px;background:#fff}
 .pagenote{margin-top:8px;font-size:13.5px;color:var(--soft)}
 .pagenote:empty{display:none}
+/* ---- раздел «HTML и CSS» (js/screens-web.js): код слева, страница справа ---- */
+.wbwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin:0 0 16px}
+.wbcode{min-height:300px}
+.wbframe{min-height:300px}
+.wbright .pagenote{margin:8px 0 0}
+.wbex{margin-top:10px}
+.wbex pre{background:var(--sunken);border-radius:10px;padding:10px 12px;margin:6px 0 0;
+  overflow:auto;font-family:'JetBrains Mono',monospace;font-size:13.5px}
+.wbchecks{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.wbchecks li{display:flex;gap:8px;align-items:baseline;line-height:1.45;color:var(--soft);font-size:14px}
+.wbchecks .mk{flex:none;width:18px;text-align:center;font-weight:700}
+.wbchecks .ok .mk{color:var(--ok)}
+.wbchecks .bad .mk{color:var(--bad)}
+.wbchecks .wait .mk{color:var(--faint)}
+.wbkeys{margin-top:6px}
+@media (max-width:860px){ .wbwrap{grid-template-columns:minmax(0,1fr)} }
 canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 .varlist{display:flex;flex-direction:column;gap:5px}
 .varrow{display:flex;gap:8px;align-items:baseline;font-size:13px}
@@ -15067,6 +15083,753 @@ window.ROBOT_TASKS = [
 
 <script>
  
+window.WEB = (function(){
+
+  function parseHTML(src){
+    return new DOMParser().parseFromString(String(src || ""), "text/html");
+  }
+
+   
+  function parseDecls(text){
+    var out = [];
+    String(text || "").split(";").forEach(function(part){
+      var i = part.indexOf(":");
+      if (i < 0) return;
+      var prop = part.slice(0, i).trim().toLowerCase();
+      var val = part.slice(i + 1).replace(/\s*!important\s*$/i, "").trim();
+      if (prop && val) out.push({ prop: prop, val: val });
+    });
+    return out;
+  }
+
+   
+  function parseCSS(text){
+    var src = String(text || "").replace(/\/\*[\s\S]*?\*\//g, ""), rules = [];
+    (function walk(s){
+      var pos = 0;
+      while (pos < s.length){
+        var open = s.indexOf("{", pos);
+        if (open < 0) break;
+        var head = s.slice(pos, open);
+        var semi = head.lastIndexOf(";");
+        if (semi >= 0) head = head.slice(semi + 1);         
+        head = head.trim();
+        if (head.charAt(0) === "@"){
+          var depth = 1, j = open + 1;
+          while (j < s.length && depth){
+            if (s.charAt(j) === "{") depth++;
+            else if (s.charAt(j) === "}") depth--;
+            j++;
+          }
+          if (/^@(media|supports)\b/i.test(head)) walk(s.slice(open + 1, j - 1));
+          pos = j;
+          continue;
+        }
+        var close = s.indexOf("}", open);
+        if (close < 0) close = s.length;
+        if (head) rules.push({ sel: head, decls: parseDecls(s.slice(open + 1, close)) });
+        pos = close + 1;
+      }
+    })(src);
+    return rules;
+  }
+
+   
+  function make(src){
+    src = String(src || "");
+    var doc = parseHTML(src), rules = [];
+    Array.prototype.forEach.call(doc.querySelectorAll("style"), function(st){
+      rules = rules.concat(parseCSS(st.textContent));
+    });
+    function list(p){ return Array.isArray(p) ? p : [p]; }
+    function hit(el, sel){
+      return sel.split(",").some(function(part){
+        part = part.trim();
+        if (!part) return false;
+        try { return el.matches(part); } catch(e){ return false; }
+      });
+    }
+    function fromDecls(decls, props){
+      var v = null;
+      decls.forEach(function(d){ if (props.indexOf(d.prop) >= 0) v = d.val; });
+      return v;
+    }
+    function sheet(el, props){
+      if (!el || !el.matches) return null;
+      props = list(props);
+      var v = null;
+      rules.forEach(function(r){
+        if (!hit(el, r.sel)) return;
+        var x = fromDecls(r.decls, props);
+        if (x !== null) v = x;
+      });
+      return v;
+    }
+    function inline(el, props){
+      if (!el || !el.getAttribute) return null;
+      return fromDecls(parseDecls(el.getAttribute("style") || ""), list(props));
+    }
+     
+    function css(el, props, inherit){
+      var e = el;
+      while (e && e.nodeType === 1){
+        var v = inline(e, props);
+        if (v === null) v = sheet(e, props);
+        if (v !== null) return v;
+        if (!inherit) return null;
+        e = e.parentElement;
+      }
+      return null;
+    }
+    function q(sel){ try { return doc.querySelector(sel); } catch(e){ return null; } }
+    function qa(sel){
+      try { return Array.prototype.slice.call(doc.querySelectorAll(sel)); } catch(e){ return []; }
+    }
+    return {
+      src: src, doc: doc, rules: rules,
+      q: q, qa: qa,
+      n: function(sel){ return qa(sel).length; },
+      text: function(el){ return el ? String(el.textContent || "").replace(/\s+/g, " ").trim() : ""; },
+      attr: function(el, name){ return el && el.getAttribute ? String(el.getAttribute(name) || "").trim() : ""; },
+      css: css, sheet: sheet, inline: inline,
+       
+      before: function(a, b){ return !!(a && b && (a.compareDocumentPosition(b) & 4)); },
+      px: function(v){
+        var m = /^(-?\d+(?:\.\d+)?)px$/i.exec(String(v || "").trim());
+        return m ? parseFloat(m[1]) : NaN;
+      }
+    };
+  }
+
+   
+  function judge(task, src){
+    var W = make(src);
+    return (task.checks || []).map(function(c){
+      var ok = false;
+      try { ok = !!c.f(W); } catch(e){ ok = false; }
+      return { t: c.t, ok: ok };
+    });
+  }
+  function passed(res){ return !!res.length && res.every(function(x){ return x.ok; }); }
+
+  return { parseHTML: parseHTML, parseCSS: parseCSS, parseDecls: parseDecls,
+           make: make, judge: judge, passed: passed };
+})();
+
+</script>
+
+<script>
+ 
+(function(){
+
+var BG = ["background", "background-color"];
+var BORDER = ["border", "border-style", "border-width", "border-color",
+              "border-top", "border-right", "border-bottom", "border-left"];
+var PAD = ["padding", "padding-top", "padding-right", "padding-bottom", "padding-left"];
+var SPACE = ["margin", "margin-right", "margin-left", "padding", "padding-right", "padding-left"];
+
+function dataRows(W){
+  return W.qa("tr").filter(function(tr){ return !!tr.querySelector("td"); }).length;
+}
+function flexBox(W){
+  return W.qa("body *").filter(function(el){
+    return /^(inline-)?flex$/i.test(W.css(el, "display") || "");
+  })[0] || null;
+}
+
+window.WEB_TOPICS = [
+  { id:"text",   em:"📄", title:"Текст на странице" },
+  { id:"blocks", em:"🧩", title:"Списки, ссылки, картинки, таблицы" },
+  { id:"css",    em:"🎨", title:"Оформление: CSS" },
+  { id:"layout", em:"🧱", title:"Раскладка и целые страницы" }
+];
+
+window.WEB_TASKS = [
+
+ 
+{
+  id: "web-first", topic: "text", emoji: "📄", title: "Первая страница",
+  intro: "Страница — это текст с пометками, тегами. Браузер читает теги и сам решает, как что показать.",
+  goal: "Сделай страницу о себе: крупный заголовок с твоим именем и под ним абзац — пара предложений о том, что ты любишь.",
+  learn: "Тег — слово в угловых скобках. Открывающий <h1> и закрывающий </h1> обнимают текст заголовка. " +
+         "Абзац пишется тегом <p>.",
+  example: "<h2>Про котов</h2>\n<p>Коты спят шестнадцать часов в сутки.</p>\n",
+  starter: "Меня зовут …\nЯ люблю …\n",
+  solution: "<h1>Меня зовут Аня</h1>\n<p>Я люблю рисовать и кататься на велосипеде.</p>\n",
+  checks: [
+    { t: "Есть заголовок <h1> с текстом", f: function(W){ return W.text(W.q("h1")) !== ""; } },
+    { t: "Есть абзац <p> с текстом", f: function(W){ return W.text(W.q("p")) !== ""; } },
+    { t: "Заголовок стоит выше абзаца", f: function(W){ return W.before(W.q("h1"), W.q("p")); } }
+  ],
+  hints: [
+    "Заголовок пишется так: <h1>текст</h1> — открывающий тег, текст, закрывающий тег с косой чертой.",
+    "Абзац — то же самое, только тег <p>.",
+    "Браузер показывает теги в том порядке, в каком они написаны: сначала заголовок, потом абзац.",
+    "Смотри в окно «Страница» — оно показывает результат прямо пока пишешь."
+  ],
+  note: "Браузер сам решил, что <h1> — крупно и жирно, а <p> — обычным текстом с отступом. Ты не задавал " +
+        "ни размера, ни шрифта: ты сказал, ЧТО это за текст, а как его показать — дело браузера. " +
+        "Это главная мысль HTML: разметка описывает смысл, а не вид."
+},
+{
+  id: "web-levels", topic: "text", emoji: "🪜", title: "Заголовки по уровням",
+  intro: "У страницы, как у книги, есть название и главы. Для этого у заголовков шесть уровней.",
+  goal: "Страница «Мой день»: один главный заголовок и два раздела — «Утро» и «Вечер» — со своими заголовками. Под каждым разделом — абзац.",
+  learn: "Заголовки идут от <h1> до <h6>. <h1> на странице один — это её название. Разделы — <h2>, " +
+         "подразделы внутри них — <h3>.",
+  example: "<h1>Рецепты</h1>\n<h2>Суп</h2>\n<p>Налить воды и поставить на огонь.</p>\n",
+  starter: "<h1>Мой день</h1>\n",
+  solution: "<h1>Мой день</h1>\n<h2>Утро</h2>\n<p>Встаю в семь и завтракаю.</p>\n" +
+            "<h2>Вечер</h2>\n<p>Читаю книгу и гуляю с собакой.</p>\n",
+  checks: [
+    { t: "Главный заголовок <h1> ровно один", f: function(W){ return W.n("h1") === 1; } },
+    { t: "Хотя бы два заголовка разделов <h2>", f: function(W){ return W.n("h2") >= 2; } },
+    { t: "Сразу после каждого <h2> идёт абзац <p>", f: function(W){
+        var hs = W.qa("h2");
+        return hs.length > 0 && hs.every(function(h){
+          var nx = h.nextElementSibling;
+          return !!nx && nx.tagName === "P" && W.text(nx) !== "";
+        }); } },
+    { t: "Главный заголовок стоит первым", f: function(W){ return W.before(W.q("h1"), W.q("h2")); } }
+  ],
+  hints: [
+    "Заготовка уже даёт главный заголовок. Добавь под ним <h2>Утро</h2>.",
+    "Под каждым <h2> сразу пиши абзац <p> — что происходит в эту часть дня.",
+    "Второй раздел устроен так же: <h2>Вечер</h2> и абзац под ним.",
+    "Второй <h1> не нужен: название у страницы одно."
+  ],
+  note: "Уровни заголовков — не про размер, а про устройство текста. Программа, которая читает страницу " +
+        "вслух незрячему человеку, по ним строит оглавление: «раздел Утро, раздел Вечер». Поэтому " +
+        "<h2> не ставят ради «чуть поменьше» — для размера есть CSS."
+},
+{
+  id: "web-strong", topic: "text", emoji: "❗", title: "Важное и выделенное",
+  intro: "Иногда одно слово в предложении важнее остальных. Для этого есть два тега.",
+  goal: "Напиши правило для младшего брата или сестры: абзац, где самое важное слово выделено через <strong>, а ещё одно — через <em>.",
+  learn: "<strong> значит «это важно» — браузер покажет жирным. <em> значит «сделай ударение» — курсивом. " +
+         "Их ставят ВНУТРИ абзаца, вокруг нужных слов.",
+  example: "<p>Кошку <em>нельзя</em> гладить против шерсти.</p>\n",
+  starter: "<p>Перед едой всегда мой руки с мылом.</p>\n",
+  solution: "<p>Перед едой <strong>всегда</strong> мой руки с <em>мылом</em>.</p>\n",
+  checks: [
+    { t: "Есть абзац <p> с текстом", f: function(W){ return W.text(W.q("p")) !== ""; } },
+    { t: "Внутри абзаца есть <strong> со словом", f: function(W){ return W.text(W.q("p strong")) !== ""; } },
+    { t: "Внутри абзаца есть <em> со словом", f: function(W){ return W.text(W.q("p em")) !== ""; } },
+    { t: "Выделено слово, а не весь абзац", f: function(W){
+        var s = W.text(W.q("p strong"));
+        return s !== "" && s.length < W.text(W.q("p")).length; } }
+  ],
+  hints: [
+    "Найди в заготовке самое важное слово и обними его: <strong>слово</strong>.",
+    "Второе слово обними тегом <em> — так же, открывающим и закрывающим.",
+    "Теги ставятся внутри <p>…</p>, не снаружи.",
+    "Выделять весь абзац не надо: выделение работает, только когда вокруг обычный текст."
+  ],
+  note: "Жирный и курсив можно получить и через CSS, но <strong> и <em> говорят больше: они сообщают, что " +
+        "слово ВАЖНОЕ. Программа чтения вслух произнесёт его с нажимом, а поисковик поймёт, о чём текст."
+},
+{
+  id: "web-poem", topic: "text", emoji: "📝", title: "Стихи в столбик",
+  intro: "Попробуй записать стихотворение — и увидишь, что браузер склеил все строки в одну.",
+  goal: "Запиши четверостишие в один абзац так, чтобы каждая строка начиналась с новой строки.",
+  learn: "Переносы строк в коде браузер превращает в обычный пробел. Новую строку внутри абзаца начинает " +
+         "тег <br> — у него нет закрывающей пары.",
+  example: "<p>Раз, два, три,<br>на меня смотри.</p>\n",
+  starter: "<p>\nУ лукоморья дуб зелёный;\nЗлатая цепь на дубе том:\nИ днём и ночью кот учёный\nВсё ходит по цепи кругом;\n</p>\n",
+  solution: "<p>\nУ лукоморья дуб зелёный;<br>\nЗлатая цепь на дубе том:<br>\nИ днём и ночью кот учёный<br>\nВсё ходит по цепи кругом;\n</p>\n",
+  checks: [
+    { t: "Абзац <p> один", f: function(W){ return W.n("p") === 1; } },
+    { t: "Внутри абзаца хотя бы три <br>", f: function(W){ return W.n("p br") >= 3; } },
+    { t: "На странице все четыре строки", f: function(W){
+        var p = W.q("p");
+        return !!p && p.innerHTML.split(/<br\s*\/?>/i).filter(function(s){
+          return s.replace(/<[^>]+>/g, "").trim() !== ""; }).length >= 4; } }
+  ],
+  hints: [
+    "Посмотри в окно «Страница»: строки слиплись, хотя в коде они друг под другом.",
+    "Поставь <br> в конце каждой строки, кроме последней.",
+    "Закрывать <br> не нужно: это одиночный тег.",
+    "Не делай четыре абзаца: между абзацами браузер ставит пустое место, а в стихах его нет."
+  ],
+  note: "Браузер нарочно не верит переносам в коде: в разметке строки переносят для удобства того, кто " +
+        "пишет, а не того, кто читает. Если бы каждый перенос становился новой строкой, страницы " +
+        "рассыпались бы от любого аккуратного отступа."
+},
+{
+  id: "web-skeleton", topic: "text", emoji: "🦴", title: "Скелет страницы",
+  intro: "Настоящая страница — это документ целиком, со служебной частью, которую не видно.",
+  goal: "Собери полный документ: объявление <!doctype html>, тег <html>, в <head> — <title> с названием вкладки, в <body> — заголовок и абзац.",
+  learn: "Документ начинается с <!doctype html>. Внутри <html> два отдела: <head> — служебное (название " +
+         "вкладки пишут в <title>), и <body> — всё, что видно на странице.",
+  example: "<!doctype html>\n<html>\n<body>\n  <p>Страница без названия вкладки.</p>\n</body>\n</html>\n",
+  starter: "<h1>Мой сайт</h1>\n<p>Скоро здесь что-то будет.</p>\n",
+  solution: "<!doctype html>\n<html>\n<head>\n  <title>Мой сайт</title>\n</head>\n<body>\n" +
+            "  <h1>Мой сайт</h1>\n  <p>Скоро здесь что-то будет.</p>\n</body>\n</html>\n",
+  checks: [
+    { t: "Первой строкой стоит <!doctype html>", f: function(W){ return /^\s*<!doctype html>/i.test(W.src); } },
+    { t: "Документ обёрнут в <html> … </html>", f: function(W){
+        return /<html[\s>]/i.test(W.src) && /<\/html>/i.test(W.src); } },
+    { t: "В <head> стоит <title> с названием", f: function(W){
+        return /<head[^>]*>[\s\S]*<title[^>]*>[^<]*\S[^<]*<\/title>[\s\S]*<\/head>/i.test(W.src); } },
+    { t: "Заголовок <h1> стоит внутри <body>", f: function(W){
+        return /<body[^>]*>[\s\S]*<h1[\s>][\s\S]*<\/body>/i.test(W.src); } }
+  ],
+  hints: [
+    "Начни с первой строки: <!doctype html>.",
+    "Дальше <html>, внутри него сначала <head>, потом <body>. В конце всё закрой.",
+    "В <head> положи <title>Мой сайт</title> — это название вкладки.",
+    "Заголовок и абзац из заготовки перенеси внутрь <body>."
+  ],
+  note: "Браузер прощает многое: страница из одного абзаца тоже откроется, он сам достроит недостающее. " +
+        "Но достроит как решит сам, а не как хотел ты. <!doctype html> включает современные правила, " +
+        "а <title> — это имя вкладки, закладки и строка в поисковой выдаче."
+},
+
+/* ---------------- Списки, ссылки, картинки, таблицы ---------------- */
+{
+  id: "web-ul", topic: "blocks", emoji: "🛒", title: "Список покупок",
+  intro: "Всё, что перечисляют, на странице оформляют списком, а не строчкой через запятую.",
+  goal: "Сделай список покупок к празднику: заголовок и маркированный список хотя бы из трёх пунктов.",
+  learn: "<ul> — список с точками. Каждый пункт — отдельный <li> внутри него.",
+  example: "<ul>\n  <li>Хлеб</li>\n</ul>\n",
+  starter: "<h2>Купить к празднику</h2>\nторт, свечи, шарики\n",
+  solution: "<h2>Купить к празднику</h2>\n<ul>\n  <li>Торт</li>\n  <li>Свечи</li>\n  <li>Шарики</li>\n</ul>\n",
+  checks: [
+    { t: "Есть заголовок", f: function(W){ return W.text(W.q("h1, h2, h3")) !== ""; } },
+    { t: "Есть список <ul>", f: function(W){ return !!W.q("ul"); } },
+    { t: "В списке хотя бы три пункта <li>", f: function(W){ return W.n("ul > li") >= 3; } },
+    { t: "Ни один пункт не пустой", f: function(W){
+        var li = W.qa("ul > li");
+        return li.length > 0 && li.every(function(x){ return W.text(x) !== ""; }); } }
+  ],
+  hints: [
+    "Вместо строчки через запятую открой <ul> и закрой </ul>.",
+    "Каждую покупку оберни в свой <li>…</li>.",
+    "Пункты пишутся ВНУТРИ <ul>, а не после него.",
+    "Точки перед пунктами ставит браузер — самому их писать не нужно."
+  ],
+  note: "Список — это не «строчки с точками», а сообщение: «здесь перечень». Поэтому браузер может сам " +
+        "оформить его, а программа чтения вслух скажет: «список из трёх пунктов». Строчка через запятую " +
+        "ничего такого не сообщает."
+},
+{
+  id: "web-ol", topic: "blocks", emoji: "🥪", title: "Рецепт по шагам",
+  intro: "Когда порядок важен, пункты нумеруют. Но номера ставишь не ты, а браузер.",
+  goal: "Рецепт бутерброда: список продуктов с точками и шаги приготовления нумерованным списком — хотя бы четыре шага.",
+  learn: "<ol> — список с номерами. Браузер сам ставит 1, 2, 3, а если переставить пункты — пересчитает.",
+  example: "<ol>\n  <li>Проснуться</li>\n  <li>Умыться</li>\n</ol>\n",
+  starter: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n",
+  solution: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n<ol>\n" +
+            "  <li>Отрезать ломтик хлеба</li>\n  <li>Намазать масло</li>\n" +
+            "  <li>Положить сыр</li>\n  <li>Съесть</li>\n</ol>\n",
+  checks: [
+    { t: "Есть список продуктов <ul>, хотя бы два пункта", f: function(W){ return W.n("ul > li") >= 2; } },
+    { t: "Есть нумерованный список <ol>", f: function(W){ return !!W.q("ol"); } },
+    { t: "В нумерованном списке хотя бы четыре шага", f: function(W){ return W.n("ol > li") >= 4; } },
+    { t: "Номера ставит браузер, а не ты", f: function(W){
+        var li = W.qa("ol > li");
+        return li.length > 0 && li.every(function(x){ return !/^\d+\s*[.)]/.test(W.text(x)); }); } }
+  ],
+  hints: [
+    "Продукты уже есть. Под ними открой <ol>.",
+    "Каждый шаг — отдельный <li>, как в обычном списке.",
+    "Не пиши «1.» в начале пункта: номер появится сам.",
+    "Попробуй поменять шаги местами и посмотри, что станет с номерами."
+  ],
+  note: "Номера, написанные руками, врут, как только рецепт меняется: вставил шаг в середину — и всё ниже " +
+        "надо перенумеровать. Номера, которые ставит <ol>, пересчитываются сами. Это та же мысль, что " +
+        "в программировании: не пиши руками то, что может посчитать машина."
+},
+{
+  id: "web-link", topic: "blocks", emoji: "🔗", title: "Ссылка",
+  intro: "Ссылки — то, из-за чего страницы называют «сетью»: они ведут друг к другу.",
+  goal: "Посоветуй другу страницу в интернете: абзац с объяснением и ссылка на неё внутри. Текст ссылки — слова, а не сам адрес.",
+  learn: "<a href=\"адрес\">текст</a>. В href — куда вести, между тегами — что будет написано. Хорошая " +
+         "ссылка говорит, куда ведёт: «расписание электричек», а не «жми сюда».",
+  example: "<a href=\"https://ru.wikipedia.org\">https://ru.wikipedia.org</a>\n",
+  starter: "<p>Интересная статья про Луну: </p>\n",
+  solution: "<p>Интересная статья про Луну: <a href=\"https://ru.wikipedia.org/wiki/Луна\">Луна в Википедии</a>.</p>\n",
+  checks: [
+    { t: "Есть ссылка <a> с адресом в href", f: function(W){ return W.attr(W.q("a[href]"), "href") !== ""; } },
+    { t: "Адрес полный: начинается с https:// или http://", f: function(W){
+         
+        return (/^https?:[/][/]/i).test(W.attr(W.q("a[href]"), "href")); } },
+    { t: "Текст ссылки — слова, а не сам адрес", f: function(W){
+        var t = W.text(W.q("a[href]"));
+        return t !== "" && !/^(https?:|www\.)/i.test(t); } },
+    { t: "Ссылка стоит внутри абзаца", f: function(W){ return !!W.q("p a[href]"); } }
+  ],
+  hints: [
+    "Ссылку ставят внутрь абзаца, перед </p>.",
+    "Адрес пишется в кавычках: href=\"https://…\".",
+    "Между <a …> и </a> напиши, КУДА ведёт ссылка, обычными словами.",
+    "Нажми на ссылку в окне «Страница»: тренажёр объяснит, что сделал бы настоящий браузер."
+  ],
+  note: "Ссылку со словами «тут» и «жми сюда» не понять без соседнего текста, а программы чтения вслух " +
+        "часто зачитывают одни только ссылки подряд — и получается «тут, тут, тут». Текст ссылки должен " +
+        "сам говорить, куда она ведёт."
+},
+{
+  id: "web-img", topic: "blocks", emoji: "🖼", title: "Картинка и её описание",
+  intro: "Картинку вставляют одним тегом. Но главное в нём — не адрес картинки, а её описание.",
+  goal: "Вставь картинку тегом <img> и опиши её в alt так, чтобы понял человек, который её не видит. Под картинкой — подпись.",
+  learn: "<img src=\"адрес\" alt=\"описание\"> — одиночный тег. alt читает вслух программа для незрячих, и " +
+         "его же показывает браузер, если картинка не загрузилась.",
+  example: "<img src=\"cat.jpg\">\n",
+  starter: "<h2>Мой кот</h2>\n<img src=\"kot.jpg\">\n",
+  solution: "<h2>Мой кот</h2>\n<img src=\"kot.jpg\" alt=\"Рыжий кот спит на подоконнике\">\n<p>Его зовут Персик.</p>\n",
+  checks: [
+    { t: "Есть картинка <img> с адресом в src", f: function(W){ return W.attr(W.q("img"), "src") !== ""; } },
+    { t: "У картинки есть описание alt", f: function(W){ return W.attr(W.q("img"), "alt") !== ""; } },
+    { t: "Описание говорит, что на картинке, — хотя бы три слова", f: function(W){
+        return W.attr(W.q("img"), "alt").split(/\s+/).filter(Boolean).length >= 3; } },
+    { t: "Под картинкой есть подпись-абзац", f: function(W){
+        var p = W.q("img ~ p");
+        return !!p && W.text(p) !== ""; } }
+  ],
+  hints: [
+    "Допиши к тегу <img> атрибут alt=\"…\" — внутри тега, до знака >.",
+    "Опиши, что видно на картинке: не «кот», а какой кот и что он делает.",
+    "Подпись — обычный абзац <p> после картинки.",
+    "Картинку в окне ты не увидишь — и это нарочно, прочитай почему в разборе после решения."
+  ],
+  note: "В тренажёре картинки из интернета и с диска не загружаются нарочно: страница здесь не ходит в сеть " +
+        "и ничего не расскажет о тебе постороннему сайту. Поэтому ты видишь на месте картинки её alt — " +
+        "ровно то, что увидит человек с медленным интернетом или услышит незрячий."
+},
+{
+  id: "web-table", topic: "blocks", emoji: "📅", title: "Расписание",
+  intro: "Всё, что удобно читать по строкам и столбцам, на странице оформляют таблицей.",
+  goal: "Расписание кружков: первая строка — заголовки «День» и «Кружок», дальше хотя бы три строки с данными.",
+  learn: "<table> — таблица, <tr> — строка, <td> — ячейка, <th> — ячейка-заголовок. Таблицу пишут по " +
+         "строкам, а не по столбцам.",
+  example: "<table>\n  <tr><td>Пн</td><td>Шахматы</td></tr>\n</table>\n",
+  starter: "<table>\n  <tr><th>День</th><th>Кружок</th></tr>\n</table>\n",
+  solution: "<table>\n  <tr><th>День</th><th>Кружок</th></tr>\n  <tr><td>Понедельник</td><td>Шахматы</td></tr>\n" +
+            "  <tr><td>Среда</td><td>Робототехника</td></tr>\n  <tr><td>Пятница</td><td>Бассейн</td></tr>\n</table>\n",
+  checks: [
+    { t: "Есть таблица <table>", f: function(W){ return !!W.q("table"); } },
+    { t: "Первая строка — заголовки <th>, хотя бы два", f: function(W){
+        var tr = W.q("tr");
+        return !!tr && tr.querySelectorAll("th").length >= 2; } },
+    { t: "Хотя бы три строки с данными <td>", f: function(dW){ return dataRows(dW) >= 3; } },
+    { t: "В каждой строке столько же ячеек, сколько заголовков", f: function(W){
+        var rows = W.qa("tr");
+        return rows.length > 1 && rows.every(function(tr){ return tr.children.length === rows[0].children.length; }); } }
+  ],
+  hints: [
+    "Строка заголовков уже есть. Каждая следующая строка — новый <tr>…</tr>.",
+    "Внутри строки данных ячейки пишутся тегом <td>, по одной на столбец.",
+    "Ячеек в каждой строке столько же, сколько заголовков, — иначе столбцы съедут.",
+    "Рамок у таблицы пока нет — это оформление, до него дойдёт раздел про CSS."
+  ],
+  note: "<th> отличается от <td> не только жирным шрифтом: он сообщает, что это заголовок столбца. Программа " +
+        "чтения вслух у каждой ячейки назовёт её столбец: «Кружок: Шахматы». Без <th> таблица для " +
+        "незрячего превращается в набор слов."
+},
+
+ 
+{
+  id: "web-color", topic: "css", emoji: "🎨", title: "Цвет заголовка",
+  intro: "HTML говорит, что на странице. Как это выглядит — говорит второй язык, CSS.",
+  goal: "Покрась заголовок: в блоке <style> напиши правило для h1 с цветом. Абзац пусть останется обычным.",
+  learn: "Правило CSS — это селектор (кому) и свойства в фигурных скобках (что): h1 { color: crimson; }. " +
+         "Правила пишут внутри <style>…</style>.",
+  example: "<style>\n  p { color: green; }\n</style>\n<p>Зелёный абзац.</p>\n",
+  starter: "<h1>Мой сайт</h1>\n<p>Здесь будет интересно.</p>\n",
+  solution: "<style>\n  h1 { color: crimson; }\n</style>\n<h1>Мой сайт</h1>\n<p>Здесь будет интересно.</p>\n",
+  checks: [
+    { t: "Есть блок <style>", f: function(W){ return !!W.q("style"); } },
+    { t: "У h1 цвет задан правилом в <style>", f: function(W){ return W.sheet(W.q("h1"), "color") !== null; } },
+    { t: "Цвет не в атрибуте style=\"…\", а в правиле", f: function(W){
+        return !!W.q("h1") && W.inline(W.q("h1"), "color") === null; } },
+    { t: "Абзац остался обычного цвета", f: function(W){
+        return !!W.q("p") && W.css(W.q("p"), "color", true) === null; } }
+  ],
+  hints: [
+    "Над заголовком открой <style> и закрой </style>.",
+    "Внутри напиши селектор h1, а за ним фигурные скобки.",
+    "В скобках — свойство и значение через двоеточие, в конце точка с запятой: color: crimson;",
+    "Цвета можно писать словами (crimson, teal, gold) или кодом вида #e63946."
+  ],
+  note: "Одно правило h1 { … } красит ВСЕ заголовки h1 на странице сразу. Захочешь другой цвет — поменяешь " +
+        "одну строку, а не каждый заголовок. Ради этого оформление и вынесли в отдельный язык."
+},
+{
+  id: "web-bg", topic: "css", emoji: "🌌", title: "Фон страницы",
+  intro: "У страницы, как у листа бумаги, есть цвет. Главное — чтобы на нём читался текст.",
+  goal: "Сделай странице ночной фон (у body) и светлый цвет текста абзацев, чтобы всё читалось.",
+  learn: "background-color задаёт цвет фона, color — цвет текста. Правило для body действует на всю " +
+         "страницу: цвет текста дети получают от родителя.",
+  example: "<style>\n  h1 { background: yellow; }\n</style>\n<h1>Жёлтая полоска</h1>\n",
+  starter: "<style>\n\n</style>\n<h1>Ночное небо</h1>\n<p>Звёзды видно лучше всего зимой.</p>\n",
+  solution: "<style>\n  body { background-color: midnightblue; }\n  p { color: white; }\n  h1 { color: gold; }\n</style>\n" +
+            "<h1>Ночное небо</h1>\n<p>Звёзды видно лучше всего зимой.</p>\n",
+  checks: [
+    { t: "У body задан фон", f: function(W){ return W.css(W.q("body"), BG) !== null; } },
+    { t: "У абзаца задан цвет текста (можно через body)", f: function(W){
+        return W.css(W.q("p"), "color", true) !== null; } },
+    { t: "Цвет текста не совпадает с цветом фона", f: function(W){
+        var bg = W.css(W.q("body"), BG), c = W.css(W.q("p"), "color", true);
+        return bg !== null && c !== null && bg.toLowerCase() !== c.toLowerCase(); } }
+  ],
+  hints: [
+    "Внутри <style> напиши правило для body: body { background-color: … }",
+    "Для абзаца — своё правило с color.",
+    "Тёмный фон — светлый текст, светлый фон — тёмный: иначе ничего не прочитать.",
+    "Попробуй цвета midnightblue, navy, black для фона и white, gold для текста."
+  ],
+  note: "Цвет текста, заданный у body, достаётся всем абзацам и заголовкам внутри — это называется " +
+        "наследованием. А фон не наследуется, он просто лежит под детьми. Поэтому одно правило для body " +
+        "перекрашивает страницу целиком."
+},
+{
+  id: "web-font", topic: "css", emoji: "🔤", title: "Шрифт и размер",
+  intro: "Шрифт делает страницу серьёзной или весёлой. Размер — удобной для чтения.",
+  goal: "Настрой текст: у абзацев — шрифт и размер в пикселях, а заголовок сделай крупнее абзаца.",
+  learn: "font-family: Georgia, serif; — первым идёт желаемый шрифт, дальше запасные. font-size: 18px; — " +
+         "размер в пикселях.",
+  example: "<style>\n  h2 { font-family: monospace; }\n</style>\n<h2>Как пишущая машинка</h2>\n",
+  starter: "<style>\n\n</style>\n<h1>Сказка</h1>\n<p>Жил-был программист.</p>\n",
+  solution: "<style>\n  p { font-family: Georgia, serif; font-size: 18px; }\n  h1 { font-size: 40px; }\n</style>\n" +
+            "<h1>Сказка</h1>\n<p>Жил-был программист.</p>\n",
+  checks: [
+    { t: "У абзаца задан шрифт font-family", f: function(W){
+        return W.css(W.q("p"), "font-family", true) !== null; } },
+    { t: "У абзаца задан размер font-size в пикселях", f: function(W){
+        return W.px(W.css(W.q("p"), "font-size", true)) > 0; } },
+    { t: "Заголовок крупнее абзаца (font-size в пикселях)", f: function(W){
+        return W.px(W.css(W.q("h1"), "font-size", true)) > W.px(W.css(W.q("p"), "font-size", true)); } }
+  ],
+  hints: [
+    "Правило для абзацев: p { font-family: …; font-size: …; }",
+    "Размер пиши с единицами без пробела: 18px, а не 18 px.",
+    "Для заголовка — своё правило h1 с размером больше, чем у абзаца.",
+    "Если шрифта нет на компьютере, браузер возьмёт следующий из списка — поэтому последним пишут общий: serif или sans-serif."
+  ],
+  note: "Список шрифтов через запятую — страховка: на телефоне и на школьном компьютере установлены разные " +
+        "шрифты. Браузер идёт по списку и берёт первый, который у него есть, а общее слово в конце " +
+        "(serif — с засечками, sans-serif — без) срабатывает всегда."
+},
+{
+  id: "web-class", topic: "css", emoji: "🏷", title: "Классы",
+  intro: "Правило для p красит все абзацы. А если выделить нужно только один?",
+  goal: "Два абзаца: обычный и «важный». Дай важному класс note и оформи правилом .note — фон и рамка. Обычный абзац оформляться не должен.",
+  learn: "class=\"note\" — ярлык на теге. В CSS к нему обращаются через точку: .note { … }. Правило " +
+         "достаётся только помеченным тегам.",
+  example: "<style>\n  p { background: lightyellow; }\n</style>\n<p>Все абзацы жёлтые.</p>\n",
+  starter: "<style>\n\n</style>\n<p>Сбор у школы в девять утра.</p>\n<p>Не забудьте сменную обувь!</p>\n",
+  solution: "<style>\n  .note { background: lightyellow; border: 2px solid orange; }\n</style>\n" +
+            "<p>Сбор у школы в девять утра.</p>\n<p class=\"note\">Не забудьте сменную обувь!</p>\n",
+  checks: [
+    { t: "Есть абзац с классом note", f: function(W){ return !!W.q("p.note"); } },
+    { t: "В <style> есть правило для класса .note", f: function(W){
+        return W.rules.some(function(r){ return /\.note\b/.test(r.sel); }); } },
+    { t: "У .note задан фон", f: function(W){ return W.css(W.q(".note"), BG) !== null; } },
+    { t: "У .note задана рамка", f: function(W){ return W.css(W.q(".note"), BORDER) !== null; } },
+    { t: "Обычный абзац остался без оформления", f: function(W){
+        var ps = W.qa("p:not(.note)");
+        return ps.length > 0 && ps.every(function(p){ return W.css(p, BG.concat(BORDER)) === null; }); } }
+  ],
+  hints: [
+    "Второму абзацу допиши атрибут: <p class=\"note\">.",
+    "В <style> правило начинается с точки: .note { … }",
+    "Рамка пишется одним свойством: border: 2px solid orange; — толщина, вид, цвет.",
+    "Правило для всех p здесь не годится: оно оформит и обычный абзац."
+  ],
+  note: "Класс — это смысл, а не вид: «заметка», «предупреждение», «цена». Название выбирают по тому, ЧТО " +
+        "это, а не как выглядит: .note переживёт смену цвета, а .yellow станет враньём, как только " +
+        "заметки перекрасят в зелёный."
+},
+{
+  id: "web-box", topic: "css", emoji: "📦", title: "Рамка и отступы",
+  intro: "Любой блок на странице — это коробка: рамка, отступ внутри и отступ снаружи.",
+  goal: "Карточка-объявление: блок <div class=\"card\"> с заголовком и абзацем. У карточки — рамка, внутренний отступ и скруглённые углы.",
+  learn: "padding — отступ ВНУТРИ рамки, от рамки до текста. margin — СНАРУЖИ, от рамки до соседей. " +
+         "border-radius скругляет углы.",
+  example: "<div class=\"box\" style=\"border: 1px solid gray\">Текст прилип к рамке.</div>\n",
+  starter: "<div class=\"card\">\n  <h2>Продаю велосипед</h2>\n  <p>Почти новый, синий.</p>\n</div>\n",
+  solution: "<style>\n  .card { border: 2px solid teal; padding: 16px; border-radius: 12px; }\n</style>\n" +
+            "<div class=\"card\">\n  <h2>Продаю велосипед</h2>\n  <p>Почти новый, синий.</p>\n</div>\n",
+  checks: [
+    { t: "Есть блок <div class=\"card\">", f: function(W){ return !!W.q("div.card"); } },
+    { t: "Внутри карточки есть заголовок и абзац", f: function(W){
+        return !!W.q(".card h1, .card h2, .card h3") && !!W.q(".card p"); } },
+    { t: "У карточки есть рамка", f: function(W){ return W.css(W.q(".card"), BORDER) !== null; } },
+    { t: "Задан внутренний отступ padding", f: function(W){ return W.css(W.q(".card"), PAD) !== null; } },
+    { t: "Углы скруглены: border-radius", f: function(W){ return W.css(W.q(".card"), "border-radius") !== null; } }
+  ],
+  hints: [
+    "Карточка уже размечена. Добавь <style> с правилом .card { … }",
+    "Рамка: border: 2px solid teal;",
+    "Без padding текст прилипает к рамке — дай ему 16px.",
+    "border-radius: 12px; — чем больше число, тем круглее углы."
+  ],
+  note: "Эта «коробка» — самое важное устройство всего CSS: у каждого блока есть содержимое, внутренний " +
+        "отступ, рамка и внешний отступ. Любая раскладка сайта — от меню до карточек товаров — это " +
+        "коробки, поставленные рядом и друг в друга."
+},
+
+ 
+{
+  id: "web-nav", topic: "layout", emoji: "🧭", title: "Меню сайта",
+  intro: "У каждого сайта есть меню — ряд ссылок на главные страницы.",
+  goal: "Сделай меню: блок <nav> хотя бы с тремя ссылками. У ссылок убери подчёркивание и раздвинь их отступом.",
+  learn: "<nav> — тег для меню: по нему браузер и программы чтения экрана понимают, что это навигация. " +
+         "Селектор «nav a» значит «ссылки внутри nav».",
+  example: "<p><a href=\"#top\">Наверх</a></p>\n",
+  starter: "<nav>\n  <a href=\"#home\">Главная</a>\n</nav>\n",
+  solution: "<style>\n  nav a { text-decoration: none; margin-right: 16px; }\n</style>\n<nav>\n" +
+            "  <a href=\"#home\">Главная</a>\n  <a href=\"#photo\">Фото</a>\n  <a href=\"#contacts\">Контакты</a>\n</nav>\n",
+  checks: [
+    { t: "Есть блок <nav>", f: function(W){ return !!W.q("nav"); } },
+    { t: "В меню хотя бы три ссылки", f: function(W){ return W.n("nav a[href]") >= 3; } },
+    { t: "У ссылок меню нет подчёркивания", f: function(W){
+        var a = W.qa("nav a");
+        return a.length > 0 && a.every(function(x){
+          return /none/i.test(W.css(x, ["text-decoration", "text-decoration-line"]) || ""); }); } },
+    { t: "Ссылки раздвинуты: отступ у ссылок или gap у меню", f: function(W){
+        var a = W.qa("nav a");
+        return W.css(W.q("nav"), ["gap", "column-gap"]) !== null ||
+          (a.length > 0 && a.every(function(x){ return W.css(x, SPACE) !== null; })); } }
+  ],
+  hints: [
+    "Добавь в <nav> ещё две ссылки — так же, как первая.",
+    "Правило для ссылок меню: nav a { … }",
+    "Подчёркивание убирает text-decoration: none;",
+    "Отступ справа у каждой ссылки: margin-right: 16px;"
+  ],
+  note: "Селектор из двух слов — «nav a» — называется потомковым: он выбирает ссылки только внутри меню. " +
+        "Ссылки в тексте страницы останутся подчёркнутыми, и это правильно: в тексте подчёркивание " +
+        "подсказывает, что на слово можно нажать."
+},
+{
+  id: "web-flex", topic: "layout", emoji: "🧱", title: "Карточки в ряд",
+  intro: "Блоки на странице по умолчанию стоят друг под другом. Чтобы поставить их рядом, нужна раскладка.",
+  goal: "Три карточки в один ряд: у контейнера — display: flex, между карточками — промежуток gap.",
+  learn: "display: flex у контейнера выстраивает его прямых детей в ряд. gap: 12px задаёт расстояние " +
+         "между ними — не нужно давать отступ каждому.",
+  example: "<div style=\"display: flex\">\n  <div>Один блок</div>\n</div>\n",
+  starter: "<div class=\"row\">\n  <div class=\"card\">Кино</div>\n  <div class=\"card\">Книги</div>\n  <div class=\"card\">Игры</div>\n</div>\n",
+  solution: "<style>\n  .row { display: flex; gap: 12px; }\n  .card { border: 1px solid gray; padding: 12px; }\n</style>\n" +
+            "<div class=\"row\">\n  <div class=\"card\">Кино</div>\n  <div class=\"card\">Книги</div>\n  <div class=\"card\">Игры</div>\n</div>\n",
+  checks: [
+    { t: "Есть контейнер с display: flex", f: function(W){ return !!flexBox(W); } },
+    { t: "В контейнере хотя бы три блока", f: function(W){
+        var b = flexBox(W);
+        return !!b && b.children.length >= 3; } },
+    { t: "Между блоками задан промежуток gap", f: function(W){
+        var b = flexBox(W);
+        return !!b && W.css(b, ["gap", "column-gap"]) !== null; } }
+  ],
+  hints: [
+    "Flex задают КОНТЕЙНЕРУ, а не карточкам: .row { display: flex; }",
+    "Посмотри в окно «Страница»: карточки встали в ряд.",
+    "gap: 12px; — и между ними появится воздух.",
+    "Рамки карточкам можно дать отдельным правилом .card, чтобы было видно, где кончается одна и начинается другая."
+  ],
+  note: "Flex — главный инструмент раскладки сегодняшних сайтов: меню, ряды карточек, шапки. Он решает за " +
+        "тебя, как поделить место, а если ряд не влезает, с одной строчкой flex-wrap: wrap переносит " +
+        "блоки вниз — так сайты и подстраиваются под телефон."
+},
+{
+  id: "web-center", topic: "layout", emoji: "🎯", title: "По центру",
+  intro: "Текст во всю ширину большого экрана читать трудно. Поэтому страницу часто ставят колонкой по центру.",
+  goal: "Объявление: заголовок выровнен по центру, а весь текст стоит в блоке .page — узкой колонкой по центру экрана.",
+  learn: "text-align: center выравнивает текст внутри блока. max-width ограничивает ширину блока, а " +
+         "margin: 0 auto ставит его по центру: слева и справа поровну.",
+  example: "<h1 style=\"text-align: left\">Заголовок слева</h1>\n",
+  starter: "<div class=\"page\">\n  <h1>Потерялся котёнок</h1>\n  <p>Серый, отзывается на имя Дымок.</p>\n</div>\n",
+  solution: "<style>\n  .page { max-width: 600px; margin: 0 auto; }\n  h1 { text-align: center; }\n</style>\n" +
+            "<div class=\"page\">\n  <h1>Потерялся котёнок</h1>\n  <p>Серый, отзывается на имя Дымок.</p>\n</div>\n",
+  checks: [
+    { t: "Заголовок выровнен по центру", f: function(W){
+        return /center/i.test(W.css(W.q("h1"), "text-align", true) || ""); } },
+    { t: "Есть блок с классом page", f: function(W){ return !!W.q(".page"); } },
+    { t: "У .page ограничена ширина: max-width", f: function(W){ return W.css(W.q(".page"), "max-width") !== null; } },
+    { t: "Блок .page стоит по центру: margin с auto", f: function(W){
+        return /auto/i.test(W.css(W.q(".page"), ["margin", "margin-left", "margin-right"]) || ""); } }
+  ],
+  hints: [
+    "Для заголовка: h1 { text-align: center; }",
+    "Для колонки: .page { max-width: 600px; }",
+    "Центрирует блок margin: 0 auto; — ноль сверху и снизу, «сколько останется» слева и справа.",
+    "В узком окне «Страница» разницы может быть не видно — колонка просто уже самого окна."
+  ],
+  note: "text-align двигает ТЕКСТ внутри блока, а margin: auto двигает сам БЛОК. Их часто путают: " +
+        "центрируют текст, а блок остаётся во всю ширину. Отсюда правило: хочешь сдвинуть коробку — " +
+        "меняй её отступы, хочешь сдвинуть буквы внутри — меняй выравнивание."
+},
+{
+  id: "web-card", topic: "layout", emoji: "🪪", title: "Сайт-визитка",
+  intro: "Всё, что было в разделе, на одной странице о тебе.",
+  goal: "Визитка: заголовок с именем, абзац о себе, список увлечений хотя бы из трёх пунктов и ссылка на что-нибудь любимое. Оформление: фон страницы и цвет заголовка.",
+  learn: "Здесь нет нового тега — только то, что уже было. Сначала размечай, ЧТО на странице, потом в " +
+         "<style> решай, КАК это выглядит.",
+  example: "<h1>Петя</h1>\n",
+  starter: "<h1>Привет!</h1>\n",
+  solution: "<style>\n  body { background: #fff8e7; font-family: sans-serif; }\n  h1 { color: darkorange; }\n</style>\n" +
+            "<h1>Меня зовут Аня</h1>\n<p>Мне двенадцать лет, и это мой первый сайт.</p>\n<h2>Мои увлечения</h2>\n" +
+            "<ul>\n  <li>Рисование</li>\n  <li>Шахматы</li>\n  <li>Велосипед</li>\n</ul>\n" +
+            "<p>Любимая книга — <a href=\"https://ru.wikipedia.org/wiki/Незнайка\">про Незнайку</a>.</p>\n",
+  checks: [
+    { t: "Заголовок <h1> с именем", f: function(W){ return W.text(W.q("h1")) !== ""; } },
+    { t: "Абзац о себе", f: function(W){ return W.text(W.q("p")) !== ""; } },
+    { t: "Список увлечений — хотя бы три пункта", f: function(W){ return W.n("ul > li") >= 3; } },
+    { t: "Ссылка с текстом", f: function(W){ return W.attr(W.q("a[href]"), "href") !== "" && W.text(W.q("a[href]")) !== ""; } },
+    { t: "У страницы задан фон", f: function(W){ return W.css(W.q("body"), BG) !== null; } },
+    { t: "У заголовка свой цвет", f: function(W){ return W.css(W.q("h1"), "color") !== null; } }
+  ],
+  hints: [
+    "Начни с разметки: <h1>, <p>, список <ul> с пунктами <li>, ссылка <a>.",
+    "Когда всё на месте, добавь <style>.",
+    "Фон — у body, цвет заголовка — в правиле для h1.",
+    "Загляни в прошлые задания: каждый кусок визитки там уже был."
+  ],
+  note: "Порядок «сначала что, потом как» — не школьное правило, а способ, которым делают настоящие сайты. " +
+        "Разметку можно проверить без единого стиля, а стиль поменять, не трогая разметку: дизайнер " +
+        "перекрашивает сайт, и ни одна ссылка при этом не ломается."
+},
+{
+  id: "web-hero", topic: "layout", emoji: "🦸", title: "Страница героя",
+  intro: "Страница героя из твоей игры — как настоящая: шапка, таблица характеристик и подвал.",
+  goal: "Шапка <header> с именем героя, таблица характеристик (заголовки и хотя бы три строки), внизу <footer>. Оформление: у шапки свой фон, у ячеек таблицы — рамки.",
+  learn: "<header> — шапка страницы, <footer> — подвал. Как <nav>, они сообщают, что это за часть страницы. " +
+         "Одно правило можно дать сразу нескольким тегам через запятую: td, th { … }.",
+  example: "<header>\n  <h1>Рыцарь</h1>\n</header>\n",
+  starter: "<header>\n  <h1>Лучница Ива</h1>\n</header>\n",
+  solution: "<style>\n  header { background: seagreen; color: white; padding: 12px; }\n" +
+            "  td, th { border: 1px solid gray; padding: 6px 10px; }\n</style>\n" +
+            "<header>\n  <h1>Лучница Ива</h1>\n</header>\n<table>\n  <tr><th>Характеристика</th><th>Значение</th></tr>\n" +
+            "  <tr><td>Сила</td><td>7</td></tr>\n  <tr><td>Ловкость</td><td>9</td></tr>\n  <tr><td>Здоровье</td><td>80</td></tr>\n" +
+            "</table>\n<footer>\n  <p>Герой из моей игры.</p>\n</footer>\n",
+  checks: [
+    { t: "Шапка <header> с заголовком внутри", f: function(W){ return W.text(W.q("header h1, header h2")) !== ""; } },
+    { t: "Таблица: заголовки <th> и хотя бы три строки данных", f: function(W){
+        return !!W.q("table th") && dataRows(W) >= 3; } },
+    { t: "Внизу, после таблицы, подвал <footer> с текстом", f: function(W){
+        return W.text(W.q("footer")) !== "" && W.before(W.q("table"), W.q("footer")); } },
+    { t: "У шапки свой фон", f: function(W){ return W.css(W.q("header"), BG) !== null; } },
+    { t: "У ячеек таблицы есть рамки", f: function(W){ return W.css(W.q("td"), BORDER) !== null; } }
+  ],
+  hints: [
+    "Под шапкой — таблица, как в задании про расписание.",
+    "После таблицы — <footer> с абзацем внутри.",
+    "Фон шапки: header { background: … }",
+    "Рамки сразу всем ячейкам: td, th { border: 1px solid gray; }"
+  ],
+  note: "Шапка, меню, основная часть и подвал — скелет почти любого сайта, от школьного до новостного. " +
+        "Теги <header>, <nav> и <footer> ничего не рисуют сами, но по ним браузер, поисковик и программа " +
+        "чтения вслух понимают, где на странице главное, а где служебное."
+}
+];
+
+})();
+
+</script>
+
+<script>
+ 
 window.EXAMS = {
 
    
@@ -17613,6 +18376,24 @@ function pageDoc(text){
     '<style>body{margin:16px;font:16px/1.5 system-ui,sans-serif;color:#111;background:#fff}</style>' +
     '</head><body>' + body + '</body></html>';
 }
+ 
+function pageFrameWire(frame, note, whose){
+  frame.addEventListener("load", function(){
+    var d = null;
+    try { d = frame.contentDocument; } catch(e){}
+    if (!d || !d.body) return;
+    frame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
+     
+    d.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a) return;
+      e.preventDefault();
+      if (note) note.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
+        "На настоящем сайте браузер открыл бы эту страницу — здесь показана " +
+        (whose || "только то, что напечатала программа") + ".";
+    });
+  });
+}
 
  
 function makeStudio(cfg){
@@ -17724,21 +18505,7 @@ function makeStudio(cfg){
     pageBtn.textContent = "✕ Скрыть страницу";
     pageRender();
   };
-  pageFrame.addEventListener("load", function(){
-    var d = null;
-    try { d = pageFrame.contentDocument; } catch(e){}
-    if (!d || !d.body) return;
-    pageFrame.style.height = Math.min(480, Math.max(160, d.documentElement.scrollHeight + 4)) + "px";
-     
-    d.addEventListener("click", function(e){
-      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
-      if (!a) return;
-      e.preventDefault();
-      pageNote.innerHTML = "Ссылка ведёт на <b>" + A.esc(a.getAttribute("href")) + "</b>. " +
-        "На настоящем сайте браузер попросил бы эту страницу у сервера — здесь показано " +
-        "только то, что напечатала программа.";
-    });
-  });
+  pageFrameWire(pageFrame, pageNote);
 
   function showDisk(files){
     if (!files || !Object.keys(files).length){
@@ -17926,7 +18693,7 @@ function makeStudio(cfg){
   return wrap;
 }
 
-return { makeStudio: makeStudio };
+return { makeStudio: makeStudio, pageDoc: pageDoc, pageFrameWire: pageFrameWire };
 };
 
 </script>
@@ -19017,6 +19784,178 @@ function screenRobot(){
 }
 
 return { screenRobot: screenRobot, openRobot: openRobot };
+};
+
+</script>
+
+<script>
+ 
+window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.web = function(A){
+
+var codes = {};             
+var results = {};           
+var previewTimer = null;
+
+function tasks(){ return window.WEB_TASKS || []; }
+function topics(){ return window.WEB_TOPICS || []; }
+function taskById(id){
+  var xs = tasks();
+  for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
+  return null;
+}
+function topicOf(t){
+  var ts = topics();
+  for (var i = 0; i < ts.length; i++) if (ts[i].id === t.topic) return ts[i];
+  return null;
+}
+function doneIn(xs){ return xs.filter(function(x){ return A.algoDone(x.id); }).length; }
+
+ 
+var WEB_KEYS = ["<>", "</>", "=", '""', "{}", ":", ";", "#", ".", "/"];
+var WEB_KEY_BACK = { "<>":1, "</>":1, '""':1, "{}":1 };
+function insertKey(ta, key){
+  var s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+  ta.value = v.slice(0, s) + key + v.slice(e);
+  var pos = s + key.length - (WEB_KEY_BACK[key] || 0);
+  ta.setSelectionRange(pos, pos);
+  ta.focus();
+  ta.dispatchEvent(new Event("input"));
+}
+
+ 
+function checksHTML(t, res){
+  return '<ul class="wbchecks">' + t.checks.map(function(c, i){
+    var st = res ? (res[i].ok ? "ok" : "bad") : "wait";
+    var mk = st === "ok" ? "✓" : (st === "bad" ? "✗" : "○");
+    return '<li class="' + st + '"><span class="mk">' + mk + '</span><span>' + A.esc(c.t) + '</span></li>';
+  }).join("") + '</ul>';
+}
+function verdictHTML(res){
+  var n = res.length, k = res.filter(function(x){ return x.ok; }).length;
+  if (n && k === n)
+    return '<div class="msg show ok"><b>Готово ✓</b>Страница прошла все ' + n + ' ' +
+      A.plural(n, "проверку", "проверки", "проверок") + ': браузер нашёл в ней всё, что просили.</div>';
+  return '<div class="msg show bad"><b>Выполнено ' + k + ' из ' + n + '</b>Чего не хватает — ' +
+    'отмечено крестиком в списке «Что нужно сделать». Окно «Страница» показывает, что получилось сейчас.</div>';
+}
+
+ 
+function openWeb(id){
+  var t = taskById(id);
+  if (!t) return screenWeb();
+  A.enterScreen("train", "web");
+  if (codes[id] === undefined) codes[id] = t.starter;
+  var res = results[id] || null, solved = A.algoDone(t.id), tp = topicOf(t);
+  var xs = tasks(), next = xs[xs.indexOf(t) + 1] || null;
+
+  var h = '<div class="lvlhead"><div><div class="idx">HTML и CSS · ' + A.esc(tp ? tp.title : "") + '</div>' +
+    '<h1>' + t.emoji + ' ' + A.esc(t.title) + '</h1></div>' +
+    (solved ? '<div class="right"><span class="tag">готово ✓</span></div>' : '') + '</div>' +
+    '<p class="lede">' + A.esc(t.intro) + '</p>' +
+    '<div class="card"><h3>Что нужно сделать</h3><p>' + A.esc(t.goal) + '</p>' +
+      '<div id="wbchecks">' + checksHTML(t, res) + '</div></div>' +
+    '<div class="card"><h3>Как это пишется</h3><p>' + A.esc(t.learn) + '</p>' +
+      '<div class="wbex"><span class="dim">Пример — про другое, это не ответ</span>' +
+      '<pre>' + A.esc(t.example.replace(/\n+$/, "")) + '</pre></div></div>' +
+    '<div class="wbwrap">' +
+      '<div class="wbleft"><div class="rbhead">Код страницы</div>' +
+        '<textarea id="wbcode" class="rbcode wbcode" spellcheck="false" rows="14" ' +
+          'aria-label="код страницы">' + A.esc(codes[id]) + '</textarea>' +
+        '<div class="keybar wbkeys">' + WEB_KEYS.map(function(k, i){
+          return '<button class="kbk" data-wk="' + i + '">' + A.esc(k) + '</button>'; }).join("") + '</div>' +
+        '<div class="admrow"><button class="rbtn check" id="wbcheck">✓ Проверить</button>' +
+        '<button class="rbtn sec" id="wbreset">Сначала</button></div></div>' +
+      '<div class="wbright"><div class="rbhead">Страница</div>' +
+        '<iframe class="pageframe wbframe" title="так твою страницу покажет браузер" ' +
+          'sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>' +
+        '<div class="pagenote"></div>' +
+        '<p class="dim">Обновляется, пока пишешь. Картинки из интернета здесь не загружаются нарочно: ' +
+          'страница не ходит в сеть.</p></div>' +
+    '</div>' +
+    '<div id="wbmsg">' + (res ? verdictHTML(res) : "") + '</div>' +
+    (solved
+      ? '<div class="card"><h3>Разбор</h3><p>' + A.esc(t.note) + '</p></div>'
+      : '<div class="card"><h3>Подсказки</h3><ol class="rbhints">' +
+        t.hints.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ol></div>') +
+    '<div class="pager"><button class="bigbtn ghost" id="wbback">← Ко всем заданиям</button>' +
+      '<span class="sp"></span>' +
+      (next ? '<button class="bigbtn ghost" id="wbnext">Дальше: ' + A.esc(next.title) + ' →</button>' : '') +
+    '</div>';
+
+  A.app.innerHTML = h;
+  var ta = document.getElementById("wbcode"), frame = A.app.querySelector(".wbframe");
+  A.pageFrameWire(frame, A.app.querySelector(".wbright .pagenote"), "только твоя страница");
+  function preview(){ frame.setAttribute("srcdoc", A.pageDoc(ta.value)); }
+  preview();
+  ta.addEventListener("input", function(){
+    codes[id] = ta.value;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(preview, 250);
+  });
+  A.app.querySelectorAll("[data-wk]").forEach(function(b){
+    b.onclick = function(){ insertKey(ta, WEB_KEYS[+b.getAttribute("data-wk")]); };
+  });
+  document.getElementById("wbcheck").onclick = function(){
+    codes[id] = ta.value;
+    var r = window.WEB.judge(t, ta.value);
+    results[id] = r;
+     
+    if (window.WEB.passed(r) && !A.algoDone(t.id)){ A.algoMark(t.id); return openWeb(id); }
+    document.getElementById("wbchecks").innerHTML = checksHTML(t, r);
+    document.getElementById("wbmsg").innerHTML = verdictHTML(r);
+  };
+  document.getElementById("wbreset").onclick = function(){
+    codes[id] = t.starter; results[id] = null; openWeb(id);
+  };
+  document.getElementById("wbback").onclick = screenWeb;
+  var nb = document.getElementById("wbnext");
+  if (nb) nb.onclick = function(){ openWeb(next.id); };
+  A.refreshTop();
+}
+
+ 
+function screenWeb(){
+  A.enterScreen("train", "web");
+  var xs = tasks();
+  var h = '<div class="lvlhead"><div><div class="idx">вёрстка: вторая грань информатики</div>' +
+    '<h1>🌐 HTML и CSS</h1></div><div class="right"><span class="tag">' + doneIn(xs) + ' из ' + xs.length +
+    '</span></div></div>' +
+    '<p class="lede">Страница сайта своими руками: теги, списки, таблицы, цвета и раскладка. ' +
+    'Страницу видно сразу, пока пишешь, а проверяет её сам браузер.</p>' +
+    '<div class="card"><h3>⚖️ Честно про этот раздел</h3><ul class="trrules">' +
+      '<li><b>HTML и CSS — не языки программирования.</b> Они описывают, ЧТО на странице и КАК это ' +
+      'выглядит, но ничего не вычисляют. Программировать здесь учит Python, а этот раздел — про то, ' +
+      'из чего сделан любой сайт.</li>' +
+      '<li><b>Проверяет браузер:</b> разбирает твою страницу и смотрит, есть ли в ней нужные теги и ' +
+      'правила. Как именно ты их расставишь — твоё дело; одного-единственного верного ответа нет.</li>' +
+      '<li><b>В школьной программе</b> создание страниц на HTML есть в углублённом курсе 9 класса, CSS — ' +
+      'вне программы. Это плюс к предмету, а не школьная тема, которую закрывают к аттестации.</li>' +
+      '<li><b>Страница не ходит в интернет.</b> Картинки с чужих сайтов не загрузятся, скрипты не ' +
+      'выполнятся. Это нарочно: так твоя страница ничего не расскажет о тебе постороннему сайту.</li>' +
+    '</ul></div>';
+  topics().forEach(function(tp){
+    var ts = xs.filter(function(x){ return x.topic === tp.id; });
+    h += '<div class="sect"><h2>' + tp.em + ' ' + A.esc(tp.title) + '</h2><div class="line"></div>' +
+      '<span class="cnt">' + doneIn(ts) + ' из ' + ts.length + '</span></div><div class="gamegrid">';
+    ts.forEach(function(t){
+      h += '<button class="gamecard" data-wb="' + A.esc(t.id) + '">' +
+        '<span class="gemoji">' + t.emoji + '</span>' +
+        '<b>' + A.esc(t.title) + (A.algoDone(t.id) ? ' <span class="edittag done">готово ✓</span>' : '') + '</b>' +
+        '<span>' + A.esc(t.intro) + '</span></button>';
+    });
+    h += '</div>';
+  });
+  h += '<div class="pager"><button class="bigbtn ghost" id="wbtomap">← К тренировкам</button></div>';
+  A.app.innerHTML = h;
+  A.app.querySelectorAll("[data-wb]").forEach(function(b){
+    b.onclick = function(){ openWeb(b.getAttribute("data-wb")); };
+  });
+  document.getElementById("wbtomap").onclick = A.screenTrain;
+  A.refreshTop();
+}
+
+return { screenWeb: screenWeb, openWeb: openWeb };
 };
 
 </script>
@@ -25797,7 +26736,7 @@ var PLACE_RU = {
   play:"играет в игру по ссылке", specs:"в приёмке", spec:"в приёмке",
   folio:"в портфолио", works:"на витрине", home:"на главном экране",
   world:"выбирает урок", train:"выбирает тренировку", guide:"читает инструкцию",
-  account:"в профиле", trace:"смотрит, как шла работа"
+  account:"в профиле", trace:"смотрит, как шла работа", web:"в разделе «HTML и CSS»"
 };
  
 function presenceInfo(st, serverAt){
@@ -26739,6 +27678,8 @@ var STUDIO = KVSCREENS.studio({
   session: function(){ return session; }
 });
 var makeStudio = STUDIO.makeStudio;
+ 
+var pageDoc = STUDIO.pageDoc, pageFrameWire = STUDIO.pageFrameWire;
 
  
 function normSeg(s, pen){
@@ -27123,6 +28064,15 @@ function trainCards(){
         var sOk = sAll ? specsList().filter(function(x){ return specDone(x.id); }).length : 0;
         return (aiAll ? aiDone + " из " + aiAll + " пройдено" : "") +
                (sAll ? " · приёмка " + sOk + " из " + sAll : "");
+      })() },
+     
+    { id:"web", em:"🌐", title:"HTML и CSS", go: function(){ screenWeb(); },
+      why: "Страница сайта своими руками: теги, списки, таблицы, цвета и раскладка. Страницу видно сразу, пока пишешь, а проверяет её сам браузер.",
+      when: "Когда хочется сделать то, что можно показать всем, — сайт.",
+      stat: (function(){
+        var xs = window.WEB_TASKS || [];
+        var d = xs.filter(function(x){ return algoDone(x.id); }).length;
+        return xs.length ? d + " из " + xs.length + " готово" : "";
       })() },
     { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
       why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
@@ -31544,6 +32494,18 @@ var SECTION_CERTS = [
         plural(t, "задание", "задания", "заданий") +
         (p ? ', проект «' + esc(p.title) + '» собран' : '') +
         '. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
+    } },
+  { id:"web", icon:"🌐", title:"Раздел «HTML и CSS» пройден",
+    what:"HTML и CSS",
+    all: function(){ return (window.WEB_TASKS || []).length; },
+    done: function(){
+      return (window.WEB_TASKS || []).filter(function(x){ return algoDone(x.id); }).length;
+    },
+    unit: ["задание", "задания", "заданий"],
+    line: function(d, t){
+      return 'Раздел «HTML и CSS» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+        plural(t, "задания", "заданий", "заданий") +
+        ' — от первого тега до страницы с раскладкой. Каждую страницу проверял браузер.';
     } }
 ];
 function sectionCert(id){
@@ -32723,6 +33685,14 @@ var ROBOTS = KVSCREENS.robot({
   algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain
 });
 var screenRobot = ROBOTS.screenRobot, openRobot = ROBOTS.openRobot;
+
+ 
+var WEBS = KVSCREENS.web({
+  app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop,
+  algoDone: algoDone, algoMark: algoMark, screenTrain: screenTrain,
+  pageDoc: pageDoc, pageFrameWire: pageFrameWire
+});
+var screenWeb = WEBS.screenWeb, openWeb = WEBS.openWeb;
 
 var SHOWCASE = KVSCREENS.showcase({
   app: app,
@@ -34783,6 +35753,7 @@ var ROUTES = [
   { h:"#mine",    place:"mytasks", t:"Своё задание",               open:function(){ screenMyTasks(); } },
   { h:"#works",   place:"works",   t:"Что создают ученики",        open:function(){ screenShowcase(); } },
   { h:"#robot",   place:"robot",   t:"Робот",                      open:function(){ screenRobot(); } },
+  { h:"#html",    place:"web",     t:"HTML и CSS",                 open:function(){ screenWeb(); } },
   { h:"#specs",   place:"specs",   t:"Приёмка",                    open:function(){ screenSpecs(); } },
   { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
   { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
@@ -39144,6 +40115,17 @@ var HELP = {
     '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div></div>' +
     '<p>Написанное <b>не пропадает</b>: уйдёшь с урока и вернёшься — код будет на месте.</p>' },
 
+  web: { t:"🌐 HTML и CSS — страница своими руками", h:
+    '<h4>Что это за раздел</h4>' +
+    '<p>Задания про то, из чего сделан любой сайт. HTML говорит, ЧТО на странице — заголовок, ' +
+    'список, таблица. CSS — КАК это выглядит: цвета, шрифты, раскладка.</p>' +
+    '<h4>Как решать</h4>' +
+    '<ul><li>Пиши код слева — справа сразу видно страницу.</li>' +
+    '<li>«Проверить» разбирает страницу и отмечает в списке «Что нужно сделать», что уже есть, а чего нет.</li>' +
+    '<li>Пример в карточке «Как это пишется» — про другое: он показывает тег, но ответом не является.</li></ul>' +
+    '<h4>Почему не видно картинок из интернета</h4>' +
+    '<p>Нарочно: страница в тренажёре не ходит в сеть, чтобы ничего не рассказать о тебе чужому сайту. ' +
+    'Вместо картинки браузер показывает её описание из alt.</p>' },
   train: { t:"🎯 Тренировки — зачем они", h:
     '<h4>Что это за экран</h4>' +
     '<p>Всё, что <b>вне сотни уроков</b>. Звёзд тут не дают и по порядку проходить не надо — ' +
@@ -39841,6 +40823,7 @@ window.__game = {
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
   screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
   algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
+  screenWeb: function(){ screenWeb(); }, openWeb: function(id){ openWeb(id); },
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,
