@@ -861,6 +861,12 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 @keyframes star{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
 .winxp{color:var(--acc2);font-weight:700;margin-bottom:16px}
 .winrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+/* Имя после первой победы: гостю, и только ему (winSaveHTML в app.js). */
+.winsave{margin:0 0 18px;padding-top:16px;border-top:1px solid var(--line2);text-align:left}
+.winsave>b{display:block;margin-bottom:4px}
+.wincard .winsave p{margin:0 0 10px}
+.winsave .ldauthrow{gap:8px}
+.wincard .winsaved{margin:0;color:var(--ink)}
 canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99;display:none}
 
 /* Всплывашка стоит ВЫШЕ кнопки «наверх»: раньше у обеих было bottom:16px,
@@ -2035,8 +2041,11 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    ⚠️ Размер шрифта в поле 16px и на широком экране тоже: меньше — и Safari
    на телефоне сам увеличивает страницу при касании поля, а первый экран
    уезжает вбок. */
-.ldauth{margin:24px 0 0;max-width:520px}
-.ldauthrow{display:flex;flex-wrap:wrap;gap:12px}
+/* ⚠️ Потолок стоит на РЯДУ с полем, а не на всём блоке: с 1.138.0 в блоке есть
+   строка текста под кнопкой, и потолок блока рвал её на две при свободной
+   колонке справа (правило полной ширины, RAZVITIE § 4.13). */
+.ldauth{margin:24px 0 0}
+.ldauthrow{display:flex;flex-wrap:wrap;gap:12px;max-width:520px}
 .ldauthrow input{flex:1 1 200px;min-width:0;background:var(--panel);
   border:1px solid var(--line2);border-radius:12px;padding:13px 16px;
   color:var(--ink);font-size:16px;font-family:'Inter',sans-serif}

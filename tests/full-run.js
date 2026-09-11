@@ -2700,6 +2700,101 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- вход: сначала урок, имя — после первой победы (1.138.0) ---
+     ⚠️ Решение 11.09.2026. Вывеска просила имя раньше, чем показывала урок, а
+     сам урок стоял мелкой ссылкой под полем. Проверяются все половины
+     обещания: главная кнопка — урок; имя спрашивает карточка победы и только
+     у гостя; вписанное имя СОХРАНЯЕТ сделанное. Последнее — самое дорогое:
+     до 1.138.0 doRegister обнулял прогресс, и просьба «сохрани» молча стёрла
+     бы ту самую победу. И обратная сторона: чужой прогресс стирается, как
+     раньше, — иначе на общем компьютере двое детей смешаются в одного. */
+  let entryChecked = 0;
+  {
+    const p0 = problems.length;
+    const кодБыл = w.Cloud.myCode(), имяБыло = g.state.name;
+    const звёздыБыли = g.state.stars, журналБыл = g.state.log;
+    const first = CUR[0].lessons[0];
+    const body = ((CONTENT || {}).world1 || {})[first.id];
+    w.Cloud.forgetCode(); g.state.name = ""; g.state.stars = {}; g.state.log = {};
+
+    /* 1. Вывеска гостю: главное действие — урок, поля до урока нет */
+    g.screenAbout(); await tick(); await tick();
+    const box = doc.getElementById("ldauth");
+    const start = box && box.querySelector('[data-auth="try"]');
+    if (!box) bad("[вход] на вывеске у гостя нет входа");
+    else {
+      if (box.querySelector("input"))
+        bad("[вход] вывеска снова просит что-то вписать до урока — имя спрашивают после первой победы");
+      if (!start || !/Начать первый урок/.test(start.textContent) || !start.classList.contains("bigbtn"))
+        bad("[вход] главная кнопка вывески — не «Начать первый урок»");
+    }
+    const низ = doc.querySelector('[data-land="try"]');
+    if (!низ || !/Начать первый урок/.test(низ.textContent))
+      bad("[вход] внизу вывески не та же дверь «Начать первый урок»");
+
+    /* 2. Кнопка открывает первый урок — гостем, без профиля */
+    if (start){
+      start.click(); await tick();
+      const s = g.getSession();
+      if (!s || s.lesson !== first.id) bad("[вход] «Начать первый урок» открыл не первый урок");
+    }
+
+    /* 3. Победа гостя: карточка просит имя, а имя сохраняет победу */
+    if (!body || !body.task || !body.task.solution)
+      bad("[вход] у первого урока нет эталона — победу не устроить");
+    else {
+      g.openLesson(first.id); await tick();
+      studioOf().editor.setCode(body.task.solution);
+      studioOf().querySelector('[data-role="check"]').click();
+      await tick();
+      if (!won()) bad("[вход] эталон первого урока не засчитан — " + msgText());
+      else {
+        const inp = doc.getElementById("wsname"), go = doc.getElementById("wsgo");
+        if (!inp || !go) bad("[вход] гостю после первой победы не предложили сохранить сделанное");
+        else {
+          /* имя из одной буквы — объяснение на месте, прогресс цел */
+          inp.value = "А"; go.click(); await tick();
+          if (g.state.name) bad("[вход] принято имя из одной буквы");
+          if (!/две буквы/.test(doc.getElementById("wsmsg").textContent))
+            bad("[вход] на слишком короткое имя нет объяснения");
+          inp.value = "Аня"; go.click(); await tick(40);
+          if (g.state.name !== "Аня") bad("[вход] имя из карточки победы не сохранилось: " + g.state.name);
+          if (!(g.state.stars[first.id] > 0))
+            bad("[вход] имя вписано — а победа стёрта: регистрация обнулила прогресс гостя");
+          if (!won()) bad("[вход] после «Сохранить» карточка победы закрылась — ребёнка унесло с урока");
+          if (!/Готово/.test((doc.getElementById("winsave") || {}).textContent || ""))
+            bad("[вход] после «Сохранить» не сказано, что сохранено");
+        }
+        closeWin();
+      }
+
+      /* 4. У ребёнка с именем просьбы нет: сохранять уже есть куда */
+      g.setStars(first.id, 0);
+      g.openLesson(first.id); await tick();
+      studioOf().editor.setCode(body.task.solution);
+      studioOf().querySelector('[data-role="check"]').click();
+      await tick();
+      if (!won()) bad("[вход] повторная победа не засчитана — " + msgText());
+      else if (doc.getElementById("wsname"))
+        bad("[вход] ребёнку, у которого уже есть имя, снова предлагают его вписать");
+      closeWin();
+    }
+
+    /* 5. Чужой прогресс по-прежнему стирается: новый профиль поверх ребёнка с именем.
+       Имя ставим здесь же, а не берём из шага 3: иначе поломка шага 3 дала бы
+       ложную жалобу ещё и тут. */
+    g.state.name = "Аня";
+    g.state.stars[first.id] = 3;
+    g.doRegister("Боря"); await tick(40);
+    if (g.state.stars[first.id])
+      bad("[вход] новый профиль унаследовал прогресс другого ребёнка — на общем компьютере двое смешаются");
+
+    if (кодБыл) w.Cloud.setCode(кодБыл); else w.Cloud.forgetCode();
+    g.state.name = имяБыло; g.state.stars = звёздыБыли; g.state.log = журналБыл;
+    if (problems.length === p0) entryChecked++;
+    viewReset(g);
+  }
+
   /* --- Главный экран сложен из карточек ---
      ⚠️ Проверка стережёт ровно то, чего не видит ни один другой тест и не
      видно глазами на экране. Карточке отдаётся только то, что она назвала в
@@ -9535,6 +9630,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`черновики кода на уроке: ${draftChecked ? "да" : "нет"}`);
   console.log(`портфолио и сертификаты: ${folioChecked ? "да" : "нет"}`);
   console.log(`регистрация по имени: ${regChecked ? "да" : "нет"}`);
+  console.log(`вход: сначала урок, имя после победы: ${entryChecked ? "да" : "нет"}`);
   console.log(`цель по шагам: ${leanChecked ? "да" : "нет"}`);
   console.log(`разбор своей программы: ${ownVizChecked ? "да" : "нет"}`);
   console.log(`свои задания и ссылки: ${taskChecked ? "да" : "нет"}`);

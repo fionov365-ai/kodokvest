@@ -915,6 +915,12 @@ canvas.stage{display:block;width:100%;height:auto;background:var(--board)}
 @keyframes star{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
 .winxp{color:var(--acc2);font-weight:700;margin-bottom:16px}
 .winrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+/* Имя после первой победы: гостю, и только ему (winSaveHTML в app.js). */
+.winsave{margin:0 0 18px;padding-top:16px;border-top:1px solid var(--line2);text-align:left}
+.winsave>b{display:block;margin-bottom:4px}
+.wincard .winsave p{margin:0 0 10px}
+.winsave .ldauthrow{gap:8px}
+.wincard .winsaved{margin:0;color:var(--ink)}
 canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99;display:none}
 
 /* Всплывашка стоит ВЫШЕ кнопки «наверх»: раньше у обеих было bottom:16px,
@@ -2089,8 +2095,11 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    ⚠️ Размер шрифта в поле 16px и на широком экране тоже: меньше — и Safari
    на телефоне сам увеличивает страницу при касании поля, а первый экран
    уезжает вбок. */
-.ldauth{margin:24px 0 0;max-width:520px}
-.ldauthrow{display:flex;flex-wrap:wrap;gap:12px}
+/* ⚠️ Потолок стоит на РЯДУ с полем, а не на всём блоке: с 1.138.0 в блоке есть
+   строка текста под кнопкой, и потолок блока рвал её на две при свободной
+   колонке справа (правило полной ширины, RAZVITIE § 4.13). */
+.ldauth{margin:24px 0 0}
+.ldauthrow{display:flex;flex-wrap:wrap;gap:12px;max-width:520px}
 .ldauthrow input{flex:1 1 200px;min-width:0;background:var(--panel);
   border:1px solid var(--line2);border-radius:12px;padding:13px 16px;
   color:var(--ink);font-size:16px;font-family:'Inter',sans-serif}
@@ -24899,21 +24908,23 @@ function resetProgressLocal(){
   save();
 }
  
-function doRegister(name, onErr){
+function doRegister(name, onErr, opts){
   name = String(name || "").trim();
   if (name.length < 2){ if (onErr) onErr("Впиши имя — хотя бы две буквы."); return; }
-  resetProgressLocal();
+  var stay = !!(opts && opts.stay);
+   
+  if (myCode() || S.name) resetProgressLocal();
   S.name = name;
   if (serverOn()){
     Cloud.setCode(slugFromName(name));
     save();
      
-    refreshTop(); screenWorlds();
+    refreshTop(); if (!stay) screenWorlds();
     var seq = screenSeq;
     var done = function(){ if (screenSeq === seq) refreshTop(); };
     cloudPush().then(done, done);
   } else {
-    save(); refreshTop(); screenWorlds();
+    save(); refreshTop(); if (!stay) screenWorlds();
   }
 }
  
@@ -28107,7 +28118,7 @@ function winLesson(l, body){
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
     takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
     partsNote(gotParts) +
-    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
+    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div>' + winSaveHTML() + '<div class="winrow">' +
       /* Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в следующий урок. Иначе
          «Дальше →» уносит мимо плана, и разговор «время вышло, что дальше»
          не случается никогда: ребёнок просто едет вперёд, пока не надоест. */
@@ -28130,8 +28141,56 @@ function winLesson(l, body){
   var wz = document.getElementById("wzan");
   if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
   document.getElementById("wstay").onclick = closeWin;
+  winSaveWire();
 }
 function closeWin(){ document.getElementById("win").classList.remove("show"); }
+
+/* ===== имя — после первой победы, а не на входе =====
+   ⚠️ Решение 11.09.2026 (1.138.0). Вывеска больше не просит представиться:
+   «Начать первый урок» открывает урок гостем. Имя спрашиваем ЗДЕСЬ — когда у
+   ребёнка уже есть что сохранять, и просьба звучит как «сохранить сделанное»,
+   а не как анкета на входе.
+   Гость — это устройство без кода и без имени, и не взрослое: у репетитора и
+   родителя урок — просмотр, сохранять там нечего и некому.
+   Просьба не мешает идти дальше: «Дальше →» работает и без имени, а на
+   следующей победе гостя спросят снова. Прогресс при этом не теряется —
+   doRegister гостю его не стирает (там же разбор, почему). */
+function guestKid(){
+  return !myCode() && !S.name && !isAdminDevice() && !isParentDevice();
+}
+function winSaveHTML(){
+  if (!guestKid()) return "";
+  return '<div class="winsave" id="winsave">' +
+    '<b>Сохранить, что получилось?</b>' +
+    '<p>Впиши имя — и урок останется за тобой.</p>' +
+    '<div class="ldauthrow">' +
+      '<input type="text" id="wsname" autocomplete="off" spellcheck="false" maxlength="24"' +
+        ' aria-label="Твоё имя" placeholder="Как тебя зовут?">' +
+      '<button class="bigbtn" id="wsgo">Сохранить</button>' +
+    '</div><div class="msg" id="wsmsg"></div></div>';
+}
+function winSaveWire(){
+  var go = document.getElementById("wsgo"), inp = document.getElementById("wsname");
+  if (!go || !inp) return;
+  function keep(){
+    doRegister(inp.value, function(err){
+      var m = document.getElementById("wsmsg");
+      if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
+      if (inp.focus) inp.focus();
+    }, { stay: true });
+    if (!S.name) return;                    /* имя не подошло — ошибка уже на экране */
+    var code = myCode();
+    document.getElementById("winsave").innerHTML =
+      '<p class="winsaved">✅ Готово, <b>' + esc(S.name) + '</b>! Урок сохранён за тобой.' +
+      (code ? ' Код для входа с другого устройства — <b>' + esc(code) + '</b>.' : '') + '</p>';
+  }
+  go.onclick = keep;
+  inp.addEventListener("keydown", function(e){
+    if (e.key !== "Enter") return;
+    e.preventDefault(); e.stopPropagation();    /* Enter здесь — «сохранить», а не «дальше» */
+    keep();
+  });
+}
 
 function confetti(n){
   var c = document.getElementById("confetti");
@@ -28159,16 +28218,11 @@ function confetti(n){
   })(t0);
 }
 
-/* ================= песочница ================= */
+ 
 var SANDBOX_START = 'color("cyan")\nwidth(3)\n\nfor i in range(36):\n    forward(120)\n    right(100)\n\nprint("Готово! Меняй числа и смотри, что будет.")\n';
-/* Тот же чистый лист, но для настоящего Python: черепашки там нет, и
-   встретить ребёнка кодом, который сразу падает, было бы издевательством.
-   Подменяется ТОЛЬКО нетронутый пример — своё написанное не трогаем никогда. */
+ 
 var SANDBOX_START_PY = 'import sys\n\nprint("Это настоящий Python", sys.version.split()[0])\n\nfor i in range(1, 6):\n    print(i, "в квадрате —", i * i)\n';
-/* ================= настоящий Python в песочнице =================
-   ⚠️ Уехал в js/sandbox.js — пятый шаг по архитектурному долгу. Почему S и
-   session передаются функциями, а не значениями, написано в шапке того файла:
-   это правило, а не стиль. */
+ 
 var SANDBOX = KVSCREENS.sandbox({
   app: app, esc: esc, errHTML: errHTML, enterScreen: enterScreen, refreshTop: refreshTop,
   save: save, award: award, copyText: copyText, claimScreen: claimScreen,
@@ -28179,27 +28233,14 @@ var SANDBOX = KVSCREENS.sandbox({
   screenWorlds: screenWorlds,
   SANDBOX_START: SANDBOX_START, SANDBOX_START_PY: SANDBOX_START_PY,
   SFX_KEY: SFX_KEY, VOICE_KEY: VOICE_KEY,
-  /* ⚠️ Функциями: и прогресс, и сессия — чужое изменяемое состояние. */
+   
   S: function(){ return S; }, session: function(){ return session; },
   newSession: function(v){ session = v; }
 });
 var screenSandbox = SANDBOX.screenSandbox;
 
-/* ================= свои проекты =================
-   Пункт 2.4 плана. Из песочницы уходило всё, кроме рисунков: написал программу,
-   ушёл с экрана — и её нет. Рисунок при этом сохранялся, а игра-угадайка,
-   калькулятор или считалка — нет, потому что черепашка в них не участвовала.
-
-   ⚠️ Отличие от галереи и от мастерской, и оно содержательное. Галерея хранит
-   РИСУНКИ и название берёт сама, из первой строки-комментария. Мастерская
-   хранит вещи, собранные из деталей. А здесь ребёнок сам даёт имя и сам
-   пишет, что это такое, — и это половина смысла: пока не назовёшь, оно не
-   твоё, а просто код в редакторе.
-
-   ⚠️ Описание не для нас: его читает тот, кому отправят ссылку. Он открывает
-   игру, не видя кода, и ему надо понять, что делать.
-   ============================================================ */
-var WORK_MAX = 20;            /* столько своих проектов держим */
+ 
+var WORK_MAX = 20;             
 var WORK_TITLE_MAX = 40;
 var WORK_ABOUT_MAX = 160;
 
@@ -28213,11 +28254,7 @@ function myWorksList(){
              about:x.about || "", at:x.at || 0 };
   }).filter(Boolean).sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
 }
-/* ⚠️ id не может строиться из одних миллисекунд. Два сохранения подряд
-   попадают в одну миллисекунду, получают ОДИН id, и второе молча затирает
-   первое — поймано глазами 07.09.2026: сохранил две программы, в «Моём»
-   осталась одна. Добавляем счётчик, который не повторяется в пределах
-   загрузки страницы. */
+ 
 var workSeq = 0;
 function myWorkSave(title, about, code){
   var d = myWorksAll();
@@ -28240,28 +28277,13 @@ function myWorkById(id){
   for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
   return null;
 }
-/* Ссылка на свой проект — тот же механизм, что у игр (#play=): программа
-   уезжает внутри адреса, сервер не нужен, а тот, кто открыл, видит её
-   работающей и не видит кода. Описание едет заголовком: без него друг
-   открывает окно и не знает, что делать. */
+ 
 function myWorkLink(w){
   return playLink({ title: w.title, code: w.code,
                     author: myName() || "", emoji: "🛠" });
 }
 
-/* ================= выпускной мира =================
-   Пункт 2.2 плана. Мир заканчивается проектом, и до сих пор в этот момент
-   ребёнку показывали собранную программу — и всё. А главный вопрос у него
-   другой: «что я теперь умею». Ответ на него нигде не звучал ни разу.
-
-   ⚠️ Умения написаны ГЛАГОЛАМИ и от первого лица ребёнка, а не темами
-   программы. «Списки, словари, множества» — это оглавление учебника, оно
-   ничего не говорит о нём самом. «Считаю, сколько раз встретилось слово» —
-   говорит.
-
-   ⚠️ У каждого умения стоит id урока, где оно появилось, и это не украшение:
-   строчка «а где это было» превращает список из похвалы в оглавление своей
-   же памяти. Тест требует, чтобы урок существовал. */
+ 
 var WORLD_SKILLS = {
   1: [
     { v:"печатаю на экран текст и числа и знаю, чем они отличаются", id:"text-vs-num" },
@@ -28314,19 +28336,14 @@ var WORLD_SKILLS = {
     { v:"ищу ответ в документации, а не жду, пока подскажут", id:"docs" }
   ]
 };
-/* Порядок — по урокам, а не по тому, как я их выписал: список читается как
-   дорога, которую ребёнок прошёл, и «урок 13» перед «уроком 11» эту дорогу
-   ломает. Сортируем здесь, чтобы в самих данных можно было держать умения в
-   любом удобном для правки порядке. */
+ 
 function worldSkills(n){
   return (WORLD_SKILLS[n] || []).slice().sort(function(a, b){
     var la = CURRICULUM.byId(a.id), lb = CURRICULUM.byId(b.id);
     return ((la && la.num) || 0) - ((lb && lb.num) || 0);
   });
 }
-/* Мир считается выпущенным по тому же правилу, что и сертификат: все уроки
-   пройдены И проект собран. Иначе «выпускной» наступал бы, когда главное
-   дело мира ещё не сделано. */
+ 
 function worldGraduated(n){ return certWorldReady(n); }
 
 function screenWorldDone(n){
@@ -28365,9 +28382,7 @@ function screenWorldDone(n){
         '<div class="row"><button class="bigbtn" id="gr-proj">Открыть мой проект</button></div></div>';
     }
 
-    /* ⚠️ Награда называется В ТОТ МОМЕНТ, когда она открылась. Набор, про
-       который ребёнок узнаёт случайно в настройках через месяц, наградой не
-       работает вовсе: он не связан ни с каким усилием. */
+     
     var gsk = SKINS.filter(function(x){ return x.world === n; })[0];
     if (gsk && skinOpen(gsk)){
       var already = skinNow().id === gsk.id;
@@ -28408,25 +28423,11 @@ function screenWorldDone(n){
   });
 }
 
-/* ================= карта пути =================
-   Сто уроков одной дорогой. Зачем это отдельным экраном, если на Главном
-   уже есть пять карточек миров: карточки отвечают на вопрос «что внутри»,
-   а карта — на другой, и он для ребёнка важнее: «сколько ещё и до чего».
-   Пять карточек по двадцать уроков этого не показывают — из них не видно
-   ни где ты, ни что впереди веха, ни как она близко.
-
-   Это детская половина того, что на вывеске уже сделано для взрослого:
-   родителю там показывают путь целиком, а ребёнку до сих пор показывали
-   только следующий шаг.
-
-   ⚠️ Ни одного процента и ни одного «осталось N дней». Расстояние меряется
-   ЗАНЯТИЯМИ — той единицей, которую ребёнок чувствует, — и считается по его
-   собственному темпу (frame().perLesson), как и всё остальное в продукте. */
+ 
 function pathZan(left){
   return Math.max(1, Math.ceil(left / zanSlotsFor(frame().len || 30)));
 }
-/* Ближайшая веха: проект того мира, в котором ребёнок сейчас.
-   null — если весь курс пройден или ни один мир ещё не начат. */
+ 
 function pathAhead(){
   var next = nextLesson();
   if (!next) return null;
@@ -28437,8 +28438,7 @@ function pathAhead(){
   return { world: w, next: next, left: left, zan: pathZan(left),
            project: projectOfWorld(w.n) };
 }
-/* Состояние шага на карте. Отдельной функцией, потому что его читают и
-   разметка, и подпись, и тест. */
+ 
 function pathState(l){
   if (solved(l.id)) return "done";
   if (!lessonBody(l)) return "soon";
@@ -28461,8 +28461,7 @@ function screenPath(){
       '<p class="lede">Сто уроков по порядку и пять вех: в конце каждого мира — проект, ' +
       'который ты собираешь сам и уносишь с собой. Нажми на любой открытый кружок — откроется тот урок.</p>';
 
-    /* Строка «ты здесь». Она же отвечает на вопрос, который ребёнок задаёт
-       чаще всего: «сколько ещё до чего-то большого». */
+     
     h += '<div class="pathnow">';
     if (!next){
       h += '<b>🏁 Весь курс пройден.</b> Дорога кончилась, но тренировки, игры и своя песочница остались.';
@@ -28473,10 +28472,7 @@ function screenPath(){
              plural(ah.left, "урок", "урока", "уроков") + ', примерно ' + ah.zan + ' ' +
              plural(ah.zan, "занятие", "занятия", "занятий") + '.';
       }
-      /* Карта длинная, и у того, кто дошёл до пятого мира, «ты здесь» уходит
-         далеко вниз. Кнопка, а не автопрокрутка: прыгать самому по экрану
-         сразу после открытия — значит унести ребёнка от строки, которую он
-         только начал читать. */
+       
       h += ' <button class="rbtn sec" id="p-where">Показать, где я</button>';
     }
     h += '</div>';
@@ -28548,11 +28544,7 @@ function screenPath(){
       var here = app.querySelector(".pstep.here");
       if (!here) return;
       try { here.scrollIntoView({ block:"center", behavior:"smooth" }); } catch(e){}
-      /* ⚠️ Есть браузеры, которые МОЛЧА игнорируют behavior:"smooth" — не
-         ошибка, не исключение, просто ничего не происходит. Замечено 07.09.2026
-         на встроенной панели предпросмотра. Поэтому смотрим глазами: если
-         кружок так и не попал в окно, доводим прокрутку без анимации.
-         Кнопка, которая иногда не работает, хуже кнопки без анимации. */
+       
       setTimeout(function(){
         var r;
         try { r = here.getBoundingClientRect(); } catch(e){ return; }
@@ -28565,10 +28557,7 @@ function screenPath(){
   });
 }
 
-/* ================= экран: игры =================
-   Готовые маленькие игры. Код виден и его можно менять прямо здесь:
-   поправил — нажал «Новая игра» — играешь свою версию. Изменения
-   сохраняются между заходами, а кнопка «Вернуть оригинал» их сбрасывает. */
+ 
 function gamesList(){ return (window.GAMES || []); }
 function gameCode(g){ return (S.games && S.games[g.id]) || g.code; }
 
@@ -28588,9 +28577,7 @@ function screenGames(){
   });
   h += '</div>';
 
-  /* ===== игры-проекты: собери свою =====
-     Открываются собранным проектом мира (финал мира открывает следующую
-     игру). Конечный список, а не лента: собрал — понёс другу, а не «ещё». */
+   
   var gps = projectsList().filter(function(p){ return p.kind === "game"; });
   if (gps.length){
     h += '<div class="sect"><h2>🛠 Собери свою игру</h2><div class="line"></div></div>' +
@@ -28631,8 +28618,7 @@ function screenGames(){
 function openGame(id){
   var g = gamesList().filter(function(x){ return x.id === id; })[0];
   if (!g) return screenGames();
-  /* Жёсткий потолок дня меряет ВСЁ время в тренажёре, а не только уроки, —
-     значит и сюда новая работа после предела не пускает. */
+   
   if (capHard()) return screenCapReached();
   enterScreen("train", "game");
   session = { id:null, attempts:0, hints:0, shown:false };
@@ -28643,17 +28629,14 @@ function openGame(id){
   app.innerHTML = head + '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn ghost" data-go="games">← Ко всем играм</button>' +
     '<span class="sp"></span>' +
-    /* Ссылка уносит ТЕКУЩИЙ код: правил игру — друг сыграет твою версию.
-       Это и есть крючок: у работы появляется зритель. */
+     
     '<button class="bigbtn ghost" id="gshare">🔗 Отправить игру другу</button>' +
     '<button class="bigbtn ghost" id="greset">↩ Вернуть оригинал</button></div>';
 
   var studio = makeStudio({
     engine: "mini", draw: !!g.draw, play: true, code: gameCode(g), label: g.title,
     onRun: function(){
-      /* «твоя версия» — только если код действительно поменяли. Раньше здесь
-         сохранялся любой запуск, и после первой же партии карточка игры
-         врала: «твоя версия» появлялась на нетронутом коде. */
+       
       var code = studio.editor.getCode();
       S.games = S.games || {};
       if (code === g.code) delete S.games[g.id]; else S.games[g.id] = code;
@@ -28682,25 +28665,16 @@ function openGame(id){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-/* ================= экран: разминка (predict) =================
-   Отдельный раздел рядом с «Играми». Ребёнок читает готовую программу
-   и ДО запуска пишет, что она напечатает. Потом сверка.
-   Прогресс хранится в S.warmups и не влияет на звёзды и сотню уроков.
-   ============================================================ */
+ 
 function warmupsList(){ return (window.WARMUPS || []); }
 function warmupDone(id){ return !!(S.warmups && S.warmups[id]); }
-/* Разминка «откроется позже» — не каприз, а защита от бессмыслицы: упражнение
-   про zip ребёнку из Мира 1 читать нечем, а задача дня, которую нечем читать,
-   отбивает охоту заходить. Поле lesson — урок, после которого разминка
-   перестаёт быть загадкой; разминка без lesson открыта всегда. */
+ 
 function warmupOpen(w){
   return !w || !w.lesson || solved(w.lesson) || !!(S.admin && S.admin.unlockAll);
 }
 function warmupsOpen(){ return warmupsList().filter(warmupOpen); }
 
-/* Сравнение предсказания с настоящим выводом. Хвостовые пробелы в каждой
-   строке и пустые строки в конце не считаем — их ребёнок мог не набрать,
-   а на смысл они не влияют. Внутренние пустые строки важны и остаются. */
+ 
 function normPred(s){
   return String(s == null ? "" : s)
     .replace(/\r/g, "")
@@ -35749,31 +35723,27 @@ function landHwRender(){
 }
  
  
-var landAuthMode = "reg";
+var landAuthMode = "start";
 function landAuthHTML(){
-  var code = landAuthMode === "code";
-  return '<div class="ldauthrow">' +
-      '<input type="text" id="ldname" autocomplete="off" spellcheck="false"' +
-        ' maxlength="' + (code ? 32 : 24) + '"' +
-        ' aria-label="' + (code ? "Код ученика" : "Имя ребёнка") + '"' +
-        ' placeholder="' + (code ? "например, anya-3f7a" : "Имя ребёнка") + '">' +
-      '<button class="bigbtn" data-auth="go">' + (code ? "Войти →" : "Начать →") + '</button>' +
-    '</div><div class="msg" id="ldmsg"></div>' +
-    '<p class="ldalt">' +
+  if (landAuthMode !== "code")
+    return '<div class="landcta"><button class="bigbtn" data-auth="try">Начать первый урок →</button></div>' +
        
-      (serverOn()
-        ? (code
-            ? 'Ещё нет профиля? <button class="linkjump" data-auth="reg">Завести по имени</button>'
-            : 'Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>') + ' · '
-        : '') +
-      '<button class="linkjump" data-auth="try">👀 Посмотреть первый урок</button>' +
-    '</p>';
+      '<p class="ldalt">Имя спросим после первой задачи' +
+       
+      (serverOn() ? ' · Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>' : '') +
+      '</p>';
+  return '<div class="ldauthrow">' +
+      '<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
+        ' aria-label="Код ученика" placeholder="например, anya-3f7a">' +
+      '<button class="bigbtn" data-auth="go">Войти →</button>' +
+    '</div><div class="msg" id="ldmsg"></div>' +
+    '<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
 }
 function landAuthRender(focus){
   var box = document.getElementById("ldauth");
   if (!box) return;
   box.innerHTML = landAuthHTML();
-  var inp = document.getElementById("ldname");
+  var inp = document.getElementById("ldcode");
   function fail(err){
     var m = document.getElementById("ldmsg");
     if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
@@ -35782,8 +35752,7 @@ function landAuthRender(focus){
   function go(){
      
     becomeKid();
-    if (landAuthMode === "code") return doLogin(inp.value, fail);
-    doRegister(inp.value, fail);
+    doLogin(inp.value, fail);
   }
   box.querySelectorAll("[data-auth]").forEach(function(b){
     b.onclick = function(){
@@ -35968,14 +35937,14 @@ function screenAbout(){
         'код тоже есть.</li>' +
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
-      '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
+      '<p class="lede">Сначала урок, имя — после первой задачи. Ни почты, ни телефона.</p>' +
        
       '<div class="landcta">' +
         (started || known
           ? '<button class="bigbtn" data-land="on">' +
               (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
             '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-          : '<button class="bigbtn" data-land="up">↑ Завести профиль</button>') +
+          : '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
       '</div>' +
       '<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
       'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
@@ -35988,13 +35957,6 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-      if (k === "up"){                    
-        var f = document.getElementById("ldauth");
-        if (f && f.scrollIntoView) f.scrollIntoView({ behavior:"smooth", block:"center" });
-        var i = document.getElementById("ldname");
-        if (i && i.focus) i.focus();
-        return;
-      }
       if (k === "adults"){
         var a = document.getElementById("adults");
         if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
@@ -39069,8 +39031,9 @@ var HELP = {
     '<p>Витрина: что тут есть, из чего состоит курс и что видит взрослый. ' +
     'Это единственный экран, где ничего не надо решать, — его просто читают.</p>' +
     '<h4>Что делать</h4>' +
-    '<ul><li><b>«Посмотреть первый урок»</b> открывает настоящий урок без всякой регистрации — ' +
-    'самый быстрый способ понять, подходит ли это вам.</li>' +
+    '<ul><li><b>«Начать первый урок»</b> открывает настоящий урок без всякой регистрации — ' +
+    'самый быстрый способ понять, подходит ли это вам. Имя тренажёр спросит после ' +
+    'первой решённой задачи, чтобы сохранить сделанное.</li>' +
     '<li><b>«Начать заниматься»</b> спросит, кто вы: ученик, родитель или репетитор.</li>' +
     '<li>Раздел <b>«Честно про границы»</b> читать обязательно: там написано, чего тут нет.</li></ul>' +
     '<h4>Как сюда вернуться</h4>' +

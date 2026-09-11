@@ -1219,11 +1219,19 @@ function resetProgressLocal(){
   clearAll(S);
   save();
 }
-/* создать аккаунт по имени и уйти на карту миров */
-function doRegister(name, onErr){
+/* создать аккаунт по имени и уйти на карту миров (opts.stay — остаться, где
+   стоим: так имя вписывают в карточке победы, поверх урока) */
+function doRegister(name, onErr, opts){
   name = String(name || "").trim();
   if (name.length < 2){ if (onErr) onErr("Впиши имя — хотя бы две буквы."); return; }
-  resetProgressLocal();
+  var stay = !!(opts && opts.stay);
+  /* ⚠️ Стираем только ЧУЖОЙ прогресс — записанный под другим кодом или
+     именем: иначе на общем компьютере двое детей смешались бы в одного.
+     Прогресс ГОСТЯ (ни кода, ни имени) — его собственный: он решал уроки
+     сам и вписывает имя, чтобы СОХРАНИТЬ сделанное, а не начать с нуля.
+     До 1.138.0 здесь стиралось всё подряд, и спросить имя после первой
+     победы (решение 11.09.2026) значило бы стереть эту самую победу. */
+  if (myCode() || S.name) resetProgressLocal();
   S.name = name;
   if (serverOn()){
     Cloud.setCode(slugFromName(name));
@@ -1235,12 +1243,12 @@ function doRegister(name, onErr){
        запоздавший ответ сервера перерисовывал экран поверх открытого.
        Ответ сервера теперь трогает только верхнюю панель, и только если с неё
        никуда не ушли. */
-    refreshTop(); screenWorlds();
+    refreshTop(); if (!stay) screenWorlds();
     var seq = screenSeq;
     var done = function(){ if (screenSeq === seq) refreshTop(); };
     cloudPush().then(done, done);
   } else {
-    save(); refreshTop(); screenWorlds();
+    save(); refreshTop(); if (!stay) screenWorlds();
   }
 }
 /* войти по уже существующему коду (например, с другого устройства) */
@@ -5215,7 +5223,7 @@ function winLesson(l, body){
           : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
     takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
     partsNote(gotParts) +
-    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div><div class="winrow">' +
+    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div>' + winSaveHTML() + '<div class="winrow">' +
       /* Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в следующий урок. Иначе
          «Дальше →» уносит мимо плана, и разговор «время вышло, что дальше»
          не случается никогда: ребёнок просто едет вперёд, пока не надоест. */
@@ -5238,8 +5246,56 @@ function winLesson(l, body){
   var wz = document.getElementById("wzan");
   if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
   document.getElementById("wstay").onclick = closeWin;
+  winSaveWire();
 }
 function closeWin(){ document.getElementById("win").classList.remove("show"); }
+
+/* ===== имя — после первой победы, а не на входе =====
+   ⚠️ Решение 11.09.2026 (1.138.0). Вывеска больше не просит представиться:
+   «Начать первый урок» открывает урок гостем. Имя спрашиваем ЗДЕСЬ — когда у
+   ребёнка уже есть что сохранять, и просьба звучит как «сохранить сделанное»,
+   а не как анкета на входе.
+   Гость — это устройство без кода и без имени, и не взрослое: у репетитора и
+   родителя урок — просмотр, сохранять там нечего и некому.
+   Просьба не мешает идти дальше: «Дальше →» работает и без имени, а на
+   следующей победе гостя спросят снова. Прогресс при этом не теряется —
+   doRegister гостю его не стирает (там же разбор, почему). */
+function guestKid(){
+  return !myCode() && !S.name && !isAdminDevice() && !isParentDevice();
+}
+function winSaveHTML(){
+  if (!guestKid()) return "";
+  return '<div class="winsave" id="winsave">' +
+    '<b>Сохранить, что получилось?</b>' +
+    '<p>Впиши имя — и урок останется за тобой.</p>' +
+    '<div class="ldauthrow">' +
+      '<input type="text" id="wsname" autocomplete="off" spellcheck="false" maxlength="24"' +
+        ' aria-label="Твоё имя" placeholder="Как тебя зовут?">' +
+      '<button class="bigbtn" id="wsgo">Сохранить</button>' +
+    '</div><div class="msg" id="wsmsg"></div></div>';
+}
+function winSaveWire(){
+  var go = document.getElementById("wsgo"), inp = document.getElementById("wsname");
+  if (!go || !inp) return;
+  function keep(){
+    doRegister(inp.value, function(err){
+      var m = document.getElementById("wsmsg");
+      if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
+      if (inp.focus) inp.focus();
+    }, { stay: true });
+    if (!S.name) return;                    /* имя не подошло — ошибка уже на экране */
+    var code = myCode();
+    document.getElementById("winsave").innerHTML =
+      '<p class="winsaved">✅ Готово, <b>' + esc(S.name) + '</b>! Урок сохранён за тобой.' +
+      (code ? ' Код для входа с другого устройства — <b>' + esc(code) + '</b>.' : '') + '</p>';
+  }
+  go.onclick = keep;
+  inp.addEventListener("keydown", function(e){
+    if (e.key !== "Enter") return;
+    e.preventDefault(); e.stopPropagation();    /* Enter здесь — «сохранить», а не «дальше» */
+    keep();
+  });
+}
 
 function confetti(n){
   var c = document.getElementById("confetti");
@@ -14217,35 +14273,41 @@ function landHwRender(){
    ТРИ шага: «Войти» → «кто занимается?» → «Я ученик» → и только там поле с
    именем. Гость уходил раньше, чем доходил до поля, а внизу страницы стояла
    вторая кнопка про то же самое — то есть страница заканчивалась дважды.
-   ⚠️ Одно поле на оба дела, переключатель строкой под ним. Две формы рядом
-   («заведи профиль» и «войди по коду») читались бы как выбор, которого гость
-   сделать не может: он ещё не знает, есть у него код или нет. */
-var landAuthMode = "reg";
+   ⚠️⚠️ С 1.138.0 главное действие — УРОК, а не имя (решение 11.09.2026).
+   Человек из поиска пришёл посмотреть, что это такое, а мы первым делом
+   просили его представиться — раньше, чем показали, зачем. Урок и так
+   открывался без профиля, но мелкой ссылкой «Посмотреть первый урок» под
+   полем, то есть главное и второстепенное стояли наоборот.
+   Теперь «Начать первый урок» — большая кнопка, а имя спрашивает карточка
+   первой победы (winSaveHTML), когда уже есть что сохранять. Поле на
+   вывеске осталось одно — для КОДА: у пришедшего с кодом от репетитора своя
+   дверь, строкой под кнопкой. Две формы рядом читались бы как выбор. */
+var landAuthMode = "start";
 function landAuthHTML(){
-  var code = landAuthMode === "code";
-  return '<div class="ldauthrow">' +
-      '<input type="text" id="ldname" autocomplete="off" spellcheck="false"' +
-        ' maxlength="' + (code ? 32 : 24) + '"' +
-        ' aria-label="' + (code ? "Код ученика" : "Имя ребёнка") + '"' +
-        ' placeholder="' + (code ? "например, anya-3f7a" : "Имя ребёнка") + '">' +
-      '<button class="bigbtn" data-auth="go">' + (code ? "Войти →" : "Начать →") + '</button>' +
-    '</div><div class="msg" id="ldmsg"></div>' +
-    '<p class="ldalt">' +
+  if (landAuthMode !== "code")
+    return '<div class="landcta"><button class="bigbtn" data-auth="try">Начать первый урок →</button></div>' +
+      /* ⚠️ Строка обязана лечь в ОДНУ линию: колонка первого экрана — 490 px
+         (справа живой редактор), а длину выбирает текст, а не колонка
+         (RAZVITIE § 4.13). «Без регистрации: имя спросим…» вместе со входом
+         по коду занимало 577 px и рвалось на две; «имя спросим после» и так
+         говорит, что сейчас регистрации нет. Замер 11.09.2026. */
+      '<p class="ldalt">Имя спросим после первой задачи' +
       /* Вход по коду есть только когда есть сервер: без него doLogin всё равно
          ответит отказом, а ссылка на несуществующую дверь хуже её отсутствия. */
-      (serverOn()
-        ? (code
-            ? 'Ещё нет профиля? <button class="linkjump" data-auth="reg">Завести по имени</button>'
-            : 'Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>') + ' · '
-        : '') +
-      '<button class="linkjump" data-auth="try">👀 Посмотреть первый урок</button>' +
-    '</p>';
+      (serverOn() ? ' · Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>' : '') +
+      '</p>';
+  return '<div class="ldauthrow">' +
+      '<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
+        ' aria-label="Код ученика" placeholder="например, anya-3f7a">' +
+      '<button class="bigbtn" data-auth="go">Войти →</button>' +
+    '</div><div class="msg" id="ldmsg"></div>' +
+    '<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
 }
 function landAuthRender(focus){
   var box = document.getElementById("ldauth");
   if (!box) return;
   box.innerHTML = landAuthHTML();
-  var inp = document.getElementById("ldname");
+  var inp = document.getElementById("ldcode");
   function fail(err){
     var m = document.getElementById("ldmsg");
     if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
@@ -14256,8 +14318,7 @@ function landAuthRender(focus){
        роли взрослого, иначе на общем устройстве профиль заводится поверх
        открытого кабинета. Пароль при этом цел. */
     becomeKid();
-    if (landAuthMode === "code") return doLogin(inp.value, fail);
-    doRegister(inp.value, fail);
+    doLogin(inp.value, fail);
   }
   box.querySelectorAll("[data-auth]").forEach(function(b){
     b.onclick = function(){
@@ -14286,13 +14347,13 @@ function screenAbout(){
      (посмотрел урок с этой же вывески и решил его). Тогда первая кнопка — не
      «начать», а «продолжить»: иначе сделанное выглядит потерянным. */
   var started = Object.keys(S.stars).length;
-  /* ⚠️ Форма входа показывается только тому, у кого профиля ЕЩЁ НЕТ, и считается
-     это по профилю, а не по звёздам. Ловушка: заведённый ребёнок, не сдавший ни
-     одного урока, — это started === 0, и по звёздам ему выдали бы форму
-     регистрации, а «Начать» в ней зовёт doRegister, который стирает локальный
-     прогресс. То есть вернувшийся на вывеску новичок мог обнулить себя одной
-     кнопкой. Роль взрослого тоже считается профилем: заводить ребёнка поверх
-     открытого кабинета — не то, зачем родитель зашёл на вывеску. */
+  /* ⚠️ «Начать первый урок» показывается только тому, у кого профиля ЕЩЁ НЕТ, и
+     считается это по профилю, а не по звёздам: заведённому ребёнку, не сдавшему
+     ни одного урока (started === 0), нужна дорога к СВОИМ урокам, а не гостевой
+     вход. До 1.138.0 здесь стояла форма имени, и «Начать» в ней стирал
+     прогресс — вернувшийся новичок мог обнулить себя одной кнопкой. Роль
+     взрослого тоже считается профилем: заводить ребёнка поверх открытого
+     кабинета — не то, зачем родитель зашёл на вывеску. */
   var known = !!(myCode() || S.name || isAdminDevice() || isParentDevice());
 
   var h = '<div class="land">';
@@ -14543,16 +14604,17 @@ function screenAbout(){
         'код тоже есть.</li>' +
       '</ul></div>' +
     '<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
-      '<p class="lede">Регистрация — это имя, и всё. Ни почты, ни телефона.</p>' +
-      /* ⚠️ Внизу больше не вторая дверь, а указатель на ту же самую. Пока
-         здесь стояла своя кнопка «Войти или завести профиль», страница
-         заканчивалась дважды и к одному действию вели две дороги. */
+      '<p class="lede">Сначала урок, имя — после первой задачи. Ни почты, ни телефона.</p>' +
+      /* ⚠️ Внизу та же дверь, что наверху, а не вторая: пока здесь стояла
+         своя кнопка «Войти или завести профиль», страница заканчивалась дважды
+         и к одному действию вели две дороги. До 1.138.0 это был указатель
+         «↑ Завести профиль» — теперь то же действие, что у верхней кнопки. */
       '<div class="landcta">' +
         (started || known
           ? '<button class="bigbtn" data-land="on">' +
               (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
             '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-          : '<button class="bigbtn" data-land="up">↑ Завести профиль</button>') +
+          : '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
       '</div>' +
       '<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
       'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
@@ -14565,13 +14627,6 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-      if (k === "up"){                   /* наверх, к единственной форме входа */
-        var f = document.getElementById("ldauth");
-        if (f && f.scrollIntoView) f.scrollIntoView({ behavior:"smooth", block:"center" });
-        var i = document.getElementById("ldname");
-        if (i && i.focus) i.focus();
-        return;
-      }
       if (k === "adults"){
         var a = document.getElementById("adults");
         if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
@@ -18199,8 +18254,9 @@ var HELP = {
     '<p>Витрина: что тут есть, из чего состоит курс и что видит взрослый. ' +
     'Это единственный экран, где ничего не надо решать, — его просто читают.</p>' +
     '<h4>Что делать</h4>' +
-    '<ul><li><b>«Посмотреть первый урок»</b> открывает настоящий урок без всякой регистрации — ' +
-    'самый быстрый способ понять, подходит ли это вам.</li>' +
+    '<ul><li><b>«Начать первый урок»</b> открывает настоящий урок без всякой регистрации — ' +
+    'самый быстрый способ понять, подходит ли это вам. Имя тренажёр спросит после ' +
+    'первой решённой задачи, чтобы сохранить сделанное.</li>' +
     '<li><b>«Начать заниматься»</b> спросит, кто вы: ученик, родитель или репетитор.</li>' +
     '<li>Раздел <b>«Честно про границы»</b> читать обязательно: там написано, чего тут нет.</li></ul>' +
     '<h4>Как сюда вернуться</h4>' +
