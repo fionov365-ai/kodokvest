@@ -80,7 +80,12 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                         а не сам вариант: вариант ребёнок соберёт у себя по
                         этому семени, и соберётся у всех один и тот же —
                         сборка есть чистая функция от (экзамен, семя). */
-                     "vtask"];
+                     "vtask",
+                     /* Слова ребёнка к пакету защиты проекта (1.142.0):
+                        { projectId: { topic, actual, conclusion, next, at } }.
+                        ⚠️ Школу, класс и руководителя НЕ храним — это
+                        персональные данные; в документах для них пустые строки. */
+                     "defense"];
 /* codeSaved — единственный ответ продукта на «потерял код — потерял прогресс».
    ⚠️ Это НЕ восстановление: восстанавливать нечем и не будет чем, потому что
    ни почты, ни телефона мы не спрашиваем, и это обещание на вывеске. Это
@@ -92,7 +97,7 @@ var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect","codeSaved"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели репетитора такое не
    стирает — стирает только смена ученика. */
-var KEEP_ON_RESET = ["games","mytasks","gallery"];
+var KEEP_ON_RESET = ["games","mytasks","gallery","defense"];
 
 /* пустой прогресс: только структура, без данных */
 function blankProgress(){
@@ -1836,6 +1841,23 @@ function minPos(a, b){
   if (!b) return a;
   return Math.min(a, b);
 }
+/* По шагу проекта — самая ранняя дата сдачи из двух копий. */
+function mergeStepsAt(x, y){
+  x = Array.isArray(x) ? x : []; y = Array.isArray(y) ? y : [];
+  var out = [], n = Math.max(x.length, y.length);
+  for (var i = 0; i < n; i++) out.push(minPos(x[i], y[i]) || 0);
+  return out;
+}
+/* По шагу проекта — запись о ПЕРВОЙ сдаче: из двух берём более раннюю. */
+function mergeStepsTr(x, y){
+  x = Array.isArray(x) ? x : []; y = Array.isArray(y) ? y : [];
+  var out = [], n = Math.max(x.length, y.length);
+  for (var i = 0; i < n; i++){
+    var p = x[i], q = y[i];
+    out.push(!p ? (q || null) : (!q ? p : ((p.at || 0) <= (q.at || 0) ? p : q)));
+  }
+  return out;
+}
 function mergeProgress(a, b){
   a = a || {}; b = b || {};
   var out = { v:2, stars:{}, badges:[], log:{} };
@@ -2143,8 +2165,21 @@ function mergeProgress(a, b){
       /* дата сборки — РАННЯЯ из двух: проект собран тогда, когда собран
          впервые, а не когда об этом узнало второе устройство */
       doneAt: minPos(pa.doneAt, pb.doneAt),
-      code: pf.code || po.code || null
+      code: pf.code || po.code || null,
+      /* ⚠️ Даты шагов и запись работы (1.142.0). Объект проекта здесь
+         собирается ПЕРЕЧИСЛЕНИЕМ полей, и без этих строк оба поля молча
+         пропадали бы при первом же обмене с сервером. По шагу — РАННЕЕ из
+         двух: шаг сдан тогда, когда сдан впервые, и запись о нём — первая. */
+      stepsAt: mergeStepsAt(pa.stepsAt, pb.stepsAt),
+      tr: mergeStepsTr(pa.tr, pb.tr)
     };
+  });
+  /* Слова ребёнка к защите — текст, а не результат: сложить нельзя, берём
+     более свежую правку (at), как песочницу. */
+  out.defense = {};
+  Object.keys(mergeSet(a.defense, b.defense)).forEach(function(k){
+    var x = (a.defense || {})[k], y = (b.defense || {})[k];
+    out.defense[k] = !x ? y : (!y ? x : ((x.at || 0) >= (y.at || 0) ? x : y));
   });
 
   /* повторы: n — это «сколько раз закрепил», результат, поэтому берём больший.
@@ -2323,7 +2358,8 @@ var PLACE_RU = {
   play:"играет в игру по ссылке", specs:"в приёмке", spec:"в приёмке",
   folio:"в портфолио", works:"на витрине", home:"на главном экране",
   world:"выбирает урок", train:"выбирает тренировку", guide:"читает инструкцию",
-  account:"в профиле", trace:"смотрит, как шла работа", web:"в разделе «HTML и CSS»"
+  account:"в профиле", trace:"смотрит, как шла работа", web:"в разделе «HTML и CSS»",
+  defense:"готовит проект к защите"
 };
 /* Чем занят, по чужому снимку. serverAt — серверное время последней записи:
    сравнивать его с часами зрителя чуть нечестно, но дрейф часов много меньше
@@ -8531,6 +8567,9 @@ function projectState(id){
   if (!st || typeof st !== "object"){ st = { step:0, code:null, done:0, aiAt:-1, doneAt:0 }; S.projects[id] = st; }
   if (typeof st.step !== "number") st.step = 0;
   if (typeof st.aiAt !== "number") st.aiAt = -1;
+  /* даты сдачи шагов и запись работы по шагам — для пакета к защите (1.142.0) */
+  if (!Array.isArray(st.stepsAt)) st.stepsAt = [];
+  if (!Array.isArray(st.tr)) st.tr = [];
   return st;
 }
 function projectDone(id){ return !!projectState(id).done; }
@@ -8615,7 +8654,12 @@ function openProject(id, forceStep){
 
     var goal = '<div class="goal"><h3>🎯 Шаг ' + (i + 1) + ': ' + esc(step.title) + '</h3>' +
       '<p>' + esc(step.brief) + '</p>' +
-      (step.list ? '<ul>' + step.list.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>' : '') +
+      /* ⚠️ Пункты требований — HTML, как у уроков: так их пишут в
+         js/projects.js, и tests/lessons.js [разметка] требует записывать
+         показываемые теги сущностями (&lt;h1&gt;). До 1.142.0 здесь стоял
+         esc(x) — сущность экранировалась второй раз, и ребёнок в проекте
+         «Свой сайт» видел буквально «&lt;h1&gt;» вместо «<h1>». */
+      (step.list ? '<ul>' + step.list.map(function(x){ return '<li>' + x + '</li>'; }).join("") + '</ul>' : '') +
       (i > 0 ? '<span class="bugtip">' + (step.starter !== undefined
           ? 'В редакторе — НОВАЯ редакция от напарника, а не твой код. Он что-то добавил и мог заодно сломать сделанное раньше: сравни с тем, что было, и почини.'
           : 'В редакторе — твой код с прошлого шага. Дописывай в него, а не начинай с нуля.') + '</span>' : '') +
@@ -8703,6 +8747,16 @@ function runProjectCheck(p, i, ed, showMsg){
 function winProjectStep(p, i, code){
   var st = projectState(p.id);
   st.code = code;
+  /* Дата шага и запись работы по шагу — для пакета к защите (1.142.0).
+     Пишутся ОДИН раз, на первой сдаче, по тому же правилу, что запись
+     авторства урока (lg.tr): повторная сдача не переписывает ни дату, ни то,
+     как шаг был сделан впервые. Иначе достаточно пройти шаг ещё раз. */
+  if (!st.stepsAt[i]) st.stepsAt[i] = Date.now();
+  var ped = session && session.studio && session.studio.editor;
+  if (!st.tr[i] && ped && ped.trace){
+    st.tr[i] = { at: Date.now(), typed: ped.trace.typed || 0, pasted: ped.trace.pasted || 0,
+                 edits: ped.trace.edits || 0, shown: session.shown ? 1 : 0, hints: session.hints || 0 };
+  }
   /* Шаг сдан — код уехал в st.code, черновик шага больше не нужен. Заготовку
      сессии подменяем на сданный код: иначе draftFlush при уходе на следующий
      шаг заведёт черновик заново, и он останется висеть навсегда. */
@@ -8767,6 +8821,7 @@ function screenProjectDone(id){
     '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
     (p.kind === "game" ? '<button class="bigbtn" id="pshare">🔗 Отправить игру другу</button>' : '') +
+    '<button class="bigbtn ghost" id="pdef">📁 Пакет к защите</button>' +
     '<button class="bigbtn ghost" id="pfolio">🎒 Все мои работы</button>' +
     '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
     '<button class="bigbtn ghost" data-go="world">← ' +
@@ -8790,6 +8845,7 @@ function screenProjectDone(id){
                         author: myName() || "", emoji: p.emoji }), psh);
   };
   document.getElementById("pfolio").onclick = screenFolio;
+  document.getElementById("pdef").onclick = function(){ screenDefense(p.id); };
   document.getElementById("pagain").onclick = function(){
     var yes = true;
     try { yes = confirm("Начать проект заново? Пройденные шаги обнулятся, но код останется в редакторе."); } catch(e){}
@@ -9347,6 +9403,7 @@ function screenFolio(){
         '<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
         '<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
         '<button class="rbtn sec" data-py="' + p.id + '">⬇ Скачать .py</button>' +
+        '<button class="rbtn sec" data-todef="' + p.id + '">📁 К защите</button>' +
         '<span class="fplen">' + n + " " + plural(n, "строка", "строки", "строк") + '</span></div>';
     } else {
       h += '<div class="fpbtns">' + (open
@@ -9550,6 +9607,9 @@ function screenFolio(){
       var st = projectState(p.id);
       copyText(st.code || p.steps[p.steps.length - 1].solution, b);
     };
+  });
+  app.querySelectorAll("[data-todef]").forEach(function(b){
+    b.onclick = function(){ screenDefense(b.getAttribute("data-todef")); };
   });
   app.querySelectorAll("[data-cert]").forEach(function(b){
     b.onclick = function(){
@@ -10403,6 +10463,22 @@ var WEBS = KVSCREENS.web({
   pageDoc: pageDoc, pageFrameWire: pageFrameWire
 });
 var screenWeb = WEBS.screenWeb, openWeb = WEBS.openWeb;
+
+/* Пакет к защите проекта (1.142.0) — своим файлом, js/screens-defense.js.
+   ⚠️ storyOf и экраны — обёртками: storyOf присваивается НИЖЕ по файлу
+   (пересказ — свой модуль), и на этой строке он ещё undefined. */
+var DEFENSE = KVSCREENS.defense({
+  app: app, esc: esc, plural: plural, fmtDay: fmtDay, enterScreen: enterScreen, setRoute: setRoute,
+  refreshTop: refreshTop, save: save, myName: myName,
+  projectById: projectById, projectState: projectState, projectDone: projectDone,
+  projectWhere: projectWhere, codeSkeleton: function(c){ return codeSkeleton(c); },
+  storyOf: function(c, e){ return storyOf(c, e); },
+  openProject: function(id){ openProject(id); },
+  screenProjectDone: function(id){ screenProjectDone(id); },
+  screenFolio: function(){ screenFolio(); },
+  S: function(){ return S; }
+});
+var screenDefense = DEFENSE.screenDefense;
 
 var SHOWCASE = KVSCREENS.showcase({
   app: app,
@@ -12979,6 +13055,9 @@ function routeHash(){
      дефисом), а чтобы правило было одно для всех адресов с «=». */
   var lpk = /^#lesson=([\w-]+)$/.exec(location.hash || "");
   if (lpk && CURRICULUM.byId(lpk[1])){ openLesson(lpk[1]); return true; }
+  /* Пакет к защите — тоже адрес с параметром (id проекта) */
+  var dpk = /^#defense=([\w-]+)$/.exec(location.hash || "");
+  if (dpk && projectById(dpk[1])){ screenDefense(dpk[1]); return true; }
   var wpn = /^#world=(\d+)$/.exec(location.hash || "");
   if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }
 
@@ -18328,6 +18407,16 @@ var HELP = {
     '<div class="keyrow"><kbd>Esc</kbd><span>закрыть окно поверх страницы</span></div></div>' +
     '<p>Написанное <b>не пропадает</b>: уйдёшь с урока и вернёшься — код будет на месте.</p>' },
 
+  defense: { t:"📁 Пакет к защите проекта", h:
+    '<h4>Что это</h4>' +
+    '<p>Документы, которые обычно просят на защите индивидуального проекта: паспорт, пояснительная ' +
+    'записка, презентация, речь и протокол работы. Собираются из готового проекта.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Впиши свои слова: тему, актуальность, вывод и что можно улучшить. Они сразу попадают во все документы.</li>' +
+    '<li>Открой документ и нажми «Распечатать или сохранить в PDF».</li>' +
+    '<li>Школу, класс и руководителя впиши от руки: тренажёр их не спрашивает и не хранит.</li></ul>' +
+    '<h4>Честно</h4>' +
+    '<p>Это каркас, а не бланк твоей школы: сверь его с её требованиями.</p>' },
   web: { t:"🌐 HTML и CSS — страница своими руками", h:
     '<h4>Что это за раздел</h4>' +
     '<p>Задания про то, из чего сделан любой сайт. HTML говорит, ЧТО на странице — заголовок, ' +
@@ -19165,6 +19254,8 @@ window.__game = {
   screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
   algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
   screenWeb: function(){ screenWeb(); }, openWeb: function(id){ openWeb(id); },
+  screenDefense: function(id){ screenDefense(id); },
+  defenseDocHTML: function(k, id){ return DEFENSE.docHTML(k, id); }, DEFENSE_DOCS: DEFENSE.DOCS,
   AI_STAGES: AI_STAGES, aiStageOf: aiStageOf,
   bootFallback: bootFallback, bootRender: bootRender,
   screenSandbox: screenSandbox, screenAdmin: screenAdmin, screenGames: screenGames,

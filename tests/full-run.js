@@ -2971,6 +2971,146 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     viewReset(g);
   }
 
+  /* --- пакет к защите проекта (1.142.0) ---
+     ⚠️ Стережётся обещание со страницы /individualnyi-proekt/ и три вещи,
+     которые ломаются молча:
+       1) документы собираются по ВСЕМ одиннадцати проектам, а не по тому,
+          на котором их смотрели глазами (у игр input(), у «Напарника» свои
+          редакции шагов);
+       2) даты шагов и запись работы пишутся при сдаче шага и ПЕРЕЖИВАЮТ
+          слияние — объект проекта там собирается перечислением полей;
+       3) пакет не хранит школу, класс и руководителя — это ПДн. */
+  let defChecked = 0;
+  {
+    const p0 = problems.length;
+    const PR = w.PROJECTS || [];
+    const projБыл = JSON.parse(JSON.stringify(g.state.projects || {}));
+    const defБыл = JSON.parse(JSON.stringify(g.state.defense || {}));
+    const unlockБыл = g.state.admin.unlockAll;
+    if (typeof g.screenDefense !== "function" || !g.DEFENSE_DOCS) bad("[защита] пакета нет");
+    else {
+      if (g.DEFENSE_DOCS.length !== 5) bad("[защита] документов не пять: " + g.DEFENSE_DOCS.length);
+
+      /* 1. все пять документов по каждому проекту */
+      PR.forEach(p => {
+        g.state.projects[p.id] = { step: p.steps.length, done: 1, doneAt: 5000, aiAt: -1,
+          code: p.steps[p.steps.length - 1].solution, stepsAt: [], tr: [] };
+        g.DEFENSE_DOCS.forEach(dd => {
+          const h = g.defenseDocHTML(dd.id, p.id) || "";
+          if (h.indexOf("docpage") < 0) bad("[защита] «" + dd.title + "» для «" + p.title + "» пустой");
+          if (/списал/i.test(h)) bad("[защита] в «" + dd.title + "» слово «списал» — этого продукт себе не позволяет");
+          /* тексты шагов — HTML с сущностями; экранированные второй раз, они
+             покажут «&lt;h1&gt;» буквами */
+          if (/&amp;(lt|gt|quot);/.test(h))
+            bad("[защита] в «" + dd.title + "» для «" + p.title + "» текст экранирован дважды");
+        });
+        const pass = g.defenseDocHTML("passport", p.id);
+        p.steps.forEach(s => {
+          if (pass.indexOf(s.title) < 0) bad("[защита] в паспорте «" + p.title + "» нет шага «" + s.title + "»");
+        });
+        const rows = (g.defenseDocHTML("protocol", p.id).match(/<tr/g) || []).length;
+        if (rows !== p.steps.length + 1)
+          bad("[защита] в протоколе «" + p.title + "» строк " + rows + ", а шагов " + p.steps.length);
+        const slides = (g.defenseDocHTML("slides", p.id).match(/class="docpage docslide/g) || []).length;
+        if (slides < 7) bad("[защита] в презентации «" + p.title + "» всего " + slides + " слайдов");
+        /* Вопросы комиссии с посчитанным ответом. ⚠️ Первая версия брала
+           механизм «Спросите вслух» и не дала ответа НИ ОДНОМУ проекту — на
+           экране при этом было обещано. У программы без случайности (два
+           прогона совпали) хоть один посчитанный ответ обязан быть. */
+        const last = p.steps[p.steps.length - 1], R = w.Runtime.get("mini");
+        const o1 = R.run(last.solution, { stdin: (last.stdin || []).slice() }).output;
+        const o2 = R.run(last.solution, { stdin: (last.stdin || []).slice() }).output;
+        const ans = (g.defenseDocHTML("speech", p.id).match(/class="docans"/g) || []).length;
+        if (o1 && String(o1).trim() && o1 === o2 && ans < 1)
+          bad("[защита] в речи «" + p.title + "» нет вопроса с посчитанным ответом, хотя программа без случайности");
+      });
+
+      /* 2. слова ребёнка попадают в документы; ПДн в хранилище нет */
+      const p1 = PR[0];
+      g.screenDefense(p1.id); await tick();
+      if (w.location.hash !== "#defense=" + p1.id)
+        bad("[защита] у пакета нет своего адреса: «" + w.location.hash + "»");
+      const ta = doc.querySelector('[data-def="actual"]');
+      if (!ta) bad("[защита] на экране нет поля «Актуальность»");
+      else {
+        ta.value = "Мне нравятся игры про героев";
+        ta.dispatchEvent(new w.Event("input"));
+        if (g.defenseDocHTML("passport", p1.id).indexOf("Мне нравятся игры про героев") < 0)
+          bad("[защита] слова ребёнка не попали в паспорт");
+      }
+      const keys = Object.keys((g.state.defense || {})[p1.id] || {});
+      if (keys.some(k => /school|mentor|teacher|grade|class|klass/i.test(k)))
+        bad("[защита] пакет хранит школу, класс или руководителя — это персональные данные: " + keys.join(","));
+      if (g.defenseDocHTML("passport", p1.id).indexOf("docinline") < 0)
+        bad("[защита] для руководителя нет пустой строки — значит, его где-то взяли");
+
+      /* 3. документ открывается слоем и закрывается */
+      const b = doc.querySelector('[data-doc="passport"]');
+      if (!b) bad("[защита] нет кнопки открыть паспорт");
+      else {
+        b.click(); await tick();
+        const ov = doc.getElementById("doc");
+        if (!ov || ov.hidden) bad("[защита] документ не открылся");
+        else {
+          if (!/Паспорт проекта/.test(doc.getElementById("docbox").textContent))
+            bad("[защита] в открытом документе не паспорт");
+          doc.getElementById("docclose").click();
+          if (!ov.hidden) bad("[защита] документ не закрылся");
+        }
+      }
+      if (html.indexOf("body>.doc:not([hidden])") < 0)
+        bad("[защита] в стилях нет правила печати документов — на бумагу уйдёт вся страница");
+
+      /* 4. несобранный проект пакета не даёт */
+      delete g.state.projects[PR[1].id];
+      g.screenDefense(PR[1].id); await tick();
+      if (doc.querySelector("[data-doc]")) bad("[защита] пакет открылся у несобранного проекта");
+      if (g.defenseDocHTML("passport", PR[1].id)) bad("[защита] документ собрался по несобранному проекту");
+
+      /* 5. дата шага и запись работы пишутся при сдаче шага */
+      g.state.admin.unlockAll = true;
+      /* Попутная находка сборки пакета: экран проекта экранировал тексты шагов
+         второй раз, и в «Своём сайте» ребёнок видел «&lt;h1&gt;». */
+      const pw5 = PR.find(p => p.id === "project-w5");
+      if (pw5){
+        g.openProject(pw5.id, 0); await tick(); await tick();
+        const goalT = (doc.querySelector(".goal") || {}).textContent || "";
+        if (goalT.indexOf("<h1>") < 0 || goalT.indexOf("&lt;") >= 0)
+          bad("[защита] на экране «Своего сайта» тег показан не как «<h1>»: " + goalT.slice(0, 160));
+        viewReset(g); await tick();
+      }
+      delete g.state.projects[p1.id];
+      g.openProject(p1.id, 0); await tick();
+      const pst = studioOf();
+      if (!pst) bad("[защита] шаг проекта не открылся");
+      else {
+        pst.editor.setCode(p1.steps[0].solution);
+        pst.querySelector('[data-role="check"]').click(); await tick();
+        const ps = g.state.projects[p1.id] || {};
+        if (!ps.stepsAt || !ps.stepsAt[0]) bad("[защита] у сданного шага нет даты");
+        if (!ps.tr || !ps.tr[0]) bad("[защита] у сданного шага нет записи работы");
+        closeWin();
+      }
+
+      /* 6. слияние: даты и запись по шагам — ранние, слова — свежие */
+      const m = g.mergeProgress(
+        { projects:{ x:{ step:2, stepsAt:[500, 900], tr:[{ at:500, typed:10 }] } }, savedAt:1 },
+        { projects:{ x:{ step:2, stepsAt:[700, 800], tr:[{ at:700, typed:99 }, { at:800, typed:5 }] } }, savedAt:2 });
+      const mx = m.projects.x;
+      if (!mx.stepsAt || mx.stepsAt[0] !== 500 || mx.stepsAt[1] !== 800)
+        bad("[защита] слияние потеряло или перепутало даты шагов: " + JSON.stringify(mx.stepsAt));
+      if (!mx.tr || !mx.tr[0] || mx.tr[0].typed !== 10 || !mx.tr[1])
+        bad("[защита] слияние потеряло запись работы по шагам: " + JSON.stringify(mx.tr));
+      const md = g.mergeProgress({ defense:{ p:{ actual:"старое", at:1 } }, savedAt:1 },
+                                 { defense:{ p:{ actual:"новое", at:2 } }, savedAt:2 });
+      if (!md.defense || !md.defense.p || md.defense.p.actual !== "новое")
+        bad("[защита] слияние взяло не свежие слова к защите");
+    }
+    g.state.projects = projБыл; g.state.defense = defБыл; g.state.admin.unlockAll = unlockБыл;
+    if (problems.length === p0) defChecked++;
+    viewReset(g);
+  }
+
   /* --- Главный экран сложен из карточек ---
      ⚠️ Проверка стережёт ровно то, чего не видит ни один другой тест и не
      видно глазами на экране. Карточке отдаётся только то, что она назвала в
@@ -4941,13 +5081,20 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
       bad("[печать] сертификат не возвращается на печать");
     if (!/\.certbar\s*\{[^}]*display\s*:\s*none/.test(печать))
       bad("[печать] кнопки «Распечатать» и «Закрыть» уедут на бумагу");
-    /* Кроме сертификата на печати не должно всплывать ничего: любое другое
-       `display:block` внутри блока — это ещё один элемент на листе. */
+    /* Документы к защите (1.142.0) — второй слой, который печатают. Их
+       правила обязаны жить в ЭТОМ же блоке: отдельный блок стоял раньше по
+       файлу, и эта проверка приняла его за сломанную печать. */
+    if (!/body\s*>\s*\.doc:not\(\[hidden\]\)/.test(печать))
+      bad("[печать] документы к защите не возвращаются на печать");
+    if (!/\.docbar\s*\{[^}]*display\s*:\s*none/.test(печать))
+      bad("[печать] кнопки документов к защите уедут на бумагу");
+    /* Кроме сертификата и документов к защите на печати не должно всплывать
+       ничего: любое другое `display:block` внутри блока — ещё один элемент на листе. */
     const возвраты = (печать.match(/^\s*([^{}\n]+)\{[^}]*display\s*:\s*(block|flex|grid)/gm) || [])
       .map(x => x.split("{")[0].trim());
     возвраты.forEach(sel => {
-      if (!/\.cert/.test(sel))
-        bad("[печать] на бумагу возвращается не сертификат: " + sel);
+      if (!/\.cert|\.doc/.test(sel))
+        bad("[печать] на бумагу возвращается не сертификат и не документ: " + sel);
     });
 
     if (problems.length === p0) themeChecked++;
@@ -9816,6 +9963,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`вход: сначала урок, имя после победы: ${entryChecked ? "да" : "нет"}`);
   console.log(`HTML из вывода — страницей, в запертой рамке: ${pageChecked ? "да" : "нет"}`);
   console.log(`раздел «HTML и CSS»: эталоны, заготовки, примеры, экран: ${webChecked ? "да" : "нет"}`);
+  console.log(`пакет к защите: 5 документов × все проекты, даты шагов, слияние, без ПДн: ${defChecked ? "да" : "нет"}`);
   console.log(`цель по шагам: ${leanChecked ? "да" : "нет"}`);
   console.log(`разбор своей программы: ${ownVizChecked ? "да" : "нет"}`);
   console.log(`свои задания и ссылки: ${taskChecked ? "да" : "нет"}`);

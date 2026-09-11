@@ -165,6 +165,19 @@
   </div>
 </div>
 
+<!-- Документы к защите проекта (js/screens-defense.js): тот же приём, что у
+     сертификата, только листов несколько — каждый .docpage при печати идёт
+     отдельной страницей. -->
+<div class="doc" id="doc" hidden>
+  <div class="docwrap" role="dialog" aria-label="Документ к защите проекта">
+    <div class="docbar">
+      <button class="bigbtn" id="docprint">🖨 Распечатать или сохранить в PDF</button>
+      <button class="bigbtn ghost" id="docclose">Закрыть</button>
+    </div>
+    <div class="docbox" id="docbox"></div>
+  </div>
+</div>
+
 <!-- Помощь всплывает ПОВЕРХ страницы по той же причине, что и шпаргалка:
      чаще всего она нужна посреди урока, а уход со страницы стёр бы код. -->
 <div class="helpwrap" id="helpwrap">
@@ -216,6 +229,7 @@
 <script src="js/home.js"></script>
 <script src="js/screens-robot.js"></script>
 <script src="js/screens-web.js"></script>
+<script src="js/screens-defense.js"></script>
 <script src="js/screens-showcase.js"></script>
 <script src="js/variant.js"></script>
 <script src="js/cloud.js"></script>
