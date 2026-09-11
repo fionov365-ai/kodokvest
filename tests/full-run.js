@@ -3160,9 +3160,15 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     const надо = [
       { rx: /(\d+)\s+урок/g,                  сколько: w.CURRICULUM.total,          что: "уроков" },
       { rx: /(\d+)\s+проект/g,                сколько: (w.PROJECTS || []).length,   что: "проектов" },
-      { rx: /(\d+)\s+упражнени\S*\s+про\s+ИИ/g, сколько: (w.AILAB || []).length,    что: "упражнений про ИИ" }
+      { rx: /(\d+)\s+упражнени\S*\s+про\s+ИИ/g, сколько: (w.AILAB || []).length,    что: "упражнений про ИИ" },
+      /* ⚠️ Добавлено 11.09.2026: на /semeynoe-obuchenie/ с 09.09 стояло
+         «девяносто пять задач» ПРОПИСЬЮ — проверка цифр его не видела, а задач
+         к тому дню стало 97. Число прописью — это число, спрятанное от теста;
+         на страницах пишем цифрами. */
+      { rx: /(\d+)\s+задач/g,                 сколько: (w.ALGO || []).length,       что: "задач экзамена" }
     ];
-    ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie", "individualnyi-proekt"].forEach(page => {
+    ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie", "individualnyi-proekt",
+     "baza/informatika-na-semeynom-obuchenii"].forEach(page => {
       const f = path.join(root, page, "index.html");
       if (!fs.existsSync(f)) return bad("[числа-сайта] нет страницы " + page);
       const текст = fs.readFileSync(f, "utf8").replace(/<[^>]+>/g, " ");
