@@ -859,7 +859,11 @@ function capNoteHTML(){
    ⚠️ Это НЕ блиц на таймере (README, «Планы»): тот таймер стоит внутри задачи
    и торопит думать, этот ограничивает сеанс и, наоборот, разрешает закончить.
    Смешивать их в одном экране нельзя. */
-function zanAll(){ S.zan = S.zan || {}; return S.zan; }
+/* ⚠️ Снимок необязательным доводом, по образцу frameState/planFact(st).
+   Без него замер занятий считался ТОЛЬКО по своему состоянию, и кабинет
+   родителя показать его не мог — функция про чужого ребёнка ничего не знала.
+   Пусто — значит своё состояние, как было. */
+function zanAll(st){ var o = st || S; o.zan = o.zan || {}; return o.zan; }
 function zanKeyOf(key, n){ return (key || dayKey()) + "#" + n; }
 function zanOfDay(key){
   key = key || dayKey();
@@ -1128,8 +1132,8 @@ function median(a){
   var m = Math.floor(v.length / 2);
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
-function zanStats(){
-  var mins = [], per = [], lessons = [], all = zanAll();
+function zanStats(st){
+  var mins = [], per = [], lessons = [], all = zanAll(st);
   Object.keys(all).forEach(function(k){
     var r = all[k];
     if (!r || !r.end) return;
@@ -10484,8 +10488,8 @@ var AUTHOR_BIG_ADD = 60;
 
 /* Запись по одному уроку. Возвращает null, если записи нет: уроки, пройденные
    до этой версии, честно молчат, а не выдумывают прошлое. */
-function authorMarks(id){
-  var g = (S.log || {})[id] || {}, t = g.tr;
+function authorMarks(id, st){
+  var g = ((st || S).log || {})[id] || {}, t = g.tr;
   if (!t) return null;
   var mine = Math.max(0, (t.len || 0) - (t.slen || 0));
   var m = [];
@@ -10508,12 +10512,12 @@ function authorMarks(id){
 }
 
 /* Все уроки с записью, свежие сверху. */
-function authorList(){
+function authorList(st){
   var out = [];
-  Object.keys(S.log || {}).forEach(function(id){
+  Object.keys((st || S).log || {}).forEach(function(id){
     var l = CURRICULUM.byId(id);
     if (!l) return;
-    var a = authorMarks(id);
+    var a = authorMarks(id, st);
     if (a) out.push({ id:id, num:l.num, title:l.title, rec:a });
   });
   out.sort(function(a, b){ return (b.rec.at || 0) - (a.rec.at || 0); });
@@ -10535,8 +10539,8 @@ function authorPredict(){
   return { ok: ok, all: all, mine: mine };
 }
 
-function authorSummary(){
-  var list = authorList(), hand = 0, ready = 0, ahead = 0;
+function authorSummary(st){
+  var list = authorList(st), hand = 0, ready = 0, ahead = 0;
   list.forEach(function(x){
     if (x.rec.clean) hand++;
     x.rec.marks.forEach(function(m){
@@ -10891,18 +10895,7 @@ function screenAdult(){
   g2 += frameEditorHTML(f);
 
   /* ---------- как шла работа (запись авторства) ---------- */
-  var asum = authorSummary();
-  g4 += '<div class="card"><h3>🖐 Как шла работа</h3>' +
-    (asum.n
-      ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
-        'написано руками <b>' + asum.hand + '</b>' +
-        (asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
-        (asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
-      : '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
-        'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
-    '<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
-    'и не следим за ребёнком.</p>' +
-    '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div></div>';
+  g4 += authorCardHTML(S, true);
 
   /* ---------- чему он учится про ИИ ----------
      Взрослый платит за ИИ-курсы 8–71 тыс. ₽, и все они про «как попросить».
@@ -10952,13 +10945,36 @@ function screenAdult(){
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+/* Карточка «Как шла работа» — одна на оба кабинета.
+   ⚠️ До 12.09.2026 она жила прямо в screenAdult и потому была видна ТОЛЬКО
+   тому, кто сидит за устройством ребёнка. Кнопку «Открыть запись» отдаём
+   лишь своему состоянию: экран записи читает своё, и по чужому ученику
+   открывать было бы нечего — обещать дверь, которой нет, хуже, чем не
+   обещать (правило 35). */
+function authorCardHTML(snap, canOpen){
+  var asum = authorSummary(snap);
+  return '<div class="card"><h3>🖐 Как шла работа</h3>' +
+    (asum.n
+      ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
+        'написано руками <b>' + asum.hand + '</b>' +
+        (asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
+        (asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
+      : '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
+        'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
+    '<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
+    'и не следим за ребёнком.</p>' +
+    (canOpen
+      ? '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div>'
+      : '') + '</div>';
+}
+
 /* ---------- что показывает практика ----------
    Единственное место в продукте, где тренажёр правит собственное обещание по
    факту, а не по замыслу. Число уроков в занятии посчитано из длины текста
    урока; здесь оно сверяется с тем, сколько ребёнок работает на самом деле.
    ⚠️ Сам ничего не меняем: показываем и предлагаем. Рамку ставит взрослый. */
-function paceStatHTML(){
-  var st = zanStats(), f = frame();
+function paceStatHTML(snap){
+  var st = zanStats(snap), f = frame();
   if (!st.enough){
     return '<div class="card"><h3>📏 Что показывает практика</h3>' +
       '<p class="dim">Замер появится после ' + ZAN_STAT_MIN + ' занятий, на которых сделан хотя бы один урок. ' +
@@ -15068,11 +15084,18 @@ var ADULT_TABS = [
 var adultTab = "rep";
 var KID_TABS = [
   ["rep",   "📊", "Отчёт"],
+  ["work",  "📏", "Практика"],
   ["frame", "🗓", "Расписание"],
   ["hw",    "📮", "Домашка"],
   ["note",  "✍️", "Заметка"],
   ["link",  "🔗", "Доступ"]
 ];
+/* ⚠️ «Практика» отделена от «Отчёта» 12.09.2026, когда в кабинет родителя
+   доехали карта часов, замер занятий и запись авторства: во вкладке стало
+   семь карточек — та самая простыня, от которой вкладки и заводились.
+   Деление не произвольное, а по вопросу: «Отчёт» — ЧТО БЫЛО (неделя, о чём
+   спросить, сообщение родителю, цифры), «Практика» — КАК ОН РАБОТАЕТ (когда
+   садится, сколько уходит на урок, своими ли руками написано). */
 /* ⚠️ «Доступ» был спрятан от родителя с пометкой «родителю раздавать нечего».
    Это оказалось неправдой, и дорогой: у родителя НИГДЕ не было видно кода
    ребёнка (в шапке при заданной подписи стоит имя, а не код), а экран «Не
@@ -15149,15 +15172,23 @@ function kidRender(savedNote){
     kidTarget.fresh
       ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
       : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
-        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) +
-        /* ⚠️ Карта часов доехала сюда только 12.09.2026. До этого она
-           вызывалась в ОДНОМ месте — screenAdult, то есть была видна лишь
+        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
+
+  h += kidPaneHTML("work",
+    kidTarget.fresh
+      ? '<div class="note"><b>Практики пока нет</b>Она появится после первых занятий: ' +
+        'карта часов, замер темпа и запись работы считаются по тому, что ребёнок уже делал.</div>'
+      :
+        /* ⚠️ Три карточки доехали сюда только 12.09.2026. До этого они
+           вызывались в ОДНОМ месте — screenAdult, то есть были видны лишь
            тому, кто сидит за устройством ребёнка. У родителя с телефона
-           (типичный случай: ссылка ?parent= и есть его кабинет) её не было
-           вовсе, хотя она отвечает на самый частый его вопрос — «когда он
-           вообще занимается». Функция и так берёт снимок, править было
-           нечего: не хватало ровно этой строки. Разбор трёх ролей. */
-        heatHTML(st));
+           (типичный случай: ссылка ?parent= и есть его кабинет) их не было
+           вовсе, хотя карта часов отвечает на самый частый его вопрос —
+           «когда он вообще занимается». Карте часов хватало снимка и так;
+           замер занятий и запись авторства читали своё состояние напрямую, и
+           снимок в них проведён отдельным доводом (zanAll/authorList).
+           Разбор трёх ролей. */
+        heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false));
 
   h += kidPaneHTML("frame",
     frameEditorHTML(frame()) +

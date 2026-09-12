@@ -27160,7 +27160,7 @@ plural(m, "минута", "минуты", "минут") + ' за тренажё�
 : 'Взрослый считает, что на сегодня хватит. Дальше — на твоё усмотрение.') + '</div>';
 }
 
-function zanAll(){ S.zan = S.zan || {}; return S.zan; }
+function zanAll(st){ var o = st || S; o.zan = o.zan || {}; return o.zan; }
 function zanKeyOf(key, n){ return (key || dayKey()) + "#" + n; }
 function zanOfDay(key){
 key = key || dayKey();
@@ -27367,8 +27367,8 @@ var v = a.slice().sort(function(x, y){ return x - y; });
 var m = Math.floor(v.length / 2);
 return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
-function zanStats(){
-var mins = [], per = [], lessons = [], all = zanAll();
+function zanStats(st){
+var mins = [], per = [], lessons = [], all = zanAll(st);
 Object.keys(all).forEach(function(k){
 var r = all[k];
 if (!r || !r.end) return;
@@ -34967,8 +34967,8 @@ var AUTHOR_PASTE_MIN = 40;
 var AUTHOR_FEW_EDITS = 2;
 var AUTHOR_BIG_ADD = 60;
 
-function authorMarks(id){
-var g = (S.log || {})[id] || {}, t = g.tr;
+function authorMarks(id, st){
+var g = ((st || S).log || {})[id] || {}, t = g.tr;
 if (!t) return null;
 var mine = Math.max(0, (t.len || 0) - (t.slen || 0));
 var m = [];
@@ -34990,12 +34990,12 @@ own: t.own || 0, edits: t.edits || 0, marks: m,
 clean: m.length === 1 && m[0].k === "hand" };
 }
 
-function authorList(){
+function authorList(st){
 var out = [];
-Object.keys(S.log || {}).forEach(function(id){
+Object.keys((st || S).log || {}).forEach(function(id){
 var l = CURRICULUM.byId(id);
 if (!l) return;
-var a = authorMarks(id);
+var a = authorMarks(id, st);
 if (a) out.push({ id:id, num:l.num, title:l.title, rec:a });
 });
 out.sort(function(a, b){ return (b.rec.at || 0) - (a.rec.at || 0); });
@@ -35013,8 +35013,8 @@ mine += r.predMine || 0;
 return { ok: ok, all: all, mine: mine };
 }
 
-function authorSummary(){
-var list = authorList(), hand = 0, ready = 0, ahead = 0;
+function authorSummary(st){
+var list = authorList(st), hand = 0, ready = 0, ahead = 0;
 list.forEach(function(x){
 if (x.rec.clean) hand++;
 x.rec.marks.forEach(function(m){
@@ -35292,18 +35292,7 @@ g1 += paceStatHTML();
 
 g2 += frameEditorHTML(f);
 
-var asum = authorSummary();
-g4 += '<div class="card"><h3>🖐 Как шла работа</h3>' +
-(asum.n
-? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
-'написано руками <b>' + asum.hand + '</b>' +
-(asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
-(asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
-: '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
-'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
-'<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
-'и не следим за ребёнком.</p>' +
-'<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div></div>';
+g4 += authorCardHTML(S, true);
 
 var aiAllN = ailabList().length;
 var aiDoneN = ailabList().filter(function(x){ return ailabDone(x.id); }).length;
@@ -35340,8 +35329,25 @@ refreshTop();
 window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-function paceStatHTML(){
-var st = zanStats(), f = frame();
+function authorCardHTML(snap, canOpen){
+var asum = authorSummary(snap);
+return '<div class="card"><h3>🖐 Как шла работа</h3>' +
+(asum.n
+? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
+'написано руками <b>' + asum.hand + '</b>' +
+(asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
+(asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
+: '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
+'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
+'<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
+'и не следим за ребёнком.</p>' +
+(canOpen
+? '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div>'
+: '') + '</div>';
+}
+
+function paceStatHTML(snap){
+var st = zanStats(snap), f = frame();
 if (!st.enough){
 return '<div class="card"><h3>📏 Что показывает практика</h3>' +
 '<p class="dim">Замер появится после ' + ZAN_STAT_MIN + ' занятий, на которых сделан хотя бы один урок. ' +
@@ -38485,6 +38491,7 @@ var ADULT_TABS = [
 var adultTab = "rep";
 var KID_TABS = [
 ["rep",   "📊", "Отчёт"],
+["work",  "📏", "Практика"],
 ["frame", "🗓", "Расписание"],
 ["hw",    "📮", "Домашка"],
 ["note",  "✍️", "Заметка"],
@@ -38553,9 +38560,15 @@ h += kidPaneHTML("rep",
 kidTarget.fresh
 ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
 : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
-'<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) +
+'<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
 
-heatHTML(st));
+h += kidPaneHTML("work",
+kidTarget.fresh
+? '<div class="note"><b>Практики пока нет</b>Она появится после первых занятий: ' +
+'карта часов, замер темпа и запись работы считаются по тому, что ребёнок уже делал.</div>'
+:
+
+heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false));
 
 h += kidPaneHTML("frame",
 frameEditorHTML(frame()) +
