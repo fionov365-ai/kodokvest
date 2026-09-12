@@ -38995,9 +38995,12 @@ kidTab = kidTarget.fresh ? "frame" : "rep";
 var h = "";
 
 h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</div>';
+
 if (kidTarget.fresh)
-h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
-'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
+h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал, поэтому ' +
+'кабинет почти пуст — это не поломка. Сейчас живо только расписание: поставьте его ' +
+'заранее, оно приедет к ученику при первом же входе. Отчёт, практика, домашка и ' +
+'заметка оживут после первого занятия.</div>';
 
 if (!kidTarget.fresh){
 var wf = weekFacts(st);
@@ -39465,7 +39468,7 @@ app.innerHTML =
 '<div id="kidbody"><p class="dim">Загружаю занятия с сервера…</p></div>' +
 
 '<div class="pager">' +
-'<button class="bigbtn ghost" data-pd="leave">🚪 Выйти из кабинета</button>' +
+'<button class="bigbtn ghost" data-pd="leave">🚪 Выйти и отвязать устройство</button>' +
 '<span class="sp"></span><button class="bigbtn ghost" data-pd="role">⇄ Сменить роль</button></div>' +
 aboutFootHTML();
 wireAboutFoot(app);
@@ -39474,7 +39477,7 @@ b.onclick = function(){
 if (b.getAttribute("data-pd") === "role"){ kidTarget = null; return screenRoles(); }
 if (b.getAttribute("data-pd") !== "leave") return;
 
-if (!confirm("Выйти из кабинета?\n\n" +
+if (!confirm("Выйти и отвязать устройство?\n\n" +
 "Устройство станет обычным. Чтобы вернуться, понадобится код ребёнка:\n\n" +
 "    " + code + "\n\n" +
 "Запишите его. Ссылка от учителя тоже откроет кабинет снова."))
