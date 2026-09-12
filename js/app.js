@@ -10975,6 +10975,7 @@ function screenAdult(){
   g1 += weekReportHTML(S);
   g1 += heatHTML(S);
   g1 += paceStatHTML();
+  g1 += PROVERKA.cardHTML(S);
 
   g2 += frameEditorHTML(f);
 
@@ -15298,7 +15299,7 @@ function kidRender(savedNote){
            замер занятий и запись авторства читали своё состояние напрямую, и
            снимок в них проведён отдельным доводом (zanAll/authorList).
            Разбор трёх ролей. */
-        heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false));
+        heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false) + PROVERKA.cardHTML(st));
 
   h += kidPaneHTML("frame",
     frameEditorHTML(frame()) +

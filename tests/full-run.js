@@ -10681,6 +10681,31 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
                               { savedAt:1, proverka:{ v:1, seed:5, at:10, i:1, closed:1, rungs:[] } });
     if (!m.proverka || m.proverka.closed !== 1) bad("[проверка] слияние вернуло незакрытую проверку поверх закрытой");
 
+    /* 13г.9б. Итог доезжает до кабинета: карточка по ЛЮБОМУ снимку (у
+       репетитора и родителя — чужой) и дверь «Открыть итог», которая
+       открывает тот же итог по коду. */
+    {
+      const code = P.pack({ day: 254, seed: 4242, mins: 12,
+        rungs: P.RUNGS.map((r, i) => ({ st: i < 3 ? 3 : (i === 3 ? 1 : 0), paste: 0 })) });
+      const snap = { proverka: { v:1, seed:4242, at: Date.UTC(2026, 8, 12), i:4, closed:1, code,
+                                 rungs: P.RUNGS.map(() => ({ st:0, paste:0 })) } };
+      const html = P.cardHTML(snap);
+      if (!/уверенно сам 3 из 10/.test(html) || !/Повтор/.test(html) || html.indexOf(code) < 0)
+        bad("[проверка] карточка кабинета не назвала итог по снимку: " + html.replace(/<[^>]+>/g, " ").slice(0, 160));
+      if (!/Проверки ещё не было/.test(P.cardHTML({})))
+        bad("[проверка] карточка кабинета без проверки молчит, что её не было");
+      g.state.proverka = snap.proverka;
+      g.screenAdult(); await tick();
+      const open = doc.querySelector("[data-prvopen]");
+      if (!open) bad("[проверка] в кабинете взрослого нет карточки проверки");
+      else {
+        open.click(); await tick();
+        const txt = doc.getElementById("app").textContent;
+        if (!/Уверенно сам: 3 ступени из 10/.test(txt)) bad("[проверка] «Открыть итог» из кабинета не открыл итог");
+        if (!/Назад в кабинет/.test(txt)) bad("[проверка] из итога, открытого в кабинете, нет дороги назад в кабинет");
+      }
+    }
+
     /* 13г.10. Дверь в «Тренировках». */
     g.screenTrain(); await tick();
     const card = doc.querySelector('[data-train="proverka"]');

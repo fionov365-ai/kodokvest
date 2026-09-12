@@ -490,9 +490,12 @@ function screenReport(rawCode, rawPrev, mine){
     '<button class="bigbtn ghost" id="prvcmp">Сравнить</button></div>' +
     '<div class="msg" id="prvcmpmsg"></div></div>';
 
+  var fromCab = backFromReport;
+  backFromReport = false;
   h += '<div class="pager">' +
     (mine ? '<button class="bigbtn" id="prvagain">Пройти проверку заново</button><span class="sp"></span>' : '') +
-    '<button class="bigbtn ghost" id="prvhome">' + (mine ? '← К тренировкам' : 'Пройти проверку самому') + '</button></div>';
+    '<button class="bigbtn ghost" id="prvhome">' +
+      (fromCab ? '← Назад в кабинет' : mine ? '← К тренировкам' : 'Пройти проверку самому') + '</button></div>';
   A.app.innerHTML = h;
 
   document.getElementById("prvcopy").onclick = function(){
@@ -514,10 +517,49 @@ function screenReport(rawCode, rawPrev, mine){
   document.getElementById("prvprev").addEventListener("keydown", function(e){ if (e.key === "Enter") cmp(); });
   var ag = document.getElementById("prvagain");
   if (ag) ag.onclick = function(){ start(); flash = ""; screenRung(); };
-  document.getElementById("prvhome").onclick = mine ? A.screenTrain : function(){ screenIntro(); };
+  document.getElementById("prvhome").onclick = fromCab ? function(){ history.back(); }
+    : mine ? A.screenTrain : function(){ screenIntro(); };
   A.refreshTop();
   window.scrollTo({ top:0, behavior:"smooth" });
 }
+
+/* ===== карточка для кабинета взрослого =====
+   Снимок ЛЮБОГО ученика (репетитору и родителю — чужой прогресс, ребёнку —
+   свой), поэтому состояние берётся из довода, а не из A.proverkaGet (§ 4.5).
+   ⚠️ Итог открывается по коду, а не по снимку: код и есть итог, и взрослый
+   видит ровно то же, что увидел бы по продиктованному коду. */
+function cardHTML(st){
+  var p = st && st.proverka;
+  var ok = p && p.v === VER && Array.isArray(p.rungs) && p.rungs.length === RUNGS.length;
+  var h = '<div class="card"><h3>🔎 Проверка «что умеет сам»</h3>';
+  if (ok && p.closed && unpack(p.code)){
+    var t = tallyOf(unpack(p.code));
+    h += '<p>Последняя — от ' + dateText(dayOf(p.at)) + ': <b>уверенно сам ' + t.firm + ' из ' + RUNGS.length +
+      '</b> ступеней подряд' + (t.shaky >= 0 ? ', первая шаткая — «' + A.esc(RUNGS[t.shaky].t) + '»' : ', все ступени — сам') + '.</p>' +
+      (t.pasted ? '<p class="dim">⚠️ На ' + t.pasted + ' ' + A.plural(t.pasted, "ступени", "ступенях", "ступенях") +
+        ' код пришёл вставкой.</p>' : '') +
+      '<p class="dim">Код итога: <b class="prvinline">' + A.esc(p.code) + '</b>. Сохраните его: через месяц ' +
+      'по двум кодам будет видно «было → стало».</p>' +
+      '<div class="admrow"><button class="rbtn check" data-prvopen="' + A.esc(p.code) + '">Открыть итог</button></div>';
+  } else if (ok && !p.closed){
+    h += '<p>Идёт проверка: ступень <b>' + (p.i + 1) + '</b> из ' + RUNGS.length + '. Итог появится здесь, когда она закончится.</p>';
+  } else {
+    h += '<p>Проверки ещё не было. Десять задач по нарастающей, без подсказок: так видно, что ученик умеет сам, ' +
+      'а не с чьей-то помощью.</p><p class="dim">Попросите пройти её: «Тренировки» → «Проверка: что умеет сам». ' +
+      'Начинающему хватит десяти минут.</p>';
+  }
+  return h + '</div>';
+}
+/* Одна дверь на весь продукт: карточка рисуется в разных кабинетах, и вешать
+   обработчик в каждом значило бы однажды забыть один. Назад из итога —
+   история браузера: итог пишет свой адрес, и «назад» возвращает в кабинет. */
+document.addEventListener("click", function(e){
+  var b = e.target && e.target.closest ? e.target.closest("[data-prvopen]") : null;
+  if (!b) return;
+  backFromReport = true;
+  screenReport(b.getAttribute("data-prvopen"), "");
+});
+var backFromReport = false;
 
 /* Короткая строка для карточки в «Тренировках». */
 function proverkaStat(){
@@ -529,5 +571,6 @@ function proverkaStat(){
 }
 
 return { screenProverka: screenProverka, screenReport: screenReport, proverkaStat: proverkaStat,
+         cardHTML: cardHTML,
          pack: pack, unpack: unpack, taskOf: taskOf, tallyOf: tallyOf, RUNGS: RUNGS };
 };
