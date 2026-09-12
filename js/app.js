@@ -443,8 +443,13 @@ function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(d
    вернуло бы снятый на другом устройстве день. */
 function blankFrame(){
   return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true,
-           perLesson:null, cap:0, capHard:false, setAt:0 };
+           perLesson:null, cap:0, capHard:false, setAt:0, time:null, until:null };
 }
+/* «17:00» — время НАЧАЛА занятия. Хранится строкой «ЧЧ:ММ» и живёт в рамке
+   взрослого, а не в расписании ребёнка: день ребёнок себе выбрать может,
+   час занятия с репетитором — нет. Пусто — значит время не назначено, и
+   продукт нигде его не выдумывает. */
+var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 function frameShape(f){
   var o = (f && typeof f === "object") ? f : {};
   var out = blankFrame();
@@ -453,6 +458,8 @@ function frameShape(f){
   if (ZAN_LEN.indexOf(o.len) >= 0) out.len = o.len;
   if (ZAN_MIX.indexOf(o.mix) >= 0) out.mix = o.mix;
   if (typeof o.goal === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.goal)) out.goal = o.goal;
+  if (typeof o.time === "string" && TIME_RE.test(o.time)) out.time = o.time;
+  if (typeof o.until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.until)) out.until = o.until;
   if (Array.isArray(o.breaks))
     out.breaks = o.breaks.filter(function(b){
       return Array.isArray(b) && b.length === 2 &&
@@ -508,6 +515,103 @@ function frameStudyDay(key){
   key = key || dayKey();
   if (!frameOn() || isBreakDay(key)) return false;
   return frame().days.indexOf(weekdayOf(key)) >= 0;
+}
+/* ===== план занятий: даты, время, горизонт =====
+   Рамка до этого умела говорить «по субботам». Фаундер попросил «по субботам
+   в 17:00, и так на месяц-два-три» — то есть два недостающих куска: ЧАС и
+   ГОРИЗОНТ. Оба живут в рамке взрослого (см. blankFrame).
+
+   ⚠️ Горизонт и «успеть к дате» — разные вещи, и путать их нельзя:
+   goal  — к какому числу надо ПРОЙТИ курс (из него считается темп);
+   until — до какого числа мы вообще ЗАНИМАЕМСЯ (из него растёт календарь).
+   У репетитора это «занимаемся до конца четверти», а не «сдать к экзамену». */
+function frameTime(){ var t = frame().time; return TIME_RE.test(t || "") ? t : ""; }
+/* Прибавить месяцы к дате. 31 января + 1 месяц = 28 февраля, а не 3 марта:
+   иначе «+1 месяц» от конца месяца перепрыгивал бы через месяц целиком. */
+function addMonths(key, n){
+  var p = String(key).split("-");
+  var y = +p[0], m = +p[1] - 1 + n, d = +p[2];
+  y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+  var last = new Date(y, m + 1, 0).getDate();
+  if (d > last) d = last;
+  return y + "-" + (m + 1 < 10 ? "0" : "") + (m + 1) + "-" + (d < 10 ? "0" : "") + d;
+}
+/* Даты занятий от сегодня до горизонта: дни недели рамки минус каникулы.
+   Сегодня входит — занятие в 17:00 ещё впереди, и убирать его из плана
+   значило бы соврать в день, когда план как раз и смотрят. */
+function planDates(limit){
+  var f = frame();
+  if (!f.days.length) return [];
+  var until = f.until || addMonths(dayKey(), 3);
+  var out = [], cur = dayKey(), guard = 0;
+  while (cur <= until && guard++ < 800){
+    if (f.days.indexOf(weekdayOf(cur)) >= 0 && !isBreakDay(cur)) out.push(cur);
+    if (limit && out.length >= limit) break;
+    cur = shiftDay(cur, 1);
+  }
+  return out;
+}
+/* ===== файл календаря (.ics) =====
+   ⚠️ Почему файл, а не напоминание из тренажёра. Толчок в 17:00 умеет только
+   тот, кто работает, когда страница закрыта: почта или web-push с отдельным
+   сервером ключей. Ни того, ни другого у нас нет (§ 2 «Напоминание взрослому»
+   так и помечено «ждёт почты»), и обещать напоминание было бы враньём.
+   А Календарь на маке и телефоне это умеет с 2007 года. Поэтому мы отдаём
+   ему событие с повтором — и напоминает Apple, честно и без нашего сервера.
+
+   Время пишем ПЛАВАЮЩЕЕ (без Z и без TZID): «17:00» значит семнадцать часов
+   там, где человек живёт. С часовым поясом пришлось бы тащить в файл базу
+   переходов на летнее время, а занятие в 17:00 не должно уезжать на час
+   дважды в год. */
+var ICS_WD = ["SU","MO","TU","WE","TH","FR","SA"];
+function icsEsc(v){
+  return String(v).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n");
+}
+function icsStamp(key, time){ return key.replace(/-/g, "") + "T" + time.replace(":", "") + "00"; }
+/* конец занятия = начало + длина; переход через полночь не считаем — занятие
+   в 23:50 на 45 минут никто не ставит, а лишняя арифметика тут только вредит */
+function icsEnd(time, mins){
+  var p = time.split(":"), t = (+p[0]) * 60 + (+p[1]) + mins;
+  if (t > 23 * 60 + 59) t = 23 * 60 + 59;
+  var hh = Math.floor(t / 60), mm = t % 60;
+  return (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm;
+}
+function icsForFrame(who){
+  var f = frame(), time = frameTime();
+  if (!f.days.length || !time) return "";
+  var dates = planDates(0);
+  if (!dates.length) return "";
+  var first = dates[0];
+  var until = f.until || addMonths(dayKey(), 3);
+  var byday = f.days.slice().sort(function(a, b){ return a - b; })
+    .map(function(n){ return ICS_WD[n]; }).join(",");
+  /* каникулы внутри горизонта — исключения, а не дыры: календарь не должен
+     звать на занятие в день, о пропуске которого договорились */
+  var skip = [], cur = first, guard = 0;
+  while (cur <= until && guard++ < 800){
+    if (f.days.indexOf(weekdayOf(cur)) >= 0 && isBreakDay(cur)) skip.push(icsStamp(cur, time));
+    cur = shiftDay(cur, 1);
+  }
+  var title = "Занятие по программированию" + (who ? " — " + who : "");
+  var L = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fionika//Zanyatiya//RU",
+    "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+    /* UID склеен из того, что событие и описывает: первая дата и дни недели.
+       Значит повторная выгрузка того же плана обновит событие в календаре,
+       а не заведёт рядом второе. */
+    "UID:fionika-" + first.replace(/-/g, "") + "-" + byday.replace(/,/g, "") + "@fionika",
+    "DTSTAMP:" + new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, ""),
+    "DTSTART:" + icsStamp(first, time),
+    "DTEND:" + icsStamp(first, icsEnd(time, f.len)),
+    "RRULE:FREQ=WEEKLY;BYDAY=" + byday + ";UNTIL=" + until.replace(/-/g, "") + "T235959"
+  ];
+  if (skip.length) L.push("EXDATE:" + skip.join(","));
+  L.push("SUMMARY:" + icsEsc(title));
+  L.push("DESCRIPTION:" + icsEsc("Занятие на " + f.len + " минут. Тренажёр «Фионика»."));
+  L.push("BEGIN:VALARM", "TRIGGER:-PT30M", "ACTION:DISPLAY",
+         "DESCRIPTION:" + icsEsc(title + " через 30 минут"), "END:VALARM");
+  L.push("END:VEVENT", "END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
 }
 /* сколько уроков ставить в занятие. Замер по курсу: урок 5–8 минут, плюс
    разминка и проверка в начале и в конце — поэтому 20 минут это два урока,
@@ -8328,7 +8432,7 @@ function pyFileText(title, code){
 /* Отдать текст файлом. Blob — основной путь, data-ссылка — запасной:
    в старых и урезанных браузерах URL.createObjectURL может не быть,
    а промолчавшая кнопка хуже отсутствующей. */
-function downloadText(name, text, btn){
+function downloadText(name, text, btn, mime){
   var done = function(){
     if (!btn) return;
     var t = btn.textContent;
@@ -8338,7 +8442,7 @@ function downloadText(name, text, btn){
   var a = document.createElement("a");
   a.download = name;
   try {
-    var url = URL.createObjectURL(new Blob([text], { type:"text/x-python;charset=utf-8" }));
+    var url = URL.createObjectURL(new Blob([text], { type:(mime || "text/x-python") + ";charset=utf-8" }));
     a.href = url;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(e){} }, 2000);
@@ -8346,7 +8450,7 @@ function downloadText(name, text, btn){
     return true;
   } catch(e){}
   try {
-    a.href = "data:text/x-python;charset=utf-8," + encodeURIComponent(text);
+    a.href = "data:" + (mime || "text/x-python") + ";charset=utf-8," + encodeURIComponent(text);
     document.body.appendChild(a); a.click(); a.remove();
     done();
     return true;
@@ -9212,7 +9316,8 @@ function nextTimeHTML(){
     var d = new Date(when + "T12:00:00");
     h += '<p class="dim">Следующее занятие по расписанию — ' + WD_FULL[d.getDay()] + ', ' +
       (d.getDate() < 10 ? "0" : "") + d.getDate() + "." +
-      (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + '.</p>';
+      (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) +
+      (frameTime() ? ', в ' + esc(frameTime()) : "") + '.</p>';
   }
   return h + '</div>';
 }
@@ -10936,6 +11041,12 @@ function bindFrameEditor(redraw){
   app.querySelectorAll("[data-fmix]").forEach(function(b){
     b.onclick = function(){ frameSet({ mix: b.getAttribute("data-fmix") }); redraw(); };
   });
+  app.querySelectorAll("[data-funtil]").forEach(function(b){
+    b.onclick = function(){
+      frameSet({ until: addMonths(dayKey(), +b.getAttribute("data-funtil")) });
+      redraw();
+    };
+  });
   app.querySelectorAll("[data-brdel]").forEach(function(b){
     b.onclick = function(){
       var br = frame().breaks.slice();
@@ -10946,10 +11057,32 @@ function bindFrameEditor(redraw){
   });
   /* кнопки внутри рамки, у которых общий обработчик data-act */
   app.querySelectorAll('[data-act="fgoal"],[data-act="fgoaloff"],[data-act="bradd"],' +
-                       '[data-act="fcaphard"],[data-act="freport"]').forEach(function(b){
+                       '[data-act="fcaphard"],[data-act="freport"],[data-act="ftime"],' +
+                       '[data-act="ftimeoff"],[data-act="funtil"],[data-act="funtiloff"],' +
+                       '[data-act="fics"]').forEach(function(b){
     b.onclick = function(){
       var act = b.getAttribute("data-act");
       if (act === "fcaphard"){ frameSet({ capHard: !frame().capHard }); return redraw(); }
+      if (act === "ftimeoff"){ frameSet({ time: null }); return redraw(); }
+      if (act === "funtiloff"){ frameSet({ until: null }); return redraw(); }
+      if (act === "ftime"){
+        var tv = (document.getElementById("ftime") || {}).value || "";
+        /* ⚠️ Пустое поле — это «убрать», а не «оставить как было»: иначе
+           взрослый стирает час, жмёт «Сохранить», и ничего не меняется. */
+        frameSet({ time: TIME_RE.test(tv) ? tv : null });
+        return redraw();
+      }
+      if (act === "funtil"){
+        var uv = (document.getElementById("funtil") || {}).value || "";
+        frameSet({ until: uv || null });
+        return redraw();
+      }
+      if (act === "fics"){
+        var who = (kidTarget && kidTarget.name) ? kidTarget.name : (frameState().name || "");
+        var text = icsForFrame(who);
+        if (text) downloadText("fionika-zanyatiya.ics", text, b, "text/calendar");
+        return;
+      }
       if (act === "freport"){ frameSet({ report: !frame().report }); return redraw(); }
       if (act === "fgoaloff"){ frameSet({ goal: null }); return redraw(); }
       if (act === "fgoal"){
@@ -12713,6 +12846,15 @@ function frameEditorHTML(f){
     'объясняется раньше, чем понадобится, и перестановка уроков ломает именно это. ' +
     'Вы ставите рамку и темп, курс отвечает за порядок.</p>' +
     '<div class="admlbl">Дни занятий</div><div class="wdrow">' + chips + '</div>' +
+    '<div class="admlbl">Время занятия</div>' +
+    '<div class="admrow"><input type="time" id="ftime" value="' + (f.time || "") + '">' +
+      '<button class="rbtn sec" data-act="ftime">Сохранить время</button>' +
+      (f.time ? '<button class="rbtn sec" data-act="ftimeoff">Убрать</button>' : '') + '</div>' +
+    (f.time
+      ? '<p class="dim">Занятие начинается в <b>' + esc(f.time) + '</b>. Это время видит ребёнок ' +
+        'на «Сегодня» и родитель в отчёте — одно и то же число во всех трёх местах.</p>'
+      : '<p class="dim">Время не задано: продукт скажет «в субботу», но часа не назовёт. ' +
+        'Ставить час не обязательно — но без него нельзя выгрузить занятия в календарь.</p>') +
     '<div class="admlbl">Длина занятия</div><div class="admrow">' + lens + '</div>' +
     '<div class="admlbl">Чего больше</div><div class="admrow">' + mixes + '</div>' +
     '<div class="admlbl">Успеть к дате (необязательно)</div>' +
@@ -12774,6 +12916,52 @@ function frameEditorHTML(f){
        подсветки, — и взрослый жал её повторно, считая, что сломался сайт. */
     (adultPick.breaksProblem ? '<p class="warnline">⚠️ ' + esc(adultPick.breaksProblem) + '</p>' : '') +
     '<p class="dim">В эти дни пропуск запланирован, и отчёт не назовёт его прогулом.</p>';
+
+  /* ---------- календарь занятий ----------
+     Стоит ПОД каникулами нарочно: план обязан быть посчитан уже с ними.
+     Иначе взрослый увидит занятие в день, о пропуске которого сам договорился,
+     и перестанет верить календарю целиком. */
+  var dates = planDates(0);
+  h += '<div class="admlbl">До какой даты занимаемся</div>' +
+    '<div class="admrow">' +
+      [1, 2, 3, 6].map(function(n){
+        return '<button class="rbtn sec" data-funtil="' + n + '">+' + n + ' ' +
+          plural(n, "месяц", "месяца", "месяцев") + '</button>';
+      }).join("") +
+    '</div>' +
+    '<div class="admrow"><input type="date" id="funtil" value="' + (f.until || "") + '">' +
+      '<button class="rbtn sec" data-act="funtil">Сохранить дату</button>' +
+      (f.until ? '<button class="rbtn sec" data-act="funtiloff">Убрать</button>' : '') + '</div>' +
+    (f.until
+      ? '<p class="dim">План расписан до <b>' + f.until.split("-").reverse().join(".") + '</b>.</p>'
+      : '<p class="dim">Горизонт не задан — календарь показывает ближайшие три месяца.</p>');
+
+  h += '<div class="admlbl">Календарь занятий</div>';
+  if (!f.days.length)
+    h += '<p class="dim">Не отмечен ни один день недели — расписывать нечего.</p>';
+  else if (!dates.length)
+    h += '<p class="dim">До выбранной даты не выпадает ни одного занятия. ' +
+      'Проверьте дни недели, каникулы и горизонт.</p>';
+  else {
+    h += '<p class="dim"><b>' + dates.length + '</b> ' +
+      plural(dates.length, "занятие", "занятия", "занятий") + ' до ' +
+      (f.until || addMonths(dayKey(), 3)).split("-").reverse().join(".") +
+      (f.time ? ', каждое в <b>' + esc(f.time) + '</b>' : "") + '. ' +
+      'Каникулы уже вычтены.</p>' +
+      '<ul class="planlist">' + dates.slice(0, 40).map(function(k){
+        var d = new Date(k + "T12:00:00");
+        return '<li>' + WD_FULL[d.getDay()] + ', ' + k.split("-").reverse().join(".") +
+          (f.time ? ' — ' + esc(f.time) : "") + '</li>';
+      }).join("") + '</ul>' +
+      (dates.length > 40 ? '<p class="dim">Показаны первые 40.</p>' : "");
+    h += f.time
+      ? '<div class="admrow"><button class="rbtn check" data-act="fics">📅 Добавить в календарь</button></div>' +
+        '<p class="dim">Скачается файл для Календаря на маке и айфоне: повтор по выбранным дням, ' +
+        'напоминание за полчаса, каникулы исключены. ⚠️ Напоминает Календарь, а не тренажёр — ' +
+        'сам тренажёр в закрытой вкладке разбудить некому.</p>'
+      : '<p class="dim">Чтобы выгрузить в календарь, задайте время занятия выше: ' +
+        'событие без часа календарь принять не может.</p>';
+  }
 
   /* потолок дня */
   var caps = CAP_CHOICES.map(function(n){
@@ -15529,13 +15717,24 @@ function weekReportHTML(st){
       weekSolved = f.weekSolved, weekMs = f.weekMs, tough = f.tough, lastDay = f.lastDay;
   var names = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
+  /* ⚠️ День, где ребёнок БЫЛ в тренажёре, но ничего не закончил, — это не
+     прогул. Раньше ячейка решалась только по st.days (дни с достижением), и
+     такой день рисовался как «—», хотя легенда обещает «·» — «занимались, но
+     урок не закончили». Родитель видел «пропуск» и карту ритма с сорока
+     минутами прямо под ней: отчёт спорил сам с собой. Нашлось взглядом
+     фаундера 12.09.2026. Достоверность отчёта — это весь его смысл. */
+  var satIn = function(k){
+    var row = st.hours && st.hours[k];
+    return Array.isArray(row) && row.some(function(v){ return v > 0; });
+  };
   var strip = keys.map(function(k){
     var was = activeIn(st.days, k), shield = !was && !!(st.shields && st.shields[k]);
+    var sat = !was && !shield && satIn(k);
     var n = (byDay[k] || []).length;
     var d = new Date(k + "T12:00:00");
     return '<div class="wrday' + (was ? " on" : (shield ? " shield" : "")) + (k === today ? " now" : "") + '">' +
       '<span class="wrd">' + names[d.getDay()] + '</span>' +
-      '<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : "—")) + '</span>' +
+      '<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : (sat ? "·" : "—"))) + '</span>' +
       '<span class="wrdate">' + d.getDate() + "." + (d.getMonth() + 1) + '</span></div>';
   }).join("");
 
@@ -18624,6 +18823,7 @@ window.__game = {
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+  frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
   shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
   shieldWouldSave: shieldWouldSave,
   coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,

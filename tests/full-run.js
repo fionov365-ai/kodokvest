@@ -2333,6 +2333,30 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (!/wrday shield/.test(html)) bad("[отчёт] день, закрытый щитом, не отмечен в полосе");
     if ((html.match(/🛡/g) || []).length < 2) bad("[отчёт] в клетке щита нет значка щита");
 
+    /* ⚠️ День, где ребёнок сидел в тренажёре и ничего не закончил, — не прогул.
+       Нашлось взглядом фаундера 12.09.2026: сетка недели рисовала «—»
+       (пропуск), а карта ритма прямо под ней показывала сорок минут. Ячейка
+       решалась только по days и про hours не знала. */
+    {
+      const hrs = []; for (let i = 0; i < 24; i++) hrs.push(0);
+      hrs[17] = 40 * 60;
+      const satOnly = g.weekReportHTML({
+        stars:{}, log:{}, days:{}, shields:{}, hours:{ [dk(-3)]: hrs } });
+      const cells = (satOnly.match(/<span class="wrn">([^<]*)<\/span>/g) || []);
+      const dots = cells.filter(c => c.indexOf("·") >= 0).length;
+      if (dots !== 1)
+        bad("[отчёт] день со временем в тренажёре и без урока показан не точкой: " +
+            cells.join(" "));
+      /* и наоборот: день, где не было НИЧЕГО, остаётся прочерком.
+         ⚠️ Считаем только КЛЕТКИ: «·» есть и в подписи под полосой, и первая
+         версия этой проверки падала именно на легенде. */
+      const nothing = g.weekReportHTML({ stars:{}, log:{}, days:{}, shields:{}, hours:{} });
+      const cells0 = (nothing.match(/<span class="wrn">([^<]*)<\/span>/g) || []);
+      if (!cells0.length) bad("[отчёт] полоса недели не нарисована вовсе");
+      if (cells0.some(c => c.indexOf("·") >= 0))
+        bad("[отчёт] пустая неделя нарисована точками вместо прочерков: " + cells0.join(" "));
+    }
+
     /* урок, пройденный давно, в недельный счёт попадать не должен */
     const old = g.weekReportHTML({
       stars:{ "print-first":3 },
@@ -5607,6 +5631,76 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (g.frame().report !== false) bad("[рамка] галочка отчётов не снялась");
     g.frameSet({ report:true, days:[1,2,3,4,5], len:30, mix:"balanced" });
 
+    /* --- 3а. время занятия, горизонт и календарь (просьба фаундера 12.09.2026:
+       «суббота в 17:00, и так на месяц-два-три») --- */
+    {
+      /* час проверяется, а не берётся на веру: «25:00» и «17» — не время */
+      g.frameSet({ time:"25:00" });
+      if (g.frameTime()) bad("[расписание] негодный час принят: " + g.frameTime());
+      g.frameSet({ time:"17" });
+      if (g.frameTime()) bad("[расписание] час без минут принят: " + g.frameTime());
+      g.frameSet({ time:"17:00" });
+      if (g.frameTime() !== "17:00") bad("[расписание] годный час не сохранился: " + g.frameTime());
+
+      /* «+1 месяц» от конца месяца не перепрыгивает месяц целиком */
+      if (g.addMonths("2026-01-31", 1) !== "2026-02-28")
+        bad("[расписание] 31 января + месяц = " + g.addMonths("2026-01-31", 1) + ", ожидалось 28 февраля");
+      if (g.addMonths("2026-11-30", 2) !== "2027-01-30")
+        bad("[расписание] переход через год посчитан неверно: " + g.addMonths("2026-11-30", 2));
+
+      /* план по субботам: только субботы, и ровно до горизонта */
+      const today = g.dayKey();
+      const until = g.addMonths(today, 2);
+      g.frameSet({ days:[6], time:"17:00", until: until, breaks: [] });
+      const plan = g.planDates(0);
+      if (!plan.length) bad("[расписание] план по субботам пуст");
+      if (plan.some(k => new Date(k + "T12:00:00").getDay() !== 6))
+        bad("[расписание] в план по субботам попал другой день: " + plan.slice(0, 5).join(", "));
+      if (plan[plan.length - 1] > until)
+        bad("[расписание] план вылез за горизонт: " + plan[plan.length - 1] + " > " + until);
+      if (plan.length < 7 || plan.length > 10)
+        bad("[расписание] за два месяца суббот " + plan.length + " — это не похоже на правду");
+
+      /* каникулы вычитаются из плана, а не просто отмечаются */
+      const skipped = plan[1];
+      g.frameSet({ breaks: [[skipped, skipped]] });
+      const plan2 = g.planDates(0);
+      if (plan2.indexOf(skipped) >= 0)
+        bad("[расписание] занятие назначено на день каникул: " + skipped);
+      if (plan2.length !== plan.length - 1)
+        bad("[расписание] каникулы убрали не одно занятие: " + plan.length + " → " + plan2.length);
+
+      /* файл календаря: повтор, горизонт, длина, напоминание и исключение */
+      const ics = g.icsForFrame("Роман");
+      if (!/BEGIN:VCALENDAR/.test(ics) || !/END:VCALENDAR/.test(ics))
+        bad("[расписание] файл календаря не собрался");
+      if (!/RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=/.test(ics))
+        bad("[расписание] в файле нет повтора по субботам: " + ics.slice(0, 400));
+      if (!/DTSTART:\d{8}T170000/.test(ics))
+        bad("[расписание] время начала в файле не 17:00");
+      if (!/DTEND:\d{8}T173000/.test(ics))
+        bad("[расписание] конец занятия не через 30 минут (длина рамки)");
+      if (!/TRIGGER:-PT30M/.test(ics)) bad("[расписание] в файле нет напоминания");
+      if (ics.indexOf("EXDATE:" + skipped.replace(/-/g, "") + "T170000") < 0)
+        bad("[расписание] день каникул не исключён из файла календаря");
+      if (ics.indexOf("Роман") < 0) bad("[расписание] имя ученика не попало в название события");
+      /* ⚠️ Строки .ics разделяются CRLF — с одним \n Календарь файл не примет */
+      if (/[^\r]\n/.test(ics)) bad("[расписание] в файле календаря перенос строки без CR");
+
+      /* без часа файла нет — и это молчание, а не пустой файл */
+      g.frameSet({ time: null });
+      if (g.icsForFrame("Роман") !== "")
+        bad("[расписание] файл календаря собрался без времени занятия");
+      g.frameSet({ time:"17:00", breaks: [] });
+
+      /* час виден там, где ребёнок и родитель его ищут */
+      g.state.stars = {}; g.state.stars["print-first"] = 3;
+      const nt = g.nextTimeHTML();
+      if (!/в 17:00/.test(nt))
+        bad("[расписание] в карточке «в следующий раз» нет часа занятия: " + nt.replace(/<[^>]+>/g, " ").slice(0, 160));
+      g.frameSet({ days:[1,2,3,4,5], time:null, until:null });
+    }
+
     /* кабинет открывается и показывает карту часов */
     g.adminUnlock();
     g.screenAdult();
@@ -7078,6 +7172,24 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         /* без выбранного ученика редактор рамки работает на СВОЁ состояние */
         if (g.frameState() !== g.state)
           bad("[рамка] без выбранного ученика редактор смотрит не в свой прогресс");
+
+        /* ⚠️ Час и горизонт должны быть НА ЭКРАНЕ, а не только в модели:
+           лид рамки обещает «дни, время и длину назначаете вы» — обещание
+           стояло в тексте раньше, чем появился орган управления (12.09.2026). */
+        const ed = g.frameEditorHTML({ days:[6], len:30, time:"17:00",
+          until: g.addMonths(g.dayKey(), 2), setAt: now - day, breaks: [],
+          mix:"balanced", report:true, goal:null });
+        if (!/id="ftime"/.test(ed)) bad("[расписание] в редакторе рамки нет поля времени");
+        if (!/id="funtil"/.test(ed)) bad("[расписание] в редакторе рамки нет горизонта плана");
+        if (!/data-funtil="3"/.test(ed)) bad("[расписание] нет быстрой кнопки «+3 месяца»");
+        if (!/Календарь занятий/.test(ed)) bad("[расписание] в рамке нет календаря занятий");
+        if (!/data-act="fics"/.test(ed)) bad("[расписание] нет кнопки выгрузки в календарь");
+        if (!/17:00/.test(ed)) bad("[расписание] заданный час не показан в рамке");
+        /* без часа кнопка выгрузки не предлагается — событие без времени календарь не примет */
+        const edNoTime = g.frameEditorHTML({ days:[6], len:30, time:null, until:null,
+          setAt: now - day, breaks: [], mix:"balanced", report:true, goal:null });
+        if (/data-act="fics"/.test(edNoTime))
+          bad("[расписание] кнопка календаря предложена без заданного часа");
       }
     } else bad("[план-и-факт] функции planFact нет");
 

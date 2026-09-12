@@ -1912,6 +1912,12 @@ body.focus .toTop{display:none}
   border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
 .brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
 .brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+/* календарь занятий: ряд карточек без дыры справа (§ 4.15) — колонки тянутся
+   сами, поэтому последний ряд заполняется, а не оставляет пустую треть */
+.planlist{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px;
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.planlist li{font-size:14px;color:var(--soft);background:var(--panel2);
+  border:1px solid var(--line2);border-radius:10px;padding:7px 11px}
 /* выбор роли на общем компьютере */
 .rolegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
 .rolecard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
