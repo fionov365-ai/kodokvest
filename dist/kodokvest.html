@@ -35260,9 +35260,21 @@ var h = '<div class="lvlhead"><div><div class="idx">для взрослого</d
 '<p class="lede">Здесь взрослый ставит рамку занятий, видит, как шла работа, и задаёт ребёнку задание. ' +
 'Десять минут в неделю — и вы знаете о занятиях больше, чем даёт любой отчёт репетитора.</p>';
 
+var ut = ADULT_TABS.some(function(t){ return t[0] === adultTab; }) ? adultTab : "rep";
+h += '<div class="ltabs adnav" role="tablist">' + ADULT_TABS.map(function(t){
+return '<button class="ltab' + (t[0] === ut ? " on" : "") + '" role="tab" data-utab="' + t[0] + '"' +
+' aria-selected="' + (t[0] === ut ? "true" : "false") + '">' +
+'<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+}).join("") + '</div>';
+var pane = function(id, inner){
+return '<div class="kpane" data-upane="' + id + '"' + (ut === id ? "" : " hidden") + '>' +
+inner + '</div>';
+};
+var g1 = "", g2 = "", g3 = "", g4 = "";
+
 if (last){
 var r = zanReport(last, S);
-h += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
+g1 += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
 '<p class="dim">' + fmtWhen(last.end) + '</p>' +
 '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
 '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
@@ -35270,17 +35282,18 @@ h += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
 '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
 '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
 } else {
-h += '<div class="card"><h3>📨 Последнее занятие</h3>' +
+g1 += '<div class="card"><h3>📨 Последнее занятие</h3>' +
 '<p class="dim">Занятий ещё не было. Отчёт появится, как только ребёнок закончит первое.</p></div>';
 }
 
-h += heatHTML(S);
-h += paceStatHTML();
+g1 += weekReportHTML(S);
+g1 += heatHTML(S);
+g1 += paceStatHTML();
 
-h += frameEditorHTML(f);
+g2 += frameEditorHTML(f);
 
 var asum = authorSummary();
-h += '<div class="card"><h3>🖐 Как шла работа</h3>' +
+g4 += '<div class="card"><h3>🖐 Как шла работа</h3>' +
 (asum.n
 ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
 'написано руками <b>' + asum.hand + '</b>' +
@@ -35296,7 +35309,7 @@ var aiAllN = ailabList().length;
 var aiDoneN = ailabList().filter(function(x){ return ailabDone(x.id); }).length;
 var spAllN = specsList().length;
 var spDoneN = specsList().filter(function(x){ return specDone(x.id); }).length;
-h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
+g4 += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
 '<p>Курсы про нейросети учат <b>просить</b>. Здесь учат <b>принимать работу</b>: ' +
 'прочитать ответ машины, найти, где она уверенно врёт, написать проверку и вернуть на доработку. ' +
 'Судит движок, а не мнение, — поэтому себя тут не обманешь.</p>' +
@@ -35306,19 +35319,20 @@ h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
 'несовместима с разделом, который учит её проверять.</p>' +
 '<div class="admrow"><button class="rbtn check" data-act="toai">Посмотреть раздел →</button></div></div>';
 
-h += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
+g4 += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
 '<p>Страница с вещами, которые собираются на курсе: шесть программ, рисунки и игры. ' +
 'Всё запускается прямо там — это не картинки работ, а сами работы.</p>' +
 '<p class="dim">Чужих детей и имён на ней нет: мы имя ребёнка не спрашиваем вовсе, ' +
 'а публичную ленту работ пришлось бы кому-то проверять руками.</p>' +
 '<div class="admrow"><button class="rbtn check" data-act="toworks">Открыть витрину →</button></div></div>';
 
-h += adultTaskHTML();
+g3 += adultTaskHTML();
 
-h += weekReportHTML(S);
+h += pane("rep", g1) + pane("frame", g2) + pane("task", g3) + pane("more", g4);
 
 h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель репетитора →</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
+
+'<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">← К урокам ребёнка</button></div>';
 
 app.innerHTML = h;
 wireAdult();
@@ -35558,6 +35572,20 @@ return redraw();
 });
 }
 function wireAdult(){
+
+app.querySelectorAll("[data-utab]").forEach(function(b){
+b.onclick = function(){
+adultTab = b.getAttribute("data-utab");
+app.querySelectorAll("[data-utab]").forEach(function(x){
+var on = x.getAttribute("data-utab") === adultTab;
+x.classList.toggle("on", on);
+x.setAttribute("aria-selected", on ? "true" : "false");
+});
+app.querySelectorAll("[data-upane]").forEach(function(p){
+p.hidden = p.getAttribute("data-upane") !== adultTab;
+});
+};
+});
 bindFrameEditor(screenAdult);
 app.querySelectorAll("[data-ptab]").forEach(function(b){
 b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab");
@@ -38448,6 +38476,13 @@ esc(err.message || err) + '</p>';
 });
 }
 
+var ADULT_TABS = [
+["rep",   "📊", "Отчёт"],
+["frame", "🗓", "Расписание"],
+["task",  "✉️", "Задание"],
+["more",  "📚", "Разделы"]
+];
+var adultTab = "rep";
 var KID_TABS = [
 ["rep",   "📊", "Отчёт"],
 ["frame", "🗓", "Расписание"],
@@ -38518,7 +38553,9 @@ h += kidPaneHTML("rep",
 kidTarget.fresh
 ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
 : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
-'<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
+'<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) +
+
+heatHTML(st));
 
 h += kidPaneHTML("frame",
 frameEditorHTML(frame()) +

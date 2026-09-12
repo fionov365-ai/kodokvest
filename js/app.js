@@ -10847,10 +10847,32 @@ function screenAdult(){
     '<p class="lede">Здесь взрослый ставит рамку занятий, видит, как шла работа, и задаёт ребёнку задание. ' +
     'Десять минут в неделю — и вы знаете о занятиях больше, чем даёт любой отчёт репетитора.</p>';
 
+  /* ⚠️ ВКЛАДКИ, а не девять карточек подряд. Оплачено жалобой фаундера
+     12.09.2026: «надо сделать человеческие личные кабинеты». Корень оказался
+     не в словах, а в том, что ОДИН И ТОТ ЖЕ кабинет выглядел двумя разными
+     экранами: карточка ученика и кабинет родителя давно на вкладках (см.
+     KID_TABS, жалоба 08.09.2026), а этот, на устройстве ребёнка, остался
+     простынёй из девяти карточек — четыре экрана прокрутки. Человек,
+     видевший оба, не мог понять, один это кабинет или два разных.
+     Вкладки те же и ведут себя так же: всё отрисовано сразу, вкладка только
+     прячет чужое, поэтому переключение мгновенно и наполовину заполненные
+     поля не пропадают. */
+  var ut = ADULT_TABS.some(function(t){ return t[0] === adultTab; }) ? adultTab : "rep";
+  h += '<div class="ltabs adnav" role="tablist">' + ADULT_TABS.map(function(t){
+    return '<button class="ltab' + (t[0] === ut ? " on" : "") + '" role="tab" data-utab="' + t[0] + '"' +
+      ' aria-selected="' + (t[0] === ut ? "true" : "false") + '">' +
+      '<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+  }).join("") + '</div>';
+  var pane = function(id, inner){
+    return '<div class="kpane" data-upane="' + id + '"' + (ut === id ? "" : " hidden") + '>' +
+      inner + '</div>';
+  };
+  var g1 = "", g2 = "", g3 = "", g4 = "";
+
   /* ---------- отчёт по последнему занятию ---------- */
   if (last){
     var r = zanReport(last, S);
-    h += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
+    g1 += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
       '<p class="dim">' + fmtWhen(last.end) + '</p>' +
       '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
       '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
@@ -10858,18 +10880,19 @@ function screenAdult(){
       '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
       '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
   } else {
-    h += '<div class="card"><h3>📨 Последнее занятие</h3>' +
+    g1 += '<div class="card"><h3>📨 Последнее занятие</h3>' +
       '<p class="dim">Занятий ещё не было. Отчёт появится, как только ребёнок закончит первое.</p></div>';
   }
 
-  h += heatHTML(S);
-  h += paceStatHTML();
+  g1 += weekReportHTML(S);
+  g1 += heatHTML(S);
+  g1 += paceStatHTML();
 
-  h += frameEditorHTML(f);
+  g2 += frameEditorHTML(f);
 
   /* ---------- как шла работа (запись авторства) ---------- */
   var asum = authorSummary();
-  h += '<div class="card"><h3>🖐 Как шла работа</h3>' +
+  g4 += '<div class="card"><h3>🖐 Как шла работа</h3>' +
     (asum.n
       ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
         'написано руками <b>' + asum.hand + '</b>' +
@@ -10889,7 +10912,7 @@ function screenAdult(){
   var aiDoneN = ailabList().filter(function(x){ return ailabDone(x.id); }).length;
   var spAllN = specsList().length;
   var spDoneN = specsList().filter(function(x){ return specDone(x.id); }).length;
-  h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
+  g4 += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
     '<p>Курсы про нейросети учат <b>просить</b>. Здесь учат <b>принимать работу</b>: ' +
     'прочитать ответ машины, найти, где она уверенно врёт, написать проверку и вернуть на доработку. ' +
     'Судит движок, а не мнение, — поэтому себя тут не обманешь.</p>' +
@@ -10904,7 +10927,7 @@ function screenAdult(){
      Значит и страница «что тут вообще собирают» должна быть под рукой
      именно отсюда: её показывают не ребёнку, а тому, кто спрашивает,
      чему он здесь учится. */
-  h += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
+  g4 += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
     '<p>Страница с вещами, которые собираются на курсе: шесть программ, рисунки и игры. ' +
     'Всё запускается прямо там — это не картинки работ, а сами работы.</p>' +
     '<p class="dim">Чужих детей и имён на ней нет: мы имя ребёнка не спрашиваем вовсе, ' +
@@ -10912,13 +10935,16 @@ function screenAdult(){
     '<div class="admrow"><button class="rbtn check" data-act="toworks">Открыть витрину →</button></div></div>';
 
   /* ---------- задание ребёнку ---------- */
-  h += adultTaskHTML();
+  g3 += adultTaskHTML();
 
-  /* ---------- недельный отчёт ---------- */
-  h += weekReportHTML(S);
+  h += pane("rep", g1) + pane("frame", g2) + pane("task", g3) + pane("more", g4);
 
   h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель репетитора →</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
+    /* ⚠️ Эта кнопка ведёт на карту миров РЕБЁНКА (data-act="tomap" →
+       screenWorlds), а не домой по роли. Значит и называться обязана так:
+       «На главную» здесь означало бы кабинет, как везде после 12.09.2026, —
+       и это была бы ровно та ложь, которую мы только что убрали (§ 4.21). */
+    '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">← К урокам ребёнка</button></div>';
 
   app.innerHTML = h;
   wireAdult();
@@ -11174,6 +11200,20 @@ function bindFrameEditor(redraw){
   });
 }
 function wireAdult(){
+  /* переключение вкладок — только показ/скрытие, как в карточке ученика */
+  app.querySelectorAll("[data-utab]").forEach(function(b){
+    b.onclick = function(){
+      adultTab = b.getAttribute("data-utab");
+      app.querySelectorAll("[data-utab]").forEach(function(x){
+        var on = x.getAttribute("data-utab") === adultTab;
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      app.querySelectorAll("[data-upane]").forEach(function(p){
+        p.hidden = p.getAttribute("data-upane") !== adultTab;
+      });
+    };
+  });
   bindFrameEditor(screenAdult);
   app.querySelectorAll("[data-ptab]").forEach(function(b){
     b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab");
@@ -15017,6 +15057,15 @@ function kidLoad(code){
    вкладка только прячет чужие (hidden). Так переключение мгновенно, а
    обработчики и наполовину заполненные поля (заметка, галочки домашки)
    не пропадают. */
+/* Вкладки кабинета на устройстве ребёнка. Те же четыре смысла, что у
+   карточки ученика: смотреть — настраивать — задавать — прочее. */
+var ADULT_TABS = [
+  ["rep",   "📊", "Отчёт"],
+  ["frame", "🗓", "Расписание"],
+  ["task",  "✉️", "Задание"],
+  ["more",  "📚", "Разделы"]
+];
+var adultTab = "rep";
 var KID_TABS = [
   ["rep",   "📊", "Отчёт"],
   ["frame", "🗓", "Расписание"],
@@ -15100,7 +15149,15 @@ function kidRender(savedNote){
     kidTarget.fresh
       ? '<div class="note"><b>Отчёта пока нет</b>Он появится после первого занятия ребёнка.</div>'
       : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
-        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
+        '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st) +
+        /* ⚠️ Карта часов доехала сюда только 12.09.2026. До этого она
+           вызывалась в ОДНОМ месте — screenAdult, то есть была видна лишь
+           тому, кто сидит за устройством ребёнка. У родителя с телефона
+           (типичный случай: ссылка ?parent= и есть его кабинет) её не было
+           вовсе, хотя она отвечает на самый частый его вопрос — «когда он
+           вообще занимается». Функция и так берёт снимок, править было
+           нечего: не хватало ровно этой строки. Разбор трёх ролей. */
+        heatHTML(st));
 
   h += kidPaneHTML("frame",
     frameEditorHTML(frame()) +
