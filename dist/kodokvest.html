@@ -1945,6 +1945,7 @@ background:var(--topbg);backdrop-filter:blur(14px)}
 color:var(--soft);border-radius:999px;padding:8px 14px;font:inherit;
 font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
 .cabtab:hover{color:var(--ink);border-color:var(--acc)}
+.cabtab.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 .cabsec{scroll-margin-top:calc(var(--toph,60px) + 62px)}
 .cabnow{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
 border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14.5px}
@@ -35140,6 +35141,32 @@ return '<nav class="cabnav">' + CAB_SECTIONS.map(function(s){
 return '<button class="cabtab" data-cab="' + s[0] + '">' + s[1] + '</button>';
 }).join("") + '</nav>';
 }
+
+var cabTrackOn = false;
+function cabNavTrack(){
+if (cabTrackOn) return;
+cabTrackOn = true;
+var busy = false;
+function mark(){
+var nav = document.querySelector(".cabnav");
+if (!nav) return;
+var edge = nav.getBoundingClientRect().bottom + 40;
+var cur = CAB_SECTIONS[0][0];
+CAB_SECTIONS.forEach(function(s){
+var el = document.getElementById(s[0]);
+if (el && el.getBoundingClientRect().top <= edge) cur = s[0];
+});
+nav.querySelectorAll(".cabtab").forEach(function(b){
+b.classList.toggle("on", b.getAttribute("data-cab") === cur);
+});
+}
+window.addEventListener("scroll", function(){
+if (busy) return;
+busy = true;
+requestAnimationFrame(function(){ busy = false; mark(); });
+}, { passive:true });
+mark();
+}
 function adultSummaryHTML(){
 var f = weekFacts(S);
 var lastT = 0, lg = S.log || {};
@@ -35451,6 +35478,7 @@ function wireAdult(){
 bindFrameEditor(screenAdult);
 
 syncTopHeight();
+cabNavTrack();
 app.querySelectorAll("[data-cab]").forEach(function(b){
 b.onclick = function(){
 var el = document.getElementById(b.getAttribute("data-cab"));
@@ -38252,6 +38280,16 @@ h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</
 if (kidTarget.fresh)
 h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
 'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
+
+if (!kidTarget.fresh){
+var wf = weekFacts(st);
+if (wf.stuck.length){
+var stuckL = CURRICULUM.byId(wf.stuck[0].id);
+h += '<p class="cabnow">⛔ Сейчас важно: застрял на уроке «' +
+(stuckL ? esc(stuckL.title) : esc(wf.stuck[0].id)) +
+'» — разбор и что делать на вкладке «Отчёт».</p>';
+}
+}
 
 h += '<div class="ltabs kidnav" role="tablist">' + tabs.map(function(t){
 return '<button class="ltab' + (t[0] === kidTab ? " on" : "") + '" role="tab" data-ktab="' + t[0] + '"' +

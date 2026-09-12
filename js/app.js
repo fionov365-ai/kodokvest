@@ -10670,6 +10670,35 @@ function cabNavHTML(){
     return '<button class="cabtab" data-cab="' + s[0] + '">' + s[1] + '</button>';
   }).join("") + '</nav>';
 }
+/* Подсветка текущего раздела в оглавлении при прокрутке. Слушатель один на
+   всю жизнь страницы и молчит, когда оглавления нет на экране, — тот же
+   приём, что у кнопки «Наверх». Раздел «текущий», когда его верх ушёл под
+   липкую полосу; пока никакой не ушёл — подсвечен первый. */
+var cabTrackOn = false;
+function cabNavTrack(){
+  if (cabTrackOn) return;
+  cabTrackOn = true;
+  var busy = false;
+  function mark(){
+    var nav = document.querySelector(".cabnav");
+    if (!nav) return;
+    var edge = nav.getBoundingClientRect().bottom + 40;
+    var cur = CAB_SECTIONS[0][0];
+    CAB_SECTIONS.forEach(function(s){
+      var el = document.getElementById(s[0]);
+      if (el && el.getBoundingClientRect().top <= edge) cur = s[0];
+    });
+    nav.querySelectorAll(".cabtab").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-cab") === cur);
+    });
+  }
+  window.addEventListener("scroll", function(){
+    if (busy) return;
+    busy = true;
+    requestAnimationFrame(function(){ busy = false; mark(); });
+  }, { passive:true });
+  mark();
+}
 function adultSummaryHTML(){
   var f = weekFacts(S);
   var lastT = 0, lg = S.log || {};
@@ -11024,6 +11053,7 @@ function wireAdult(){
   /* Оглавление кабинета: кнопка везёт к карточке. Отступ прокрутки задаёт
      scroll-margin-top у .cabsec — под липкой шапкой и самим оглавлением. */
   syncTopHeight();
+  cabNavTrack();
   app.querySelectorAll("[data-cab]").forEach(function(b){
     b.onclick = function(){
       var el = document.getElementById(b.getAttribute("data-cab"));
@@ -14744,6 +14774,20 @@ function kidRender(savedNote){
   if (kidTarget.fresh)
     h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
          'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
+
+  /* «Сейчас важно» — затык виден с любой вкладки, а не только с «Отчёта»
+     (приём Khan Academy, замер 12.09.2026: docs/kabinet-benchmark-2026-09-12.md).
+     Плитки-числа сюда не ставим: вкладка «Отчёт» открывается первой и сама
+     начинается с этих чисел — была бы копия строкой ниже (правило 1.103.0). */
+  if (!kidTarget.fresh){
+    var wf = weekFacts(st);
+    if (wf.stuck.length){
+      var stuckL = CURRICULUM.byId(wf.stuck[0].id);
+      h += '<p class="cabnow">⛔ Сейчас важно: застрял на уроке «' +
+        (stuckL ? esc(stuckL.title) : esc(wf.stuck[0].id)) +
+        '» — разбор и что делать на вкладке «Отчёт».</p>';
+    }
+  }
 
   h += '<div class="ltabs kidnav" role="tablist">' + tabs.map(function(t){
     return '<button class="ltab' + (t[0] === kidTab ? " on" : "") + '" role="tab" data-ktab="' + t[0] + '"' +

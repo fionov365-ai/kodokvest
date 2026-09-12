@@ -8935,6 +8935,24 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             bad("[панель] клик по «Доступу» не показал ссылки ученика");
         }
         g.kidDrop(kid.code);
+
+        /* --- «Сейчас важно»: затык виден с любой вкладки (1.149.0) ---
+           Затык — нерешённый урок с ценой ≥ 6 (stuckIn). Раньше он жил только
+           внутри вкладки «Отчёт»; строка над вкладками обязана быть видна и
+           после переключения. */
+        w.Cloud.load = () => Promise.resolve({ found: true, serverAt: Date.now(),
+          data: { log: { "print-first": { attempts: 9, hints: 3, timeMs: 1200000, last: Date.now() } } } });
+        const kid2 = g.kidAdd("Тест Затык");
+        g.screenKid(kid2.code); await tick(); await tick();
+        if (!doc.querySelector(".cabnow"))
+          bad("[панель] затык ученика не виден над вкладками — нет строки «Сейчас важно»");
+        const hwTab = [...doc.querySelectorAll(".kidnav .ltab")].find(b => /Домашка/.test(b.textContent));
+        if (hwTab){
+          hwTab.click(); await tick();
+          if (!doc.querySelector(".cabnow"))
+            bad("[панель] строка «Сейчас важно» пропала при смене вкладки");
+        }
+        g.kidDrop(kid2.code);
       } finally {
         w.Cloud.load = origLoad; w.Cloud.hasUrl = origHas;
       }
