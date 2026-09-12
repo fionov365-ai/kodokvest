@@ -168,7 +168,7 @@ function screenAccount(){
     '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
     'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
     '<div class="winrow"><button class="bigbtn ghost" id="goguide">❓ Открыть инструкцию</button></div></div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   A.app.innerHTML = h;
 
   A.bindLiveRow(screenAccount);

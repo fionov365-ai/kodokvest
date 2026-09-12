@@ -459,8 +459,15 @@ function blankFrame(){
 /* «17:00» — время НАЧАЛА занятия. Хранится строкой «ЧЧ:ММ» и живёт в рамке
    взрослого, а не в расписании ребёнка: день ребёнок себе выбрать может,
    час занятия с репетитором — нет. Пусто — значит время не назначено, и
-   продукт нигде его не выдумывает. */
-var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+   продукт нигде его не выдумывает.
+   ⚠️⚠️ ФУНКЦИЯ, а не `var TIME_RE`. Оплачено ошибкой 12.09.2026: константа
+   присваивалась на строке 463, а ensureShape(S) зовётся на 199 — и у всякого,
+   у КОГО ЧАС УЖЕ СОХРАНЁН, тренажёр падал при загрузке ещё до первой
+   отрисовки. Тесты молчали: на чистом состоянии time равен null, проверка
+   `typeof o.time === "string"` не доходила до регулярки, и порядок не был
+   виден. Объявление функции поднимается целиком, поэтому порядок строк
+   перестаёт что-либо значить — класс ошибки закрыт, а не случай. */
+function validTime(v){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v)); }
 function frameShape(f){
   var o = (f && typeof f === "object") ? f : {};
   var out = blankFrame();
@@ -469,7 +476,7 @@ function frameShape(f){
   if (ZAN_LEN.indexOf(o.len) >= 0) out.len = o.len;
   if (ZAN_MIX.indexOf(o.mix) >= 0) out.mix = o.mix;
   if (typeof o.goal === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.goal)) out.goal = o.goal;
-  if (typeof o.time === "string" && TIME_RE.test(o.time)) out.time = o.time;
+  if (typeof o.time === "string" && validTime(o.time)) out.time = o.time;
   if (typeof o.until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.until)) out.until = o.until;
   if (Array.isArray(o.breaks))
     out.breaks = o.breaks.filter(function(b){
@@ -536,7 +543,7 @@ function frameStudyDay(key){
    goal  — к какому числу надо ПРОЙТИ курс (из него считается темп);
    until — до какого числа мы вообще ЗАНИМАЕМСЯ (из него растёт календарь).
    У репетитора это «занимаемся до конца четверти», а не «сдать к экзамену». */
-function frameTime(){ var t = frame().time; return TIME_RE.test(t || "") ? t : ""; }
+function frameTime(){ var t = frame().time; return validTime(t || "") ? t : ""; }
 /* Прибавить месяцы к дате. 31 января + 1 месяц = 28 февраля, а не 3 марта:
    иначе «+1 месяц» от конца месяца перепрыгивал бы через месяц целиком. */
 function addMonths(key, n){
@@ -562,6 +569,24 @@ function planDates(limit){
   }
   return out;
 }
+/* Вся рамка одной строкой: «по субботам в 17:00, занятие 30 минут, до 12.11».
+   ⚠️ Это ГЛАВНОЕ предложение экрана расписания. До 12.09.2026 его не было
+   вовсе: взрослый читал семь блоков органов управления и сам складывал из них
+   ответ на вопрос «так когда же занятия?». Строка отвечает за них всех. */
+function zanSlovami(f){
+  f = f || frame();
+  if (!f.days.length) return "Дни занятий не отмечены";
+  var wd = f.days.slice().sort(function(a, b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
+    .map(function(n){ return WD_FULL_PO[n]; }).join(", ");
+  var out = "По " + wd;
+  if (f.time) out += " в " + f.time;
+  out += ", занятие " + f.len + " " + plural(f.len, "минута", "минуты", "минут");
+  if (f.until) out += ", до " + f.until.split("-").reverse().join(".");
+  return out;
+}
+var WD_FULL_PO = ["воскресеньям", "понедельникам", "вторникам", "средам",
+                  "четвергам", "пятницам", "субботам"];
+
 /* ===== файл календаря (.ics) =====
    ⚠️ Почему файл, а не напоминание из тренажёра. Толчок в 17:00 умеет только
    тот, кто работает, когда страница закрыта: почта или web-push с отдельным
@@ -1775,6 +1800,28 @@ function goHome(){
   return screenWorlds();
 }
 
+/* ⚠️ Надпись кнопки «домой» обязана называть ТО МЕСТО, куда она ведёт
+   (§ 4.21). Кнопка одна на весь продукт (#tomap, двадцать штук в шести
+   файлах), а дом у каждой роли свой — его выбирает goHome. Надпись же до
+   12.09.2026 была одна на всех: «На главную». Жалоба фаундера: «нажал
+   Тренировки, потом На главную — и оказался в кабинете взрослого». Кнопка не
+   соврала про дорогу, она соврала про МЕСТО: домой для кабинета — кабинет.
+   Слова и дорога считаются рядом, чтобы не разъехались. */
+function homeLabel(){
+  if (isAdminDevice() || parentOf()) return "В кабинет";
+  if (!myCode() && !S.name) return "На главную страницу";
+  return "На главную";
+}
+/* Проставляется в refreshTop по той же причине, что и место человека: туда
+   заходят все экраны без исключения, и забыть негде. Метка data-home
+   отделяет кнопки «домой» от соседей с тем же id, но другой дорогой
+   («← К тренировкам», «← В „Ты и ИИ“»). */
+function homeBtnSync(){
+  var b = document.getElementById("tomap");
+  if (!b || b.getAttribute("data-home") !== "1") return;
+  b.textContent = "← " + homeLabel();
+}
+
 /* Экраны, которые СЧИТАЮТСЯ кабинетом. Список явный, а не «всё, что не
    вывеска»: урок, открытый взрослым для просмотра, кабинетом не является, и
    обновление на нём не должно вышвыривать человека в список учеников. */
@@ -1782,6 +1829,7 @@ var ROOM_PLACES = ["admin", "kids", "kid", "group", "parent", "adult",
                    "adminsetup", "adminlogin", "parentlogin", "roles"];
 function refreshTop(){
   syncBack();
+  homeBtnSync();
   /* Набор применяется здесь по той же причине, что и место человека: сюда
      заходят все экраны без исключения, и забыть его негде. Заодно закрытый
      набор слетает сам, как только прогресс сменился. */
@@ -4182,7 +4230,7 @@ function screenTrain(){
     '<div class="note"><b>Повторение живёт отдельно</b>Уроки, которые дались тяжело, ' +
     'возвращаются сами в разделе «Повторить» — он на Главном, потому что это про уроки, ' +
     'а не про отдых. Там же бестиарий ошибок: каждая ошибка, которую ты победил.</div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" id="toagain">🔁 Повторить</button></div>';
   app.innerHTML = h;
   var cards = trainCards();
@@ -4285,7 +4333,7 @@ function screenWorld(n){
         'и идёт в дело.</span></span>' +
         '<button class="bigbtn" id="openshop">Открыть мастерскую</button></div>';
 
-    h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button><span class="sp"></span>' +
+    h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button><span class="sp"></span>' +
       (n < 5 ? '<button class="bigbtn ghost" id="wnext">Мир ' + (n+1) + ' →</button>' : '') + '</div>';
 
     app.innerHTML = h;
@@ -4496,7 +4544,7 @@ function screenCapReached(){
     '<div class="note"><b>Сегодня за тренажёром уже ' + m + ' ' +
     plural(m, "минута", "минуты", "минут") + '</b>Столько вы договорились со взрослым. ' +
     'Новый урок откроется завтра — а тот, что начат, доделать можно.</div>' +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   document.getElementById("tomap").onclick = goHome;
   refreshTop();
 }
@@ -5953,7 +6001,7 @@ function screenGames(){
     h += '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard[data-id]").forEach(function(b){
     b.onclick = function(){ openGame(b.getAttribute("data-id")); };
@@ -6592,7 +6640,7 @@ function screenToday(){
     'Пропущенный день ничего не сжигает — календарь просто покажет, как было. ' +
     'Звёзды тут не начисляются: важна не серия, а возвращение.</p>' +
     installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
   wireInstallTip(app);
   var dopen = document.getElementById("dopen");
@@ -6648,7 +6696,7 @@ function screenWarmups(){
                      : "Откроется после урока " + (les ? les.num + " «" + esc(les.title) + "»" : "из программы")) + '</span>' +
       '<span class="wtag">' + esc(w.tag) + '</span></button>';
   });
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".gamecard").forEach(function(b){
     b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
@@ -7085,7 +7133,7 @@ function screenReview(){
 
   h += beastsHTML();
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
   app.querySelectorAll(".revcard").forEach(function(b){
     b.onclick = function(){ openLesson(b.getAttribute("data-id")); };
@@ -8977,7 +9025,7 @@ function screenFolio(){
   });
   h += '</div>';
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
   app.innerHTML = h;
   var tsh = document.getElementById("toshop");
@@ -10195,7 +10243,7 @@ function screenShop(){
     h += '</div></div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
 
   var studio = makeStudio({
@@ -11085,7 +11133,7 @@ function bindFrameEditor(redraw){
         var tv = (document.getElementById("ftime") || {}).value || "";
         /* ⚠️ Пустое поле — это «убрать», а не «оставить как было»: иначе
            взрослый стирает час, жмёт «Сохранить», и ничего не меняется. */
-        frameSet({ time: TIME_RE.test(tv) ? tv : null });
+        frameSet({ time: validTime(tv) ? tv : null });
         return redraw();
       }
       if (act === "funtil"){
@@ -11403,7 +11451,7 @@ function screenSolved(r){
     '<p class="dim">Ни имени, ни программы решавшего в ссылке нет — только какая задача ' +
     'и с какой попытки. Мы про людей ничего не собираем.</p></div>' +
     '<div class="pager"><button class="bigbtn" id="tomine">✍️ Задать ещё одну</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   document.getElementById("tomine").onclick = function(){
     try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
     screenMyTasks();
@@ -11548,7 +11596,7 @@ function screenMyTasks(edit){
       '<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
       '<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
   });
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
 
   var studio = makeStudio({
@@ -11678,7 +11726,7 @@ function openFriendTask(t, opts){
 
   h += '<div id="studio"></div>' +
     '<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
 
   /* Код решателя сохраняется тем же механизмом, что черновики уроков: ключ
@@ -11772,7 +11820,7 @@ function screenTaskBroken(){
     '<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
     'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
     '<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
-    '<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
   document.getElementById("tomap").onclick = goHome;
   refreshTop();
@@ -12160,7 +12208,7 @@ function screenViz(opts){
     '</div><div id="vizstudio"></div>' +
     '<div class="pager">' +
       (opts.backTo ? '<button class="bigbtn" id="vizback">' + esc(opts.backTo.label) + '</button>' : '') +
-      '<button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+      '<button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   app.innerHTML = h;
 
   var ed = makeEditor(opts.code || VIZ_EXAMPLES[0].code,
@@ -12883,6 +12931,12 @@ function frameEditorHTML(f){
   }).join("");
 
   h = '<div class="card"><h3>🗓 Рамка занятий</h3>' +
+    /* ⚠️ Первая строка экрана — ОТВЕТ, а не оглавление. Ниже семь блоков
+       органов управления, и без этой строки взрослый складывал ответ из них
+       сам. Жалоба фаундера 12.09.2026: «надо сделать человеческие кабинеты,
+       с настройками нормальными и ясными». Начинается это с того, чтобы
+       экран говорил, что на нём сейчас настроено. */
+    '<p class="zansum' + (f.days.length ? "" : " none") + '">' + esc(zanSlovami(f)) + '</p>' +
     '<p class="dim">Дни, время и длину назначаете вы. Порядок уроков — нет: курс устроен так, что команда ' +
     'объясняется раньше, чем понадобится, и перестановка уроков ломает именно это. ' +
     'Вы ставите рамку и темп, курс отвечает за порядок.</p>' +
@@ -12943,8 +12997,8 @@ function frameEditorHTML(f){
         'а не отставание.</p>') +
     '';
 
-  /* каникулы */
-  h += '<div class="admlbl">Каникулы и запланированные паузы</div>' +
+  /* каникулы (блок собран заранее, печатается в карточке «редкое» ниже) */
+  var брКаникулы = '<div class="admlbl">Каникулы и запланированные паузы</div>' +
     (f.breaks.length
       ? '<ul class="brlist">' + f.breaks.map(function(b, i){
           return '<li>' + b[0].split("-").reverse().join(".") + ' — ' + b[1].split("-").reverse().join(".") +
@@ -12984,17 +13038,27 @@ function frameEditorHTML(f){
     h += '<p class="dim">До выбранной даты не выпадает ни одного занятия. ' +
       'Проверьте дни недели, каникулы и горизонт.</p>';
   else {
-    h += '<p class="dim"><b>' + dates.length + '</b> ' +
-      plural(dates.length, "занятие", "занятия", "занятий") + ' до ' +
-      (f.until || addMonths(dayKey(), 3)).split("-").reverse().join(".") +
-      (f.time ? ', каждое в <b>' + esc(f.time) + '</b>' : "") + '. ' +
-      'Каникулы уже вычтены.</p>' +
-      '<ul class="planlist">' + dates.slice(0, 40).map(function(k){
+    /* ⚠️ Сорок дат простынёй — то, что тут стояло сначала, и фаундер назвал это
+       безобразием в тот же день (12.09.2026): «каждые субботы каждых недель до
+       конца года». И он прав — список дат НЕ ОТВЕЧАЕТ НИ НА ОДИН вопрос, ради
+       которого сюда пришли. Вопросов ровно два: «когда ближайшее?» и «сколько
+       всего и до какого числа?». Оба — одной строкой. Полный список остаётся,
+       но свёрнутым: он нужен раз в жизни, а места занимал больше всего. */
+    var бл = dates.slice(0, 3).map(function(k){
+      var d = new Date(k + "T12:00:00");
+      return WD_SHORT[d.getDay()].toLowerCase() + " " + k.slice(8) + "." + k.slice(5, 7);
+    }).join(" · ");
+    /* ⚠️ Ту же строку печатает zansum в шапке карточки — второй раз она не
+       информация, а шум. Здесь отвечаем на ДРУГОЙ вопрос: когда ближайшие. */
+    h += '<p class="planline">Ближайшие: <b>' + бл + '</b>' +
+      (dates.length > 3 ? " …" : "") + '</p>' +
+      '<details class="plandet"><summary>Все ' + dates.length + ' ' +
+        plural(dates.length, "дата", "даты", "дат") + '</summary>' +
+      '<ul class="planlist">' + dates.map(function(k){
         var d = new Date(k + "T12:00:00");
-        return '<li>' + WD_FULL[d.getDay()] + ', ' + k.split("-").reverse().join(".") +
-          (f.time ? ' — ' + esc(f.time) : "") + '</li>';
-      }).join("") + '</ul>' +
-      (dates.length > 40 ? '<p class="dim">Показаны первые 40.</p>' : "");
+        return '<li>' + WD_SHORT[d.getDay()].toLowerCase() + ', ' +
+          k.split("-").reverse().join(".") + (f.time ? ' — ' + esc(f.time) : "") + '</li>';
+      }).join("") + '</ul></details>';
     h += f.time
       ? '<div class="admrow"><button class="rbtn check" data-act="fics">📅 Добавить в календарь</button></div>' +
         '<p class="dim">Скачается файл для Календаря на маке и айфоне: повтор по выбранным дням, ' +
@@ -13003,6 +13067,18 @@ function frameEditorHTML(f){
       : '<p class="dim">Чтобы выгрузить в календарь, задайте время занятия выше: ' +
         'событие без часа календарь принять не может.</p>';
   }
+
+  h += '</div>';   /* ← конец карточки «Когда занимаемся» */
+
+  /* ---------- карточка 3: редкое ----------
+     ⚠️ Каникулы, потолок дня и галочка отчётов трогают раз в полгода, а места
+     занимали столько же, сколько дни и час. Правило постепенного раскрытия:
+     показывать всё сразу — значит не показывать ничего. Свёрнуто, но НЕ
+     спрятано: заголовок называет, что внутри, и текст остаётся в странице
+     (поиск по экрану его находит). */
+  h += '<div class="card"><details class="plandet"><summary>' +
+    '<b>Паузы и границы</b> — каникулы, потолок экранного времени, отчёты</summary>' +
+    брКаникулы;
 
   /* потолок дня */
   var caps = CAP_CHOICES.map(function(n){
@@ -13029,7 +13105,7 @@ function frameEditorHTML(f){
       (f.report ? "✓ Получать отчёты о занятиях" : "Отчёты выключены") + '</button></div>' +
     '<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
     'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
-    'выключенная означает «ничего не присылать».</p></div>';
+    'выключенная означает «ничего не присылать».</p></details></div>';
 
   return h;
 }
@@ -18595,7 +18671,7 @@ function screenGuide(){
     'снимаются замки с уроков. Она открывается адресом сайта с <b>#admin</b> на конце ' +
     'и спрашивает код — в меню её нет, чтобы ребёнок не забрёл туда случайно.</p></div>';
 
-  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+  h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button>' +
     '<span class="sp"></span><button class="bigbtn" id="gostart">▶ К урокам</button></div>';
 
   app.innerHTML = h;
@@ -18975,6 +19051,7 @@ window.__game = {
   warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
+  homeLabel: homeLabel, goHome: goHome,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
   agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
   frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,

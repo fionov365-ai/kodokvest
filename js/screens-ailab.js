@@ -161,7 +161,7 @@ function screenAILab(){
     '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   A.app.innerHTML = h;
   var tas = document.getElementById("toaispecs");
   if (tas) tas.onclick = A.screenSpecs;

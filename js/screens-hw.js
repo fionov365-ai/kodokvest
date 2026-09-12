@@ -80,7 +80,7 @@ function screenHW(){
     h += '</div>';
   }
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   A.app.innerHTML = h;
   A.app.querySelectorAll("[data-hw]").forEach(function(b){
     b.onclick = function(){ openHW(b.getAttribute("data-hw")); };
