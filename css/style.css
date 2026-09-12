@@ -2677,6 +2677,26 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .roomnav button:hover{color:var(--ink);border-color:var(--acc)}
 .roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
 
+/* ---------- сводка и оглавление кабинета взрослого ----------
+   Кабинет — одна длинная страница карточек. Сводка (.cabsum) отвечает на
+   первый вопрос взрослого числами, оглавление (.cabnav) липнет под шапкой и
+   везёт к карточкам. Приёмы из замера конкурентов 12.09.2026 —
+   docs/kabinet-benchmark-2026-09-12.md.
+   ⚠️ На телефоне оглавление НЕ переносится в сетку, как .ltabs на ≤640px:
+   липкая полоса в три ряда съела бы пол-экрана. Вместо переноса — прокрутка
+   вбок, тот же приём, что у .admtable и карты часов. */
+.cabsum{margin-bottom:6px}
+.cabnav{position:sticky;top:var(--toph,60px);z-index:50;display:flex;gap:8px;
+  flex-wrap:nowrap;overflow-x:auto;padding:10px 2px;margin:0 -2px 12px;
+  background:var(--topbg);backdrop-filter:blur(14px)}
+.cabtab{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);
+  color:var(--soft);border-radius:999px;padding:8px 14px;font:inherit;
+  font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
+.cabtab:hover{color:var(--ink);border-color:var(--acc)}
+.cabsec{scroll-margin-top:calc(var(--toph,60px) + 62px)}
+.cabnow{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
+  border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14.5px}
+
 /* ---------- карта экзамена: все задания по номерам ----------
    Строка на задание, а не карточка: заданий 27, и карточками это была бы
    стена, по которой не пробежать глазами. Читателю тут нужно одно движение —

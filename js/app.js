@@ -10648,6 +10648,52 @@ function screenTrace(){
    поддомен со своим входом — граница между детским контуром (без ПДн) и
    взрослым (с адресом) должна проходить по домену.
    Разбор: docs/zanyatie-i-vzroslyj.md §§ 12–14. */
+
+/* ---------- сводка и оглавление кабинета ----------
+   Что заимствовано и у кого — docs/kabinet-benchmark-2026-09-12.md:
+   сводка сверху и «что сейчас важно» — приём Khan Academy, оглавление
+   длинной страницы — приём отчётов ЯКласс. Сводка не дублирует ни одной
+   кнопки (правило «одна дорога к одному действию», 1.103.0): в ней числа,
+   а в оглавлении — дорога к карточкам ниже.
+   ⚠️ Порядок кнопок оглавления обязан совпадать с порядком карточек на
+   странице — иначе «ниже» в текстах врёт. */
+var CAB_SECTIONS = [
+  ["cab-zan",   "📨 Занятие"],
+  ["cab-ritm",  "🗓 Ритм"],
+  ["cab-frame", "📏 Рамка"],
+  ["cab-trace", "🖐 Запись"],
+  ["cab-task",  "✉️ Задание"],
+  ["cab-week",  "📅 Неделя"]
+];
+function cabNavHTML(){
+  return '<nav class="cabnav">' + CAB_SECTIONS.map(function(s){
+    return '<button class="cabtab" data-cab="' + s[0] + '">' + s[1] + '</button>';
+  }).join("") + '</nav>';
+}
+function adultSummaryHTML(){
+  var f = weekFacts(S);
+  var lastT = 0, lg = S.log || {};
+  Object.keys(lg).forEach(function(k){
+    var t = (lg[k] || {}).last || 0;
+    if (t > lastT) lastT = t;
+  });
+  var h = '<div class="admstats cabsum">' +
+    statBox("Сегодня за тренажёром", fmtDur(dayMs(S, dayKey()))) +
+    statBox("Уроков за неделю", String(f.weekSolved)) +
+    statBox("Дней подряд", String(f.streak)) +
+    statBox("Последнее занятие", fmtWhen(lastT)) +
+    '</div>';
+  /* Одна строка «что сейчас важно» — и только когда важное есть: затык
+     стоит между ребёнком и всем курсом, взрослый обязан узнать о нём с
+     первого экрана, не докручивая до недельного отчёта. */
+  if (f.stuck.length){
+    var sl = CURRICULUM.byId(f.stuck[0].id);
+    h += '<p class="cabnow">⛔ Сейчас важно: ребёнок застрял на уроке «' +
+      (sl ? esc(sl.title) : esc(f.stuck[0].id)) +
+      '» — разбор и что делать ниже, в карточке «Что было за неделю».</p>';
+  }
+  return h;
+}
 function screenAdult(){
   curPlace = "adult";
   stopTimer(); vizStopPlay();
@@ -10667,10 +10713,20 @@ function screenAdult(){
     '<p class="lede">Здесь взрослый ставит рамку занятий, видит, как шла работа, и задаёт ребёнку задание. ' +
     'Десять минут в неделю — и вы знаете о занятиях больше, чем даёт любой отчёт репетитора.</p>';
 
+  /* Сводка и оглавление стоят ДО карточек: кабинет был одной колонкой на
+     десять карточек, и до «задать задание» лежал десяток экранов прокрутки.
+     Замер кабинетов конкурентов 12.09.2026
+     (docs/kabinet-benchmark-2026-09-12.md): первый экран отвечает «что сейчас
+     важно», а не «вот всё, что у нас есть». Это не плитки-дубли из 1.103.0:
+     там плитки повторяли кнопки, здесь — числа и дорога к карточкам,
+     которых с первого экрана не видно. */
+  h += adultSummaryHTML();
+  h += cabNavHTML();
+
   /* ---------- отчёт по последнему занятию ---------- */
   if (last){
     var r = zanReport(last, S);
-    h += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
+    h += '<div class="card adrep cabsec" id="cab-zan"><h3>📨 Последнее занятие</h3>' +
       '<p class="dim">' + fmtWhen(last.end) + '</p>' +
       '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
       '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
@@ -10678,18 +10734,16 @@ function screenAdult(){
       '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
       '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
   } else {
-    h += '<div class="card"><h3>📨 Последнее занятие</h3>' +
+    h += '<div class="card cabsec" id="cab-zan"><h3>📨 Последнее занятие</h3>' +
       '<p class="dim">Занятий ещё не было. Отчёт появится, как только ребёнок закончит первое.</p></div>';
   }
 
-  h += heatHTML(S);
-  h += paceStatHTML();
-
-  h += frameEditorHTML(f);
+  h += '<div class="cabsec" id="cab-ritm">' + heatHTML(S) + '</div>';
+  h += '<div class="cabsec" id="cab-frame">' + paceStatHTML() + frameEditorHTML(f) + '</div>';
 
   /* ---------- как шла работа (запись авторства) ---------- */
   var asum = authorSummary();
-  h += '<div class="card"><h3>🖐 Как шла работа</h3>' +
+  h += '<div class="card cabsec" id="cab-trace"><h3>🖐 Как шла работа</h3>' +
     (asum.n
       ? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
         'написано руками <b>' + asum.hand + '</b>' +
@@ -10732,10 +10786,10 @@ function screenAdult(){
     '<div class="admrow"><button class="rbtn check" data-act="toworks">Открыть витрину →</button></div></div>';
 
   /* ---------- задание ребёнку ---------- */
-  h += adultTaskHTML();
+  h += '<div class="cabsec" id="cab-task">' + adultTaskHTML() + '</div>';
 
   /* ---------- недельный отчёт ---------- */
-  h += weekReportHTML(S);
+  h += '<div class="cabsec" id="cab-week">' + weekReportHTML(S) + '</div>';
 
   h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель репетитора →</button>' +
     '<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
@@ -10967,6 +11021,15 @@ function bindFrameEditor(redraw){
 }
 function wireAdult(){
   bindFrameEditor(screenAdult);
+  /* Оглавление кабинета: кнопка везёт к карточке. Отступ прокрутки задаёт
+     scroll-margin-top у .cabsec — под липкой шапкой и самим оглавлением. */
+  syncTopHeight();
+  app.querySelectorAll("[data-cab]").forEach(function(b){
+    b.onclick = function(){
+      var el = document.getElementById(b.getAttribute("data-cab"));
+      if (el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+    };
+  });
   app.querySelectorAll("[data-ptab]").forEach(function(b){
     b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab");
       /* Ошибку сборки гасим вместе со сменой вкладки: «программа шаблона

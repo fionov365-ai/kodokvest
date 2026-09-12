@@ -5616,6 +5616,16 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (!/Когда он занимался/.test(t)) bad("[кабинет] нет карты активности");
     if (!/Задать задание/.test(t)) bad("[кабинет] нет «задать задание»");
     if (!doc.querySelector(".heat i")) bad("[кабинет] карта часов не отрисовалась");
+    /* сводка и оглавление (1.148.0): кнопка оглавления обязана вести к
+       существующей карточке — кнопка в никуда молча умирает, это уже
+       стреляло на Главном (правило «кнопка без обработчика») */
+    if (!doc.querySelector(".cabsum .admstat")) bad("[кабинет] сводка сверху не отрисовалась");
+    const cabBtns = Array.from(doc.querySelectorAll("[data-cab]"));
+    if (!cabBtns.length) bad("[кабинет] оглавление кабинета пусто");
+    cabBtns.forEach(b => {
+      if (!doc.getElementById(b.getAttribute("data-cab")))
+        bad("[кабинет] кнопка оглавления ведёт в никуда: " + b.getAttribute("data-cab"));
+    });
     if (problems.length === p0) adultChecked++;
     viewReset(g);
   }
