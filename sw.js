@@ -17,13 +17,25 @@
    старые файлы жили в кэше вечно и могли подмешаться к новой странице.
    Теперь каждый выпуск заводит свой кэш, а старые чистятся в activate.
    Версия обязана совпадать с package.json — на это есть проверка в тестах. */
-var CACHE = "kodokvest-1.156.0";
+var CACHE = "kodokvest-1.157.0";
 
 /* Оболочка: то, без чего страница не откроется. Уроки (content/worldN.js)
    тоже здесь — иначе офлайн открылась бы карта миров без самих уроков. */
 var SHELL = [
   "./", "./index.html", "./404.html", "./manifest.webmanifest", "./icon.svg",
   "./css/style.css",
+  /* Страницы сайта — тоже в оболочке (12.09.2026, § 2.6 RAZVITIE): раньше
+     офлайн ЛЮБОЙ переход откатывался на index.html, и человек, открывший
+     «Репетитору» без сети, получал детский тренажёр вместо страницы.
+     Весит это немного: страницы по ~8 КБ. ⚠️ Список обязан совпадать со
+     страницами из sitemap.xml — это стережёт тест [офлайн-страницы]. */
+  "./css/pages.css",
+  "./vitrina/", "./repetitoru/", "./semeynoe-obuchenie/",
+  "./individualnyi-proekt/", "./shkole/", "./o-proekte/", "./kontakty/",
+  "./baza/", "./baza/informatika-na-semeynom-obuchenii/",
+  "./baza/rebenok-ne-hochet-uchitsya/",
+  "./baza/skolko-stoit-repetitor-po-informatike/",
+  "./pravo/politika/", "./pravo/soglashenie/",
   /* Шрифты лежат у нас (см. шапку css/style.css). Без них в офлайне
      страница рисовалась бы системными — то есть иначе, чем онлайн. */
   "./fonts/fredoka-latin.woff2",
@@ -90,9 +102,30 @@ self.addEventListener("fetch", function(e){
     }).catch(function(){
       return caches.match(req).then(function(hit){
         if (hit) return hit;
-        /* переход по адресу без сети: отдаём саму страницу, дальше игра
-           поднимется из кэша и будет работать как обычно */
-        if (req.mode === "navigate") return caches.match("./index.html");
+        if (req.mode === "navigate"){
+          /* Тренажёром подменяем только дорогу К ТРЕНАЖЁРУ. Остальным
+             без сети — честное объяснение, а не чужой экран: до 12.09.2026
+             человек, открывший офлайн незакэшированную страницу сайта,
+             получал детский тренажёр и не понимал, куда попал. */
+          var scope = new URL(self.registration.scope).pathname;
+          if (url.pathname === scope || url.pathname === scope + "index.html")
+            return caches.match("./index.html");
+          return new Response(
+            '<!doctype html><html lang="ru"><meta charset="utf-8">' +
+            '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+            '<title>Нет сети — Фионика</title>' +
+            '<body style="margin:0;display:grid;place-items:center;min-height:100vh;' +
+            'font-family:system-ui,sans-serif;background:#f1f4fc;color:#1a1f3d">' +
+            '<div style="max-width:34em;padding:24px;text-align:center">' +
+            '<p style="font-size:42px;margin:0">📡</p>' +
+            '<h1 style="font-size:22px">Без интернета эта страница недоступна</h1>' +
+            '<p>Она откроется, когда сеть вернётся. А тренажёр работает и без ' +
+            'сети — уроки, задачи и проекты на месте.</p>' +
+            '<p><a href="' + scope + '" style="display:inline-block;background:#5a41e0;' +
+            'color:#fff;text-decoration:none;border-radius:12px;padding:12px 22px;' +
+            'font-weight:600">Открыть тренажёр</a></p></div>',
+            { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        }
         return new Response("", { status: 504, statusText: "нет сети" });
       });
     })
