@@ -26869,7 +26869,10 @@ save();
 try { refreshTop(); } catch(e){}
 }
 
-function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(dayKey()); }
+function agreedDays(){ return frameOn() ? frame().days.slice() : scheduleDays(); }
+function agreedOn(){ return agreedDays().length > 0; }
+function agreedStudyDay(key){ return frameOn() ? frameStudyDay(key) : isStudyDay(key); }
+function studyDue(){ return agreedOn() && agreedStudyDay(dayKey()) && !activeOn(dayKey()); }
 
 function blankFrame(){
 return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true,
@@ -31594,14 +31597,17 @@ var doneToday = activeOn(dayKey());
 var pick = dailyPick();
 var taskDone = dailyDone();
 var due = studyDue();
-var days = scheduleDays();
+var days = agreedDays();         
 
 var уговор = days.length
 ? "Уговор: " + days.length + " " + plural(days.length, "день", "дня", "дней") + " в неделю"
 : "Уговор пока не назначен";
+var часЗанятия = frameOn() ? frameTime() : "";
 var сегодня = doneToday
 ? "Сегодня уже занимался."
-: (due ? "Сегодня по уговору учебный день." : "Сегодня можно отдыхать — это не учебный день.");
+: (due
+? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
+: "Сегодня можно отдыхать — это не учебный день.");
 
 var hero = '<div class="streakhero">' +
 '<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
@@ -31645,10 +31651,12 @@ taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
 var saved = takeShieldNote();
 
 var banner = "";
-if (hasSchedule()){
+if (agreedOn()){
 if (studyDue())
-banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день.</b> Начни занятие, чтобы не пропустить.</div>';
-else if (isStudyDay(dayKey()))
+banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
+(часЗанятия ? ", занятие в " + esc(часЗанятия) : "") + '.</b> ' +
+'Начни занятие, чтобы не пропустить.</div>';
+else if (agreedStudyDay(dayKey()))
 banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
 else
 banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
@@ -33996,7 +34004,7 @@ refreshTop();
 function nextZanDayKey(){
 for (var i = 1; i <= 14; i++){
 var k = shiftDay(dayKey(), i);
-if (frameOn() ? frameStudyDay(k) : isStudyDay(k)) return k;
+if (agreedStudyDay(k)) return k;
 }
 return "";
 }
@@ -36819,6 +36827,22 @@ S.admin.labels[code] = name;
 saveLocal();
 return kid;
 }
+
+function kidAttach(code, name){
+var v = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
+if (!v) return null;
+var was = kidGet(v);
+if (was){                       
+if (String(name || "").trim()) kidRename(v, name);
+return was;
+}
+var kid = { code: v, name: String(name || "").trim().slice(0, 40) || v, addedAt: Date.now() };
+S.admin.kids = kidsList().concat([kid]);
+S.admin.labels = S.admin.labels || {};
+S.admin.labels[v] = kid.name;
+saveLocal();
+return kid;
+}
 function kidDrop(code){
 S.admin.kids = kidsList().filter(function(k){ return k.code !== code; });
 saveLocal();
@@ -38210,6 +38234,17 @@ h += '<div class="card" id="kidadd"><h3>Добавить ученика</h3>' +
 '<button class="rbtn check" data-kact="add">Завести</button>' +
 '</div><div class="msg" id="kidmsg"></div></div>';
 
+h += '<div class="card" id="kidback"><h3>Вернуть ученика по коду</h3>' +
+'<p class="dim">Если ученик уже занимался — у него есть код, и прогресс лежит на сервере. ' +
+'Впишите код, и ученик вернётся в список вместе со всеми занятиями. ' +
+'Код показан у ребёнка в профиле. ⚠️ Не заводите его заново по имени: ' +
+'новый код — это новый ученик с нуля.</p>' +
+'<div class="admgate">' +
+'<input type="text" id="kidcode" placeholder="код, например roman-3f7a" autocomplete="off" spellcheck="false" maxlength="32">' +
+'<input type="text" id="kidcodename" placeholder="имя для вашего списка" autocomplete="off" spellcheck="false" maxlength="40">' +
+'<button class="rbtn sec" data-kact="attach">Найти и вернуть</button>' +
+'</div><div class="msg" id="kidbackmsg"></div></div>';
+
 if (!kids.length){
 h += '<div class="note"><b>Пока ни одного ученика</b>Заведите первого — это займёт полминуты.</div>';
 } else {
@@ -38248,6 +38283,50 @@ return;
 }
 return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она уже открыта.");
 }
+if (act === "attach"){
+var raw = (document.getElementById("kidcode") || {}).value || "";
+var nm2 = (document.getElementById("kidcodename") || {}).value || "";
+var bm = document.getElementById("kidbackmsg");
+var v = (typeof Cloud !== "undefined" && Cloud.validCode(raw)) || "";
+if (!v){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Это не похоже на код</b>Код — от трёх до тридцати двух знаков: " +
+"маленькие латинские буквы, цифры, дефис и подчёркивание. Посмотрите его " +
+"у ребёнка в профиле и перепишите точно.";
+return;
+}
+if (kidGet(v)){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Этот ученик уже в списке</b>Он ниже, под кодом <code>" + esc(v) + "</code>.";
+return;
+}
+
+if (!serverOn()){
+var k0 = kidAttach(v, nm2);
+return screenKid(k0.code, "Ученик добавлен. ⚠️ Сервер не подключён — " +
+"проверить, есть ли под этим кодом занятия, было нечем.");
+}
+bm.className = "msg show"; bm.innerHTML = "<b>Ищу на сервере…</b>";
+Cloud.load(v).then(function(r){
+if (!r || !r.found || !r.data){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>На сервере нет ученика с кодом «" + esc(v) + "»</b>" +
+"Проверьте код по профилю ребёнка. Ничего не добавлено и не испорчено.";
+return;
+}
+var solved = Object.keys(r.data.stars || {}).length;
+var kid = kidAttach(v, nm2);
+screenKid(kid.code, solved
+? "Ученик вернулся в список: на сервере " + solved + " " +
+plural(solved, "сданный урок", "сданных урока", "сданных уроков") + "."
+: "Ученик вернулся в список. Сданных уроков на сервере пока нет.");
+}, function(err){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Сервер не ответил</b>" + esc(err.message || String(err)) +
+" Ничего не добавлено — попробуйте ещё раз.";
+});
+return;
+}
 if (act === "open") return screenKid(code);
 if (act === "leave") return leaveRoom();
 if (act === "role") return screenRoles();
@@ -38256,7 +38335,8 @@ if (act === "drop"){
 var k = kidGet(code);
 if (!confirm("Убрать «" + ((k && k.name) || code) + "» из списка?\n\n" +
 "Занятия ребёнка и его прогресс останутся на сервере — пропадёт только строка " +
-"в вашем списке. Вернуть можно, добавив код обратно."))
+"в вашем списке.\n\nВернуть можно карточкой «Вернуть ученика по коду». " +
+"Код этого ученика: " + code))
 return;
 kidDrop(code);
 return screenKids();
@@ -38306,6 +38386,8 @@ if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return;
 kidTarget.data = ensureShape(r.found && r.data ? r.data : blankProgress());
 kidTarget.fresh = !(r.found && r.data);
 kidTarget.serverAt = r.serverAt || 0;
+
+kidTarget.frameAt = frameShape(kidTarget.data.frame).setAt || 0;
 kidRender();
 kidWatch(code, seq);
 }, function(err){
@@ -38321,34 +38403,50 @@ var KID_TABS = [
 ["frame", "🗓", "Расписание"],
 ["hw",    "📮", "Домашка"],
 ["note",  "✍️", "Заметка"],
-["link",  "🔗", "Доступ"]    
+["link",  "🔗", "Доступ"]
 ];
+
 var kidTab = "";
 function kidPaneHTML(id, inner){
 return '<div class="kpane" data-kpane="' + id + '"' + (kidTab === id ? "" : " hidden") + '>' +
 inner + '</div>';
 }
 
-function kidLinksHTML(code){
+function kidLinksHTML(code, mentor){
 var k = kidGet(code) || {};
-return '<div class="card"><h3>Ссылка для ребёнка</h3>' +
-'<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
-'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
+
+var h = '<div class="card"><h3>🔑 Код ученика</h3>' +
+'<p class="dim">Главное, что стоит сохранить. По нему прогресс открывается с любого ' +
+'устройства; ни имени, ни почты мы не спрашиваем, и найти ребёнка иначе нечем.</p>' +
+'<div class="codebox"><code>' + esc(code) + '</code>' +
+'<button class="rbtn check" data-kd="ccopy">Скопировать код</button></div></div>';
+
+h += '<div class="card"><h3>Ссылка для ребёнка</h3>' +
+'<p class="dim">' + (mentor
+? 'Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
+'Дальше он просто заходит на сайт, и это его тренажёр.'
+: 'Откройте её на устройстве ребёнка — один раз. Дальше он просто заходит на сайт, ' +
+'и это его тренажёр. Она же выручает, если планшет сбросили или ребёнок вышел.') +
+'</p>' +
 '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
 '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
-'<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
-'<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
-'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
-'<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
-'<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
-'<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>';
+'<h3 style="margin-top:16px">Ссылка ' + (mentor ? 'для родителя' : 'на этот кабинет') + '</h3>' +
+'<p class="dim">' + (mentor
+? 'Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+'с расписанием и отчётом по этому ребёнку — и только по нему.'
+: 'Откройте её на втором своём устройстве или отправьте второму родителю: ' +
+'получится такой же кабинет по этому ребёнку — и только по нему.') +
+'</p>' +
+'<div class="codebox"><code>' + esc(parentLink(code, k.name || parentLabel())) + '</code>' +
+'<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div></div>';
+return h;
 }
 function kidRender(savedNote){
 var box = document.getElementById("kidbody");
 if (!box || !kidTarget || !kidTarget.data) return;
 var st = kidTarget.data;
 var mentor = (curPlace === "kid");
-var tabs = KID_TABS.filter(function(t){ return t[0] !== "link" || mentor; });
+var tabs = KID_TABS.slice();
 
 if (!tabs.some(function(t){ return t[0] === kidTab; }))
 kidTab = kidTarget.fresh ? "frame" : "rep";
@@ -38381,7 +38479,7 @@ frameEditorHTML(frame()) +
 
 h += kidPaneHTML("hw", hwGiveHTML(st));
 h += kidPaneHTML("note", noteGiveHTML(st));
-if (mentor) h += kidPaneHTML("link", kidLinksHTML(kidTarget.code));
+h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
 box.innerHTML = h;
 
@@ -38401,8 +38499,10 @@ p.hidden = p.getAttribute("data-kpane") !== kidTab;
 box.querySelectorAll("[data-kd]").forEach(function(b){
 b.onclick = function(){
 var a = b.getAttribute("data-kd");
+if (a === "ccopy") return copyText(kidTarget.code, b);
 if (a === "copy") return copyText(kidLink(kidTarget.code), b);
-if (a === "pcopy") return copyText(parentLink(kidTarget.code, (kidGet(kidTarget.code) || {}).name), b);
+if (a === "pcopy") return copyText(parentLink(kidTarget.code,
+(kidGet(kidTarget.code) || {}).name || parentLabel()), b);
 };
 });
 bindFrameEditor(function(){ kidRender(); });
@@ -38762,11 +38862,24 @@ var code = kidTarget.code, myFrame = frameShape(kidTarget.data.frame);
 var msg = document.getElementById("kidsavemsg");
 function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
 say("warn", "<b>Сохраняю…</b>");
+
+var openedAt = kidTarget.frameAt || 0;
 Cloud.load(code).then(function(r){
 var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+var theirs = frameShape(base.frame);
+if (openedAt && theirs.setAt > openedAt && theirs.setAt !== myFrame.setAt){
+say("bad", "<b>Рамку успели поменять</b>Пока карточка была открыта, расписание " +
+"этого ученика изменили с другого устройства. Чтобы не стереть чужую правку, " +
+"я ничего не сохранил — откройте карточку заново и посмотрите, что там теперь.");
+kidTarget.data = base;
+kidTarget.frameAt = theirs.setAt;
+kidTarget.dirty = true;
+return;
+}
 base.frame = myFrame;                        
 return Cloud.save(base, code).then(function(){
 kidTarget.data = base;
+kidTarget.frameAt = myFrame.setAt;
 kidTarget.dirty = false;
 kidTarget.fresh = false;
 kidRender("<b>Расписание сохранено</b>Оно приедет к ребёнку при следующем открытии тренажёра.");
@@ -41611,6 +41724,7 @@ warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
 screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
 streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
 scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
 frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
 shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
 shieldWouldSave: shieldWouldSave,
@@ -41725,6 +41839,7 @@ atHome: atHome, setPlace: setPlace, leaveRoom: leaveRoom, ROOM_PLACES: ROOM_PLAC
 bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
 adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
 kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
+kidAttach: kidAttach, kidRename: kidRename,
 kidLink: kidLink, frameEditorHTML: frameEditorHTML,
 isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
 parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,

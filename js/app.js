@@ -420,7 +420,18 @@ function toggleStudyDay(n){
   try { refreshTop(); } catch(e){}
 }
 /* сегодня учебный день, а заниматься ещё не садились */
-function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(dayKey()); }
+/* ===== о чём договорились: ОДИН ответ на весь продукт =====
+   ⚠️ Рамка взрослого сильнее расписания ребёнка — это было записано словами в
+   шапке рамки, но выполнялось лишь местами. Редактор дней рамку уважал, а
+   «Сегодня» — главный экран ребёнка — читал только scheduleDays(): поставил
+   репетитор занятия по субботам, а ребёнок видит «Уговор пока не назначен» и
+   «сегодня можно отдыхать». Разбор трёх ролей, 12.09.2026.
+   Три вопроса — три функции, и больше нигде этот выбор не повторяется
+   (§ 4.18: защита от класса ошибок стоит в ОДНОМ месте). */
+function agreedDays(){ return frameOn() ? frame().days.slice() : scheduleDays(); }
+function agreedOn(){ return agreedDays().length > 0; }
+function agreedStudyDay(key){ return frameOn() ? frameStudyDay(key) : isStudyDay(key); }
+function studyDue(){ return agreedOn() && agreedStudyDay(dayKey()) && !activeOn(dayKey()); }
 
 /* ================= рамка занятий: её ставит взрослый =================
    Расписание выше — настройка ребёнка: он сам отмечает дни. Рамка — то же
@@ -6462,7 +6473,7 @@ function screenToday(){
   var pick = dailyPick();
   var taskDone = dailyDone();
   var due = studyDue();
-  var days = scheduleDays();
+  var days = agreedDays();        /* рамка взрослого сильнее своего расписания */
 
   /* ⚠️ ОГОНЁК СТАЛ УГОВОРОМ (план, п. 4.4). Раньше здесь стояло число дней
      подряд, рекорд и запас щитов — то есть три способа сказать «тебе есть
@@ -6479,9 +6490,12 @@ function screenToday(){
   var уговор = days.length
     ? "Уговор: " + days.length + " " + plural(days.length, "день", "дня", "дней") + " в неделю"
     : "Уговор пока не назначен";
+  var часЗанятия = frameOn() ? frameTime() : "";
   var сегодня = doneToday
     ? "Сегодня уже занимался."
-    : (due ? "Сегодня по уговору учебный день." : "Сегодня можно отдыхать — это не учебный день.");
+    : (due
+        ? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
+        : "Сегодня можно отдыхать — это не учебный день.");
 
   var hero = '<div class="streakhero">' +
     '<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
@@ -6530,10 +6544,12 @@ function screenToday(){
 
   /* напоминание по расписанию — только внутри сайта */
   var banner = "";
-  if (hasSchedule()){
+  if (agreedOn()){
     if (studyDue())
-      banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день.</b> Начни занятие, чтобы не пропустить.</div>';
-    else if (isStudyDay(dayKey()))
+      banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
+        (часЗанятия ? ", занятие в " + esc(часЗанятия) : "") + '.</b> ' +
+        'Начни занятие, чтобы не пропустить.</div>';
+    else if (agreedStudyDay(dayKey()))
       banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
     else
       banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
@@ -9297,7 +9313,7 @@ function screenZan(){
 function nextZanDayKey(){
   for (var i = 1; i <= 14; i++){
     var k = shiftDay(dayKey(), i);
-    if (frameOn() ? frameStudyDay(k) : isStudyDay(k)) return k;
+    if (agreedStudyDay(k)) return k;
   }
   return "";
 }
@@ -12771,6 +12787,31 @@ function kidAdd(name){
   saveLocal();
   return kid;
 }
+/* Взять в список ученика, у которого код УЖЕ есть. Обратная сторона kidAdd:
+   тот ПРИДУМЫВАЕТ новый код, этот принимает готовый.
+   ⚠️ Без этого «Убрать» была дверью в один конец: карточка обещала «вернуть
+   можно, добавив код обратно», а добавить код было нечем — нашлось разбором
+   трёх ролей 12.09.2026. Той же дверью возвращается ученик, заведённый на
+   другом компьютере: список кабинета живёт только в своём браузере и на
+   сервер не уходит (CLOUD_SKIP).
+   ⚠️ Имя берём у ВЗРОСЛОГО, а не с сервера: имени ребёнка там нет по
+   построению — оно вырезано из снимка тем же CLOUD_SKIP, и это обещание
+   («о ребёнке мы не храним ничего»), а не недоделка. */
+function kidAttach(code, name){
+  var v = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
+  if (!v) return null;
+  var was = kidGet(v);
+  if (was){                      /* уже в списке — только подпись обновим */
+    if (String(name || "").trim()) kidRename(v, name);
+    return was;
+  }
+  var kid = { code: v, name: String(name || "").trim().slice(0, 40) || v, addedAt: Date.now() };
+  S.admin.kids = kidsList().concat([kid]);
+  S.admin.labels = S.admin.labels || {};
+  S.admin.labels[v] = kid.name;
+  saveLocal();
+  return kid;
+}
 function kidDrop(code){
   S.admin.kids = kidsList().filter(function(k){ return k.code !== code; });
   saveLocal();
@@ -14716,6 +14757,21 @@ function screenKids(){
       '<button class="rbtn check" data-kact="add">Завести</button>' +
     '</div><div class="msg" id="kidmsg"></div></div>';
 
+  /* ⚠️ Вторая карточка, а не вторая кнопка в первой: это РАЗНЫЕ действия.
+     «Завести» придумывает новый код, «Вернуть» принимает готовый. Смешать их
+     в одну форму — значит однажды завести второго пустого ученика тому, у
+     кого уже есть прогресс. Ровно это и случилось 12.09.2026. */
+  h += '<div class="card" id="kidback"><h3>Вернуть ученика по коду</h3>' +
+    '<p class="dim">Если ученик уже занимался — у него есть код, и прогресс лежит на сервере. ' +
+    'Впишите код, и ученик вернётся в список вместе со всеми занятиями. ' +
+    'Код показан у ребёнка в профиле. ⚠️ Не заводите его заново по имени: ' +
+    'новый код — это новый ученик с нуля.</p>' +
+    '<div class="admgate">' +
+      '<input type="text" id="kidcode" placeholder="код, например roman-3f7a" autocomplete="off" spellcheck="false" maxlength="32">' +
+      '<input type="text" id="kidcodename" placeholder="имя для вашего списка" autocomplete="off" spellcheck="false" maxlength="40">' +
+      '<button class="rbtn sec" data-kact="attach">Найти и вернуть</button>' +
+    '</div><div class="msg" id="kidbackmsg"></div></div>';
+
   if (!kids.length){
     h += '<div class="note"><b>Пока ни одного ученика</b>Заведите первого — это займёт полминуты.</div>';
   } else {
@@ -14756,6 +14812,52 @@ function screenKids(){
         }
         return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она уже открыта.");
       }
+      if (act === "attach"){
+        var raw = (document.getElementById("kidcode") || {}).value || "";
+        var nm2 = (document.getElementById("kidcodename") || {}).value || "";
+        var bm = document.getElementById("kidbackmsg");
+        var v = (typeof Cloud !== "undefined" && Cloud.validCode(raw)) || "";
+        if (!v){
+          bm.className = "msg show bad";
+          bm.innerHTML = "<b>Это не похоже на код</b>Код — от трёх до тридцати двух знаков: " +
+            "маленькие латинские буквы, цифры, дефис и подчёркивание. Посмотрите его " +
+            "у ребёнка в профиле и перепишите точно.";
+          return;
+        }
+        if (kidGet(v)){
+          bm.className = "msg show bad";
+          bm.innerHTML = "<b>Этот ученик уже в списке</b>Он ниже, под кодом <code>" + esc(v) + "</code>.";
+          return;
+        }
+        /* ⚠️ Сначала СПРАШИВАЕМ сервер, и только потом добавляем. Опечатка в
+           коде завела бы в список пустого ученика, который выглядит как
+           настоящий, — а это ровно та беда, от которой мы тут и лечим. */
+        if (!serverOn()){
+          var k0 = kidAttach(v, nm2);
+          return screenKid(k0.code, "Ученик добавлен. ⚠️ Сервер не подключён — " +
+            "проверить, есть ли под этим кодом занятия, было нечем.");
+        }
+        bm.className = "msg show"; bm.innerHTML = "<b>Ищу на сервере…</b>";
+        Cloud.load(v).then(function(r){
+          if (!r || !r.found || !r.data){
+            bm.className = "msg show bad";
+            bm.innerHTML = "<b>На сервере нет ученика с кодом «" + esc(v) + "»</b>" +
+              "Проверьте код по профилю ребёнка. Ничего не добавлено и не испорчено.";
+            return;
+          }
+          var solved = Object.keys(r.data.stars || {}).length;
+          var kid = kidAttach(v, nm2);
+          screenKid(kid.code, solved
+            ? "Ученик вернулся в список: на сервере " + solved + " " +
+              plural(solved, "сданный урок", "сданных урока", "сданных уроков") + "."
+            : "Ученик вернулся в список. Сданных уроков на сервере пока нет.");
+        }, function(err){
+          bm.className = "msg show bad";
+          bm.innerHTML = "<b>Сервер не ответил</b>" + esc(err.message || String(err)) +
+            " Ничего не добавлено — попробуйте ещё раз.";
+        });
+        return;
+      }
       if (act === "open") return screenKid(code);
       if (act === "leave") return leaveRoom();
       if (act === "role") return screenRoles();
@@ -14764,7 +14866,8 @@ function screenKids(){
         var k = kidGet(code);
         if (!confirm("Убрать «" + ((k && k.name) || code) + "» из списка?\n\n" +
                      "Занятия ребёнка и его прогресс останутся на сервере — пропадёт только строка " +
-                     "в вашем списке. Вернуть можно, добавив код обратно."))
+                     "в вашем списке.\n\nВернуть можно карточкой «Вернуть ученика по коду». " +
+                     "Код этого ученика: " + code))
           return;
         kidDrop(code);
         return screenKids();
@@ -14816,6 +14919,9 @@ function kidLoad(code){
     kidTarget.data = ensureShape(r.found && r.data ? r.data : blankProgress());
     kidTarget.fresh = !(r.found && r.data);
     kidTarget.serverAt = r.serverAt || 0;
+    /* с какой рамкой мы открылись — по ней kidSave поймёт, что её успели
+       поменять с другого устройства, и не затрёт чужую правку молча */
+    kidTarget.frameAt = frameShape(kidTarget.data.frame).setAt || 0;
     kidRender();
     kidWatch(code, seq);
   }, function(err){
@@ -14840,34 +14946,61 @@ var KID_TABS = [
   ["frame", "🗓", "Расписание"],
   ["hw",    "📮", "Домашка"],
   ["note",  "✍️", "Заметка"],
-  ["link",  "🔗", "Доступ"]   /* только у репетитора: родителю раздавать нечего */
+  ["link",  "🔗", "Доступ"]
 ];
+/* ⚠️ «Доступ» был спрятан от родителя с пометкой «родителю раздавать нечего».
+   Это оказалось неправдой, и дорогой: у родителя НИГДЕ не было видно кода
+   ребёнка (в шапке при заданной подписи стоит имя, а не код), а экран «Не
+   помню код» при этом обещает ребёнку: «у родителя, который смотрит твои
+   занятия, код тоже есть». Есть — а показать было негде. Плюс родителю
+   ссылка ребёнка нужна ровно тогда, когда её труднее всего достать: планшет
+   сбросили, ребёнок вышел. Разбор трёх ролей, 12.09.2026.
+   Кому что показывать внутри вкладки, решает kidLinksHTML: репетитор
+   раздаёт, родитель хранит. */
 var kidTab = "";
 function kidPaneHTML(id, inner){
   return '<div class="kpane" data-kpane="' + id + '"' + (kidTab === id ? "" : " hidden") + '>' +
     inner + '</div>';
 }
 /* Ссылки и код — бывшая статичная карточка screenKid: теперь вкладка. */
-function kidLinksHTML(code){
+function kidLinksHTML(code, mentor){
   var k = kidGet(code) || {};
-  return '<div class="card"><h3>Ссылка для ребёнка</h3>' +
-    '<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
-    'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
+  /* ⚠️ Код — ПЕРВЫМ и крупно, а не сноской внизу. Это единственная вещь, без
+     которой прогресс ребёнка не найти ни с какого другого устройства, и
+     единственная, которую взрослого просят сохранить у себя. Внизу мелким
+     она стояла у репетитора — и у него же 12.09.2026 потерялся ученик. */
+  var h = '<div class="card"><h3>🔑 Код ученика</h3>' +
+    '<p class="dim">Главное, что стоит сохранить. По нему прогресс открывается с любого ' +
+    'устройства; ни имени, ни почты мы не спрашиваем, и найти ребёнка иначе нечем.</p>' +
+    '<div class="codebox"><code>' + esc(code) + '</code>' +
+    '<button class="rbtn check" data-kd="ccopy">Скопировать код</button></div></div>';
+
+  h += '<div class="card"><h3>Ссылка для ребёнка</h3>' +
+    '<p class="dim">' + (mentor
+      ? 'Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
+        'Дальше он просто заходит на сайт, и это его тренажёр.'
+      : 'Откройте её на устройстве ребёнка — один раз. Дальше он просто заходит на сайт, ' +
+        'и это его тренажёр. Она же выручает, если планшет сбросили или ребёнок вышел.') +
+    '</p>' +
     '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
     '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
-    '<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
-    '<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
-    'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
-    '<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
-    '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
-    '<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>';
+    '<h3 style="margin-top:16px">Ссылка ' + (mentor ? 'для родителя' : 'на этот кабинет') + '</h3>' +
+    '<p class="dim">' + (mentor
+      ? 'Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+        'с расписанием и отчётом по этому ребёнку — и только по нему.'
+      : 'Откройте её на втором своём устройстве или отправьте второму родителю: ' +
+        'получится такой же кабинет по этому ребёнку — и только по нему.') +
+    '</p>' +
+    '<div class="codebox"><code>' + esc(parentLink(code, k.name || parentLabel())) + '</code>' +
+    '<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div></div>';
+  return h;
 }
 function kidRender(savedNote){
   var box = document.getElementById("kidbody");
   if (!box || !kidTarget || !kidTarget.data) return;
   var st = kidTarget.data;
   var mentor = (curPlace === "kid");
-  var tabs = KID_TABS.filter(function(t){ return t[0] !== "link" || mentor; });
+  var tabs = KID_TABS.slice();
   /* Стартовая вкладка: отчёт — если он есть; новому ученику показываем
      расписание, потому что это первое (и единственное) осмысленное действие. */
   if (!tabs.some(function(t){ return t[0] === kidTab; }))
@@ -14903,7 +15036,7 @@ function kidRender(savedNote){
 
   h += kidPaneHTML("hw", hwGiveHTML(st));
   h += kidPaneHTML("note", noteGiveHTML(st));
-  if (mentor) h += kidPaneHTML("link", kidLinksHTML(kidTarget.code));
+  h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
   box.innerHTML = h;
   /* переключение — только показ/скрытие, без перерисовки (см. шапку) */
@@ -14923,8 +15056,10 @@ function kidRender(savedNote){
   box.querySelectorAll("[data-kd]").forEach(function(b){
     b.onclick = function(){
       var a = b.getAttribute("data-kd");
+      if (a === "ccopy") return copyText(kidTarget.code, b);
       if (a === "copy") return copyText(kidLink(kidTarget.code), b);
-      if (a === "pcopy") return copyText(parentLink(kidTarget.code, (kidGet(kidTarget.code) || {}).name), b);
+      if (a === "pcopy") return copyText(parentLink(kidTarget.code,
+        (kidGet(kidTarget.code) || {}).name || parentLabel()), b);
     };
   });
   bindFrameEditor(function(){ kidRender(); });
@@ -15328,11 +15463,29 @@ function kidSave(){
   var msg = document.getElementById("kidsavemsg");
   function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
   say("warn", "<b>Сохраняю…</b>");
+  /* ⚠️ Рамку читали при открытии карточки, а кладут на сервер сейчас — между
+     этим взрослый успевает подумать, а ребёнок или второй взрослый успевает
+     поменять рамку у себя. Раньше здесь стояло голое base.frame = myFrame, и
+     чужая правка исчезала МОЛЧА. Решаем по СОСТОЯНИЮ, а не по времени
+     (§ 4.19): рамка несёт setAt, и если на сервере он свежее того, с чем мы
+     открылись, — не затираем, а говорим вслух. */
+  var openedAt = kidTarget.frameAt || 0;
   Cloud.load(code).then(function(r){
     var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+    var theirs = frameShape(base.frame);
+    if (openedAt && theirs.setAt > openedAt && theirs.setAt !== myFrame.setAt){
+      say("bad", "<b>Рамку успели поменять</b>Пока карточка была открыта, расписание " +
+        "этого ученика изменили с другого устройства. Чтобы не стереть чужую правку, " +
+        "я ничего не сохранил — откройте карточку заново и посмотрите, что там теперь.");
+      kidTarget.data = base;
+      kidTarget.frameAt = theirs.setAt;
+      kidTarget.dirty = true;
+      return;
+    }
     base.frame = myFrame;                       /* только расписание, прогресс не трогаем */
     return Cloud.save(base, code).then(function(){
       kidTarget.data = base;
+      kidTarget.frameAt = myFrame.setAt;
       kidTarget.dirty = false;
       kidTarget.fresh = false;
       kidRender("<b>Расписание сохранено</b>Оно приедет к ребёнку при следующем открытии тренажёра.");
@@ -18823,6 +18976,7 @@ window.__game = {
   screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
   streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+  agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
   frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
   shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
   shieldWouldSave: shieldWouldSave,
@@ -18937,6 +19091,7 @@ window.__game = {
   bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
+  kidAttach: kidAttach, kidRename: kidRename,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
   isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
   parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,

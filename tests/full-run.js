@@ -5631,6 +5631,43 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (g.frame().report !== false) bad("[рамка] галочка отчётов не снялась");
     g.frameSet({ report:true, days:[1,2,3,4,5], len:30, mix:"balanced" });
 
+    /* --- 3о. рамка взрослого сильнее расписания ребёнка — И НА ЕГО ЭКРАНЕ.
+       ⚠️ Разбор трёх ролей 12.09.2026: в шапке рамки было написано, что она
+       сильнее, а «Сегодня» — главный экран ребёнка — читал только своё
+       расписание. Репетитор ставил занятия по субботам, ребёнок видел
+       «Уговор пока не назначен» и «сегодня можно отдыхать». --- */
+    {
+      const сб = 6, today = g.dayKey(), wdToday = new Date(today + "T12:00:00").getDay();
+      g.state.schedule.days = [];
+      g.frameSet({ days:[сб], time:"17:00", until:null, breaks: [] });
+      if (!g.agreedOn()) bad("[рамка] с рамкой взрослого «уговора» не видно");
+      if (g.agreedDays().join() !== String(сб))
+        bad("[рамка] дни уговора взяты не из рамки: " + g.agreedDays().join());
+      /* своё расписание ребёнка рамку НЕ перебивает */
+      g.state.schedule.days = [1,2,3];
+      if (g.agreedDays().join() !== String(сб))
+        bad("[рамка] расписание ребёнка перебило рамку взрослого: " + g.agreedDays().join());
+      /* а без рамки возвращается своё — рамку сняли, уговор ребёнка вернулся */
+      g.frameSet({ days: [] });
+      if (g.agreedDays().join() !== "1,2,3")
+        bad("[рамка] без рамки своё расписание не вернулось: " + g.agreedDays().join());
+
+      /* и это видно НА ЭКРАНЕ, а не только в функции */
+      g.state.schedule.days = [];
+      g.frameSet({ days:[wdToday], time:"17:00" });
+      g.state.days = {};
+      g.screenToday(); await tick();
+      const tt = doc.getElementById("app").textContent;
+      if (/Уговор пока не назначен/.test(tt))
+        bad("[рамка] на «Сегодня» уговор не назначен, хотя рамка взрослого стоит");
+      if (!/Сегодня по уговору учебный день/.test(tt))
+        bad("[рамка] рамка назначила занятие на сегодня, а «Сегодня» этого не говорит");
+      if (!/17:00/.test(tt))
+        bad("[расписание] час занятия не доехал до экрана ребёнка");
+      g.frameSet({ days:[1,2,3,4,5], time:null });
+      g.state.schedule.days = [];
+    }
+
     /* --- 3а. время занятия, горизонт и календарь (просьба фаундера 12.09.2026:
        «суббота в 17:00, и так на месяц-два-три») --- */
     {
@@ -9064,6 +9101,128 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             bad("[панель] клик по «Доступу» не показал ссылки ученика");
         }
         g.kidDrop(kid.code);
+
+        /* --- возврат ученика по ГОТОВОМУ коду ---
+           ⚠️ Разбор трёх ролей 12.09.2026: «Убрать» обещала «вернуть можно,
+           добавив код обратно», а добавить код было нечем — kidAdd всегда
+           придумывает НОВЫЙ со случайным хвостом. На этом 12.09.2026 потерялся
+           настоящий ученик: его завели заново, и кабинет смотрел в пустую
+           запись, пока прогресс лежал на сервере под прежним кодом. */
+        if (typeof g.kidAttach !== "function") bad("[кабинет] нет способа вернуть ученика по коду");
+        else {
+          const было = g.kidsList().length;
+          if (g.kidAttach("НЕ КОД")) bad("[кабинет] негодный код принят в список");
+          if (g.kidsList().length !== было) bad("[кабинет] негодный код всё-таки попал в список");
+
+          const k2 = g.kidAttach("roman-3f7a", "Роман");
+          if (!k2 || k2.code !== "roman-3f7a")
+            bad("[кабинет] готовый код не принят: " + JSON.stringify(k2));
+          if (k2 && k2.name !== "Роман") bad("[кабинет] подпись ученика не сохранилась: " + k2.name);
+          /* ⚠️ Код НЕ переписывается и хвост не добавляется — иначе возврат
+             превратился бы в то самое заведение нового ученика */
+          if (!g.kidsList().some(k => k.code === "roman-3f7a"))
+            bad("[кабинет] вернувшийся ученик в списке под другим кодом: " +
+                g.kidsList().map(k => k.code).join(", "));
+          /* повтор не плодит вторую строку, но подпись обновляет.
+             ⚠️ Читаем строку списка через проверку на null: при сломанном
+             возврате её там нет, и прежняя версия этой проверки падала
+             TypeError, унося с собой ВЕСЬ остаток прогона. Проверка обязана
+             назвать беду, а не свалиться (нашлось нарочной поломкой). */
+          g.kidAttach("roman-3f7a", "Роман Александрович");
+          if (g.kidsList().filter(k => k.code === "roman-3f7a").length !== 1)
+            bad("[кабинет] повторный возврат завёл ученика второй раз");
+          const вернулся = g.kidGet("roman-3f7a");
+          if (!вернулся) bad("[кабинет] после повторного возврата ученика нет в списке");
+          else if (вернулся.name !== "Роман Александрович")
+            bad("[кабинет] повторный возврат не обновил подпись: " + вернулся.name);
+          /* заглавные буквы кода приводятся к маленьким, как и везде */
+          g.kidAttach("MISHA-7F3A", "Миша");
+          if (!g.kidGet("misha-7f3a")) bad("[кабинет] код из заглавных букв не принят");
+          /* прибираем за собой по СПИСКУ, а не по ожидаемым кодам: при
+             сломанном возврате коды другие, и хвост от одной проверки
+             испортил бы соседнюю */
+          g.kidsList().slice().forEach(k => g.kidDrop(k.code));
+
+          /* --- правка рамки не теряется молча (разбор трёх ролей 12.09.2026) ---
+             ⚠️ kidSave читал рамку при ОТКРЫТИИ карточки, а клал на сервер
+             при нажатии «Сохранить» — и голым base.frame = myFrame стирал
+             всё, что за это время поменяли с другого устройства. Молча. */
+          {
+            const T0 = Date.now() - 60 * 60e3;
+            const снимок = at => g.ensureShape({ stars:{}, log:{},
+              frame: { days:[1], len:30, mix:"balanced", breaks:[], report:true, setAt: at } });
+            w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(T0) });
+            let saved = 0;
+            const origSave = w.Cloud.save;
+            w.Cloud.save = function(){ saved++; return Promise.resolve({ ok:true }); };
+            try {
+              const k4 = g.kidAttach("kidsave-1", "Проверка");
+              g.screenKid(k4.code); await tick(); await tick();
+              /* взрослый поменял дни у себя в карточке */
+              g.frameSet({ days:[6] });
+              /* а в это время ту же рамку поменяли с другого устройства */
+              w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(Date.now()) });
+              const sv = doc.querySelector('[data-kf="save"]');
+              if (!sv) bad("[рамка] в карточке ученика нет кнопки сохранения расписания");
+              else {
+                sv.click(); await tick(); await tick();
+                const m4 = doc.getElementById("kidsavemsg");
+                if (saved) bad("[рамка] чужая правка рамки затёрта молча: сохранение всё-таки ушло");
+                if (!m4 || !/успели поменять/.test(m4.textContent))
+                  bad("[рамка] про чужую правку не сказано ни слова: " +
+                      ((m4 && m4.textContent) || "нет сообщения"));
+              }
+              /* а когда никто не мешал — сохраняется как раньше */
+              w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(T0) });
+              g.screenKid(k4.code); await tick(); await tick();
+              g.frameSet({ days:[5] });
+              saved = 0;
+              const sv2 = doc.querySelector('[data-kf="save"]');
+              if (sv2){
+                sv2.click(); await tick(); await tick();
+                if (!saved) bad("[рамка] обычное сохранение расписания перестало работать");
+              }
+              g.kidDrop(k4.code);
+            } finally { w.Cloud.save = origSave; }
+          }
+
+          /* --- код и ссылки у РОДИТЕЛЯ (разбор трёх ролей 12.09.2026) ---
+             ⚠️ Вкладка «Доступ» была спрятана от родителя с пометкой
+             «родителю раздавать нечего», и код ребёнка не показывался ему
+             НИГДЕ: в шапке при заданной подписи стоит имя. При этом экран
+             «Не помню код» обещает ребёнку, что у родителя код есть. */
+          {
+            const st0 = g.ensureShape({ stars:{}, log:{} });
+            w.Cloud.load = () => Promise.resolve({ found: true, data: st0 });
+            g.becomeParent("rebenok-1", "Рома");
+            g.screenParent("rebenok-1"); await tick(); await tick();
+            const pt = doc.getElementById("app").textContent;
+            const ph = doc.getElementById("app").innerHTML;
+            if (pt.indexOf("rebenok-1") < 0)
+              bad("[родитель] код ребёнка нигде не показан родителю");
+            if (!/data-kd="ccopy"/.test(ph))
+              bad("[родитель] код нечем скопировать");
+            const ptabs = [...doc.querySelectorAll(".kidnav .ltab")].map(b => b.textContent);
+            if (!ptabs.some(x => x.indexOf("Доступ") >= 0))
+              bad("[родитель] нет вкладки «Доступ»: " + ptabs.join(" | "));
+            if (!/\?kid=rebenok-1/.test(ph))
+              bad("[родитель] нет ссылки для устройства ребёнка");
+            if (!/\?parent=rebenok-1/.test(ph))
+              bad("[родитель] нет ссылки на этот же кабинет для второго устройства");
+            /* ⚠️ Рамку родитель править может — это его ребёнок */
+            if (!/id="ftime"/.test(ph))
+              bad("[родитель] родителю недоступно время занятия");
+            g.becomeAdmin();
+          }
+
+          /* и форма возврата есть НА ЭКРАНЕ, а не только в модели */
+          g.screenKids(); await tick();
+          const kh = doc.getElementById("app").innerHTML;
+          if (!/id="kidcode"/.test(kh)) bad("[кабинет] на экране учеников нет поля для готового кода");
+          if (!/data-kact="attach"/.test(kh)) bad("[кабинет] нет кнопки возврата по коду");
+          if (!/Вернуть ученика по коду/.test(doc.getElementById("app").textContent))
+            bad("[кабинет] карточка возврата не названа словами");
+        }
       } finally {
         w.Cloud.load = origLoad; w.Cloud.hasUrl = origHas;
       }
