@@ -1,6 +1,6 @@
 {
   "name": "kodokvest",
-  "version": "1.149.0",
+  "version": "1.154.1",
   "private": true,
   "description": "Фионика — тренажёр по информатике: программирование на Python для школьников",
   "scripts": {

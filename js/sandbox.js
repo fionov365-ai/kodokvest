@@ -96,7 +96,7 @@ function screenSandbox(){
     '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
     'Первая строка-комментарий станет названием.</span>' +
     '<div class="msg" id="picmsg"></div></div>') +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
   var studio = A.makeStudio({
     engine: real ? "pyodide" : "mini", draw: !real,

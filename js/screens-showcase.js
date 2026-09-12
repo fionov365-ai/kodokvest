@@ -166,7 +166,7 @@ function screenShowcase(){
     'Вместо неё — <b>адресная ссылка</b>: любую свою работу или задачу ребёнок отправляет ' +
     'конкретному человеку, и она не попадает никуда больше.</p></div>';
 
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
   A.app.innerHTML = h;
 
   A.app.querySelectorAll("[data-show]").forEach(function(b){

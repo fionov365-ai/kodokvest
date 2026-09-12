@@ -17,5 +17,7 @@ Disallow: /vendor/
 Disallow: /tests/
 Disallow: /tools/
 Disallow: /node_modules/
+# og/card.html — заготовка картинки для соцсетей, читателю она не нужна
+Disallow: /og/
 
 Sitemap: https://fionov365-ai.github.io/kodokvest/sitemap.xml

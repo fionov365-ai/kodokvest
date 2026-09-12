@@ -2333,6 +2333,30 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (!/wrday shield/.test(html)) bad("[отчёт] день, закрытый щитом, не отмечен в полосе");
     if ((html.match(/🛡/g) || []).length < 2) bad("[отчёт] в клетке щита нет значка щита");
 
+    /* ⚠️ День, где ребёнок сидел в тренажёре и ничего не закончил, — не прогул.
+       Нашлось взглядом фаундера 12.09.2026: сетка недели рисовала «—»
+       (пропуск), а карта ритма прямо под ней показывала сорок минут. Ячейка
+       решалась только по days и про hours не знала. */
+    {
+      const hrs = []; for (let i = 0; i < 24; i++) hrs.push(0);
+      hrs[17] = 40 * 60;
+      const satOnly = g.weekReportHTML({
+        stars:{}, log:{}, days:{}, shields:{}, hours:{ [dk(-3)]: hrs } });
+      const cells = (satOnly.match(/<span class="wrn">([^<]*)<\/span>/g) || []);
+      const dots = cells.filter(c => c.indexOf("·") >= 0).length;
+      if (dots !== 1)
+        bad("[отчёт] день со временем в тренажёре и без урока показан не точкой: " +
+            cells.join(" "));
+      /* и наоборот: день, где не было НИЧЕГО, остаётся прочерком.
+         ⚠️ Считаем только КЛЕТКИ: «·» есть и в подписи под полосой, и первая
+         версия этой проверки падала именно на легенде. */
+      const nothing = g.weekReportHTML({ stars:{}, log:{}, days:{}, shields:{}, hours:{} });
+      const cells0 = (nothing.match(/<span class="wrn">([^<]*)<\/span>/g) || []);
+      if (!cells0.length) bad("[отчёт] полоса недели не нарисована вовсе");
+      if (cells0.some(c => c.indexOf("·") >= 0))
+        bad("[отчёт] пустая неделя нарисована точками вместо прочерков: " + cells0.join(" "));
+    }
+
     /* урок, пройденный давно, в недельный счёт попадать не должен */
     const old = g.weekReportHTML({
       stars:{ "print-first":3 },
@@ -3484,11 +3508,34 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
       { rx: /(\d+)\s+задач/g,                 сколько: (w.ALGO || []).length,       что: "задач экзамена" },
       { rx: /(\d+)\s+задани\S*\s+по\s+HTML/g, сколько: (w.WEB_TASKS || []).length,  что: "заданий по HTML и CSS" }
     ];
-    ["vitrina", "repetitoru", "shkole", "semeynoe-obuchenie", "individualnyi-proekt",
-     "baza/informatika-na-semeynom-obuchenii"].forEach(page => {
+    /* ⚠️ Страницы берём СО СБОРА, а не списком руками. Оплачено 12.09.2026:
+       список был написан в этой строке, `o-proekte` в него не попала, и на ней
+       полгода стояло «Девяносто пять задач», когда их уже 97. Список страниц
+       стареет ровно так же, как числа на них, — и молча. Теперь проверяются
+       ВСЕ страницы сайта, какие есть на диске. */
+    const страницыСайта = [];
+    (function walkSite(dir, rel){
+      fs.readdirSync(dir, { withFileTypes:true }).forEach(e => {
+        if (e.name === "node_modules" || e.name === "dist" || e.name.charAt(0) === ".") return;
+        if (!e.isDirectory()) return;
+        const full = path.join(dir, e.name), r = rel ? rel + "/" + e.name : e.name;
+        if (fs.existsSync(path.join(full, "index.html"))) страницыСайта.push(r);
+        walkSite(full, r);
+      });
+    })(root, "");
+    if (страницыСайта.length < 9)
+      bad("[числа-сайта] страниц сайта найдено " + страницыСайта.length +
+          " — сбор списка сломался, и проверка почти ничего не смотрит");
+    страницыСайта.forEach(page => {
       const f = path.join(root, page, "index.html");
-      if (!fs.existsSync(f)) return bad("[числа-сайта] нет страницы " + page);
-      const текст = fs.readFileSync(f, "utf8").replace(/<[^>]+>/g, " ");
+      /* ⚠️ Блоки с чужими числами вырезаем ДО сверки. На странице про цены
+         лежит таблица одиннадцати школ, и «6 400 ₽/мес за 8 уроков» — пакет
+         конкурента, а не наши сто уроков. Помечается в разметке явно
+         (data-chuzhoe), а не угадывается здесь: угадывание однажды вырежет
+         наше число вместе с чужим. */
+      const текст = fs.readFileSync(f, "utf8")
+        .replace(/<([a-z]+)[^>]*\bdata-chuzhoe\b[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<[^>]+>/g, " ");
       надо.forEach(n => {
         n.rx.lastIndex = 0;
         let m;
@@ -3497,6 +3544,51 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             bad("[числа-сайта] " + page + ": написано «" + m[0].trim() + "», а в продукте " +
                 n.сколько + " " + n.что + " — страница врёт посетителю");
       });
+      /* ⚠️ Число ЗАДАЧ прописью запрещено отдельно (§ 4.25). Именно оно уже
+         дважды уезжало (95 → 97), и именно прописью его не видит проверка
+         выше. Уроки, миры и проекты — устойчивые обещания продукта, и «Сто
+         уроков» там читается лучше цифры; их цифровые формы стережёт та же
+         таблица. */
+      /* ⚠️⚠️ Две ловушки, обе оплачены 12.09.2026 в этой самой строке.
+         1) В JavaScript `\b` знает только латиницу и цифры: перед «девяносто»
+            границы слова НЕТ, и регулярка с `\b` не срабатывает никогда.
+            Проверка, которая не может упасть, — хуже отсутствующей.
+         2) Число прописью бывает из ДВУХ слов: «девяносто пять задач».
+            Однословный шаблон его не видит.
+         Поэтому: граница вручную (не буква кириллицы) и необязательное
+         второе слово. Проверено мутацией — вернул старый текст, упало. */
+      const ЧИСЛ = "ноль|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять|" +
+        "одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать|шестнадцать|" +
+        "семнадцать|восемнадцать|девятнадцать|двадцать|тридцать|сорок|пятьдесят|" +
+        "шестьдесят|семьдесят|восемьдесят|девяносто|сто";
+      const прописью = текст.match(new RegExp(
+        "(?:^|[^а-яёА-ЯЁ])(?:" + ЧИСЛ + ")\\S*(?:\\s+(?:" + ЧИСЛ + ")\\S*)?\\s+задач", "gi"));
+      if (прописью)
+        bad("[числа-сайта] " + page + ": число задач написано прописью — «" +
+            прописью[0].trim() + "». Прописью его не видит ни одна проверка, " +
+            "а меняется оно каждый месяц (§ 4.25). Писать цифрами");
+    });
+    /* ⚠️ Три вещи, которые на страницах ломаются молча и которые разбор
+       12.09.2026 нашёл руками. Все три — про то, что человек НЕ ПОЙМЁТ, где
+       он и куда идти, а не про валидность разметки. */
+    страницыСайта.forEach(page => {
+      const raw = fs.readFileSync(path.join(root, page, "index.html"), "utf8");
+      const up = "../".repeat(page.split("/").length);
+      /* 1) с каждой страницы есть выход в сам продукт. `baza/` его не имела
+            вовсе — единственная страница сайта без двери в тренажёр. */
+      if (raw.indexOf('href="' + up + '"') < 0)
+        bad("[страницы] " + page + ": нет ни одной ссылки в тренажёр — со страницы некуда идти");
+      /* 2) уровни заголовков не перепрыгиваются: h1 → h3 читалка экрана
+            озвучивает как подзаголовок без заголовка. */
+      const ур = (raw.match(/<h([1-6])[ >]/g) || []).map(t => Number(t.replace(/\D/g, "")));
+      for (let i = 1; i < ур.length; i++)
+        if (ур[i] > ур[i - 1] + 1)
+          return bad("[страницы] " + page + ": уровень заголовка прыгает с h" +
+            ур[i - 1] + " на h" + ур[i] + " — читалке экрана это «подзаголовок без заголовка»");
+      /* 3) в подвале обе правовые страницы, а не одна: «Условия» отсутствовали
+            во всех четырёх страницах справочника. */
+      if (raw.indexOf("pravo/politika/") >= 0 && raw.indexOf("pravo/soglashenie/") < 0)
+        bad("[страницы] " + page + ": в подвале есть «Конфиденциальность», но нет «Условий»");
     });
     if (problems.length === p0) siteNumsChecked++;
   }
@@ -5607,25 +5699,218 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (g.frame().report !== false) bad("[рамка] галочка отчётов не снялась");
     g.frameSet({ report:true, days:[1,2,3,4,5], len:30, mix:"balanced" });
 
+    /* --- 3о. рамка взрослого сильнее расписания ребёнка — И НА ЕГО ЭКРАНЕ.
+       ⚠️ Разбор трёх ролей 12.09.2026: в шапке рамки было написано, что она
+       сильнее, а «Сегодня» — главный экран ребёнка — читал только своё
+       расписание. Репетитор ставил занятия по субботам, ребёнок видел
+       «Уговор пока не назначен» и «сегодня можно отдыхать». --- */
+    {
+      const сб = 6, today = g.dayKey(), wdToday = new Date(today + "T12:00:00").getDay();
+      g.state.schedule.days = [];
+      g.frameSet({ days:[сб], time:"17:00", until:null, breaks: [] });
+      if (!g.agreedOn()) bad("[рамка] с рамкой взрослого «уговора» не видно");
+      if (g.agreedDays().join() !== String(сб))
+        bad("[рамка] дни уговора взяты не из рамки: " + g.agreedDays().join());
+      /* своё расписание ребёнка рамку НЕ перебивает */
+      g.state.schedule.days = [1,2,3];
+      if (g.agreedDays().join() !== String(сб))
+        bad("[рамка] расписание ребёнка перебило рамку взрослого: " + g.agreedDays().join());
+      /* а без рамки возвращается своё — рамку сняли, уговор ребёнка вернулся */
+      g.frameSet({ days: [] });
+      if (g.agreedDays().join() !== "1,2,3")
+        bad("[рамка] без рамки своё расписание не вернулось: " + g.agreedDays().join());
+
+      /* и это видно НА ЭКРАНЕ, а не только в функции */
+      g.state.schedule.days = [];
+      g.frameSet({ days:[wdToday], time:"17:00" });
+      g.state.days = {};
+      g.screenToday(); await tick();
+      const tt = doc.getElementById("app").textContent;
+      if (/Уговор пока не назначен/.test(tt))
+        bad("[рамка] на «Сегодня» уговор не назначен, хотя рамка взрослого стоит");
+      if (!/Сегодня по уговору учебный день/.test(tt))
+        bad("[рамка] рамка назначила занятие на сегодня, а «Сегодня» этого не говорит");
+      if (!/17:00/.test(tt))
+        bad("[расписание] час занятия не доехал до экрана ребёнка");
+      g.frameSet({ days:[1,2,3,4,5], time:null });
+      g.state.schedule.days = [];
+    }
+
+    /* --- 3а. время занятия, горизонт и календарь (просьба фаундера 12.09.2026:
+       «суббота в 17:00, и так на месяц-два-три») --- */
+    {
+      /* ⚠️⚠️ Загрузка ПРИ УЖЕ СОХРАНЁННОМ часе. Оплачено ошибкой 12.09.2026:
+         регулярка часа лежала в `var TIME_RE` на строке 463, а ensureShape(S)
+         зовётся на 199 — и у всякого, у кого час уже был сохранён, тренажёр
+         падал при загрузке ещё до первой отрисовки. Тесты молчали: на чистом
+         состоянии time равен null, и до регулярки дело не доходило. Нашлось
+         глазами в браузере (§ 4.7), а не прогоном.
+         Проверяем ОБА конца: что форма переживает сохранённый час и что в
+         исходнике час разбирается поднимаемым объявлением, а не константой,
+         которой может не оказаться. */
+      {
+        let живо = true;
+        try { g.ensureShape({ frame: { days:[6], time:"17:00", len:30 } }); }
+        catch(e){ живо = false; bad("[расписание] сохранённый час роняет разбор прогресса: " + e.message); }
+        if (живо){
+          const ш = g.ensureShape({ frame: { days:[6], time:"17:00", len:30 } });
+          if (!ш.frame || ш.frame.time !== "17:00")
+            bad("[расписание] сохранённый час потерялся при разборе: " + JSON.stringify(ш.frame));
+        }
+        const src = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+        if (/var\s+TIME_RE\s*=/.test(src))
+          bad("[расписание] час снова разбирается через var — он присваивается позже, " +
+              "чем ensureShape(S) его зовёт, и тренажёр упадёт при загрузке");
+        if (!/function\s+validTime\s*\(/.test(src))
+          bad("[расписание] нет поднимаемого разбора часа (validTime)");
+      }
+
+      /* ⚠️ Замер занятий и запись авторства обязаны считаться ПО СНИМКУ
+         УЧЕНИКА, а не по своему состоянию. Ровно эта ошибка уже стоила
+         кабинету родителя трёх карточек (разбор трёх ролей 12.09.2026), и
+         она же в 1.130.0 заставляла paceCheck обещать родителю чужую дату:
+         функция считала по прогрессу САМОГО РЕПЕТИТОРА. */
+      {
+        const тНыне = Date.now(), тСутки = 864e5;
+        const мой = g.state.zan, мойЛог = g.state.log;
+        g.state.zan = {}; g.state.log = {};
+        const чужой = g.ensureShape({ zan:{}, log:{} });
+        for (let i = 0; i < 6; i++)
+          чужой.zan[g.dayKey() + "#" + i] = { end: тНыне - i*тСутки, sec: 1800, done: ["lesson:a", "lesson:b"] };
+        const замер = g.zanStats(чужой);
+        if (замер.n !== 6)
+          bad("[замер] по снимку ученика занятий посчитано " + замер.n + " вместо шести");
+        if (g.zanStats().n !== 0)
+          bad("[замер] свой замер перестал считаться по своему состоянию: " + g.zanStats().n);
+        /* запись авторства — так же по снимку */
+        чужой.log["print-first"] = { tr: { len: 200, slen: 0, edits: 1, pasted: 300, at: тНыне } };
+        const запись = g.authorSummary(чужой);
+        if (!запись.n)
+          bad("[замер] запись авторства по снимку ученика пуста — считается не по нему");
+        if (g.authorSummary().n)
+          bad("[замер] своя запись авторства подхватила чужой снимок");
+        g.state.zan = мой; g.state.log = мойЛог;
+      }
+
+      /* час проверяется, а не берётся на веру: «25:00» и «17» — не время */
+      g.frameSet({ time:"25:00" });
+      if (g.frameTime()) bad("[расписание] негодный час принят: " + g.frameTime());
+      g.frameSet({ time:"17" });
+      if (g.frameTime()) bad("[расписание] час без минут принят: " + g.frameTime());
+      g.frameSet({ time:"17:00" });
+      if (g.frameTime() !== "17:00") bad("[расписание] годный час не сохранился: " + g.frameTime());
+
+      /* «+1 месяц» от конца месяца не перепрыгивает месяц целиком */
+      if (g.addMonths("2026-01-31", 1) !== "2026-02-28")
+        bad("[расписание] 31 января + месяц = " + g.addMonths("2026-01-31", 1) + ", ожидалось 28 февраля");
+      if (g.addMonths("2026-11-30", 2) !== "2027-01-30")
+        bad("[расписание] переход через год посчитан неверно: " + g.addMonths("2026-11-30", 2));
+
+      /* план по субботам: только субботы, и ровно до горизонта */
+      const today = g.dayKey();
+      const until = g.addMonths(today, 2);
+      g.frameSet({ days:[6], time:"17:00", until: until, breaks: [] });
+      const plan = g.planDates(0);
+      if (!plan.length) bad("[расписание] план по субботам пуст");
+      if (plan.some(k => new Date(k + "T12:00:00").getDay() !== 6))
+        bad("[расписание] в план по субботам попал другой день: " + plan.slice(0, 5).join(", "));
+      if (plan[plan.length - 1] > until)
+        bad("[расписание] план вылез за горизонт: " + plan[plan.length - 1] + " > " + until);
+      if (plan.length < 7 || plan.length > 10)
+        bad("[расписание] за два месяца суббот " + plan.length + " — это не похоже на правду");
+
+      /* каникулы вычитаются из плана, а не просто отмечаются */
+      const skipped = plan[1];
+      g.frameSet({ breaks: [[skipped, skipped]] });
+      const plan2 = g.planDates(0);
+      if (plan2.indexOf(skipped) >= 0)
+        bad("[расписание] занятие назначено на день каникул: " + skipped);
+      if (plan2.length !== plan.length - 1)
+        bad("[расписание] каникулы убрали не одно занятие: " + plan.length + " → " + plan2.length);
+
+      /* файл календаря: повтор, горизонт, длина, напоминание и исключение */
+      const ics = g.icsForFrame("Роман");
+      if (!/BEGIN:VCALENDAR/.test(ics) || !/END:VCALENDAR/.test(ics))
+        bad("[расписание] файл календаря не собрался");
+      if (!/RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=/.test(ics))
+        bad("[расписание] в файле нет повтора по субботам: " + ics.slice(0, 400));
+      if (!/DTSTART:\d{8}T170000/.test(ics))
+        bad("[расписание] время начала в файле не 17:00");
+      if (!/DTEND:\d{8}T173000/.test(ics))
+        bad("[расписание] конец занятия не через 30 минут (длина рамки)");
+      if (!/TRIGGER:-PT30M/.test(ics)) bad("[расписание] в файле нет напоминания");
+      if (ics.indexOf("EXDATE:" + skipped.replace(/-/g, "") + "T170000") < 0)
+        bad("[расписание] день каникул не исключён из файла календаря");
+      if (ics.indexOf("Роман") < 0) bad("[расписание] имя ученика не попало в название события");
+      /* ⚠️ Строки .ics разделяются CRLF — с одним \n Календарь файл не примет */
+      if (/[^\r]\n/.test(ics)) bad("[расписание] в файле календаря перенос строки без CR");
+
+      /* без часа файла нет — и это молчание, а не пустой файл */
+      g.frameSet({ time: null });
+      if (g.icsForFrame("Роман") !== "")
+        bad("[расписание] файл календаря собрался без времени занятия");
+      g.frameSet({ time:"17:00", breaks: [] });
+
+      /* час виден там, где ребёнок и родитель его ищут */
+      g.state.stars = {}; g.state.stars["print-first"] = 3;
+      const nt = g.nextTimeHTML();
+      if (!/в 17:00/.test(nt))
+        bad("[расписание] в карточке «в следующий раз» нет часа занятия: " + nt.replace(/<[^>]+>/g, " ").slice(0, 160));
+      g.frameSet({ days:[1,2,3,4,5], time:null, until:null });
+    }
+
     /* кабинет открывается и показывает карту часов */
     g.adminUnlock();
     g.screenAdult();
     await tick();
     const t = doc.getElementById("app").textContent;
     if (!/Рамка занятий/.test(t)) bad("[кабинет] нет рамки занятий");
+
+    /* ⚠️ Кабинет на устройстве ребёнка — ВКЛАДКАМИ, как карточка ученика.
+       Жалоба фаундера 12.09.2026: «надо сделать человеческие личные кабинеты».
+       Корень был не в словах: один и тот же кабинет выглядел двумя разными
+       экранами — карточка ученика на вкладках с 08.09, а этот простынёй из
+       девяти карточек на четыре экрана прокрутки. */
+    {
+      const utabs = [...doc.querySelectorAll("[data-utab]")].map(b => b.textContent);
+      if (utabs.length !== 4)
+        bad("[кабинет] в кабинете взрослого не четыре вкладки: " + utabs.join(" | "));
+      ["Отчёт", "Расписание", "Задание", "Разделы"].forEach(n => {
+        if (!utabs.some(x => x.indexOf(n) >= 0))
+          bad("[кабинет] в кабинете взрослого нет вкладки «" + n + "»");
+      });
+      const upanes = [...doc.querySelectorAll("[data-upane]")];
+      if (upanes.length !== 4) bad("[кабинет] панелей кабинета не четыре: " + upanes.length);
+      if (upanes.filter(p => !p.hidden).length !== 1)
+        bad("[кабинет] видимых панелей кабинета не одна — вкладки не работают");
+      /* ⚠️ Ни одна карточка не потеряна при раскладке по вкладкам. Список
+         снят с прежнего экрана: именно это и ломается, когда двигают куски
+         разметки — карточка исчезает молча, и никто не замечает месяцами. */
+      ["Последнее занятие", "Когда он занимался", "Что показывает практика",
+       "Рамка занятий", "Как шла работа", "учится про ИИ", "Что создают ученики",
+       "Задать задание ребёнку", "Что было за неделю"].forEach(n => {
+        if (t.indexOf(n) < 0)
+          bad("[кабинет] при раскладке по вкладкам потеряна карточка «" + n + "»");
+      });
+      /* клик по вкладке показывает ЕЁ панель, а не чужую */
+      const uf = [...doc.querySelectorAll("[data-utab]")].find(b => /Задание/.test(b.textContent));
+      if (uf){
+        uf.click();
+        const vis = [...doc.querySelectorAll("[data-upane]")].filter(p => !p.hidden);
+        if (vis.length !== 1 || vis[0].getAttribute("data-upane") !== "task")
+          bad("[кабинет] клик по «Заданию» показал панель «" +
+              (vis[0] && vis[0].getAttribute("data-upane")) + "»");
+      }
+      /* ⚠️ Кнопка внизу ведёт на карту миров РЕБЁНКА, и называться обязана
+         так же: «На главную» здесь означало бы кабинет (§ 4.21). */
+      const low = [...doc.querySelectorAll('[data-act="tomap"]')];
+      if (low.length && /На главную/.test(low[low.length - 1].textContent))
+        bad("[кабинет] кнопка на карту миров ребёнка названа «На главную» — " +
+            "в кабинете это читается как «в кабинет»");
+    }
     if (!/Когда он занимался/.test(t)) bad("[кабинет] нет карты активности");
     if (!/Задать задание/.test(t)) bad("[кабинет] нет «задать задание»");
     if (!doc.querySelector(".heat i")) bad("[кабинет] карта часов не отрисовалась");
-    /* сводка и оглавление (1.148.0): кнопка оглавления обязана вести к
-       существующей карточке — кнопка в никуда молча умирает, это уже
-       стреляло на Главном (правило «кнопка без обработчика») */
-    if (!doc.querySelector(".cabsum .admstat")) bad("[кабинет] сводка сверху не отрисовалась");
-    const cabBtns = Array.from(doc.querySelectorAll("[data-cab]"));
-    if (!cabBtns.length) bad("[кабинет] оглавление кабинета пусто");
-    cabBtns.forEach(b => {
-      if (!doc.getElementById(b.getAttribute("data-cab")))
-        bad("[кабинет] кнопка оглавления ведёт в никуда: " + b.getAttribute("data-cab"));
-    });
     if (problems.length === p0) adultChecked++;
     viewReset(g);
   }
@@ -7088,6 +7373,43 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         /* без выбранного ученика редактор рамки работает на СВОЁ состояние */
         if (g.frameState() !== g.state)
           bad("[рамка] без выбранного ученика редактор смотрит не в свой прогресс");
+
+        /* ⚠️ Час и горизонт должны быть НА ЭКРАНЕ, а не только в модели:
+           лид рамки обещает «дни, время и длину назначаете вы» — обещание
+           стояло в тексте раньше, чем появился орган управления (12.09.2026). */
+        const ed = g.frameEditorHTML({ days:[6], len:30, time:"17:00",
+          until: g.addMonths(g.dayKey(), 2), setAt: now - day, breaks: [],
+          mix:"balanced", report:true, goal:null });
+        /* ⚠️ Рамку разложили на карточки 12.09.2026, двигая границы <div>.
+           Ошибиться на один закрывающий тег тут проще всего, а jsdom и браузер
+           молча починят разметку — и поедет вся страница. Считаем теги. */
+        const пар = (t, x) => (x.match(new RegExp("<" + t + "[ >]", "g")) || []).length -
+                              (x.match(new RegExp("</" + t + ">", "g")) || []).length;
+        if (пар("div", ed) !== 0)
+          bad("[расписание] в рамке разошлись <div>: перевес " + пар("div", ed));
+        if (пар("details", ed) !== 0)
+          bad("[расписание] в рамке разошлись <details>: перевес " + пар("details", ed));
+        /* редкое свёрнуто, но не спрятано: текст остаётся в странице */
+        if (!/Каникулы и запланированные паузы/.test(ed))
+          bad("[расписание] каникулы пропали из рамки");
+        if (!/Сколько минут в день достаточно/.test(ed))
+          bad("[расписание] потолок дня пропал из рамки");
+        if (!/<details/.test(ed))
+          bad("[расписание] редкие настройки не свёрнуты — экран снова простыня");
+        /* главная строка: что настроено сейчас, одним предложением */
+        if (!/По субботам в 17:00/.test(ed))
+          bad("[расписание] рамка не говорит одной строкой, что на ней настроено");
+        if (!/id="ftime"/.test(ed)) bad("[расписание] в редакторе рамки нет поля времени");
+        if (!/id="funtil"/.test(ed)) bad("[расписание] в редакторе рамки нет горизонта плана");
+        if (!/data-funtil="3"/.test(ed)) bad("[расписание] нет быстрой кнопки «+3 месяца»");
+        if (!/Календарь занятий/.test(ed)) bad("[расписание] в рамке нет календаря занятий");
+        if (!/data-act="fics"/.test(ed)) bad("[расписание] нет кнопки выгрузки в календарь");
+        if (!/17:00/.test(ed)) bad("[расписание] заданный час не показан в рамке");
+        /* без часа кнопка выгрузки не предлагается — событие без времени календарь не примет */
+        const edNoTime = g.frameEditorHTML({ days:[6], len:30, time:null, until:null,
+          setAt: now - day, breaks: [], mix:"balanced", report:true, goal:null });
+        if (/data-act="fics"/.test(edNoTime))
+          bad("[расписание] кнопка календаря предложена без заданного часа");
       }
     } else bad("[план-и-факт] функции planFact нет");
 
@@ -7677,12 +7999,35 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
       const stDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-stats-"));
       process.env.DATA_DIR = stDir;
       w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      /* ⚠️ Метрики — единственная проверка, которая читает ПАПКУ ЦЕЛИКОМ, а не
+         ученика по коду. Значит, ей важно, что в папке лежат только её ученики.
+         А у игры есть отложенная отправка (schedulePush, 2–25 секунд): любое
+         save() раньше по прогону заводит таймер, и он долетает уже сюда, в
+         свежую папку, под кодом основного тестового ученика. У того в журнале
+         есть и «vars», и «text-vs-num» — счёт затыков уезжал, и проверка мигала
+         (11.09.2026, 1.147.0: tried 4 вместо 3 и лишний урок в списке).
+         Лечим не ослаблением счёта, а хозяйством: гасим отложенную отправку
+         перед каждым замером и требуем, чтобы в папке были ровно наши файлы.
+         Второе — не перестраховка: если чужая запись всё-таки долетит, тест
+         обязан назвать её по имени, а не выдать «сервер посчитал неверно». */
+      const mine = [];
+      const onlyMine = where => {
+        g.cancelPush();                       /* гасим отложенную: чужой снимок сюда не долетит */
+        if (g.cloudState.timer)
+          bad("[метрики] отложенная отправка не погасла — замер снова зависит от секунд");
+        const strays = fs.readdirSync(stDir).filter(f => mine.indexOf(f) < 0);
+        if (strays.length)
+          bad("[метрики] в папку замера (" + where + ") попал чужой ученик: " +
+              strays.join(", ") + " — считать по ней нельзя");
+      };
+      const saveMine = (data, code) => { mine.push(code + ".json"); return w.Cloud.save(data, code); };
       const mkDays = ts => { const o = {}; ts.forEach(t => o[g.dayKey(new Date(t))] = 1); return o; };
       const stars25 = {}; for (let i = 0; i < 25; i++) stars25["l" + i] = 3;
-      await w.Cloud.save({ xp:1, stars: stars25,
+      await saveMine({ xp:1, stars: stars25,
         days: mkDays([now - 20*day, now - 17*day, now - day]),
         log: { a:{ solvedAt: now - day } } }, "stat-a");
-      await w.Cloud.save({ xp:1, stars: { x:3 }, days: mkDays([now - 20*day]), log: {} }, "stat-b");
+      await saveMine({ xp:1, stars: { x:3 }, days: mkDays([now - 20*day]), log: {} }, "stat-b");
+      onlyMine("возвращаемость");
       const m = await w.Cloud.stats("kluch-testa");
       if (m.started !== 2) bad("[метрики] начавших: " + m.started + " вместо 2");
       if (m.week.eligible !== 2 || m.week.returned !== 1)
@@ -7706,16 +8051,20 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
          Двое сидят на «vars» без решения, один его сдал. Карточка обязана
          назвать урок словами (на сервере только идентификатор) и сказать
          главное — застрявших больше, чем сдавших. */
-      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{}, days: mkDays([now - day]),
         log: { "vars": { attempts:7, hints:0, shown:0 } } }, "stat-c");
-      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{}, days: mkDays([now - day]),
         log: { "vars": { attempts:9, hints:0, shown:0 } } }, "stat-d");
-      await w.Cloud.save({ xp:1, stars:{ "vars":3 }, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{ "vars":3 }, days: mkDays([now - day]),
         log: { "vars": { solvedAt: now - day, attempts:2 } } }, "stat-e");
+      onlyMine("затыки");
       const m2 = await w.Cloud.stats("kluch-testa");
       const zt = (m2.stuck || []).filter(x => x.lesson === "vars")[0];
       if (!zt || zt.stuck !== 2 || zt.tried !== 3 || zt.solved !== 1)
         bad("[затыки] сервер посчитал затык неверно: " + JSON.stringify(m2.stuck));
+      /* список затыков — ровно про наших: лишний урок значит чужую запись */
+      if ((m2.stuck || []).length !== 1)
+        bad("[затыки] в списке затыков не только «vars»: " + JSON.stringify(m2.stuck));
       g.grpStats.data = m2;
       g.screenGroup();
       await tick();
@@ -8911,9 +9260,9 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         const kid = g.kidAdd("Тестовый Ученик");
         g.screenKid(kid.code); await tick(); await tick();
         const ktabs = [...doc.querySelectorAll(".kidnav .ltab")].map(b => b.textContent);
-        if (ktabs.length !== 5)
-          bad("[панель] в карточке ученика не пять вкладок: " + ktabs.join(" | "));
-        ["Отчёт", "Расписание", "Домашка", "Заметка", "Доступ"].forEach(function(t){
+        if (ktabs.length !== 6)
+          bad("[панель] в карточке ученика не шесть вкладок: " + ktabs.join(" | "));
+        ["Отчёт", "Практика", "Расписание", "Домашка", "Заметка", "Доступ"].forEach(function(t){
           if (!ktabs.some(x => x.indexOf(t) >= 0))
             bad("[панель] в карточке ученика нет вкладки «" + t + "»");
         });
@@ -8936,23 +9285,141 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         }
         g.kidDrop(kid.code);
 
-        /* --- «Сейчас важно»: затык виден с любой вкладки (1.149.0) ---
-           Затык — нерешённый урок с ценой ≥ 6 (stuckIn). Раньше он жил только
-           внутри вкладки «Отчёт»; строка над вкладками обязана быть видна и
-           после переключения. */
-        w.Cloud.load = () => Promise.resolve({ found: true, serverAt: Date.now(),
-          data: { log: { "print-first": { attempts: 9, hints: 3, timeMs: 1200000, last: Date.now() } } } });
-        const kid2 = g.kidAdd("Тест Затык");
-        g.screenKid(kid2.code); await tick(); await tick();
-        if (!doc.querySelector(".cabnow"))
-          bad("[панель] затык ученика не виден над вкладками — нет строки «Сейчас важно»");
-        const hwTab = [...doc.querySelectorAll(".kidnav .ltab")].find(b => /Домашка/.test(b.textContent));
-        if (hwTab){
-          hwTab.click(); await tick();
-          if (!doc.querySelector(".cabnow"))
-            bad("[панель] строка «Сейчас важно» пропала при смене вкладки");
+        /* --- возврат ученика по ГОТОВОМУ коду ---
+           ⚠️ Разбор трёх ролей 12.09.2026: «Убрать» обещала «вернуть можно,
+           добавив код обратно», а добавить код было нечем — kidAdd всегда
+           придумывает НОВЫЙ со случайным хвостом. На этом 12.09.2026 потерялся
+           настоящий ученик: его завели заново, и кабинет смотрел в пустую
+           запись, пока прогресс лежал на сервере под прежним кодом. */
+        if (typeof g.kidAttach !== "function") bad("[кабинет] нет способа вернуть ученика по коду");
+        else {
+          const было = g.kidsList().length;
+          if (g.kidAttach("НЕ КОД")) bad("[кабинет] негодный код принят в список");
+          if (g.kidsList().length !== было) bad("[кабинет] негодный код всё-таки попал в список");
+
+          const k2 = g.kidAttach("roman-3f7a", "Роман");
+          if (!k2 || k2.code !== "roman-3f7a")
+            bad("[кабинет] готовый код не принят: " + JSON.stringify(k2));
+          if (k2 && k2.name !== "Роман") bad("[кабинет] подпись ученика не сохранилась: " + k2.name);
+          /* ⚠️ Код НЕ переписывается и хвост не добавляется — иначе возврат
+             превратился бы в то самое заведение нового ученика */
+          if (!g.kidsList().some(k => k.code === "roman-3f7a"))
+            bad("[кабинет] вернувшийся ученик в списке под другим кодом: " +
+                g.kidsList().map(k => k.code).join(", "));
+          /* повтор не плодит вторую строку, но подпись обновляет.
+             ⚠️ Читаем строку списка через проверку на null: при сломанном
+             возврате её там нет, и прежняя версия этой проверки падала
+             TypeError, унося с собой ВЕСЬ остаток прогона. Проверка обязана
+             назвать беду, а не свалиться (нашлось нарочной поломкой). */
+          g.kidAttach("roman-3f7a", "Роман Александрович");
+          if (g.kidsList().filter(k => k.code === "roman-3f7a").length !== 1)
+            bad("[кабинет] повторный возврат завёл ученика второй раз");
+          const вернулся = g.kidGet("roman-3f7a");
+          if (!вернулся) bad("[кабинет] после повторного возврата ученика нет в списке");
+          else if (вернулся.name !== "Роман Александрович")
+            bad("[кабинет] повторный возврат не обновил подпись: " + вернулся.name);
+          /* заглавные буквы кода приводятся к маленьким, как и везде */
+          g.kidAttach("MISHA-7F3A", "Миша");
+          if (!g.kidGet("misha-7f3a")) bad("[кабинет] код из заглавных букв не принят");
+          /* прибираем за собой по СПИСКУ, а не по ожидаемым кодам: при
+             сломанном возврате коды другие, и хвост от одной проверки
+             испортил бы соседнюю */
+          g.kidsList().slice().forEach(k => g.kidDrop(k.code));
+
+          /* --- правка рамки не теряется молча (разбор трёх ролей 12.09.2026) ---
+             ⚠️ kidSave читал рамку при ОТКРЫТИИ карточки, а клал на сервер
+             при нажатии «Сохранить» — и голым base.frame = myFrame стирал
+             всё, что за это время поменяли с другого устройства. Молча. */
+          {
+            const T0 = Date.now() - 60 * 60e3;
+            const снимок = at => g.ensureShape({ stars:{}, log:{},
+              frame: { days:[1], len:30, mix:"balanced", breaks:[], report:true, setAt: at } });
+            w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(T0) });
+            let saved = 0;
+            const origSave = w.Cloud.save;
+            w.Cloud.save = function(){ saved++; return Promise.resolve({ ok:true }); };
+            try {
+              const k4 = g.kidAttach("kidsave-1", "Проверка");
+              g.screenKid(k4.code); await tick(); await tick();
+              /* взрослый поменял дни у себя в карточке */
+              g.frameSet({ days:[6] });
+              /* а в это время ту же рамку поменяли с другого устройства */
+              w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(Date.now()) });
+              const sv = doc.querySelector('[data-kf="save"]');
+              if (!sv) bad("[рамка] в карточке ученика нет кнопки сохранения расписания");
+              else {
+                sv.click(); await tick(); await tick();
+                const m4 = doc.getElementById("kidsavemsg");
+                if (saved) bad("[рамка] чужая правка рамки затёрта молча: сохранение всё-таки ушло");
+                if (!m4 || !/успели поменять/.test(m4.textContent))
+                  bad("[рамка] про чужую правку не сказано ни слова: " +
+                      ((m4 && m4.textContent) || "нет сообщения"));
+              }
+              /* а когда никто не мешал — сохраняется как раньше */
+              w.Cloud.load = () => Promise.resolve({ found: true, data: снимок(T0) });
+              g.screenKid(k4.code); await tick(); await tick();
+              g.frameSet({ days:[5] });
+              saved = 0;
+              const sv2 = doc.querySelector('[data-kf="save"]');
+              if (sv2){
+                sv2.click(); await tick(); await tick();
+                if (!saved) bad("[рамка] обычное сохранение расписания перестало работать");
+              }
+              g.kidDrop(k4.code);
+            } finally { w.Cloud.save = origSave; }
+          }
+
+          /* --- код и ссылки у РОДИТЕЛЯ (разбор трёх ролей 12.09.2026) ---
+             ⚠️ Вкладка «Доступ» была спрятана от родителя с пометкой
+             «родителю раздавать нечего», и код ребёнка не показывался ему
+             НИГДЕ: в шапке при заданной подписи стоит имя. При этом экран
+             «Не помню код» обещает ребёнку, что у родителя код есть. */
+          {
+            const st0 = g.ensureShape({ stars:{}, log:{} });
+            w.Cloud.load = () => Promise.resolve({ found: true, data: st0 });
+            g.becomeParent("rebenok-1", "Рома");
+            g.screenParent("rebenok-1"); await tick(); await tick();
+            const pt = doc.getElementById("app").textContent;
+            const ph = doc.getElementById("app").innerHTML;
+            if (pt.indexOf("rebenok-1") < 0)
+              bad("[родитель] код ребёнка нигде не показан родителю");
+            if (!/data-kd="ccopy"/.test(ph))
+              bad("[родитель] код нечем скопировать");
+            const ptabs = [...doc.querySelectorAll(".kidnav .ltab")].map(b => b.textContent);
+            if (!ptabs.some(x => x.indexOf("Доступ") >= 0))
+              bad("[родитель] нет вкладки «Доступ»: " + ptabs.join(" | "));
+            if (!/\?kid=rebenok-1/.test(ph))
+              bad("[родитель] нет ссылки для устройства ребёнка");
+            if (!/\?parent=rebenok-1/.test(ph))
+              bad("[родитель] нет ссылки на этот же кабинет для второго устройства");
+            /* ⚠️ Рамку родитель править может — это его ребёнок */
+            if (!/id="ftime"/.test(ph))
+              bad("[родитель] родителю недоступно время занятия");
+            /* ⚠️ Карта часов вызывалась в ОДНОМ месте — на устройстве ребёнка.
+               У родителя с телефона её не было вовсе, хотя она отвечает на
+               самый частый его вопрос: «когда он вообще занимается». */
+            if (!/Когда он занимался/.test(pt))
+              bad("[родитель] в кабинете родителя нет карты часов");
+            if (!/Что показывает практика/.test(pt))
+              bad("[родитель] в кабинете родителя нет замера занятий");
+            if (!/Как шла работа/.test(pt))
+              bad("[родитель] в кабинете родителя нет записи авторства");
+            /* ⚠️ Кнопка «Открыть запись» родителю НЕ обещается: экран записи
+               читает своё состояние, и по чужому ученику открывать нечего.
+               Обещать дверь, которой нет, хуже, чем не обещать (§ 4.35). */
+            if (/data-act="totrace"/.test(ph))
+              bad("[родитель] родителю обещана кнопка записи, которую открыть нечем");
+            g.becomeAdmin();
+          }
+
+          /* и форма возврата есть НА ЭКРАНЕ, а не только в модели */
+          g.screenKids(); await tick();
+          const kh = doc.getElementById("app").innerHTML;
+          if (!/id="kidcode"/.test(kh)) bad("[кабинет] на экране учеников нет поля для готового кода");
+          if (!/data-kact="attach"/.test(kh)) bad("[кабинет] нет кнопки возврата по коду");
+          if (!/Вернуть ученика по коду/.test(doc.getElementById("app").textContent))
+            bad("[кабинет] карточка возврата не названа словами");
         }
-        g.kidDrop(kid2.code);
       } finally {
         w.Cloud.load = origLoad; w.Cloud.hasUrl = origHas;
       }
@@ -8968,6 +9435,35 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     const p0 = problems.length;
     const wasAdmin = !!(g.state.admin && g.state.admin.isAdmin);
     const wasParent = (g.state.admin && g.state.admin.parentOf) || "";
+
+    /* ⚠️ Жалоба фаундера 12.09.2026: «нажал Тренировки, потом На главную —
+       и оказался в кабинете взрослого». Кнопка не соврала про дорогу (дом
+       кабинета — кабинет), она соврала про МЕСТО: надпись была одна на все
+       двадцать кнопок #tomap, а дом у каждой роли свой. § 4.21. */
+    {
+      g.state.admin = g.state.admin || {};
+      const былAdmin = !!g.state.admin.isAdmin, былParent = g.state.admin.parentOf || "";
+      g.state.admin.isAdmin = true; g.state.admin.parentOf = "";
+      if (g.homeLabel() !== "В кабинет")
+        bad("[логотип] на устройстве-кабинете кнопка «домой» обещает не кабинет: " + g.homeLabel());
+      g.state.admin.isAdmin = false; g.state.admin.parentOf = "rebenok-1";
+      if (g.homeLabel() !== "В кабинет")
+        bad("[логотип] у родителя кнопка «домой» обещает не кабинет: " + g.homeLabel());
+      g.state.admin.parentOf = "";
+      /* у ученика надпись прежняя — карта миров и есть его главная */
+      const былоИмя = g.state.name; g.state.name = "Тест";
+      if (g.homeLabel() !== "На главную")
+        bad("[логотип] у ученика надпись «домой» изменилась: " + g.homeLabel());
+      /* и это видно НА КНОПКЕ, а не только в функции */
+      g.state.admin.isAdmin = true;
+      g.screenSandbox(); await tick();
+      const hb = doc.getElementById("tomap");
+      if (!hb) bad("[логотип] на экране песочницы нет кнопки «домой»");
+      else if (!/В кабинет/.test(hb.textContent))
+        bad("[логотип] кнопка на экране обещает «" + hb.textContent + "», а ведёт в кабинет");
+      g.state.admin.isAdmin = былAdmin; g.state.admin.parentOf = былParent;
+      g.state.name = былоИмя;
+    }
 
     /* ⚠️ Жалоба фаундера 07.09.2026: в кабинете репетитора логотип не делал
        НИЧЕГО. Он вёл «домой по роли», а дом репетитора — тот же кабинет, где

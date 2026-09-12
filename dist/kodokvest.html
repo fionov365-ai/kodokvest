@@ -1472,6 +1472,21 @@ border:1px solid var(--line)}
 border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
 .brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
 .brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+.planlist{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px;
+grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.planlist li{font-size:13px;color:var(--soft);background:var(--panel2);
+border:1px solid var(--line2);border-radius:10px;padding:6px 9px}
+.plandet{margin:8px 0}
+.plandet>summary{cursor:pointer;font-size:14px;color:var(--acc);
+list-style:none;display:inline-flex;align-items:center;gap:6px}
+.plandet>summary::-webkit-details-marker{display:none}
+.plandet>summary::before{content:"▸";transition:.15s}
+.plandet[open]>summary::before{transform:rotate(90deg)}
+.planline{margin:6px 0;font-size:15px}
+.zansum{margin:2px 0 10px;font-size:17px;font-weight:650;color:var(--ink);
+background:var(--panel2);border:1px solid var(--line2);border-left:4px solid var(--acc);
+border-radius:12px;padding:11px 14px}
+.zansum.none{font-weight:500;color:var(--soft);border-left-color:var(--line2)}
 .rolegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
 .rolecard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
 border:1px solid var(--line2);background:var(--panel);border-radius:16px;padding:20px 18px;cursor:pointer;
@@ -1937,18 +1952,6 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 border-radius:11px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
 .roomnav button:hover{color:var(--ink);border-color:var(--acc)}
 .roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
-.cabsum{margin-bottom:6px}
-.cabnav{position:sticky;top:var(--toph,60px);z-index:50;display:flex;gap:8px;
-flex-wrap:nowrap;overflow-x:auto;padding:10px 2px;margin:0 -2px 12px;
-background:var(--topbg);backdrop-filter:blur(14px)}
-.cabtab{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);
-color:var(--soft);border-radius:999px;padding:8px 14px;font:inherit;
-font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
-.cabtab:hover{color:var(--ink);border-color:var(--acc)}
-.cabtab.on{background:var(--acc);color:var(--onacc);border-color:transparent}
-.cabsec{scroll-margin-top:calc(var(--toph,60px) + 62px)}
-.cabnow{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
-border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14.5px}
 .extabs{margin-bottom:14px}
 .extally{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;font-size:13px}
 .extally span{border:1px solid var(--line);border-radius:11px;padding:6px 11px;background:var(--panel2)}
@@ -19345,7 +19348,7 @@ ref.map(function(x){ return "<span>" + A.esc(x) + "</span>"; }).join("") +
 '<span class="tip">Рисунки лежат в портфолио — их можно показать и скачать картинкой. ' +
 'Первая строка-комментарий станет названием.</span>' +
 '<div class="msg" id="picmsg"></div></div>') +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
 var studio = A.makeStudio({
 engine: real ? "pyodide" : "mini", draw: !real,
@@ -19655,7 +19658,7 @@ A.installTipHTML(true) + '</div>'
 '<p class="dim">Полная инструкция: устройство сайта, из чего состоит урок, откуда берутся ' +
 'звёзды и что делать, когда не получается. Есть кусок для родителя.</p>' +
 '<div class="winrow"><button class="bigbtn ghost" id="goguide">❓ Открыть инструкцию</button></div></div>' +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 A.app.innerHTML = h;
 
 A.bindLiveRow(screenAccount);
@@ -21002,7 +21005,7 @@ h += '<div class="card"><h3>⚖️ Почему здесь нет чужих р�
 'Вместо неё — <b>адресная ссылка</b>: любую свою работу или задачу ребёнок отправляет ' +
 'конкретному человеку, и она не попадает никуда больше.</p></div>';
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 A.app.innerHTML = h;
 
 A.app.querySelectorAll("[data-show]").forEach(function(b){
@@ -21186,7 +21189,7 @@ h += '<div class="projcard' + (apopen ? "" : " locked") + (apdone ? " done" : ""
 '</div>';
 }
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 A.app.innerHTML = h;
 var tas = document.getElementById("toaispecs");
 if (tas) tas.onclick = A.screenSpecs;
@@ -21603,7 +21606,7 @@ h += '<button class="gamecard" data-hw="' + A.esc(r.key) + '">' +
 h += '</div>';
 }
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 A.app.innerHTML = h;
 A.app.querySelectorAll("[data-hw]").forEach(function(b){
 b.onclick = function(){ openHW(b.getAttribute("data-hw")); };
@@ -26877,12 +26880,17 @@ save();
 try { refreshTop(); } catch(e){}
 }
 
-function studyDue(){ return hasSchedule() && isStudyDay(dayKey()) && !activeOn(dayKey()); }
+function agreedDays(){ return frameOn() ? frame().days.slice() : scheduleDays(); }
+function agreedOn(){ return agreedDays().length > 0; }
+function agreedStudyDay(key){ return frameOn() ? frameStudyDay(key) : isStudyDay(key); }
+function studyDue(){ return agreedOn() && agreedStudyDay(dayKey()) && !activeOn(dayKey()); }
 
 function blankFrame(){
 return { days:[], len:30, mix:"balanced", goal:null, breaks:[], report:true,
-perLesson:null, cap:0, capHard:false, setAt:0 };
+perLesson:null, cap:0, capHard:false, setAt:0, time:null, until:null };
 }
+
+function validTime(v){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v)); }
 function frameShape(f){
 var o = (f && typeof f === "object") ? f : {};
 var out = blankFrame();
@@ -26891,6 +26899,8 @@ out.days = o.days.filter(function(n){ return typeof n === "number" && n >= 0 && 
 if (ZAN_LEN.indexOf(o.len) >= 0) out.len = o.len;
 if (ZAN_MIX.indexOf(o.mix) >= 0) out.mix = o.mix;
 if (typeof o.goal === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.goal)) out.goal = o.goal;
+if (typeof o.time === "string" && validTime(o.time)) out.time = o.time;
+if (typeof o.until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.until)) out.until = o.until;
 if (Array.isArray(o.breaks))
 out.breaks = o.breaks.filter(function(b){
 return Array.isArray(b) && b.length === 2 &&
@@ -26938,6 +26948,91 @@ function frameStudyDay(key){
 key = key || dayKey();
 if (!frameOn() || isBreakDay(key)) return false;
 return frame().days.indexOf(weekdayOf(key)) >= 0;
+}
+
+function frameTime(){ var t = frame().time; return validTime(t || "") ? t : ""; }
+
+function addMonths(key, n){
+var p = String(key).split("-");
+var y = +p[0], m = +p[1] - 1 + n, d = +p[2];
+y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+var last = new Date(y, m + 1, 0).getDate();
+if (d > last) d = last;
+return y + "-" + (m + 1 < 10 ? "0" : "") + (m + 1) + "-" + (d < 10 ? "0" : "") + d;
+}
+
+function planDates(limit){
+var f = frame();
+if (!f.days.length) return [];
+var until = f.until || addMonths(dayKey(), 3);
+var out = [], cur = dayKey(), guard = 0;
+while (cur <= until && guard++ < 800){
+if (f.days.indexOf(weekdayOf(cur)) >= 0 && !isBreakDay(cur)) out.push(cur);
+if (limit && out.length >= limit) break;
+cur = shiftDay(cur, 1);
+}
+return out;
+}
+
+function zanSlovami(f){
+f = f || frame();
+if (!f.days.length) return "Дни занятий не отмечены";
+var wd = f.days.slice().sort(function(a, b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
+.map(function(n){ return WD_FULL_PO[n]; }).join(", ");
+var out = "По " + wd;
+if (f.time) out += " в " + f.time;
+out += ", занятие " + f.len + " " + plural(f.len, "минута", "минуты", "минут");
+if (f.until) out += ", до " + f.until.split("-").reverse().join(".");
+return out;
+}
+var WD_FULL_PO = ["воскресеньям", "понедельникам", "вторникам", "средам",
+"четвергам", "пятницам", "субботам"];
+
+var ICS_WD = ["SU","MO","TU","WE","TH","FR","SA"];
+function icsEsc(v){
+return String(v).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n");
+}
+function icsStamp(key, time){ return key.replace(/-/g, "") + "T" + time.replace(":", "") + "00"; }
+
+function icsEnd(time, mins){
+var p = time.split(":"), t = (+p[0]) * 60 + (+p[1]) + mins;
+if (t > 23 * 60 + 59) t = 23 * 60 + 59;
+var hh = Math.floor(t / 60), mm = t % 60;
+return (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm;
+}
+function icsForFrame(who){
+var f = frame(), time = frameTime();
+if (!f.days.length || !time) return "";
+var dates = planDates(0);
+if (!dates.length) return "";
+var first = dates[0];
+var until = f.until || addMonths(dayKey(), 3);
+var byday = f.days.slice().sort(function(a, b){ return a - b; })
+.map(function(n){ return ICS_WD[n]; }).join(",");
+
+var skip = [], cur = first, guard = 0;
+while (cur <= until && guard++ < 800){
+if (f.days.indexOf(weekdayOf(cur)) >= 0 && isBreakDay(cur)) skip.push(icsStamp(cur, time));
+cur = shiftDay(cur, 1);
+}
+var title = "Занятие по программированию" + (who ? " — " + who : "");
+var L = [
+"BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fionika//Zanyatiya//RU",
+"CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+
+"UID:fionika-" + first.replace(/-/g, "") + "-" + byday.replace(/,/g, "") + "@fionika",
+"DTSTAMP:" + new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, ""),
+"DTSTART:" + icsStamp(first, time),
+"DTEND:" + icsStamp(first, icsEnd(time, f.len)),
+"RRULE:FREQ=WEEKLY;BYDAY=" + byday + ";UNTIL=" + until.replace(/-/g, "") + "T235959"
+];
+if (skip.length) L.push("EXDATE:" + skip.join(","));
+L.push("SUMMARY:" + icsEsc(title));
+L.push("DESCRIPTION:" + icsEsc("Занятие на " + f.len + " минут. Тренажёр «Фионика»."));
+L.push("BEGIN:VALARM", "TRIGGER:-PT30M", "ACTION:DISPLAY",
+"DESCRIPTION:" + icsEsc(title + " через 30 минут"), "END:VALARM");
+L.push("END:VEVENT", "END:VCALENDAR");
+return L.join("\r\n") + "\r\n";
 }
 
 function zanSlots(len){ return len <= 20 ? 2 : (len <= 30 ? 3 : 4); }
@@ -27065,7 +27160,7 @@ plural(m, "минута", "минуты", "минут") + ' за тренажё�
 : 'Взрослый считает, что на сегодня хватит. Дальше — на твоё усмотрение.') + '</div>';
 }
 
-function zanAll(){ S.zan = S.zan || {}; return S.zan; }
+function zanAll(st){ var o = st || S; o.zan = o.zan || {}; return o.zan; }
 function zanKeyOf(key, n){ return (key || dayKey()) + "#" + n; }
 function zanOfDay(key){
 key = key || dayKey();
@@ -27272,8 +27367,8 @@ var v = a.slice().sort(function(x, y){ return x - y; });
 var m = Math.floor(v.length / 2);
 return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
-function zanStats(){
-var mins = [], per = [], lessons = [], all = zanAll();
+function zanStats(st){
+var mins = [], per = [], lessons = [], all = zanAll(st);
 Object.keys(all).forEach(function(k){
 var r = all[k];
 if (!r || !r.end) return;
@@ -27793,10 +27888,23 @@ if (!myCode() && !S.name) return screenAbout();
 return screenWorlds();
 }
 
+function homeLabel(){
+if (isAdminDevice() || parentOf()) return "В кабинет";
+if (!myCode() && !S.name) return "На главную страницу";
+return "На главную";
+}
+
+function homeBtnSync(){
+var b = document.getElementById("tomap");
+if (!b || b.getAttribute("data-home") !== "1") return;
+b.textContent = "← " + homeLabel();
+}
+
 var ROOM_PLACES = ["admin", "kids", "kid", "group", "parent", "adult",
 "adminsetup", "adminlogin", "parentlogin", "roles"];
 function refreshTop(){
 syncBack();
+homeBtnSync();
 
 skinApply();
 
@@ -28245,6 +28353,10 @@ cloudState.timer = setTimeout(function(){
 cloudState.timer = null;
 cloudPush().catch(function(){});
 }, wait);
+}
+
+function cancelPush(){
+if (cloudState.timer){ clearTimeout(cloudState.timer); cloudState.timer = null; }
 }
 
 var PRESENCE_FRESH = 2 * 60e3;    
@@ -29639,7 +29751,7 @@ h += '</div>' +
 '<div class="note"><b>Повторение живёт отдельно</b>Уроки, которые дались тяжело, ' +
 'возвращаются сами в разделе «Повторить» — он на Главном, потому что это про уроки, ' +
 'а не про отдых. Там же бестиарий ошибок: каждая ошибка, которую ты победил.</div>' +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button>' +
 '<span class="sp"></span><button class="bigbtn ghost" id="toagain">🔁 Повторить</button></div>';
 app.innerHTML = h;
 var cards = trainCards();
@@ -29732,7 +29844,7 @@ h += '<div class="projcard"><span class="pjemoji">🔧</span>' +
 'и идёт в дело.</span></span>' +
 '<button class="bigbtn" id="openshop">Открыть мастерскую</button></div>';
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button><span class="sp"></span>' +
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button><span class="sp"></span>' +
 (n < 5 ? '<button class="bigbtn ghost" id="wnext">Мир ' + (n+1) + ' →</button>' : '') + '</div>';
 
 app.innerHTML = h;
@@ -29890,7 +30002,7 @@ app.innerHTML = '<div class="lvlhead"><div><div class="idx">предел дня<
 '<div class="note"><b>Сегодня за тренажёром уже ' + m + ' ' +
 plural(m, "минута", "минуты", "минут") + '</b>Столько вы договорились со взрослым. ' +
 'Новый урок откроется завтра — а тот, что начат, доделать можно.</div>' +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 document.getElementById("tomap").onclick = goHome;
 refreshTop();
 }
@@ -31062,7 +31174,7 @@ h += '<button class="gamecard' + (open ? "" : " locked") + '" data-proj="' + p.i
 h += '</div>';
 }
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 app.querySelectorAll(".gamecard[data-id]").forEach(function(b){
 b.onclick = function(){ openGame(b.getAttribute("data-id")); };
@@ -31523,14 +31635,17 @@ var doneToday = activeOn(dayKey());
 var pick = dailyPick();
 var taskDone = dailyDone();
 var due = studyDue();
-var days = scheduleDays();
+var days = agreedDays();         
 
 var уговор = days.length
 ? "Уговор: " + days.length + " " + plural(days.length, "день", "дня", "дней") + " в неделю"
 : "Уговор пока не назначен";
+var часЗанятия = frameOn() ? frameTime() : "";
 var сегодня = doneToday
 ? "Сегодня уже занимался."
-: (due ? "Сегодня по уговору учебный день." : "Сегодня можно отдыхать — это не учебный день.");
+: (due
+? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
+: "Сегодня можно отдыхать — это не учебный день.");
 
 var hero = '<div class="streakhero">' +
 '<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
@@ -31574,10 +31689,12 @@ taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
 var saved = takeShieldNote();
 
 var banner = "";
-if (hasSchedule()){
+if (agreedOn()){
 if (studyDue())
-banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день.</b> Начни занятие, чтобы не пропустить.</div>';
-else if (isStudyDay(dayKey()))
+banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
+(часЗанятия ? ", занятие в " + esc(часЗанятия) : "") + '.</b> ' +
+'Начни занятие, чтобы не пропустить.</div>';
+else if (agreedStudyDay(dayKey()))
 banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
 else
 banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
@@ -31614,7 +31731,7 @@ app.innerHTML =
 'Пропущенный день ничего не сжигает — календарь просто покажет, как было. ' +
 'Звёзды тут не начисляются: важна не серия, а возвращение.</p>' +
 installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
 wireInstallTip(app);
 var dopen = document.getElementById("dopen");
@@ -31669,7 +31786,7 @@ h += '<button class="gamecard' + (op ? "" : " locked") + '" data-id="' + w.id + 
 : "Откроется после урока " + (les ? les.num + " «" + esc(les.title) + "»" : "из программы")) + '</span>' +
 '<span class="wtag">' + esc(w.tag) + '</span></button>';
 });
-h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 app.querySelectorAll(".gamecard").forEach(function(b){
 b.onclick = function(){ if (!b.disabled) openWarmup(b.getAttribute("data-id")); };
@@ -32074,7 +32191,7 @@ plural(got, "вернётся", "вернутся", "вернутся") + '.' +
 
 h += beastsHTML();
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 app.querySelectorAll(".revcard").forEach(function(b){
 b.onclick = function(){ openLesson(b.getAttribute("data-id")); };
@@ -33161,7 +33278,7 @@ return head +
 code.replace(/\s*$/, "") + "\n\ndone()\n";
 }
 
-function downloadText(name, text, btn){
+function downloadText(name, text, btn, mime){
 var done = function(){
 if (!btn) return;
 var t = btn.textContent;
@@ -33171,7 +33288,7 @@ setTimeout(function(){ btn.textContent = t; }, 1500);
 var a = document.createElement("a");
 a.download = name;
 try {
-var url = URL.createObjectURL(new Blob([text], { type:"text/x-python;charset=utf-8" }));
+var url = URL.createObjectURL(new Blob([text], { type:(mime || "text/x-python") + ";charset=utf-8" }));
 a.href = url;
 document.body.appendChild(a); a.click(); a.remove();
 setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(e){} }, 2000);
@@ -33179,7 +33296,7 @@ done();
 return true;
 } catch(e){}
 try {
-a.href = "data:text/x-python;charset=utf-8," + encodeURIComponent(text);
+a.href = "data:" + (mime || "text/x-python") + ";charset=utf-8," + encodeURIComponent(text);
 document.body.appendChild(a); a.click(); a.remove();
 done();
 return true;
@@ -33625,7 +33742,7 @@ h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
 });
 h += '</div>';
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 
 app.innerHTML = h;
 var tsh = document.getElementById("toshop");
@@ -33925,7 +34042,7 @@ refreshTop();
 function nextZanDayKey(){
 for (var i = 1; i <= 14; i++){
 var k = shiftDay(dayKey(), i);
-if (frameOn() ? frameStudyDay(k) : isStudyDay(k)) return k;
+if (agreedStudyDay(k)) return k;
 }
 return "";
 }
@@ -33944,7 +34061,8 @@ if (when){
 var d = new Date(when + "T12:00:00");
 h += '<p class="dim">Следующее занятие по расписанию — ' + WD_FULL[d.getDay()] + ', ' +
 (d.getDate() < 10 ? "0" : "") + d.getDate() + "." +
-(d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + '.</p>';
+(d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) +
+(frameTime() ? ', в ' + esc(frameTime()) : "") + '.</p>';
 }
 return h + '</div>';
 }
@@ -34661,7 +34779,7 @@ h += '<div class="partcard"><div class="parthead"><b>' + esc(b.title) + '</b>' +
 h += '</div></div>';
 }
 
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 
 var studio = makeStudio({
@@ -34849,8 +34967,8 @@ var AUTHOR_PASTE_MIN = 40;
 var AUTHOR_FEW_EDITS = 2;
 var AUTHOR_BIG_ADD = 60;
 
-function authorMarks(id){
-var g = (S.log || {})[id] || {}, t = g.tr;
+function authorMarks(id, st){
+var g = ((st || S).log || {})[id] || {}, t = g.tr;
 if (!t) return null;
 var mine = Math.max(0, (t.len || 0) - (t.slen || 0));
 var m = [];
@@ -34872,12 +34990,12 @@ own: t.own || 0, edits: t.edits || 0, marks: m,
 clean: m.length === 1 && m[0].k === "hand" };
 }
 
-function authorList(){
+function authorList(st){
 var out = [];
-Object.keys(S.log || {}).forEach(function(id){
+Object.keys((st || S).log || {}).forEach(function(id){
 var l = CURRICULUM.byId(id);
 if (!l) return;
-var a = authorMarks(id);
+var a = authorMarks(id, st);
 if (a) out.push({ id:id, num:l.num, title:l.title, rec:a });
 });
 out.sort(function(a, b){ return (b.rec.at || 0) - (a.rec.at || 0); });
@@ -34895,8 +35013,8 @@ mine += r.predMine || 0;
 return { ok: ok, all: all, mine: mine };
 }
 
-function authorSummary(){
-var list = authorList(), hand = 0, ready = 0, ahead = 0;
+function authorSummary(st){
+var list = authorList(st), hand = 0, ready = 0, ahead = 0;
 list.forEach(function(x){
 if (x.rec.clean) hand++;
 x.rec.marks.forEach(function(m){
@@ -35128,67 +35246,6 @@ refreshTop();
 window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-var CAB_SECTIONS = [
-["cab-zan",   "📨 Занятие"],
-["cab-ritm",  "🗓 Ритм"],
-["cab-frame", "📏 Рамка"],
-["cab-trace", "🖐 Запись"],
-["cab-task",  "✉️ Задание"],
-["cab-week",  "📅 Неделя"]
-];
-function cabNavHTML(){
-return '<nav class="cabnav">' + CAB_SECTIONS.map(function(s){
-return '<button class="cabtab" data-cab="' + s[0] + '">' + s[1] + '</button>';
-}).join("") + '</nav>';
-}
-
-var cabTrackOn = false;
-function cabNavTrack(){
-if (cabTrackOn) return;
-cabTrackOn = true;
-var busy = false;
-function mark(){
-var nav = document.querySelector(".cabnav");
-if (!nav) return;
-var edge = nav.getBoundingClientRect().bottom + 40;
-var cur = CAB_SECTIONS[0][0];
-CAB_SECTIONS.forEach(function(s){
-var el = document.getElementById(s[0]);
-if (el && el.getBoundingClientRect().top <= edge) cur = s[0];
-});
-nav.querySelectorAll(".cabtab").forEach(function(b){
-b.classList.toggle("on", b.getAttribute("data-cab") === cur);
-});
-}
-window.addEventListener("scroll", function(){
-if (busy) return;
-busy = true;
-requestAnimationFrame(function(){ busy = false; mark(); });
-}, { passive:true });
-mark();
-}
-function adultSummaryHTML(){
-var f = weekFacts(S);
-var lastT = 0, lg = S.log || {};
-Object.keys(lg).forEach(function(k){
-var t = (lg[k] || {}).last || 0;
-if (t > lastT) lastT = t;
-});
-var h = '<div class="admstats cabsum">' +
-statBox("Сегодня за тренажёром", fmtDur(dayMs(S, dayKey()))) +
-statBox("Уроков за неделю", String(f.weekSolved)) +
-statBox("Дней подряд", String(f.streak)) +
-statBox("Последнее занятие", fmtWhen(lastT)) +
-'</div>';
-
-if (f.stuck.length){
-var sl = CURRICULUM.byId(f.stuck[0].id);
-h += '<p class="cabnow">⛔ Сейчас важно: ребёнок застрял на уроке «' +
-(sl ? esc(sl.title) : esc(f.stuck[0].id)) +
-'» — разбор и что делать ниже, в карточке «Что было за неделю».</p>';
-}
-return h;
-}
 function screenAdult(){
 curPlace = "adult";
 stopTimer(); vizStopPlay();
@@ -35203,12 +35260,21 @@ var h = '<div class="lvlhead"><div><div class="idx">для взрослого</d
 '<p class="lede">Здесь взрослый ставит рамку занятий, видит, как шла работа, и задаёт ребёнку задание. ' +
 'Десять минут в неделю — и вы знаете о занятиях больше, чем даёт любой отчёт репетитора.</p>';
 
-h += adultSummaryHTML();
-h += cabNavHTML();
+var ut = ADULT_TABS.some(function(t){ return t[0] === adultTab; }) ? adultTab : "rep";
+h += '<div class="ltabs adnav" role="tablist">' + ADULT_TABS.map(function(t){
+return '<button class="ltab' + (t[0] === ut ? " on" : "") + '" role="tab" data-utab="' + t[0] + '"' +
+' aria-selected="' + (t[0] === ut ? "true" : "false") + '">' +
+'<span class="lte">' + t[1] + '</span>' + t[2] + '</button>';
+}).join("") + '</div>';
+var pane = function(id, inner){
+return '<div class="kpane" data-upane="' + id + '"' + (ut === id ? "" : " hidden") + '>' +
+inner + '</div>';
+};
+var g1 = "", g2 = "", g3 = "", g4 = "";
 
 if (last){
 var r = zanReport(last, S);
-h += '<div class="card adrep cabsec" id="cab-zan"><h3>📨 Последнее занятие</h3>' +
+g1 += '<div class="card adrep"><h3>📨 Последнее занятие</h3>' +
 '<p class="dim">' + fmtWhen(last.end) + '</p>' +
 '<ol class="zanrep"><li><b>Что было.</b> ' + esc(r.was) + '.</li>' +
 '<li><b>Похвалите за это.</b> ' + esc(r.praise) + '.</li>' +
@@ -35216,31 +35282,23 @@ h += '<div class="card adrep cabsec" id="cab-zan"><h3>📨 Последнее з
 '<li><b>Понял или прошёл.</b> ' + esc(r.got) + '</li>' +
 '<li><b>Спросите.</b> ' + esc(r.ask) + '</li></ol></div>';
 } else {
-h += '<div class="card cabsec" id="cab-zan"><h3>📨 Последнее занятие</h3>' +
+g1 += '<div class="card"><h3>📨 Последнее занятие</h3>' +
 '<p class="dim">Занятий ещё не было. Отчёт появится, как только ребёнок закончит первое.</p></div>';
 }
 
-h += '<div class="cabsec" id="cab-ritm">' + heatHTML(S) + '</div>';
-h += '<div class="cabsec" id="cab-frame">' + paceStatHTML() + frameEditorHTML(f) + '</div>';
+g1 += weekReportHTML(S);
+g1 += heatHTML(S);
+g1 += paceStatHTML();
 
-var asum = authorSummary();
-h += '<div class="card cabsec" id="cab-trace"><h3>🖐 Как шла работа</h3>' +
-(asum.n
-? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
-'написано руками <b>' + asum.hand + '</b>' +
-(asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
-(asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
-: '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
-'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
-'<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
-'и не следим за ребёнком.</p>' +
-'<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div></div>';
+g2 += frameEditorHTML(f);
+
+g4 += authorCardHTML(S, true);
 
 var aiAllN = ailabList().length;
 var aiDoneN = ailabList().filter(function(x){ return ailabDone(x.id); }).length;
 var spAllN = specsList().length;
 var spDoneN = specsList().filter(function(x){ return specDone(x.id); }).length;
-h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
+g4 += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
 '<p>Курсы про нейросети учат <b>просить</b>. Здесь учат <b>принимать работу</b>: ' +
 'прочитать ответ машины, найти, где она уверенно врёт, написать проверку и вернуть на доработку. ' +
 'Судит движок, а не мнение, — поэтому себя тут не обманешь.</p>' +
@@ -35250,19 +35308,20 @@ h += '<div class="card"><h3>🤖 Чему он учится про ИИ</h3>' +
 'несовместима с разделом, который учит её проверять.</p>' +
 '<div class="admrow"><button class="rbtn check" data-act="toai">Посмотреть раздел →</button></div></div>';
 
-h += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
+g4 += '<div class="card"><h3>🏗 Что создают ученики</h3>' +
 '<p>Страница с вещами, которые собираются на курсе: шесть программ, рисунки и игры. ' +
 'Всё запускается прямо там — это не картинки работ, а сами работы.</p>' +
 '<p class="dim">Чужих детей и имён на ней нет: мы имя ребёнка не спрашиваем вовсе, ' +
 'а публичную ленту работ пришлось бы кому-то проверять руками.</p>' +
 '<div class="admrow"><button class="rbtn check" data-act="toworks">Открыть витрину →</button></div></div>';
 
-h += '<div class="cabsec" id="cab-task">' + adultTaskHTML() + '</div>';
+g3 += adultTaskHTML();
 
-h += '<div class="cabsec" id="cab-week">' + weekReportHTML(S) + '</div>';
+h += pane("rep", g1) + pane("frame", g2) + pane("task", g3) + pane("more", g4);
 
 h += '<div class="pager"><button class="bigbtn ghost" data-act="toadmin">Панель репетитора →</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">На главную</button></div>';
+
+'<span class="sp"></span><button class="bigbtn ghost" data-act="tomap">← К урокам ребёнка</button></div>';
 
 app.innerHTML = h;
 wireAdult();
@@ -35270,8 +35329,25 @@ refreshTop();
 window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-function paceStatHTML(){
-var st = zanStats(), f = frame();
+function authorCardHTML(snap, canOpen){
+var asum = authorSummary(snap);
+return '<div class="card"><h3>🖐 Как шла работа</h3>' +
+(asum.n
+? '<p>По ' + asum.n + ' ' + plural(asum.n, "уроку", "урокам", "урокам") + ' с записью: ' +
+'написано руками <b>' + asum.hand + '</b>' +
+(asum.ready ? ', часть работы пришла готовой в <b>' + asum.ready + '</b>' : '') +
+(asum.ahead ? ', непройденное в решении — в <b>' + asum.ahead + '</b>' : '') + '.</p>'
+: '<p class="dim">Записи пока нет: она ведётся с пройденных уроков. ' +
+'Уроки, сданные раньше, сюда не попадут — выдумывать про них мы не будем.</p>') +
+'<p class="dim">Приговоров тут не выносят: мы называем только то, что видели у себя на странице, ' +
+'и не следим за ребёнком.</p>' +
+(canOpen
+? '<div class="admrow"><button class="rbtn check" data-act="totrace">Открыть запись →</button></div>'
+: '') + '</div>';
+}
+
+function paceStatHTML(snap){
+var st = zanStats(snap), f = frame();
 if (!st.enough){
 return '<div class="card"><h3>📏 Что показывает практика</h3>' +
 '<p class="dim">Замер появится после ' + ZAN_STAT_MIN + ' занятий, на которых сделан хотя бы один урок. ' +
@@ -35434,6 +35510,12 @@ b.onclick = function(){ frameSet({ len: +b.getAttribute("data-flen") }); redraw(
 app.querySelectorAll("[data-fmix]").forEach(function(b){
 b.onclick = function(){ frameSet({ mix: b.getAttribute("data-fmix") }); redraw(); };
 });
+app.querySelectorAll("[data-funtil]").forEach(function(b){
+b.onclick = function(){
+frameSet({ until: addMonths(dayKey(), +b.getAttribute("data-funtil")) });
+redraw();
+};
+});
 app.querySelectorAll("[data-brdel]").forEach(function(b){
 b.onclick = function(){
 var br = frame().breaks.slice();
@@ -35444,10 +35526,31 @@ redraw();
 });
 
 app.querySelectorAll('[data-act="fgoal"],[data-act="fgoaloff"],[data-act="bradd"],' +
-'[data-act="fcaphard"],[data-act="freport"]').forEach(function(b){
+'[data-act="fcaphard"],[data-act="freport"],[data-act="ftime"],' +
+'[data-act="ftimeoff"],[data-act="funtil"],[data-act="funtiloff"],' +
+'[data-act="fics"]').forEach(function(b){
 b.onclick = function(){
 var act = b.getAttribute("data-act");
 if (act === "fcaphard"){ frameSet({ capHard: !frame().capHard }); return redraw(); }
+if (act === "ftimeoff"){ frameSet({ time: null }); return redraw(); }
+if (act === "funtiloff"){ frameSet({ until: null }); return redraw(); }
+if (act === "ftime"){
+var tv = (document.getElementById("ftime") || {}).value || "";
+
+frameSet({ time: validTime(tv) ? tv : null });
+return redraw();
+}
+if (act === "funtil"){
+var uv = (document.getElementById("funtil") || {}).value || "";
+frameSet({ until: uv || null });
+return redraw();
+}
+if (act === "fics"){
+var who = (kidTarget && kidTarget.name) ? kidTarget.name : (frameState().name || "");
+var text = icsForFrame(who);
+if (text) downloadText("fionika-zanyatiya.ics", text, b, "text/calendar");
+return;
+}
 if (act === "freport"){ frameSet({ report: !frame().report }); return redraw(); }
 if (act === "fgoaloff"){ frameSet({ goal: null }); return redraw(); }
 if (act === "fgoal"){
@@ -35475,16 +35578,21 @@ return redraw();
 });
 }
 function wireAdult(){
-bindFrameEditor(screenAdult);
 
-syncTopHeight();
-cabNavTrack();
-app.querySelectorAll("[data-cab]").forEach(function(b){
+app.querySelectorAll("[data-utab]").forEach(function(b){
 b.onclick = function(){
-var el = document.getElementById(b.getAttribute("data-cab"));
-if (el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+adultTab = b.getAttribute("data-utab");
+app.querySelectorAll("[data-utab]").forEach(function(x){
+var on = x.getAttribute("data-utab") === adultTab;
+x.classList.toggle("on", on);
+x.setAttribute("aria-selected", on ? "true" : "false");
+});
+app.querySelectorAll("[data-upane]").forEach(function(p){
+p.hidden = p.getAttribute("data-upane") !== adultTab;
+});
 };
 });
+bindFrameEditor(screenAdult);
 app.querySelectorAll("[data-ptab]").forEach(function(b){
 b.onclick = function(){ adultPick.t = b.getAttribute("data-ptab");
 
@@ -35700,7 +35808,7 @@ app.innerHTML =
 '<p class="dim">Ни имени, ни программы решавшего в ссылке нет — только какая задача ' +
 'и с какой попытки. Мы про людей ничего не собираем.</p></div>' +
 '<div class="pager"><button class="bigbtn" id="tomine">✍️ Задать ещё одну</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 document.getElementById("tomine").onclick = function(){
 try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
 screenMyTasks();
@@ -35834,7 +35942,7 @@ Math.min.apply(null, got.map(function(x){ return x.n; })) + '-я</span>'
 '<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
 '<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
 });
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 
 var studio = makeStudio({
@@ -35954,7 +36062,7 @@ h += '<div class="card"><h3>Если вы взрослый и открыли э�
 
 h += '<div id="studio"></div>' +
 '<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 
 var draftId = "task-" + key;
@@ -36040,7 +36148,7 @@ app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не о
 '<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
 'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
 '<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
 document.getElementById("tomap").onclick = goHome;
 refreshTop();
@@ -36349,7 +36457,7 @@ VIZ_EXAMPLES.map(function(e, i){ return '<button class="minibtn" data-ex="' + i 
 '</div><div id="vizstudio"></div>' +
 '<div class="pager">' +
 (opts.backTo ? '<button class="bigbtn" id="vizback">' + esc(opts.backTo.label) + '</button>' : '') +
-'<button class="bigbtn ghost" id="tomap">← На главную</button></div>';
+'<button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
 app.innerHTML = h;
 
 var ed = makeEditor(opts.code || VIZ_EXAMPLES[0].code,
@@ -36791,6 +36899,22 @@ S.admin.labels[code] = name;
 saveLocal();
 return kid;
 }
+
+function kidAttach(code, name){
+var v = (typeof Cloud !== "undefined" && Cloud.validCode(code)) || "";
+if (!v) return null;
+var was = kidGet(v);
+if (was){                       
+if (String(name || "").trim()) kidRename(v, name);
+return was;
+}
+var kid = { code: v, name: String(name || "").trim().slice(0, 40) || v, addedAt: Date.now() };
+S.admin.kids = kidsList().concat([kid]);
+S.admin.labels = S.admin.labels || {};
+S.admin.labels[v] = kid.name;
+saveLocal();
+return kid;
+}
 function kidDrop(code){
 S.admin.kids = kidsList().filter(function(k){ return k.code !== code; });
 saveLocal();
@@ -36833,10 +36957,21 @@ return '<button class="rbtn ' + (f.mix === m[0] ? "check" : "sec") + '" data-fmi
 }).join("");
 
 h = '<div class="card"><h3>🗓 Рамка занятий</h3>' +
+
+'<p class="zansum' + (f.days.length ? "" : " none") + '">' + esc(zanSlovami(f)) + '</p>' +
 '<p class="dim">Дни, время и длину назначаете вы. Порядок уроков — нет: курс устроен так, что команда ' +
 'объясняется раньше, чем понадобится, и перестановка уроков ломает именно это. ' +
 'Вы ставите рамку и темп, курс отвечает за порядок.</p>' +
 '<div class="admlbl">Дни занятий</div><div class="wdrow">' + chips + '</div>' +
+'<div class="admlbl">Время занятия</div>' +
+'<div class="admrow"><input type="time" id="ftime" value="' + (f.time || "") + '">' +
+'<button class="rbtn sec" data-act="ftime">Сохранить время</button>' +
+(f.time ? '<button class="rbtn sec" data-act="ftimeoff">Убрать</button>' : '') + '</div>' +
+(f.time
+? '<p class="dim">Занятие начинается в <b>' + esc(f.time) + '</b>. Это время видит ребёнок ' +
+'на «Сегодня» и родитель в отчёте — одно и то же число во всех трёх местах.</p>'
+: '<p class="dim">Время не задано: продукт скажет «в субботу», но часа не назовёт. ' +
+'Ставить час не обязательно — но без него нельзя выгрузить занятия в календарь.</p>') +
 '<div class="admlbl">Длина занятия</div><div class="admrow">' + lens + '</div>' +
 '<div class="admlbl">Чего больше</div><div class="admrow">' + mixes + '</div>' +
 '<div class="admlbl">Успеть к дате (необязательно)</div>' +
@@ -36880,7 +37015,7 @@ plural(pf.days, "занятие", "занятия", "занятий") + ' по '
 'а не отставание.</p>') +
 '';
 
-h += '<div class="admlbl">Каникулы и запланированные паузы</div>' +
+var брКаникулы = '<div class="admlbl">Каникулы и запланированные паузы</div>' +
 (f.breaks.length
 ? '<ul class="brlist">' + f.breaks.map(function(b, i){
 return '<li>' + b[0].split("-").reverse().join(".") + ' — ' + b[1].split("-").reverse().join(".") +
@@ -36892,6 +37027,58 @@ return '<li>' + b[0].split("-").reverse().join(".") + ' — ' + b[1].split("-").
 
 (adultPick.breaksProblem ? '<p class="warnline">⚠️ ' + esc(adultPick.breaksProblem) + '</p>' : '') +
 '<p class="dim">В эти дни пропуск запланирован, и отчёт не назовёт его прогулом.</p>';
+
+var dates = planDates(0);
+h += '<div class="admlbl">До какой даты занимаемся</div>' +
+'<div class="admrow">' +
+[1, 2, 3, 6].map(function(n){
+return '<button class="rbtn sec" data-funtil="' + n + '">+' + n + ' ' +
+plural(n, "месяц", "месяца", "месяцев") + '</button>';
+}).join("") +
+'</div>' +
+'<div class="admrow"><input type="date" id="funtil" value="' + (f.until || "") + '">' +
+'<button class="rbtn sec" data-act="funtil">Сохранить дату</button>' +
+(f.until ? '<button class="rbtn sec" data-act="funtiloff">Убрать</button>' : '') + '</div>' +
+(f.until
+? '<p class="dim">План расписан до <b>' + f.until.split("-").reverse().join(".") + '</b>.</p>'
+: '<p class="dim">Горизонт не задан — календарь показывает ближайшие три месяца.</p>');
+
+h += '<div class="admlbl">Календарь занятий</div>';
+if (!f.days.length)
+h += '<p class="dim">Не отмечен ни один день недели — расписывать нечего.</p>';
+else if (!dates.length)
+h += '<p class="dim">До выбранной даты не выпадает ни одного занятия. ' +
+'Проверьте дни недели, каникулы и горизонт.</p>';
+else {
+
+var бл = dates.slice(0, 3).map(function(k){
+var d = new Date(k + "T12:00:00");
+return WD_SHORT[d.getDay()].toLowerCase() + " " + k.slice(8) + "." + k.slice(5, 7);
+}).join(" · ");
+
+h += '<p class="planline">Ближайшие: <b>' + бл + '</b>' +
+(dates.length > 3 ? " …" : "") + '</p>' +
+'<details class="plandet"><summary>Все ' + dates.length + ' ' +
+plural(dates.length, "дата", "даты", "дат") + '</summary>' +
+'<ul class="planlist">' + dates.map(function(k){
+var d = new Date(k + "T12:00:00");
+return '<li>' + WD_SHORT[d.getDay()].toLowerCase() + ', ' +
+k.split("-").reverse().join(".") + (f.time ? ' — ' + esc(f.time) : "") + '</li>';
+}).join("") + '</ul></details>';
+h += f.time
+? '<div class="admrow"><button class="rbtn check" data-act="fics">📅 Добавить в календарь</button></div>' +
+'<p class="dim">Скачается файл для Календаря на маке и айфоне: повтор по выбранным дням, ' +
+'напоминание за полчаса, каникулы исключены. ⚠️ Напоминает Календарь, а не тренажёр — ' +
+'сам тренажёр в закрытой вкладке разбудить некому.</p>'
+: '<p class="dim">Чтобы выгрузить в календарь, задайте время занятия выше: ' +
+'событие без часа календарь принять не может.</p>';
+}
+
+h += '</div>';    
+
+h += '<div class="card"><details class="plandet"><summary>' +
+'<b>Паузы и границы</b> — каникулы, потолок экранного времени, отчёты</summary>' +
+брКаникулы;
 
 var caps = CAP_CHOICES.map(function(n){
 return '<button class="rbtn ' + (f.cap === n ? "check" : "sec") + '" data-fcap="' + n + '">' +
@@ -36916,7 +37103,7 @@ h += '<div class="admlbl">Отчёты</div>' +
 (f.report ? "✓ Получать отчёты о занятиях" : "Отчёты выключены") + '</button></div>' +
 '<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
 'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
-'выключенная означает «ничего не присылать».</p></div>';
+'выключенная означает «ничего не присылать».</p></details></div>';
 
 return h;
 }
@@ -38131,6 +38318,17 @@ h += '<div class="card" id="kidadd"><h3>Добавить ученика</h3>' +
 '<button class="rbtn check" data-kact="add">Завести</button>' +
 '</div><div class="msg" id="kidmsg"></div></div>';
 
+h += '<div class="card" id="kidback"><h3>Вернуть ученика по коду</h3>' +
+'<p class="dim">Если ученик уже занимался — у него есть код, и прогресс лежит на сервере. ' +
+'Впишите код, и ученик вернётся в список вместе со всеми занятиями. ' +
+'Код показан у ребёнка в профиле. ⚠️ Не заводите его заново по имени: ' +
+'новый код — это новый ученик с нуля.</p>' +
+'<div class="admgate">' +
+'<input type="text" id="kidcode" placeholder="код, например roman-3f7a" autocomplete="off" spellcheck="false" maxlength="32">' +
+'<input type="text" id="kidcodename" placeholder="имя для вашего списка" autocomplete="off" spellcheck="false" maxlength="40">' +
+'<button class="rbtn sec" data-kact="attach">Найти и вернуть</button>' +
+'</div><div class="msg" id="kidbackmsg"></div></div>';
+
 if (!kids.length){
 h += '<div class="note"><b>Пока ни одного ученика</b>Заведите первого — это займёт полминуты.</div>';
 } else {
@@ -38169,6 +38367,50 @@ return;
 }
 return screenKid(kid.code, "Ученик заведён. Отправьте ему ссылку — она уже открыта.");
 }
+if (act === "attach"){
+var raw = (document.getElementById("kidcode") || {}).value || "";
+var nm2 = (document.getElementById("kidcodename") || {}).value || "";
+var bm = document.getElementById("kidbackmsg");
+var v = (typeof Cloud !== "undefined" && Cloud.validCode(raw)) || "";
+if (!v){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Это не похоже на код</b>Код — от трёх до тридцати двух знаков: " +
+"маленькие латинские буквы, цифры, дефис и подчёркивание. Посмотрите его " +
+"у ребёнка в профиле и перепишите точно.";
+return;
+}
+if (kidGet(v)){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Этот ученик уже в списке</b>Он ниже, под кодом <code>" + esc(v) + "</code>.";
+return;
+}
+
+if (!serverOn()){
+var k0 = kidAttach(v, nm2);
+return screenKid(k0.code, "Ученик добавлен. ⚠️ Сервер не подключён — " +
+"проверить, есть ли под этим кодом занятия, было нечем.");
+}
+bm.className = "msg show"; bm.innerHTML = "<b>Ищу на сервере…</b>";
+Cloud.load(v).then(function(r){
+if (!r || !r.found || !r.data){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>На сервере нет ученика с кодом «" + esc(v) + "»</b>" +
+"Проверьте код по профилю ребёнка. Ничего не добавлено и не испорчено.";
+return;
+}
+var solved = Object.keys(r.data.stars || {}).length;
+var kid = kidAttach(v, nm2);
+screenKid(kid.code, solved
+? "Ученик вернулся в список: на сервере " + solved + " " +
+plural(solved, "сданный урок", "сданных урока", "сданных уроков") + "."
+: "Ученик вернулся в список. Сданных уроков на сервере пока нет.");
+}, function(err){
+bm.className = "msg show bad";
+bm.innerHTML = "<b>Сервер не ответил</b>" + esc(err.message || String(err)) +
+" Ничего не добавлено — попробуйте ещё раз.";
+});
+return;
+}
 if (act === "open") return screenKid(code);
 if (act === "leave") return leaveRoom();
 if (act === "role") return screenRoles();
@@ -38177,7 +38419,8 @@ if (act === "drop"){
 var k = kidGet(code);
 if (!confirm("Убрать «" + ((k && k.name) || code) + "» из списка?\n\n" +
 "Занятия ребёнка и его прогресс останутся на сервере — пропадёт только строка " +
-"в вашем списке. Вернуть можно, добавив код обратно."))
+"в вашем списке.\n\nВернуть можно карточкой «Вернуть ученика по коду». " +
+"Код этого ученика: " + code))
 return;
 kidDrop(code);
 return screenKids();
@@ -38227,6 +38470,8 @@ if (screenStale(seq) || !kidTarget || kidTarget.code !== code) return;
 kidTarget.data = ensureShape(r.found && r.data ? r.data : blankProgress());
 kidTarget.fresh = !(r.found && r.data);
 kidTarget.serverAt = r.serverAt || 0;
+
+kidTarget.frameAt = frameShape(kidTarget.data.frame).setAt || 0;
 kidRender();
 kidWatch(code, seq);
 }, function(err){
@@ -38237,39 +38482,63 @@ esc(err.message || err) + '</p>';
 });
 }
 
+var ADULT_TABS = [
+["rep",   "📊", "Отчёт"],
+["frame", "🗓", "Расписание"],
+["task",  "✉️", "Задание"],
+["more",  "📚", "Разделы"]
+];
+var adultTab = "rep";
 var KID_TABS = [
 ["rep",   "📊", "Отчёт"],
+["work",  "📏", "Практика"],
 ["frame", "🗓", "Расписание"],
 ["hw",    "📮", "Домашка"],
 ["note",  "✍️", "Заметка"],
-["link",  "🔗", "Доступ"]    
+["link",  "🔗", "Доступ"]
 ];
+
 var kidTab = "";
 function kidPaneHTML(id, inner){
 return '<div class="kpane" data-kpane="' + id + '"' + (kidTab === id ? "" : " hidden") + '>' +
 inner + '</div>';
 }
 
-function kidLinksHTML(code){
+function kidLinksHTML(code, mentor){
 var k = kidGet(code) || {};
-return '<div class="card"><h3>Ссылка для ребёнка</h3>' +
-'<p class="dim">Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
-'Дальше он просто заходит на сайт, и это его тренажёр.</p>' +
+
+var h = '<div class="card"><h3>🔑 Код ученика</h3>' +
+'<p class="dim">Главное, что стоит сохранить. По нему прогресс открывается с любого ' +
+'устройства; ни имени, ни почты мы не спрашиваем, и найти ребёнка иначе нечем.</p>' +
+'<div class="codebox"><code>' + esc(code) + '</code>' +
+'<button class="rbtn check" data-kd="ccopy">Скопировать код</button></div></div>';
+
+h += '<div class="card"><h3>Ссылка для ребёнка</h3>' +
+'<p class="dim">' + (mentor
+? 'Отправьте её ребёнку и попросите открыть на его устройстве — один раз. ' +
+'Дальше он просто заходит на сайт, и это его тренажёр.'
+: 'Откройте её на устройстве ребёнка — один раз. Дальше он просто заходит на сайт, ' +
+'и это его тренажёр. Она же выручает, если планшет сбросили или ребёнок вышел.') +
+'</p>' +
 '<div class="codebox"><code>' + esc(kidLink(code)) + '</code>' +
 '<button class="rbtn sec" data-kd="copy">Скопировать</button></div>' +
-'<h3 style="margin-top:16px">Ссылка для родителя</h3>' +
-'<p class="dim">Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
-'с расписанием и отчётом по этому ребёнку — и только по нему.</p>' +
-'<div class="codebox"><code>' + esc(parentLink(code, k.name)) + '</code>' +
-'<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div>' +
-'<p class="dim" style="margin-top:10px">Код ученика: <code>' + esc(code) + '</code></p></div>';
+'<h3 style="margin-top:16px">Ссылка ' + (mentor ? 'для родителя' : 'на этот кабинет') + '</h3>' +
+'<p class="dim">' + (mentor
+? 'Отправьте её родителю ученика. Открыв на своём устройстве, он получит кабинет ' +
+'с расписанием и отчётом по этому ребёнку — и только по нему.'
+: 'Откройте её на втором своём устройстве или отправьте второму родителю: ' +
+'получится такой же кабинет по этому ребёнку — и только по нему.') +
+'</p>' +
+'<div class="codebox"><code>' + esc(parentLink(code, k.name || parentLabel())) + '</code>' +
+'<button class="rbtn sec" data-kd="pcopy">Скопировать</button></div></div>';
+return h;
 }
 function kidRender(savedNote){
 var box = document.getElementById("kidbody");
 if (!box || !kidTarget || !kidTarget.data) return;
 var st = kidTarget.data;
 var mentor = (curPlace === "kid");
-var tabs = KID_TABS.filter(function(t){ return t[0] !== "link" || mentor; });
+var tabs = KID_TABS.slice();
 
 if (!tabs.some(function(t){ return t[0] === kidTab; }))
 kidTab = kidTarget.fresh ? "frame" : "rep";
@@ -38280,16 +38549,6 @@ h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</
 if (kidTarget.fresh)
 h += '<div class="note"><b>Ученик ещё не заходил</b>Ссылку он пока не открывал. ' +
 'Расписание можно поставить заранее — оно приедет к нему при первом же входе.</div>';
-
-if (!kidTarget.fresh){
-var wf = weekFacts(st);
-if (wf.stuck.length){
-var stuckL = CURRICULUM.byId(wf.stuck[0].id);
-h += '<p class="cabnow">⛔ Сейчас важно: застрял на уроке «' +
-(stuckL ? esc(stuckL.title) : esc(wf.stuck[0].id)) +
-'» — разбор и что делать на вкладке «Отчёт».</p>';
-}
-}
 
 h += '<div class="ltabs kidnav" role="tablist">' + tabs.map(function(t){
 return '<button class="ltab' + (t[0] === kidTab ? " on" : "") + '" role="tab" data-ktab="' + t[0] + '"' +
@@ -38303,6 +38562,14 @@ kidTarget.fresh
 : weekReportHTML(st) + askCardHTML(st) + oralCardHTML(st) + parentReportCardHTML() +
 '<h3 class="sect">📊 Как идут занятия</h3>' + statsGridHTML(st));
 
+h += kidPaneHTML("work",
+kidTarget.fresh
+? '<div class="note"><b>Практики пока нет</b>Она появится после первых занятий: ' +
+'карта часов, замер темпа и запись работы считаются по тому, что ребёнок уже делал.</div>'
+:
+
+heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false));
+
 h += kidPaneHTML("frame",
 frameEditorHTML(frame()) +
 '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
@@ -38312,7 +38579,7 @@ frameEditorHTML(frame()) +
 
 h += kidPaneHTML("hw", hwGiveHTML(st));
 h += kidPaneHTML("note", noteGiveHTML(st));
-if (mentor) h += kidPaneHTML("link", kidLinksHTML(kidTarget.code));
+h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
 box.innerHTML = h;
 
@@ -38332,8 +38599,10 @@ p.hidden = p.getAttribute("data-kpane") !== kidTab;
 box.querySelectorAll("[data-kd]").forEach(function(b){
 b.onclick = function(){
 var a = b.getAttribute("data-kd");
+if (a === "ccopy") return copyText(kidTarget.code, b);
 if (a === "copy") return copyText(kidLink(kidTarget.code), b);
-if (a === "pcopy") return copyText(parentLink(kidTarget.code, (kidGet(kidTarget.code) || {}).name), b);
+if (a === "pcopy") return copyText(parentLink(kidTarget.code,
+(kidGet(kidTarget.code) || {}).name || parentLabel()), b);
 };
 });
 bindFrameEditor(function(){ kidRender(); });
@@ -38693,11 +38962,24 @@ var code = kidTarget.code, myFrame = frameShape(kidTarget.data.frame);
 var msg = document.getElementById("kidsavemsg");
 function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
 say("warn", "<b>Сохраняю…</b>");
+
+var openedAt = kidTarget.frameAt || 0;
 Cloud.load(code).then(function(r){
 var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+var theirs = frameShape(base.frame);
+if (openedAt && theirs.setAt > openedAt && theirs.setAt !== myFrame.setAt){
+say("bad", "<b>Рамку успели поменять</b>Пока карточка была открыта, расписание " +
+"этого ученика изменили с другого устройства. Чтобы не стереть чужую правку, " +
+"я ничего не сохранил — откройте карточку заново и посмотрите, что там теперь.");
+kidTarget.data = base;
+kidTarget.frameAt = theirs.setAt;
+kidTarget.dirty = true;
+return;
+}
 base.frame = myFrame;                        
 return Cloud.save(base, code).then(function(){
 kidTarget.data = base;
+kidTarget.frameAt = myFrame.setAt;
 kidTarget.dirty = false;
 kidTarget.fresh = false;
 kidRender("<b>Расписание сохранено</b>Оно приедет к ребёнку при следующем открытии тренажёра.");
@@ -38984,13 +39266,18 @@ var keys = f.keys, byDay = f.byDay, studied = f.studied,
 weekSolved = f.weekSolved, weekMs = f.weekMs, tough = f.tough, lastDay = f.lastDay;
 var names = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
+var satIn = function(k){
+var row = st.hours && st.hours[k];
+return Array.isArray(row) && row.some(function(v){ return v > 0; });
+};
 var strip = keys.map(function(k){
 var was = activeIn(st.days, k), shield = !was && !!(st.shields && st.shields[k]);
+var sat = !was && !shield && satIn(k);
 var n = (byDay[k] || []).length;
 var d = new Date(k + "T12:00:00");
 return '<div class="wrday' + (was ? " on" : (shield ? " shield" : "")) + (k === today ? " now" : "") + '">' +
 '<span class="wrd">' + names[d.getDay()] + '</span>' +
-'<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : "—")) + '</span>' +
+'<span class="wrn">' + (was ? (n || "·") : (shield ? "🛡" : (sat ? "·" : "—"))) + '</span>' +
 '<span class="wrdate">' + d.getDate() + "." + (d.getMonth() + 1) + '</span></div>';
 }).join("");
 
@@ -41263,7 +41550,7 @@ h += '<div class="card"><h3>Для родителя</h3>' +
 'снимаются замки с уроков. Она открывается адресом сайта с <b>#admin</b> на конце ' +
 'и спрашивает код — в меню её нет, чтобы ребёнок не забрёл туда случайно.</p></div>';
 
-h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap">← На главную</button>' +
+h += '</div><div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button>' +
 '<span class="sp"></span><button class="bigbtn" id="gostart">▶ К урокам</button></div>';
 
 app.innerHTML = h;
@@ -41536,7 +41823,10 @@ openGame: openGame, screenWarmups: screenWarmups, openWarmup: openWarmup,
 warmupOpen: warmupOpen, warmupsOpen: warmupsOpen, warmupsList: warmupsList,
 screenToday: screenToday, dailyPick: dailyPick, markActiveToday: markActiveToday,
 streakCurrent: streakCurrent, streakBest: streakBest, dailyDone: dailyDone, dayKey: dayKey,
+homeLabel: homeLabel, goHome: goHome,
 scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
+agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
+frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
 shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
 shieldWouldSave: shieldWouldSave,
 coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
@@ -41569,6 +41859,7 @@ localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelS
 blankProgress: blankProgress, ensureShape: ensureShape,
 clearResults: clearResults, clearAll: clearAll,
 cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState,
+cancelPush: cancelPush,
 screenReview: screenReview, reviewList: reviewList, reviewDue: reviewDue,
 reviewAfterLesson: reviewAfterLesson, reviewNote: reviewNote,
 reviewWhy: reviewWhy, reviewDueAt: reviewDueAt, reviewState: reviewState,
@@ -41649,6 +41940,7 @@ atHome: atHome, setPlace: setPlace, leaveRoom: leaveRoom, ROOM_PLACES: ROOM_PLAC
 bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
 adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
 kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
+kidAttach: kidAttach, kidRename: kidRename,
 kidLink: kidLink, frameEditorHTML: frameEditorHTML,
 isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
 parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,

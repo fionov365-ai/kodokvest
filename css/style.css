@@ -1912,6 +1912,25 @@ body.focus .toTop{display:none}
   border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin:8px 0}
 .brlist{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
 .brlist li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft)}
+/* Календарь занятий. ⚠️ Колонки узкие (130px) и тянутся сами: сорок дат
+   простынёй по 210px занимали пол-экрана — фаундер назвал это безобразием
+   12.09.2026. Дата это семь знаков, и колонка под неё нужна семизначная. */
+.planlist{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px;
+  grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.planlist li{font-size:13px;color:var(--soft);background:var(--panel2);
+  border:1px solid var(--line2);border-radius:10px;padding:6px 9px}
+.plandet{margin:8px 0}
+.plandet>summary{cursor:pointer;font-size:14px;color:var(--acc);
+  list-style:none;display:inline-flex;align-items:center;gap:6px}
+.plandet>summary::-webkit-details-marker{display:none}
+.plandet>summary::before{content:"▸";transition:.15s}
+.plandet[open]>summary::before{transform:rotate(90deg)}
+.planline{margin:6px 0;font-size:15px}
+/* Одна строка, отвечающая за весь экран настроек: что настроено сейчас. */
+.zansum{margin:2px 0 10px;font-size:17px;font-weight:650;color:var(--ink);
+  background:var(--panel2);border:1px solid var(--line2);border-left:4px solid var(--acc);
+  border-radius:12px;padding:11px 14px}
+.zansum.none{font-weight:500;color:var(--soft);border-left-color:var(--line2)}
 /* выбор роли на общем компьютере */
 .rolegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
 .rolecard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
@@ -2676,27 +2695,6 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
   border-radius:11px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
 .roomnav button:hover{color:var(--ink);border-color:var(--acc)}
 .roomnav button.on{background:var(--acc);color:var(--onacc);border-color:transparent}
-
-/* ---------- сводка и оглавление кабинета взрослого ----------
-   Кабинет — одна длинная страница карточек. Сводка (.cabsum) отвечает на
-   первый вопрос взрослого числами, оглавление (.cabnav) липнет под шапкой и
-   везёт к карточкам. Приёмы из замера конкурентов 12.09.2026 —
-   docs/kabinet-benchmark-2026-09-12.md.
-   ⚠️ На телефоне оглавление НЕ переносится в сетку, как .ltabs на ≤640px:
-   липкая полоса в три ряда съела бы пол-экрана. Вместо переноса — прокрутка
-   вбок, тот же приём, что у .admtable и карты часов. */
-.cabsum{margin-bottom:6px}
-.cabnav{position:sticky;top:var(--toph,60px);z-index:50;display:flex;gap:8px;
-  flex-wrap:nowrap;overflow-x:auto;padding:10px 2px;margin:0 -2px 12px;
-  background:var(--topbg);backdrop-filter:blur(14px)}
-.cabtab{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);
-  color:var(--soft);border-radius:999px;padding:8px 14px;font:inherit;
-  font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
-.cabtab:hover{color:var(--ink);border-color:var(--acc)}
-.cabtab.on{background:var(--acc);color:var(--onacc);border-color:transparent}
-.cabsec{scroll-margin-top:calc(var(--toph,60px) + 62px)}
-.cabnow{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);
-  border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14.5px}
 
 /* ---------- карта экзамена: все задания по номерам ----------
    Строка на задание, а не карточка: заданий 27, и карточками это была бы
