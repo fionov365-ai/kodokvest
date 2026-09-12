@@ -5348,6 +5348,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   let myExamChecked = 0;
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let variantChecked = 0;
+  let proverkaChecked = 0;
   let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
 
@@ -10527,6 +10528,172 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (problems.length === p0) variantChecked++;
   }
 
+  /* --- 13г. [проверка] «что умеет сам» (js/proverka.js) ---
+     Обещания, которые здесь стерегутся, — ровно те, на которых проверка
+     продаётся взрослому: код открывает ТОТ ЖЕ итог где угодно; код с опечаткой
+     не открывает чужой; старый код через год открывается тем же итогом
+     (лестница заморожена); вставленный код не выдаётся за «сам»; проверка
+     кончается сама после двух нерешённых подряд. */
+  if (g.proverka && w.HW){
+    const p0 = problems.length;
+    const P = g.proverka;
+    const ref = t => w.HW.byId(t.id).code(t.vals);
+
+    /* 13г.1. ⚠️ Лестница версии 1 заморожена. Поменял состав — старые коды
+       молча откроют другие задачи. Нужна другая лестница — заводи версию 2. */
+    const SNAP = "hw-klass,hw-konfety|hw-chek,hw-slovo|hw-bilet|hw-summa-do,hw-tablica,hw-lesenka|" +
+      "hw-kopilka,hw-pervoe|hw-ocenki,hw-spisok-rastet,hw-top|hw-funkciya,hw-fn-skidka|" +
+      "hw-dnevnik,hw-korzina,hw-glasnye|hw-try,hw-raise|hw-score,hw-class";
+    const now = P.RUNGS.map(r => r.pool.join(",")).join("|");
+    if (now !== SNAP) bad("[проверка] лестница версии 1 изменена — старые коды откроют чужие задачи: " + now);
+
+    /* 13г.2. Каждая ступень собирается на любом семени, заготовка не решает её сама. */
+    for (let s = 0; s < 40; s++){
+      const seed = (s * 26189 + 7) % 1048576;
+      P.RUNGS.forEach((r, i) => {
+        const t = P.taskOf(seed, i);
+        if (!t) return bad(`[проверка] ступень ${i + 1} не собралась на семени ${seed}`);
+        const st = w.MiniPy.run(t.starter, { stdin: [] });
+        if (!st.error && (st.lines || []).join("\n") === t.lines.join("\n"))
+          bad(`[проверка] ступень ${i + 1} (${t.id}): заготовка сама даёт правильный ответ`);
+      });
+    }
+
+    /* 13г.3. Код туда и обратно — без потерь; опечатка ловится. */
+    let rnd = 12345;
+    const next = () => (rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let lost = 0, typos = 0, slipped = 0;
+    for (let k = 0; k < 150; k++){
+      const res = { day: Math.floor(next() * 4096), seed: Math.floor(next() * 1048576),
+                    mins: Math.floor(next() * 64),
+                    rungs: P.RUNGS.map(() => ({ st: Math.floor(next() * 4), paste: next() < .3 ? 1 : 0 })) };
+      const code = P.pack(res);
+      if (!/^[2-9A-HJ-NP-Z]{4}(-[2-9A-HJ-NP-Z]{4}){3}$/.test(code)) bad("[проверка] код не того вида: " + code);
+      if (JSON.stringify(P.unpack(code.toLowerCase().replace(/-/g, " "))) !== JSON.stringify(res)) lost++;
+      const flat = code.replace(/-/g, "");
+      for (let pos = 0; pos < 16; pos += 5){
+        const ch = flat[pos], other = ABC[(ABC.indexOf(ch) + 1 + Math.floor(next() * 31)) % 32];
+        typos++;
+        if (P.unpack(flat.slice(0, pos) + other + flat.slice(pos + 1))) slipped++;
+      }
+    }
+    if (lost) bad(`[проверка] ${lost} кодов из 150 после разбора дали не тот итог`);
+    if (slipped > typos * 0.01)
+      bad(`[проверка] код с опечаткой открылся ${slipped} раз из ${typos} — взрослый увидит чужой итог`);
+    if (P.unpack("2222-2222-2222-2222") || P.unpack("") || P.unpack("ABCD-EFGH"))
+      bad("[проверка] негодный код открыл итог");
+
+    /* 13г.4. Весь проход нажатиями: первая ступень с первой попытки, вторая с
+       третьей, третья пропущена, четвёртая провалена — и проверка кончается
+       сама, потому что две ступени подряд не решены. */
+    g.state.proverka = {};
+    g.screenProverka(); await tick();
+    const go = doc.getElementById("prvgo");
+    if (!go) bad("[проверка] на входе нет кнопки «Начать проверку»");
+    else {
+      go.click(); await tick();
+      const p = g.state.proverka;
+      if (!p || p.i !== 0 || p.closed) bad("[проверка] проверка не началась");
+      const submit = async (code) => {
+        const st = studioOf();
+        if (!st) return bad("[проверка] на ступени нет редактора");
+        st.editor.setCode(code);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+      };
+      const t0 = P.taskOf(p.seed, 0);
+      /* ⚠️ Совпали числа, не совпало оформление — ступень не сгорает молча,
+         судья говорит об оформлении. И это попытка. */
+      await submit(t0.lines.map(x => 'print("Ответ: ' + x + '")').join("\n"));
+      if (!/Числа верные/.test(msgText())) bad("[проверка] про верные числа в неверном виде не сказано: " + msgText());
+      if (/Ответ:\s*\d/.test(msgText()) || msgText().indexOf(t0.lines[0] + "") >= 0 && /нужно|надо/i.test(msgText()))
+        bad("[проверка] судья показал правильный вывод — это решение за ребёнка");
+      await submit(ref(t0));
+      if (g.state.proverka.i !== 1 || g.state.proverka.rungs[0].st !== 2)
+        bad("[проверка] верное решение со второй попытки не записано как «со второй»: " +
+            JSON.stringify(g.state.proverka.rungs[0]));
+      const t1 = P.taskOf(p.seed, 1);
+      await submit(ref(t1));
+      if (g.state.proverka.rungs[1].st !== 3) bad("[проверка] решение с первой попытки не записано как «с первой»");
+      const skip = doc.getElementById("prvskip");
+      if (!skip) bad("[проверка] нет кнопки «Не знаю — дальше»");
+      else { skip.click(); await tick(); }
+      if (g.state.proverka.closed) bad("[проверка] кончилась после ОДНОЙ нерешённой ступени");
+      const t3 = P.taskOf(p.seed, 3);
+      for (let k = 0; k < 3; k++) await submit(ref(t3) + "\nprint(-777)\n");
+      const done = g.state.proverka;
+      if (!done.closed) bad("[проверка] после двух нерешённых подряд проверка не закончилась");
+      if (done.rungs[3].st !== 1) bad("[проверка] три неверных попытки не дали «не решил»");
+      const code = done.code;
+      const back = P.unpack(code);
+      if (!back || back.seed !== done.seed || back.rungs.map(r => r.st).join("") !== "2311000000")
+        bad("[проверка] код итога несёт не то: " + JSON.stringify(back));
+      if (w.location.hash !== "#proverka=" + code) bad("[проверка] адрес итога не несёт код: " + w.location.hash);
+      const txt = doc.getElementById("app").textContent;
+      if (!/Уверенно сам: 2 ступени из 10/.test(txt)) bad("[проверка] итог не назвал две твёрдые ступени");
+      if (/\d+\s*балл/i.test(txt)) bad("[проверка] итог обещает баллы");
+      if (!/С чего продолжать/.test(txt) || !/Условие/.test(txt)) bad("[проверка] итог не сказал, с чего продолжать");
+
+      /* Дальше всё держится на коде итога; без него — не падаем, а говорим. */
+      if (back){
+      /* 13г.5. Тот же код на ЧУЖОМ устройстве — тот же итог: без состояния. */
+      g.state.proverka = {};
+      w.location.hash = "#proverka=" + code.toLowerCase(); await tick(40);
+      const txt2 = doc.getElementById("app").textContent;
+      if (!/Уверенно сам: 2 ступени из 10/.test(txt2))
+        bad("[проверка] по ссылке с кодом на пустом устройстве итог не открылся");
+
+      /* 13г.6. Сравнение двух кодов: у ступени «было → стало». */
+      const later = P.pack({ day: back.day + 30, seed: 99, mins: 20,
+        rungs: P.RUNGS.map((r, i) => ({ st: i < 4 ? 3 : 0, paste: 0 })) });
+      P.screenReport(later, code); await tick();
+      const txt3 = doc.getElementById("app").textContent;
+      if (!/не решил → сам, с первой попытки/.test(txt3)) bad("[проверка] сравнение не показало «было → стало»");
+      if (!/Сейчас: 4 из 10/.test(txt3)) bad("[проверка] сравнение не назвало оба числа");
+
+      /* 13г.7. Кривой код — объяснение, а не чужой итог и не молчание. */
+      P.screenReport("AAAA-AAAA-AAAA-AAAB", ""); await tick();
+      if (!/Код не открылся/.test(doc.getElementById("app").textContent))
+        bad("[проверка] про негодный код ничего не сказано");
+      }
+    }
+
+    /* 13г.8. ⚠️ Вставленный код не выдаётся за «сам». */
+    g.state.proverka = {};
+    g.screenProverka(); await tick();
+    doc.getElementById("prvgo").click(); await tick();
+    {
+      const p = g.state.proverka, st = studioOf();
+      st.editor.setCode(ref(P.taskOf(p.seed, 0)));
+      st.editor.trace.pasted = 120;
+      st.querySelector('[data-role="check"]').click(); await tick();
+      if (g.state.proverka.rungs[0].paste !== 1) bad("[проверка] вставленный код не отмечен");
+      doc.getElementById("prvstop").click(); await tick();
+      const txt = doc.getElementById("app").textContent;
+      if (!g.state.proverka.closed) bad("[проверка] «Закончить проверку» не закончила её");
+      if (!/часть кода вставлена/.test(txt) || /Уверенно сам: 1/.test(txt))
+        bad("[проверка] ступень со вставленным кодом засчитана как «сам»");
+    }
+
+    /* 13г.9. Слияние двух устройств: та же проверка — побеждает ушедшая дальше. */
+    const m = g.mergeProgress({ savedAt:2, proverka:{ v:1, seed:5, at:10, i:3, closed:0, rungs:[] } },
+                              { savedAt:1, proverka:{ v:1, seed:5, at:10, i:1, closed:1, rungs:[] } });
+    if (!m.proverka || m.proverka.closed !== 1) bad("[проверка] слияние вернуло незакрытую проверку поверх закрытой");
+
+    /* 13г.10. Дверь в «Тренировках». */
+    g.screenTrain(); await tick();
+    const card = doc.querySelector('[data-train="proverka"]');
+    if (!card) bad("[проверка] в «Тренировках» нет карточки проверки");
+    else { card.click(); await tick();
+      if (!/Проверка|Что умеет сам/.test(doc.getElementById("app").textContent))
+        bad("[проверка] карточка в «Тренировках» не открыла проверку"); }
+
+    g.state.proverka = {};
+    viewReset(g);
+    if (problems.length === p0) proverkaChecked++;
+  }
+
   /* --- 14. чему движок научился --- */
   if (w.MiniPy){
     const p0 = problems.length;
@@ -10655,6 +10822,7 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
+  console.log(`проверка «что умеет сам»: ${proverkaChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`адрес следует за экраном (кругооборот): ${routeChecked ? "да" : "нет"}`);
   console.log(`страницы сайта: ссылки и карта сайта: ${pagesChecked ? "да" : "нет"}`);

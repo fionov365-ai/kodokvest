@@ -2796,6 +2796,34 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .vexams .card{margin:0}
 @media (max-width:620px){ .vartask{font-size:12px} }
 
+/* ---------- проверка «что умеет сам» ----------
+   Строки итога — те же .exrow, что у карты экзамена: один язык «зелёное —
+   сделано, жёлтое — с оговоркой». Своё здесь только три вещи: код результата
+   крупно (его диктуют голосом), лесенка ступеней над задачей и поле кода. */
+.prvcode{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:26px;font-weight:600;
+  letter-spacing:2px;color:var(--ink);background:var(--sunken);border:1px solid var(--line);
+  border-radius:12px;padding:12px 16px;margin:4px 0 10px;overflow-wrap:anywhere}
+.prvinline{font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:1px}
+.prvinput{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:16px;letter-spacing:1px;
+  text-transform:uppercase;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;
+  background:var(--panel);color:var(--ink);min-width:0;flex:1 1 220px}
+.prvladder{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin:0 0 14px}
+.prvladder span{text-align:center;font-size:13px;font-weight:600;padding:6px 0;border-radius:8px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--faint)}
+.prvladder .now{border-color:var(--acc);color:var(--acc);background:var(--panel)}
+.prvladder .ok{border-color:var(--ok);color:var(--ok)}
+.prvladder .miss{border-color:var(--line2);color:var(--soft);text-decoration:line-through}
+.exrow.prv-yes{border-left-color:var(--ok)}
+.exrow.prv-yes .exn{color:var(--ok)}
+.exrow.prv-part{border-left-color:var(--warn)}
+.exrow.prv-part .exn{color:var(--warn)}
+.exrow.prv-miss{border-left-color:var(--bad)}
+.exmap .exrow[class*="prv-"] .exact{white-space:normal;text-align:right}
+.exrow.prv-no{border-left-color:var(--line2);background:var(--panel2)}
+.exrow.prv-no .ext{color:var(--soft)}
+.exrow .excnt b{font-weight:600;color:var(--ink)}
+@media (max-width:620px){ .prvcode{font-size:20px;letter-spacing:1px} .prvladder{gap:3px} }
+
 /* ---------- вход ----------
    Последний экран повторяет первый по фону: страница закрывается тем же
    жестом, каким открылась, и кнопка входа стоит на самом заметном месте

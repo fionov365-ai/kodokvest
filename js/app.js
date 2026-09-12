@@ -85,7 +85,11 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                         { projectId: { topic, actual, conclusion, next, at } }.
                         ⚠️ Школу, класс и руководителя НЕ храним — это
                         персональные данные; в документах для них пустые строки. */
-                     "defense"];
+                     "defense",
+                     /* Проверка «что умеет сам» (js/proverka.js): одна
+                        живая или последняя закрытая. Итог по построению живёт
+                        в коде результата; здесь только ход проверки. */
+                     "proverka"];
 /* codeSaved — единственный ответ продукта на «потерял код — потерял прогресс».
    ⚠️ Это НЕ восстановление: восстанавливать нечем и не будет чем, потому что
    ни почты, ни телефона мы не спрашиваем, и это обещание на вывеске. Это
@@ -2265,6 +2269,16 @@ function mergeProgress(a, b){
     out.variant[k] = one;
   });
 
+  /* Проверка «что умеет сам»: сложить две разные проверки нельзя (у каждой
+     свои задачи), поэтому побеждает начатая позже. Одна и та же (то же семя)
+     на двух устройствах — берём ту, что ушла дальше: закрытую или с большим
+     номером ступени. */
+  var pa = a.proverka || {}, pb = b.proverka || {};
+  if (!pa.at) out.proverka = pb.at ? pb : {};
+  else if (!pb.at) out.proverka = pa;
+  else if (pa.seed !== pb.seed) out.proverka = (pb.at || 0) > (pa.at || 0) ? pb : pa;
+  else out.proverka = ((pb.closed || 0) * 100 + (pb.i || 0)) > ((pa.closed || 0) * 100 + (pa.i || 0)) ? pb : pa;
+
   /* Назначенный репетитором вариант: по ключу на экзамен. Складывать тут
      нечего — назначение это факт от взрослого, и свежее отменяет прежнее.
      ⚠️ Сравниваем по at, а не по «чьё сохранение новее»: репетитор пишет
@@ -2529,7 +2543,7 @@ var PLACE_RU = {
   game:"играет", games:"выбирает игру", warmup:"делает разминку", warm:"выбирает разминку",
   today:"на экране «Сегодня»", zan:"идёт занятие", review:"повторяет трудное",
   algo:"выбирает задачу экзамена", algoone:"решает задачу экзамена",
-  variant:"проходит пробный вариант",
+  variant:"проходит пробный вариант", proverka:"проходит проверку «что умеет сам»",
   ai:"в разделе «Ты и ИИ»", ailesson:"в разделе «Ты и ИИ»",
   hw:"смотрит домашку", hwone:"делает домашку", sand:"в песочнице", viz:"в визуализаторе",
   mytasks:"составляет своё задание", friendtask:"решает задание от друга",
@@ -4131,6 +4145,14 @@ function trainCards(){
     /* ⚠️ Вариант стоит ПЕРЕД разделом по темам, а не после него. Темы — это
        как учат; вариант — как спрашивают, и родитель ищет второе. Прятать его
        под темами значит прятать единственное, чего нет у соседей. */
+    /* ⚠️ Проверка стоит ПЕРВОЙ из учебных. Это единственный раздел, который
+       нужен и тому, кто учится НЕ у нас: родитель, платящий школе
+       программирования, приходит сюда узнать, что ребёнок умеет сам. go и
+       stat обёртками — модуль присваивается ниже по файлу. */
+    { id:"proverka", em:"🔎", title:"Проверка: что умеет сам", go: function(){ screenProverka(); },
+      why: "Десять задач по нарастающей, от счёта до классов, без подсказок. В конце — код из шестнадцати знаков: по нему итог откроется на телефоне взрослого, без регистрации.",
+      when: "Когда надо узнать, что получается самому, — неважно, где учишься.",
+      stat: typeof proverkaStat === "function" ? proverkaStat() : "" },
     { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
       why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. Можно тренировкой, а можно в режиме экзамена — со временем, без подсказок и без ответа проверки.",
       when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
@@ -10054,6 +10076,32 @@ var screenVariant = VARIANT.screenVariant,
     screenVariantDone = VARIANT.screenVariantDone,
     variantOpenFor = VARIANT.variantOpenFor,
     variantStat = VARIANT.variantStat;
+
+/* ================= проверка «что умеет сам» =================
+   Своим файлом (js/proverka.js) — зачем она и почему итог живёт в коде, а не
+   на сервере, в шапке того файла. Состояние — одна дверь на чтение и одна на
+   запись, по правилу варианта выше. copyText и screenWorld — обёртками:
+   первый приходит из модуля профиля, и на этой строке его может ещё не быть. */
+var PROVERKA = KVSCREENS.proverka({
+  app: app, esc: esc, plural: plural, qm: qm,
+  enterScreen: enterScreen, setRoute: setRoute, refreshTop: refreshTop,
+  makeStudio: makeStudio, codeHas: codeHas, errHTML: errHTML, hwRunner: hwRunner,
+  draftGet: draftGet, draftApply: draftApply, draftSchedule: draftSchedule,
+  markActiveToday: markActiveToday,
+  /* ⚠️ Вызовом: AUTHOR_PASTE_MIN объявлен НИЖЕ по файлу, и значением сюда
+     приехал бы undefined — а «120 >= undefined» ложно, то есть любой
+     вставленный код молча считался бы набранным. Поймано тестом [проверка]. */
+  pasteMin: function(){ return AUTHOR_PASTE_MIN; },
+  copyText: function(t, btn){ return copyText(t, btn); },
+  screenWorld: function(n){ screenWorld(n); },
+  screenTrain: function(){ screenTrain(); },
+  proverkaGet: function(){ return S.proverka || {}; },
+  proverkaSet: function(v){ S.proverka = v || {}; save(); },
+  session: function(){ return session; },
+  newSession: function(v){ session = v; return v; }
+});
+var screenProverka = PROVERKA.screenProverka,
+    proverkaStat = PROVERKA.proverkaStat;
 /* ================= мастерская: полка деталей и верстак =================
    Ставка Г из docs/foresight-2027.md § 3, дешёвый вход по § 12 п. 5:
    НЕ переписывать сто уроков в сквозную линию, а надстроить сверху.
@@ -12570,6 +12618,7 @@ var ROUTES = [
   { h:"#specs",   place:"specs",   t:"Приёмка",                    open:function(){ screenSpecs(); } },
   { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
   { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
+  { h:"#proverka", place:"proverka", t:"Проверка: что умеет сам",  open:function(){ screenProverka(); } },
   { h:"#shop",    place:"shop",    t:"Мастерская: полка и верстак",open:function(){ screenShop(); } },
   { h:"#sand",    place:"sand",    t:"Песочница",                  open:function(){ screenSandbox(); } },
   { h:"#path",    place:"path",    t:"Карта пути",                 open:function(){ screenPath(); } },
@@ -12697,6 +12746,10 @@ function routeHash(){
   /* Пакет к защите — тоже адрес с параметром (id проекта) */
   var dpk = /^#defense=([\w-]+)$/.exec(location.hash || "");
   if (dpk && projectById(dpk[1])){ screenDefense(dpk[1]); return true; }
+  /* Итог проверки — адрес с параметром: сам код результата. Кривой код не
+     уводит на Главное молча, а открывает вход проверки с объяснением. */
+  var prk = /^#proverka=([0-9A-Za-z-]+)$/.exec(location.hash || "");
+  if (prk){ PROVERKA.screenReport(prk[1], ""); return true; }
   var wpn = /^#world=(\d+)$/.exec(location.hash || "");
   if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }
 
@@ -18369,6 +18422,20 @@ var HELP = {
   /* ⚠️ Подсказка варианта отвечает сразу двоим. Ребёнок спрашивает «что тут
      делать», взрослый — «сколько баллов он набрал», и второй вопрос надо
      закрыть прямо здесь: если не ответить, число придумают за нас. */
+  /* Подсказка проверки отвечает взрослому раньше, чем ребёнку: взрослый
+     приходит сюда с вопросом «сколько это баллов» и «можно ли верить». */
+  proverka: { t:"🔎 Проверка — что ребёнок умеет сам", h:
+    '<h4>Что это</h4>' +
+    '<p>Десять ступеней по нарастающей: счёт, текст, условие, циклы, списки, функции, словари, ' +
+    'ошибки, классы. На каждой одна задача — написать программу. Подсказок нет, попыток три, ' +
+    'и после двух нерешённых ступеней подряд проверка кончается сама.</p>' +
+    '<h4>Код результата</h4>' +
+    '<p>В конце появляется код из шестнадцати знаков. В нём записан весь итог, поэтому он ' +
+    'открывается на любом устройстве без регистрации и без сервера. Код с опечаткой не ' +
+    'откроется вовсе — чужой итог по ошибке показан не будет.</p>' +
+    '<h4>Чего здесь нет</h4>' +
+    '<p>Баллов и отметок: из десяти задач их не вывести. Итог говорит проверяемое — какие ' +
+    'ступени ребёнок решил сам, какие нет, и где код пришёл вставкой, а не был набран.</p>' },
   variant: { t:"📝 Пробный вариант — весь экзамен подряд", h:
     '<h4>Что это за экран</h4>' +
     '<p>Раздел «Алгоритмы, ОГЭ и ЕГЭ» разложен по темам: сегодня графы, завтра циклы. ' +
@@ -19348,6 +19415,7 @@ window.__game = {
   screenVariant: screenVariant, screenVariantDone: screenVariantDone,
   variantOpenFor: variantOpenFor, variantStat: variantStat,
   variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
+  screenProverka: screenProverka, proverka: PROVERKA,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
   solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,
   screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,
