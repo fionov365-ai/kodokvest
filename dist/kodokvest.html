@@ -28235,6 +28235,10 @@ cloudPush().catch(function(){});
 }, wait);
 }
 
+function cancelPush(){
+if (cloudState.timer){ clearTimeout(cloudState.timer); cloudState.timer = null; }
+}
+
 var PRESENCE_FRESH = 2 * 60e3;    
 
 var PLACE_RU = {
@@ -41476,6 +41480,7 @@ localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelS
 blankProgress: blankProgress, ensureShape: ensureShape,
 clearResults: clearResults, clearAll: clearAll,
 cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState,
+cancelPush: cancelPush,
 screenReview: screenReview, reviewList: reviewList, reviewDue: reviewDue,
 reviewAfterLesson: reviewAfterLesson, reviewNote: reviewNote,
 reviewWhy: reviewWhy, reviewDueAt: reviewDueAt, reviewState: reviewState,

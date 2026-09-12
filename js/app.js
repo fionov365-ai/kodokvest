@@ -2320,6 +2320,17 @@ function schedulePush(){
     cloudPush().catch(function(){});
   }, wait);
 }
+/* Погасить отложенную отправку. Отдельный вход, потому что таймер — чужое
+   состояние (§ 4, правило 5): читается вызовом, гасится вызовом, руками в
+   cloudState.timer не лезет никто.
+   Зачем есть: отложенная отправка заведена в одном мгновении, а срабатывает
+   через 2–25 секунд — в мире, который успел смениться. Кто меняет мир под ней,
+   обязан её погасить. Сейчас такой один — тест метрик: он уводит хранилище
+   сервера в свою пустую папку, и долетевший туда чужой снимок сдвигал счёт
+   затыков (мигание 11.09.2026). */
+function cancelPush(){
+  if (cloudState.timer){ clearTimeout(cloudState.timer); cloudState.timer = null; }
+}
 
 /* ================= ПРИСУТСТВИЕ И ЖИВОЕ ЗАНЯТИЕ =================
    Ответ на вопрос фаундера «могу ли я и родители видеть, что делает ребёнок
@@ -18645,6 +18656,7 @@ window.__game = {
   blankProgress: blankProgress, ensureShape: ensureShape,
   clearResults: clearResults, clearAll: clearAll,
   cloudPull: cloudPull, cloudPush: cloudPush, cloudState: cloudState,
+  cancelPush: cancelPush,
   screenReview: screenReview, reviewList: reviewList, reviewDue: reviewDue,
   reviewAfterLesson: reviewAfterLesson, reviewNote: reviewNote,
   reviewWhy: reviewWhy, reviewDueAt: reviewDueAt, reviewState: reviewState,

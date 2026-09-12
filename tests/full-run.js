@@ -7667,12 +7667,35 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
       const stDir = fs.mkdtempSync(path.join(os.tmpdir(), "kq-stats-"));
       process.env.DATA_DIR = stDir;
       w.CLOUD_CONFIG.url = "https://srv.invalid/fn";
+      /* ⚠️ Метрики — единственная проверка, которая читает ПАПКУ ЦЕЛИКОМ, а не
+         ученика по коду. Значит, ей важно, что в папке лежат только её ученики.
+         А у игры есть отложенная отправка (schedulePush, 2–25 секунд): любое
+         save() раньше по прогону заводит таймер, и он долетает уже сюда, в
+         свежую папку, под кодом основного тестового ученика. У того в журнале
+         есть и «vars», и «text-vs-num» — счёт затыков уезжал, и проверка мигала
+         (11.09.2026, 1.147.0: tried 4 вместо 3 и лишний урок в списке).
+         Лечим не ослаблением счёта, а хозяйством: гасим отложенную отправку
+         перед каждым замером и требуем, чтобы в папке были ровно наши файлы.
+         Второе — не перестраховка: если чужая запись всё-таки долетит, тест
+         обязан назвать её по имени, а не выдать «сервер посчитал неверно». */
+      const mine = [];
+      const onlyMine = where => {
+        g.cancelPush();                       /* гасим отложенную: чужой снимок сюда не долетит */
+        if (g.cloudState.timer)
+          bad("[метрики] отложенная отправка не погасла — замер снова зависит от секунд");
+        const strays = fs.readdirSync(stDir).filter(f => mine.indexOf(f) < 0);
+        if (strays.length)
+          bad("[метрики] в папку замера (" + where + ") попал чужой ученик: " +
+              strays.join(", ") + " — считать по ней нельзя");
+      };
+      const saveMine = (data, code) => { mine.push(code + ".json"); return w.Cloud.save(data, code); };
       const mkDays = ts => { const o = {}; ts.forEach(t => o[g.dayKey(new Date(t))] = 1); return o; };
       const stars25 = {}; for (let i = 0; i < 25; i++) stars25["l" + i] = 3;
-      await w.Cloud.save({ xp:1, stars: stars25,
+      await saveMine({ xp:1, stars: stars25,
         days: mkDays([now - 20*day, now - 17*day, now - day]),
         log: { a:{ solvedAt: now - day } } }, "stat-a");
-      await w.Cloud.save({ xp:1, stars: { x:3 }, days: mkDays([now - 20*day]), log: {} }, "stat-b");
+      await saveMine({ xp:1, stars: { x:3 }, days: mkDays([now - 20*day]), log: {} }, "stat-b");
+      onlyMine("возвращаемость");
       const m = await w.Cloud.stats("kluch-testa");
       if (m.started !== 2) bad("[метрики] начавших: " + m.started + " вместо 2");
       if (m.week.eligible !== 2 || m.week.returned !== 1)
@@ -7696,16 +7719,20 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
          Двое сидят на «vars» без решения, один его сдал. Карточка обязана
          назвать урок словами (на сервере только идентификатор) и сказать
          главное — застрявших больше, чем сдавших. */
-      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{}, days: mkDays([now - day]),
         log: { "vars": { attempts:7, hints:0, shown:0 } } }, "stat-c");
-      await w.Cloud.save({ xp:1, stars:{}, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{}, days: mkDays([now - day]),
         log: { "vars": { attempts:9, hints:0, shown:0 } } }, "stat-d");
-      await w.Cloud.save({ xp:1, stars:{ "vars":3 }, days: mkDays([now - day]),
+      await saveMine({ xp:1, stars:{ "vars":3 }, days: mkDays([now - day]),
         log: { "vars": { solvedAt: now - day, attempts:2 } } }, "stat-e");
+      onlyMine("затыки");
       const m2 = await w.Cloud.stats("kluch-testa");
       const zt = (m2.stuck || []).filter(x => x.lesson === "vars")[0];
       if (!zt || zt.stuck !== 2 || zt.tried !== 3 || zt.solved !== 1)
         bad("[затыки] сервер посчитал затык неверно: " + JSON.stringify(m2.stuck));
+      /* список затыков — ровно про наших: лишний урок значит чужую запись */
+      if ((m2.stuck || []).length !== 1)
+        bad("[затыки] в списке затыков не только «vars»: " + JSON.stringify(m2.stuck));
       g.grpStats.data = m2;
       g.screenGroup();
       await tick();
