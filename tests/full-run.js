@@ -5911,6 +5911,9 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (!/Когда он занимался/.test(t)) bad("[кабинет] нет карты активности");
     if (!/Задать задание/.test(t)) bad("[кабинет] нет «задать задание»");
     if (!doc.querySelector(".heat i")) bad("[кабинет] карта часов не отрисовалась");
+    /* сводка над вкладками (1.148.0, слита с вкладками 1.155.0): четыре
+       числа видны до выбора вкладки */
+    if (!doc.querySelector(".cabsum .admstat")) bad("[кабинет] сводка над вкладками не отрисовалась");
     if (problems.length === p0) adultChecked++;
     viewReset(g);
   }
@@ -9284,6 +9287,25 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             bad("[панель] клик по «Доступу» не показал ссылки ученика");
         }
         g.kidDrop(kid.code);
+
+        /* --- «Сейчас важно»: затык виден НАД вкладками (1.155.0) ---
+           Затык — нерешённый урок с ценой ≥ 6 (stuckIn). Внутри вкладки
+           «Отчёт» он и так есть; строка над вкладками обязана быть видна
+           и после переключения на другую вкладку. */
+        w.Cloud.load = () => Promise.resolve({ found: true, serverAt: Date.now(),
+          data: { log: { "print-first": { attempts: 9, hints: 3, timeMs: 1200000, last: Date.now() } } } });
+        const kidStuck = g.kidAdd("Тест Затык");
+        g.screenKid(kidStuck.code); await tick(); await tick();
+        if (!doc.querySelector(".cabnow"))
+          bad("[панель] затык ученика не виден над вкладками — нет строки «Сейчас важно»");
+        const hwTab = [...doc.querySelectorAll(".kidnav .ltab")].find(b => /Домашка/.test(b.textContent));
+        if (hwTab){
+          hwTab.click(); await tick();
+          if (!doc.querySelector(".cabnow"))
+            bad("[панель] строка «Сейчас важно» пропала при смене вкладки");
+        }
+        g.kidDrop(kidStuck.code);
+        w.Cloud.load = () => Promise.resolve({ found: false });
 
         /* --- возврат ученика по ГОТОВОМУ коду ---
            ⚠️ Разбор трёх ролей 12.09.2026: «Убрать» обещала «вернуть можно,
