@@ -9176,7 +9176,7 @@ function checkEncoding(){
       bad("[кабинет] после выхода замок остался открыт — вернуться можно без пароля");
     if (!g.isAdminDevice())
       bad("[кабинет] выход из кабинета стёр роль устройства — это должна делать другая кнопка");
-    if (!/Информатика без репетитора/.test(doc.getElementById("app").textContent))
+    if (!/Информатика, которую видно/.test(doc.getElementById("app").textContent))
       bad("[кабинет] выход привёл не на главную");
 
     /* ⚠️ И переключатели: на телефоне по два в ряд, а не столбиком. Просьба
@@ -9615,7 +9615,7 @@ function checkEncoding(){
     g.state.admin.parentOf = "";
     g.screenAdminHome(); await tick();
     g.goLogo(); await tick();
-    if (!/О тренажёре|Информатика без репетитора|Фионика — что это/i.test(doc.getElementById("app").textContent))
+    if (!/О тренажёре|Информатика, которую видно|Фионика — что это/i.test(doc.getElementById("app").textContent))
       bad("[логотип] из кабинета репетитора логотип не вывел на страницу сайта");
     /* и обратно в кабинет — кнопкой в шапке, она обязана остаться видимой */
     const lk = doc.getElementById("tab-lk");

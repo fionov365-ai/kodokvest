@@ -78,9 +78,9 @@ h1{font-size:82px;line-height:1.02;letter-spacing:-.015em;margin:20px 0 0;font-w
 </style></head><body>
 <div>
   <div class="kick">информатика · 5–11 класс · ОГЭ и ЕГЭ</div>
-  <h1>Информатика<br>без репетитора</h1>
-  <div class="sub">${N.lessons} уроков программирования на Python прямо в браузере.
-    Код запускается сразу, ошибки объясняются словами.</div>
+  <h1>Информатика,<br>которую видно</h1>
+  <div class="sub">Ребёнок пишет код сам — а вы видите это
+    без аккаунтов, звонков и рассрочек.</div>
 </div>
 <div>
   <div class="nums">
