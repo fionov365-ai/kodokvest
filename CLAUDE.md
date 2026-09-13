@@ -66,6 +66,7 @@ GitHub Desktop не используем — виснет на `.lock`-файл�
 | `HANDOFF.md` | история сессий и грабли |
 | `docs/market-research.md` | замеры рынка и журнал решений |
 | `docs/rynok-i-rov-2026-09-12.md` | игроки рынка, чем мы лучше, ров, выход |
+| `docs/licenziya-proverka-2026-09-13.md` | почему без лицензии, красные линии, 38-ФЗ ст. 6 |
 | `docs/smeta-zapuska.md` | деньги и действия до запуска |
 | `docs/vitrina-litsenziya-napravleniya-2026-09-09.md` | Яндекс, лицензия, конкуренты, ниши |
 | `docs/foresight-2027.md` | ставки вдолгую |
