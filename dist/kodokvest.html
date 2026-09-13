@@ -1513,6 +1513,8 @@ transition:.15s;font:inherit;color:inherit}
 .kidacts{display:flex;gap:8px;flex-wrap:wrap}
 .card.kidfile.warn{background:var(--warnbg);border-color:var(--warnline)}
 .card.kidfile.warn h3{color:var(--warnink)}
+.ownchk{display:flex;align-items:center;gap:10px;min-height:44px;margin:8px 0 0;font-weight:600;cursor:pointer}
+.ownchk input{width:20px;height:20px}
 .kidfilepick{position:relative;display:inline-flex;align-items:center;line-height:normal}
 .kidfilepick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .kidfilepick:focus-within{outline:2px solid var(--acc);outline-offset:2px}
@@ -37792,7 +37794,7 @@ redraw();
 });
 
 app.querySelectorAll('[data-act="fgoal"],[data-act="fgoaloff"],[data-act="bradd"],' +
-'[data-act="fcaphard"],[data-act="freport"],[data-act="ftime"],' +
+'[data-act="fcaphard"],[data-act="ftime"],' +
 '[data-act="ftimeoff"],[data-act="funtil"],[data-act="funtiloff"],' +
 '[data-act="fics"]').forEach(function(b){
 b.onclick = function(){
@@ -37817,7 +37819,6 @@ var text = icsForFrame(who);
 if (text) downloadText("fionika-zanyatiya.ics", text, b, "text/calendar");
 return;
 }
-if (act === "freport"){ frameSet({ report: !frame().report }); return redraw(); }
 if (act === "fgoaloff"){ frameSet({ goal: null }); return redraw(); }
 if (act === "fgoal"){
 var v = (document.getElementById("fgoal") || {}).value || "";
@@ -39422,11 +39423,8 @@ plural(todayMinutes(), "минута", "минуты", "минут") + ' из ' 
 '';
 
 h += '<div class="admlbl">Отчёты</div>' +
-'<div class="admrow"><button class="rbtn ' + (f.report ? "check" : "sec") + '" data-act="freport">' +
-(f.report ? "✓ Получать отчёты о занятиях" : "Отчёты выключены") + '</button></div>' +
-'<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
-'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
-'выключенная означает «ничего не присылать».</p></details></div>';
+'<p class="dim">Отчёт о занятиях показывается здесь, в кабинете, на вкладке «Отчёт». ' +
+'Писем мы не шлём: почты и телефона не спрашиваем.</p></details></div>';
 
 return h;
 }
@@ -40555,6 +40553,33 @@ document.getElementById("plback").onclick = screenRoles;
 inp.focus();
 refreshTop();
 }
+
+function kidWorkHere(){
+return Object.keys(S.stars || {}).length;
+}
+function passFirstHTML(){
+var n = kidWorkHere();
+var h = '<p class="dim">Пароль придумывает тот, кто первым сюда вошёл. Если это устройство ' +
+'ребёнка — кабинет здесь не заводите: заведите его на своём телефоне или компьютере.</p>';
+if (n)
+h += '<div class="warnline">⚠️ На этом устройстве уже занимается ученик: сдано ' + n + ' ' +
+plural(n, "урок", "урока", "уроков") + '. Кто поставит здесь пароль, тот получит «Открыть все уроки» ' +
+'и «Сбросить весь прогресс» — в том числе сам ребёнок.</div>' +
+'<label class="ownchk"><input type="checkbox" id="admown"> Это моё устройство, а не ребёнка</label>';
+return h;
+}
+
+function passFirstOk(msg){
+if (!kidWorkHere()) return true;
+var c = document.getElementById("admown");
+if (c && c.checked) return true;
+if (msg){
+msg.className = "msg show bad";
+msg.innerHTML = "<b>Сначала отметьте, чьё это устройство</b>Здесь уже занимается ученик. " +
+"Если устройство его — заведите кабинет на своём.";
+}
+return false;
+}
 function screenAdminSetup(){
 enterScreen("home", "adminsetup");
 app.innerHTML =
@@ -40565,6 +40590,7 @@ app.innerHTML =
 '<div class="card"><h3>Придумайте пароль кабинета</h3>' +
 '<p class="dim">Он хранится только в этом браузере и никуда не отправляется. ' +
 'Нужен, чтобы ребёнок, взявший ваш компьютер, не открыл кабинет из любопытства.</p>' +
+passFirstHTML() +
 '<div class="admgate">' +
 '<input type="password" id="apass1" placeholder="пароль" autocomplete="new-password" spellcheck="false">' +
 '<input type="password" id="apass2" placeholder="ещё раз" autocomplete="new-password" spellcheck="false">' +
@@ -40588,6 +40614,7 @@ msg.className = "msg show bad";
 msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
 return;
 }
+if (!passFirstOk(msg)) return;
 adminPassSet(a, true);
 adminUnlock();
 becomeAdmin();
@@ -41579,6 +41606,7 @@ app.innerHTML =
 (setting ? '<input type="password" id="admcode2" placeholder="ещё раз" autocomplete="new-password" spellcheck="false">' : '') +
 '<button class="rbtn check" id="admgo">' + (setting ? "Готово" : "Войти") + '</button>' +
 '</div><div class="msg" id="admgatemsg"></div>' +
+(setting ? passFirstHTML() : '') +
 (setting ? '<p class="dim" style="margin-top:12px">⚠️ Это защита от любопытства, а не настоящая ' +
 'авторизация: сайт работает в браузере, проверять пароль на сервере некому. Пароль хранится ' +
 'только здесь. Забыли — очистите данные сайта в браузере и задайте заново.</p>' : '') +
@@ -41599,6 +41627,7 @@ msg.className = "msg show bad";
 msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
 return;
 }
+if (!passFirstOk(msg)) return;
 adminPassSet(inp.value, false);        
 adminUnlock();
 return after();
@@ -44519,7 +44548,7 @@ atHome: atHome, setPlace: setPlace, leaveRoom: leaveRoom, ROOM_PLACES: ROOM_PLAC
 bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
 adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
 kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
-kidAttach: kidAttach, kidRename: kidRename, progressJSON: progressJSON,
+kidAttach: kidAttach, kidRename: kidRename, kidWorkHere: kidWorkHere, progressJSON: progressJSON,
 kidsListFileText: kidsListFileText, kidsListParse: kidsListParse, kidsListMerge: kidsListMerge,
 kidsListLoadText: kidsListLoadText, kidsSaveNeeded: kidsSaveNeeded, kidsListMarkSaved: kidsListMarkSaved,
 kidLink: kidLink, frameEditorHTML: frameEditorHTML,

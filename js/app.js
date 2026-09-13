@@ -11349,7 +11349,7 @@ function bindFrameEditor(redraw){
   });
   /* кнопки внутри рамки, у которых общий обработчик data-act */
   app.querySelectorAll('[data-act="fgoal"],[data-act="fgoaloff"],[data-act="bradd"],' +
-                       '[data-act="fcaphard"],[data-act="freport"],[data-act="ftime"],' +
+                       '[data-act="fcaphard"],[data-act="ftime"],' +
                        '[data-act="ftimeoff"],[data-act="funtil"],[data-act="funtiloff"],' +
                        '[data-act="fics"]').forEach(function(b){
     b.onclick = function(){
@@ -11375,7 +11375,6 @@ function bindFrameEditor(redraw){
         if (text) downloadText("fionika-zanyatiya.ics", text, b, "text/calendar");
         return;
       }
-      if (act === "freport"){ frameSet({ report: !frame().report }); return redraw(); }
       if (act === "fgoaloff"){ frameSet({ goal: null }); return redraw(); }
       if (act === "fgoal"){
         var v = (document.getElementById("fgoal") || {}).value || "";
@@ -11451,7 +11450,7 @@ function wireAdult(){
       if (act === "totrace") return screenTrace();
       if (act === "toworks") return screenShowcase();
       if (act === "toai") return screenAILab();
-      /* freport / fcaphard / fgoal / fgoaloff / bradd обрабатывает bindFrameEditor
+      /* fcaphard / fgoal / fgoaloff / bradd обрабатывает bindFrameEditor
          (общий с кабинетом взрослого). Здесь остаётся только то, что живёт лишь
          на этом экране: замер темпа по занятиям. */
       if (act === "peron"){
@@ -13417,13 +13416,14 @@ function frameEditorHTML(f){
         'когда время выйдет.</p>') +
     '';
 
-  /* галочка отчётов */
+  /* ⚠️ Здесь была галочка «Получать отчёты», и она НИЧЕМ не управляла —
+     текст рядом сам это признавал. Орган управления без действия — § 4.35:
+     человек переключает и думает, что что-то изменил. Снята 13.09.2026;
+     поле frame.report в модели осталось — оно понадобится, когда появится
+     отправка, и его слияние стережёт [рамка]. Пока — просто правда словами. */
   h += '<div class="admlbl">Отчёты</div>' +
-    '<div class="admrow"><button class="rbtn ' + (f.report ? "check" : "sec") + '" data-act="freport">' +
-      (f.report ? "✓ Получать отчёты о занятиях" : "Отчёты выключены") + '</button></div>' +
-    '<p class="dim">Пока отчёт никуда не уходит: почты у нас нет и адреса мы не спрашиваем. ' +
-    'Он показывается здесь, в кабинете. Когда появится отправка, эта галочка будет ей управлять — ' +
-    'выключенная означает «ничего не присылать».</p></details></div>';
+    '<p class="dim">Отчёт о занятиях показывается здесь, в кабинете, на вкладке «Отчёт». ' +
+    'Писем мы не шлём: почты и телефона не спрашиваем.</p></details></div>';
 
   return h;
 }
@@ -15062,6 +15062,41 @@ function screenParentLogin(){
   inp.focus();
   refreshTop();
 }
+/* ===== пароль кабинета придумывает первый вошедший (13.09.2026, RAZVITIE § 2.6) =====
+   Настоящей авторизации у сайта в браузере нет и не будет: проверять пароль
+   некому. Значит пароль ставит тот, кто первым открыл кабинет или панель, — и
+   на детском планшете это может быть сам ребёнок («⇄ Сменить роль» → «Я
+   репетитор»): тогда у него «Открыть все уроки» и «Сбросить весь прогресс».
+   Чинится словами и одной отметкой: экран говорит это прямо, а если на
+   устройстве уже занимался ученик — пароль не ставится без «это моё
+   устройство, а не ребёнка». Отметка не защита, а остановка: взрослый,
+   заводящий кабинет на планшете сына, прочтёт, почему не стоит. */
+function kidWorkHere(){
+  return Object.keys(S.stars || {}).length;
+}
+function passFirstHTML(){
+  var n = kidWorkHere();
+  var h = '<p class="dim">Пароль придумывает тот, кто первым сюда вошёл. Если это устройство ' +
+    'ребёнка — кабинет здесь не заводите: заведите его на своём телефоне или компьютере.</p>';
+  if (n)
+    h += '<div class="warnline">⚠️ На этом устройстве уже занимается ученик: сдано ' + n + ' ' +
+      plural(n, "урок", "урока", "уроков") + '. Кто поставит здесь пароль, тот получит «Открыть все уроки» ' +
+      'и «Сбросить весь прогресс» — в том числе сам ребёнок.</div>' +
+      '<label class="ownchk"><input type="checkbox" id="admown"> Это моё устройство, а не ребёнка</label>';
+  return h;
+}
+/* пароль можно ставить: либо ученика здесь нет, либо взрослый отметил, что устройство его */
+function passFirstOk(msg){
+  if (!kidWorkHere()) return true;
+  var c = document.getElementById("admown");
+  if (c && c.checked) return true;
+  if (msg){
+    msg.className = "msg show bad";
+    msg.innerHTML = "<b>Сначала отметьте, чьё это устройство</b>Здесь уже занимается ученик. " +
+      "Если устройство его — заведите кабинет на своём.";
+  }
+  return false;
+}
 function screenAdminSetup(){
   enterScreen("home", "adminsetup");
   app.innerHTML =
@@ -15072,6 +15107,7 @@ function screenAdminSetup(){
     '<div class="card"><h3>Придумайте пароль кабинета</h3>' +
       '<p class="dim">Он хранится только в этом браузере и никуда не отправляется. ' +
       'Нужен, чтобы ребёнок, взявший ваш компьютер, не открыл кабинет из любопытства.</p>' +
+      passFirstHTML() +
       '<div class="admgate">' +
         '<input type="password" id="apass1" placeholder="пароль" autocomplete="new-password" spellcheck="false">' +
         '<input type="password" id="apass2" placeholder="ещё раз" autocomplete="new-password" spellcheck="false">' +
@@ -15095,6 +15131,7 @@ function screenAdminSetup(){
       msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
       return;
     }
+    if (!passFirstOk(msg)) return;
     adminPassSet(a, true);
     adminUnlock();
     becomeAdmin();
@@ -16245,6 +16282,7 @@ function adminGate(after){
       (setting ? '<input type="password" id="admcode2" placeholder="ещё раз" autocomplete="new-password" spellcheck="false">' : '') +
       '<button class="rbtn check" id="admgo">' + (setting ? "Готово" : "Войти") + '</button>' +
     '</div><div class="msg" id="admgatemsg"></div>' +
+    (setting ? passFirstHTML() : '') +
     (setting ? '<p class="dim" style="margin-top:12px">⚠️ Это защита от любопытства, а не настоящая ' +
       'авторизация: сайт работает в браузере, проверять пароль на сервере некому. Пароль хранится ' +
       'только здесь. Забыли — очистите данные сайта в браузере и задайте заново.</p>' : '') +
@@ -16265,6 +16303,7 @@ function adminGate(after){
         msg.innerHTML = "<b>Не совпадает</b>Второй пароль отличается от первого.";
         return;
       }
+      if (!passFirstOk(msg)) return;
       adminPassSet(inp.value, false);       /* защита есть, но кабинетом не делаем */
       adminUnlock();
       return after();
@@ -19816,7 +19855,7 @@ window.__game = {
   bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
-  kidAttach: kidAttach, kidRename: kidRename, progressJSON: progressJSON,
+  kidAttach: kidAttach, kidRename: kidRename, kidWorkHere: kidWorkHere, progressJSON: progressJSON,
   kidsListFileText: kidsListFileText, kidsListParse: kidsListParse, kidsListMerge: kidsListMerge,
   kidsListLoadText: kidsListLoadText, kidsSaveNeeded: kidsSaveNeeded, kidsListMarkSaved: kidsListMarkSaved,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,

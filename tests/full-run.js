@@ -267,9 +267,17 @@ function checkEncoding(){
     /* пароль ещё не задан → gate предлагает придумать его */
     doc.getElementById("admcode").value = "mojparol";
     if (doc.getElementById("admcode2")) doc.getElementById("admcode2").value = "mojparol";
+    /* на устройстве, где уже решались уроки, пароль просит отметку «моё» (13.09.2026) */
+    if (doc.getElementById("admown")) doc.getElementById("admown").checked = true;
     doc.getElementById("admgo").click();
     await tick();
-    if (doc.getElementById("admcode")) bad("[панель] не пустила внутрь после задания пароля");
+    if (doc.getElementById("admcode")){
+      bad("[панель] не пустила внутрь после задания пароля");
+      /* ставим пароль обходом: остальные проверки панели не должны падать
+         исключением и уносить собранные ошибки (§ 4.50) */
+      if (!g.state.admin.pass) g.adminPassSet("mojparol", false);
+      g.adminUnlock(); g.screenAdmin(); await tick();
+    }
     /* выходим и заходим снова: теперь пароль требуется */
     g.adminLock();
     g.screenAdmin();
@@ -290,9 +298,13 @@ function checkEncoding(){
 
   /* снятие замков */
   const before = g.state.admin.unlockAll;
-  doc.querySelector('[data-act="unlockall"]').click();
-  await tick();
-  if (g.state.admin.unlockAll === before) bad("[панель] кнопка «Открыть все уроки» не переключается");
+  const unlockBtn = doc.querySelector('[data-act="unlockall"]');
+  if (!unlockBtn) bad("[панель] панель не открылась — кнопки «Открыть все уроки» нет");
+  else {
+    unlockBtn.click();
+    await tick();
+    if (g.state.admin.unlockAll === before) bad("[панель] кнопка «Открыть все уроки» не переключается");
+  }
   g.screenWorld(2);
   await tick();
 
@@ -9843,6 +9855,74 @@ function checkEncoding(){
     g.becomeKid();
     if (problems.length === p0) dashChecked++;
     viewReset(g);
+  }
+
+  /* --- 12б. три честности (13.09.2026, RAZVITIE § 2.6 и § 2.7) ---
+     ① галочка «Получать отчёты» ничем не управляла — снята, вместо неё правда
+     словами; ② пароль кабинета придумывает первый вошедший — экран говорит
+     это прямо, а на устройстве с учеником пароль не ставится без отметки
+     «моё устройство»; ③ на /semeynoe-obuchenie/ сказано про баллы эксперта. */
+  {
+    const fe = g.frameEditorHTML(g.frame());
+    if (/data-act="freport"/.test(fe) || /Получать отчёты/.test(fe))
+      bad("[честность] в рамке снова переключатель отчётов, который ничем не управляет");
+    if (!/Писем мы не шлём/.test(fe)) bad("[честность] рамка не говорит, где отчёт и что писем нет");
+
+    const админ = JSON.parse(JSON.stringify(g.state.admin));
+    const звёзды = JSON.parse(JSON.stringify(g.state.stars || {}));
+    const пробуем = async (открыть, кнопка, поля) => {
+      g.state.admin.pass = "";
+      g.adminLock();                 /* открытый замок пустил бы в панель без экрана пароля */
+      открыть(); await tick();
+      const txt = doc.getElementById("app").textContent;
+      поля.forEach(id => { const el = doc.getElementById(id); if (el) el.value = "parol123"; });
+      return { txt, own: doc.getElementById("admown"), go: doc.getElementById(кнопка) };
+    };
+    try {
+      for (const [имя, открыть, кнопка, поля] of [
+        ["кабинет", () => g.screenAdminSetup(), "apassgo", ["apass1", "apass2"]],
+        ["панель", () => g.screenAdmin(), "admgo", ["admcode", "admcode2"]]
+      ]){
+        /* на устройстве с учеником */
+        g.state.stars = { "print-first": 3, "vars": 2 };
+        let r = await пробуем(открыть, кнопка, поля);
+        if (!/придумывает тот, кто первым сюда вошёл/.test(r.txt))
+          bad("[честность] " + имя + ": не сказано, что пароль придумывает первый вошедший");
+        if (!/уже занимается ученик: сдано 2 урока/.test(r.txt))
+          bad("[честность] " + имя + ": не предупреждено, что на устройстве занимается ученик");
+        if (!r.own || !r.go) bad("[честность] " + имя + ": нет отметки «моё устройство» или кнопки");
+        else {
+          r.go.click(); await tick();
+          /* ⚠️ Каждый следующий шаг — только если экран на месте: иначе
+             исключение унесёт все собранные ошибки прогона (§ 4.50) */
+          const own2 = doc.getElementById("admown"), go2 = doc.getElementById(кнопка);
+          if (g.state.admin.pass || !own2 || !go2)
+            bad("[честность] " + имя + ": пароль поставлен без отметки «моё устройство»");
+          else {
+            поля.forEach(id => { const el = doc.getElementById(id); if (el) el.value = "parol123"; });
+            own2.checked = true;
+            go2.click(); await tick();
+            if (!g.state.admin.pass) bad("[честность] " + имя + ": с отметкой пароль всё равно не ставится");
+          }
+        }
+        /* на чистом устройстве отметка не мешает */
+        g.state.stars = {};
+        r = await пробуем(открыть, кнопка, поля);
+        if (r.own) bad("[честность] " + имя + ": отметка «моё устройство» там, где ученик не занимался");
+        if (r.go){ r.go.click(); await tick(); }
+        if (!g.state.admin.pass) bad("[честность] " + имя + ": на чистом устройстве пароль не ставится");
+      }
+    } finally {
+      g.state.stars = звёзды;
+      Object.keys(g.state.admin).forEach(k => delete g.state.admin[k]);
+      Object.assign(g.state.admin, админ);
+      g.becomeKid();
+      viewReset(g);
+    }
+
+    const сем = fs.readFileSync(path.join(root, "semeynoe-obuchenie/index.html"), "utf8");
+    if (!/Задания 15 и 16 ОГЭ[^<]*критериям эксперта ФИПИ/.test(сем))
+      bad("[честность] на /semeynoe-obuchenie/ не сказано, что задания 15 и 16 ОГЭ оцениваются по критериям эксперта ФИПИ");
   }
 
   /* --- 12а. логотип: дорога на страницу сайта --- */
