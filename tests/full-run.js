@@ -7396,6 +7396,109 @@ function checkEncoding(){
           bad("[группа-вариант] ученик без номера 15 посчитан как не закрывший его: " + row15.textContent.trim());
       }
 
+      /* --- вариант ОДНОМУ ученику (13.09.2026, RAZVITIE § 2.6) ---
+         До 1.175.0 вариант уезжал только всей группе, а группа требует
+         серверного ключа: репетитор с одним учеником и родитель не могли дать
+         вариант вовсе. Проверяем круг через тот же сервер на папке:
+         карточка ученика → кнопка → запись ученика → карточка у ребёнка →
+         итог взрослому. */
+      {
+        const waitFor = async (ok) => { for (let i = 0; i < 60 && !ok(); i++) await tick(15); return ok(); };
+        /* роль устройства вернуть как была: соседние проверки ждут своё */
+        const рольДо = { isAdmin: g.state.admin.isAdmin, parentOf: g.state.admin.parentOf,
+                         parentLabel: g.state.admin.parentLabel };
+        const solo = "var-solo";
+        await w.Cloud.save(g.ensureShape({}), solo);
+        g.kidAttach(solo, "Петя");
+        g.screenKid(solo);
+        await waitFor(() => doc.getElementById("kvgive"));
+        const give = doc.getElementById("kvgive");
+        if (!give) bad("[вариант-одному] в карточке ученика нечем задать вариант");
+        else {
+          if (doc.querySelectorAll(".kidnav .ltab").length !== 6)
+            bad("[вариант-одному] вариант завёл лишнюю вкладку — на телефоне седьмая встанет одна");
+          if (!doc.querySelector('[data-kpane="hw"] #kidvar'))
+            bad("[вариант-одному] карточка варианта не во вкладке «Домашка»");
+          const dueS = g.shiftDay(g.dayKey(), 4);
+          doc.getElementById("kvex").value = "oge";
+          doc.getElementById("kvmins").value = "60";
+          doc.getElementById("kvdue").value = dueS;
+          give.click();
+          let rec = null;
+          await waitFor(() => /Вариант задан/.test((doc.getElementById("kidbody") || {}).textContent || ""));
+          rec = (((await w.Cloud.load(solo)).data || {}).vtask || {}).oge || null;
+          if (!rec || !rec.seed) bad("[вариант-одному] назначение не доехало до записи ученика");
+          else {
+            if (rec.mins !== 60) bad("[вариант-одному] режим не записался: " + rec.mins);
+            if (rec.due !== dueS) bad("[вариант-одному] срок не записался: " + rec.due);
+            if (rec.by !== "репетитор") bad("[вариант-одному] не записано, кто задал: " + rec.by);
+            if (rec.solo !== 1 || rec.group) bad("[вариант-одному] назначение не помечено как личное: " + JSON.stringify(rec));
+            if (!g.variantBuild("oge", rec.seed).filter(x => x.id).length)
+              bad("[вариант-одному] по записанному коду вариант не собирается");
+            const bodyT = doc.getElementById("kidbody").textContent;
+            if (bodyT.indexOf(rec.seed) < 0) bad("[вариант-одному] взрослому не показан код заданного варианта");
+            if (!/ещё не открывал/.test(bodyT)) bad("[вариант-одному] не сказано, что ребёнок вариант не открывал");
+          }
+          /* групповое назначение по-прежнему помечено группой */
+          const grp = (((await w.Cloud.load("var-a")).data || {}).vtask || {}).ege || {};
+          if (grp.group !== 1) bad("[вариант-одному] групповое назначение потеряло пометку группы");
+
+          /* итог взрослому — из снимка ученика */
+          if (rec && rec.seed){
+            const items = g.variantBuild("oge", rec.seed);
+            const able = items.filter(x => x.id);
+            const mk = (over) => {
+              const st = g.ensureShape({});
+              st.vtask = { oge: rec };
+              st.variant = { oge: Object.assign({ ex:"oge", seed: rec.seed, at: Date.now(), mins: 60,
+                endAt: Date.now() - 1000, closed: 1, items: items, done: {}, seen: {}, sent: {}, pts: {} }, over) };
+              return st;
+            };
+            const rb = able.filter(x => x.kind === "robot")[0];
+            const done = {}; able.slice(0, 3).forEach(x => { done[x.n] = 1; });
+            const pts = {}; if (rb) pts[rb.n] = { s: 2 };
+            const итог = g.kidVarHTML(mk({ done: done, pts: pts })).replace(/<[^>]+>/g, "");
+            if (!new RegExp("Экзамен окончен: решено 3 из " + able.length).test(итог))
+              bad("[вариант-одному] итог не называет, сколько решено: " + итог.slice(0, 200));
+            if (!/Не закрыты номера/.test(итог)) bad("[вариант-одному] итог не называет незакрытые номера");
+            if (rb && !new RegExp("задание " + rb.n + " \\(Робот\\) — 2 из 2").test(итог))
+              bad("[вариант-одному] балл эксперта за Робота не показан взрослому");
+            /* ⚠️ идущий экзамен не выдаёт итога даже взрослому */
+            const идёт = g.kidVarHTML(mk({ done: done, pts: pts, closed: 0, endAt: Date.now() + 30 * 60000 })).replace(/<[^>]+>/g, "");
+            if (!/Идёт экзамен/.test(идёт) || /решено/.test(идёт) || /из 2/.test(идёт))
+              bad("[вариант-одному] итог идущего экзамена утёк на экран взрослого: " + идёт.slice(0, 200));
+            /* чужой вариант (другое семя) — не итог заданного */
+            const чужой = g.kidVarHTML(mk({ seed: "ZZZZZZ", done: done })).replace(/<[^>]+>/g, "");
+            if (/решено/.test(чужой)) bad("[вариант-одному] итог другого варианта выдан за итог заданного");
+          }
+
+          /* кабинет родителя: та же карточка, задаёт «родитель» */
+          g.becomeParent(solo, "Петя");
+          g.screenParent(solo);
+          await waitFor(() => doc.getElementById("kidvar"));
+          const pv = doc.getElementById("kidvar");
+          if (!pv) bad("[вариант-одному] в кабинете родителя нечем задать вариант");
+          else if (!/Задаёт родитель/.test(pv.textContent)) bad("[вариант-одному] у родителя вариант подписан не родителем");
+          g.becomeAdmin();
+        }
+
+        /* сторона ребёнка: личное назначение не врёт про группу и называет, кто задал */
+        const было = { v: g.state.variant, t: g.state.vtask };
+        g.state.variant = {};
+        const личное = { seed: "SVLBAB", mins: 0, at: Date.now(), due: "", by: "родитель", solo: 1 };
+        g.state.vtask = { ege: личное, oge: Object.assign({}, личное) };
+        g.screenVariant(); await tick();
+        const детский = doc.getElementById("app").textContent;
+        if (!/Родитель задал вариант/.test(детский)) bad("[вариант-одному] ребёнку не сказано, что вариант задал родитель");
+        if (/в группе/.test(детский)) bad("[вариант-одному] личный вариант назван групповым");
+        if (!/лично тебе/.test(детский)) bad("[вариант-одному] ребёнку не сказано, что вариант задан лично ему");
+        g.state.variant = было.v; g.state.vtask = было.t;
+        g.kidDrop(solo);
+        Object.assign(g.state.admin, рольДо);
+        g.adminUnlock();
+        g.screenKids();              /* снимает открытого ученика (kidTarget) */
+      }
+
       g.groupState.rows = null;
       g.grpVarState.note = "";
       try { fs.rmSync(vDir, { recursive:true, force:true }); } catch(e){}

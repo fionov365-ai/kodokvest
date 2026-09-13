@@ -15570,7 +15570,7 @@ function kidRender(savedNote){
        идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
     (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
 
-  h += kidPaneHTML("hw", hwGiveHTML(st));
+  h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st));
   h += kidPaneHTML("note", noteGiveHTML(st));
   h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
@@ -15600,6 +15600,7 @@ function kidRender(savedNote){
   });
   bindFrameEditor(function(){ kidRender(); });
   bindHwGive();
+  bindKidVar();
   bindNoteGive();
   bindParentReport(st);
   var sv = box.querySelector('[data-kf="save"]');
@@ -15636,6 +15637,8 @@ function kidWatch(code, seq){
           kidTarget.data.zan = freshD.zan;
           kidTarget.data.daily = freshD.daily;
           kidTarget.data.hw = freshD.hw;
+          kidTarget.data.variant = freshD.variant;
+          kidTarget.data.vtask = freshD.vtask;
         }
         return null;
       }, function(){ return null; }));
@@ -15786,6 +15789,135 @@ function kidSaveHW(ids, due){
       kidRender("<b>Домашка задана</b>" + added + " " +
         plural(added, "задача уедет", "задачи уедут", "задач уедут") +
         " к ребёнку при следующем открытии тренажёра.");
+    });
+  }, function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
+  }).catch(function(err){
+    say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+  });
+}
+
+/* ===== пробный вариант экзамена ОДНОМУ ученику (13.09.2026, RAZVITIE § 2.6) =====
+   До 1.175.0 вариант задавался только всей загруженной группе, а группа
+   требует серверного ключа. Частный репетитор с одним девятиклассником и
+   родитель на семейном обучении не могли дать ребёнку вариант вовсе, а
+   родитель не видел и итога.
+   Механика та же, что у группы: в запись ученика уезжает только назначение
+   (vtask[экзамен] = семя, режим, срок), вариант собирается у ребёнка по семени.
+   ⚠️ Сборка по семени не меняется — старые коды собирают те же варианты.
+   ⚠️ solo: 1 — назначение одному: у ребёнка карточка не скажет «у всех в группе
+   этот вариант одинаковый». Старые назначения без поля — групповые, как было. */
+var kidVarForm = { ex: "oge", mins: 0 };
+/* Итог варианта словами взрослому. Считается из снимка ученика, как вся
+   карточка. ⚠️ Пока идёт экзамен — ни числа решённых, ни баллов: ребёнок
+   может увидеть экран взрослого, и вердикт утёк бы мимо запретов экзамена. */
+function kidVarResultHTML(st, exId, task){
+  var v = ((st || {}).variant || {})[exId];
+  var seed = String(task.seed);
+  if (!v || String(v.seed) !== seed)
+    return '<p class="dim">Ребёнок вариант ещё не открывал. ' +
+      (task.mins ? 'Время экзамена пойдёт с его нажатия, а не с той минуты, когда вариант задали.'
+                 : 'Он появится у ребёнка в разделе экзамена карточкой с кнопкой.') + '</p>';
+  var items = (v.items || []).filter(function(x){ return x.id; });
+  var exam = !!v.mins;
+  var endAt = v.endAt || 0;
+  if (exam && !v.closed && endAt > Date.now())
+    return '<p><b>Идёт экзамен.</b> Итог появится здесь, когда время выйдет или ребёнок сдаст работу.</p>';
+  var done = items.filter(function(x){ return (v.done || {})[x.n]; });
+  var left = items.filter(function(x){ return !(v.done || {})[x.n]; });
+  var h = '<p><b>' + (exam ? "Экзамен окончен" : "Тренировка") + ': решено ' + done.length + ' из ' +
+    items.length + '.</b>' +
+    (left.length ? ' Не закрыты номера: ' + left.map(function(x){ return x.n; }).join(", ") + '.' : ' Закрыты все номера.') +
+    '</p>';
+  /* баллы эксперта ФИПИ — только у экзамена ОГЭ, как на итоге у ребёнка */
+  if (exId === "oge" && exam){
+    var pts = v.pts || {};
+    var parts = [];
+    var rb = items.filter(function(x){ return x.kind === "robot"; })[0];
+    if (rb && window.FIPI15)
+      parts.push('задание ' + rb.n + ' (Робот) — <b>' + ((pts[rb.n] || {}).s || 0) + ' из ' + FIPI15.MAX + '</b>');
+    var et = window.FIPI16 && FIPI16.examTask ? FIPI16.examTask() : null;
+    var px = et ? items.filter(function(x){ return x.n === et.n; })[0] : null;
+    if (px){
+      var ptask = algoById(px.id);
+      parts.push('задание ' + px.n + ' (программа) — ' + (ptask && FIPI16.applies(ptask)
+        ? '<b>' + ((pts[px.n] || {}).s || 0) + ' из ' + FIPI16.MAX + '</b>'
+        : 'балла нет: на номере стояла задача-функция без ввода, эксперт её не оценивает'));
+    }
+    if (parts.length)
+      h += '<p>Как оценил бы эксперт ФИПИ: ' + parts.join("; ") + '. Не сданное задание — 0 баллов.</p>';
+  }
+  return h;
+}
+function kidVarHTML(st){
+  var who = hwWho();
+  var h = '<div class="card" id="kidvar"><h3>📝 Пробный вариант экзамена</h3>' +
+    '<p class="dim">Вариант целиком, как на экзамене: в режиме экзамена — с часами, без подсказок ' +
+    'и в один заход. Уезжает только короткий код: вариант соберётся у ребёнка сам.</p>';
+  ["oge", "ege"].forEach(function(exId){
+    var task = ((st || {}).vtask || {})[exId];
+    if (!task || !task.seed) return;
+    var ex = (window.EXAMS || {})[exId] || { title: exId };
+    h += '<div class="kidvargiven"><p><b>' + esc(ex.title) + ', код ' + esc(String(task.seed)) + '</b> — ' +
+      (task.mins ? 'экзамен на ' + task.mins + ' ' + plural(task.mins, "минуту", "минуты", "минут")
+                 : 'тренировка, без времени') +
+      (task.due ? ', ' + esc(hwDueText({ due: task.due, done: 0 })) : '') +
+      (task.by ? ', задал ' + esc(task.by) : '') +
+      (task.solo ? '' : ' (всей группе)') + '.</p>' +
+      kidVarResultHTML(st, exId, task) + '</div>';
+  });
+  h += '<div class="admrow"><label class="admlbl">экзамен <select id="kvex">' +
+      ["oge", "ege"].map(function(id){
+        var ex = (window.EXAMS || {})[id] || { title:id };
+        return '<option value="' + id + '"' + (kidVarForm.ex === id ? " selected" : "") + '>' + esc(ex.title) + '</option>';
+      }).join("") + '</select></label>' +
+    '<span class="sp"></span>' +
+    '<label class="admlbl">режим <select id="kvmins">' +
+      '<option value="0"' + (kidVarForm.mins ? "" : " selected") + '>тренировка, без времени</option>' +
+      [30, 60, 90].map(function(m){
+        return '<option value="' + m + '"' + (kidVarForm.mins === m ? " selected" : "") + '>экзамен, ' + m + ' минут</option>';
+      }).join("") + '</select></label>' +
+    '<span class="sp"></span>' +
+    '<label class="admlbl">срок <input type="date" id="kvdue" value="' + esc(hwDefaultDue()) + '"></label>' +
+    '<span class="sp"></span>' +
+    '<button class="rbtn check" id="kvgive">Задать вариант</button></div>' +
+    '<p class="dim">Новый вариант по тому же экзамену заменяет прежнее назначение. Начатый ребёнком ' +
+    'вариант не стирается. Задаёт ' + esc(who) + ' — так и будет написано у ребёнка.</p>' +
+    '<div class="msg" id="kvmsg"></div></div>';
+  return h;
+}
+function bindKidVar(){
+  var btn = document.getElementById("kvgive");
+  if (!btn) return;
+  btn.onclick = function(){
+    var exId = (document.getElementById("kvex") || {}).value || "oge";
+    var mins = parseInt((document.getElementById("kvmins") || {}).value || "0", 10) || 0;
+    var due = (document.getElementById("kvdue") || {}).value || "";
+    kidVarForm.ex = exId; kidVarForm.mins = mins;
+    return kidSaveVariant(exId, mins, due);
+  };
+}
+/* Записать назначение ребёнку: запись перечитывается прямо перед сохранением,
+   как у домашки, — ребёнок мог позаниматься, пока взрослый выбирал. */
+function kidSaveVariant(exId, mins, due){
+  if (!kidTarget || !kidTarget.data) return Promise.resolve();
+  var code = kidTarget.code;
+  var msg = document.getElementById("kvmsg");
+  function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+  var ex = (window.EXAMS || {})[exId];
+  if (!ex){ say("bad", "<b>Не выбран экзамен</b>"); return Promise.resolve(); }
+  if (!serverOn()){ say("bad", "<b>Не сохранилось</b>Сервер не подключён — передать вариант некуда."); return Promise.resolve(); }
+  say("warn", "<b>Сохраняю…</b>");
+  var seed = VARIANT.makeVariant(exId, mins).seed;
+  return Cloud.load(code).then(function(r){
+    var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+    base.vtask = base.vtask || {};
+    base.vtask[exId] = { seed: seed, mins: mins || 0, at: Date.now(), due: due || "", by: hwWho(), solo: 1 };
+    return Cloud.save(base, code).then(function(){
+      kidTarget.data = base;
+      kidRender("<b>Вариант задан</b>" + esc(ex.title) + ", код <b>" + esc(seed) + "</b> — " +
+        (mins ? "экзамен на " + mins + " " + plural(mins, "минуту", "минуты", "минут") : "тренировка") +
+        ". Он появится у ребёнка при следующем открытии тренажёра.");
     });
   }, function(err){
     say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
@@ -17197,7 +17329,7 @@ function groupAssignVariant(exId, mins, due){
     return Cloud.load(row.code).then(function(r){
       var base = ensureShape(r.found && r.data ? r.data : blankProgress());
       base.vtask = base.vtask || {};
-      base.vtask[exId] = { seed: seed, mins: mins || 0, at: at, due: due || "", by: "репетитор" };
+      base.vtask[exId] = { seed: seed, mins: mins || 0, at: at, due: due || "", by: "репетитор", group: 1 };
       return Cloud.save(base, row.code).then(function(){
         okN++; grpVarState.done++; bar(); return next();
       });
@@ -19758,7 +19890,7 @@ window.__game = {
   liveWatcher: liveWatcher, liveAccept: liveAccept,
   quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   groupAssignVariant: groupAssignVariant, grpVarState: grpVarState,
-  grpAssignOf: grpAssignOf,
+  grpAssignOf: grpAssignOf, kidVarHTML: kidVarHTML, kidSaveVariant: kidSaveVariant, kidVarForm: kidVarForm,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
   setIdleForTest: function(ms){ IDLE_MS = ms; },
   setLessonForTest: function(id){ curLessonId = id; }

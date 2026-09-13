@@ -23100,12 +23100,15 @@ function assignCardHTML(exId){
 var t = assignedOf(exId);
 if (!t || assignStarted(exId)) return "";
 var ex = examById(exId);
-return '<div class="card"><h3>📮 Репетитор задал вариант</h3>' +
+
+var who = t.by === "родитель" ? "Родитель" : "Репетитор";
+return '<div class="card"><h3>📮 ' + who + ' задал вариант</h3>' +
 '<p>' + ex.em + ' <b>' + A.esc(ex.full) + '</b>, код <b>' + A.esc(cleanSeed(t.seed)) + '</b> — ' +
 (t.mins ? 'режим экзамена на <b>' + t.mins + ' ' +
 A.plural(t.mins, "минуту", "минуты", "минут") + '</b>' : 'тренировка, без времени') +
 (t.due && A.dueText ? ', срок: <b>' + A.esc(A.dueText(t.due)) + '</b>' : '') + '.</p>' +
-'<p class="dim">У всех в группе этот вариант одинаковый — по коду он собирается один и тот же. ' +
+'<p class="dim">' + (t.solo ? 'Вариант задан лично тебе — по коду он соберётся тот же на любом устройстве. '
+: 'У всех в группе этот вариант одинаковый — по коду он собирается один и тот же. ') +
 (t.mins ? 'Время пойдёт с нажатия, а не с той минуты, когда его задали.' :
 'Торопиться некуда: решать можно в любой день.') + '</p>' +
 '<div class="admrow"><button class="bigbtn" data-vassign="' + exId + '">' +
@@ -40967,7 +40970,7 @@ frameEditorHTML(frame()) +
 
 (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
 
-h += kidPaneHTML("hw", hwGiveHTML(st));
+h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st));
 h += kidPaneHTML("note", noteGiveHTML(st));
 h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
@@ -40997,6 +41000,7 @@ if (a === "pcopy") return copyText(parentLink(kidTarget.code,
 });
 bindFrameEditor(function(){ kidRender(); });
 bindHwGive();
+bindKidVar();
 bindNoteGive();
 bindParentReport(st);
 var sv = box.querySelector('[data-kf="save"]');
@@ -41028,6 +41032,8 @@ kidTarget.data.stars = freshD.stars;
 kidTarget.data.zan = freshD.zan;
 kidTarget.data.daily = freshD.daily;
 kidTarget.data.hw = freshD.hw;
+kidTarget.data.variant = freshD.variant;
+kidTarget.data.vtask = freshD.vtask;
 }
 return null;
 }, function(){ return null; }));
@@ -41167,6 +41173,122 @@ kidTarget.fresh = false;
 kidRender("<b>Домашка задана</b>" + added + " " +
 plural(added, "задача уедет", "задачи уедут", "задач уедут") +
 " к ребёнку при следующем открытии тренажёра.");
+});
+}, function(err){
+say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
+}).catch(function(err){
+say("bad", "<b>Не сохранилось</b>" + esc((err && err.message) || err));
+});
+}
+
+var kidVarForm = { ex: "oge", mins: 0 };
+
+function kidVarResultHTML(st, exId, task){
+var v = ((st || {}).variant || {})[exId];
+var seed = String(task.seed);
+if (!v || String(v.seed) !== seed)
+return '<p class="dim">Ребёнок вариант ещё не открывал. ' +
+(task.mins ? 'Время экзамена пойдёт с его нажатия, а не с той минуты, когда вариант задали.'
+: 'Он появится у ребёнка в разделе экзамена карточкой с кнопкой.') + '</p>';
+var items = (v.items || []).filter(function(x){ return x.id; });
+var exam = !!v.mins;
+var endAt = v.endAt || 0;
+if (exam && !v.closed && endAt > Date.now())
+return '<p><b>Идёт экзамен.</b> Итог появится здесь, когда время выйдет или ребёнок сдаст работу.</p>';
+var done = items.filter(function(x){ return (v.done || {})[x.n]; });
+var left = items.filter(function(x){ return !(v.done || {})[x.n]; });
+var h = '<p><b>' + (exam ? "Экзамен окончен" : "Тренировка") + ': решено ' + done.length + ' из ' +
+items.length + '.</b>' +
+(left.length ? ' Не закрыты номера: ' + left.map(function(x){ return x.n; }).join(", ") + '.' : ' Закрыты все номера.') +
+'</p>';
+
+if (exId === "oge" && exam){
+var pts = v.pts || {};
+var parts = [];
+var rb = items.filter(function(x){ return x.kind === "robot"; })[0];
+if (rb && window.FIPI15)
+parts.push('задание ' + rb.n + ' (Робот) — <b>' + ((pts[rb.n] || {}).s || 0) + ' из ' + FIPI15.MAX + '</b>');
+var et = window.FIPI16 && FIPI16.examTask ? FIPI16.examTask() : null;
+var px = et ? items.filter(function(x){ return x.n === et.n; })[0] : null;
+if (px){
+var ptask = algoById(px.id);
+parts.push('задание ' + px.n + ' (программа) — ' + (ptask && FIPI16.applies(ptask)
+? '<b>' + ((pts[px.n] || {}).s || 0) + ' из ' + FIPI16.MAX + '</b>'
+: 'балла нет: на номере стояла задача-функция без ввода, эксперт её не оценивает'));
+}
+if (parts.length)
+h += '<p>Как оценил бы эксперт ФИПИ: ' + parts.join("; ") + '. Не сданное задание — 0 баллов.</p>';
+}
+return h;
+}
+function kidVarHTML(st){
+var who = hwWho();
+var h = '<div class="card" id="kidvar"><h3>📝 Пробный вариант экзамена</h3>' +
+'<p class="dim">Вариант целиком, как на экзамене: в режиме экзамена — с часами, без подсказок ' +
+'и в один заход. Уезжает только короткий код: вариант соберётся у ребёнка сам.</p>';
+["oge", "ege"].forEach(function(exId){
+var task = ((st || {}).vtask || {})[exId];
+if (!task || !task.seed) return;
+var ex = (window.EXAMS || {})[exId] || { title: exId };
+h += '<div class="kidvargiven"><p><b>' + esc(ex.title) + ', код ' + esc(String(task.seed)) + '</b> — ' +
+(task.mins ? 'экзамен на ' + task.mins + ' ' + plural(task.mins, "минуту", "минуты", "минут")
+: 'тренировка, без времени') +
+(task.due ? ', ' + esc(hwDueText({ due: task.due, done: 0 })) : '') +
+(task.by ? ', задал ' + esc(task.by) : '') +
+(task.solo ? '' : ' (всей группе)') + '.</p>' +
+kidVarResultHTML(st, exId, task) + '</div>';
+});
+h += '<div class="admrow"><label class="admlbl">экзамен <select id="kvex">' +
+["oge", "ege"].map(function(id){
+var ex = (window.EXAMS || {})[id] || { title:id };
+return '<option value="' + id + '"' + (kidVarForm.ex === id ? " selected" : "") + '>' + esc(ex.title) + '</option>';
+}).join("") + '</select></label>' +
+'<span class="sp"></span>' +
+'<label class="admlbl">режим <select id="kvmins">' +
+'<option value="0"' + (kidVarForm.mins ? "" : " selected") + '>тренировка, без времени</option>' +
+[30, 60, 90].map(function(m){
+return '<option value="' + m + '"' + (kidVarForm.mins === m ? " selected" : "") + '>экзамен, ' + m + ' минут</option>';
+}).join("") + '</select></label>' +
+'<span class="sp"></span>' +
+'<label class="admlbl">срок <input type="date" id="kvdue" value="' + esc(hwDefaultDue()) + '"></label>' +
+'<span class="sp"></span>' +
+'<button class="rbtn check" id="kvgive">Задать вариант</button></div>' +
+'<p class="dim">Новый вариант по тому же экзамену заменяет прежнее назначение. Начатый ребёнком ' +
+'вариант не стирается. Задаёт ' + esc(who) + ' — так и будет написано у ребёнка.</p>' +
+'<div class="msg" id="kvmsg"></div></div>';
+return h;
+}
+function bindKidVar(){
+var btn = document.getElementById("kvgive");
+if (!btn) return;
+btn.onclick = function(){
+var exId = (document.getElementById("kvex") || {}).value || "oge";
+var mins = parseInt((document.getElementById("kvmins") || {}).value || "0", 10) || 0;
+var due = (document.getElementById("kvdue") || {}).value || "";
+kidVarForm.ex = exId; kidVarForm.mins = mins;
+return kidSaveVariant(exId, mins, due);
+};
+}
+
+function kidSaveVariant(exId, mins, due){
+if (!kidTarget || !kidTarget.data) return Promise.resolve();
+var code = kidTarget.code;
+var msg = document.getElementById("kvmsg");
+function say(cls, html){ if (msg){ msg.className = "msg show " + cls; msg.innerHTML = html; } }
+var ex = (window.EXAMS || {})[exId];
+if (!ex){ say("bad", "<b>Не выбран экзамен</b>"); return Promise.resolve(); }
+if (!serverOn()){ say("bad", "<b>Не сохранилось</b>Сервер не подключён — передать вариант некуда."); return Promise.resolve(); }
+say("warn", "<b>Сохраняю…</b>");
+var seed = VARIANT.makeVariant(exId, mins).seed;
+return Cloud.load(code).then(function(r){
+var base = ensureShape(r.found && r.data ? r.data : blankProgress());
+base.vtask = base.vtask || {};
+base.vtask[exId] = { seed: seed, mins: mins || 0, at: Date.now(), due: due || "", by: hwWho(), solo: 1 };
+return Cloud.save(base, code).then(function(){
+kidTarget.data = base;
+kidRender("<b>Вариант задан</b>" + esc(ex.title) + ", код <b>" + esc(seed) + "</b> — " +
+(mins ? "экзамен на " + mins + " " + plural(mins, "минуту", "минуты", "минут") : "тренировка") +
+". Он появится у ребёнка при следующем открытии тренажёра.");
 });
 }, function(err){
 say("bad", "<b>Не сохранилось</b>" + esc(err.message || err));
@@ -42272,7 +42394,7 @@ var row = rows[i++];
 return Cloud.load(row.code).then(function(r){
 var base = ensureShape(r.found && r.data ? r.data : blankProgress());
 base.vtask = base.vtask || {};
-base.vtask[exId] = { seed: seed, mins: mins || 0, at: at, due: due || "", by: "репетитор" };
+base.vtask[exId] = { seed: seed, mins: mins || 0, at: at, due: due || "", by: "репетитор", group: 1 };
 return Cloud.save(base, row.code).then(function(){
 okN++; grpVarState.done++; bar(); return next();
 });
@@ -44447,7 +44569,7 @@ livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView
 liveWatcher: liveWatcher, liveAccept: liveAccept,
 quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
 groupAssignVariant: groupAssignVariant, grpVarState: grpVarState,
-grpAssignOf: grpAssignOf,
+grpAssignOf: grpAssignOf, kidVarHTML: kidVarHTML, kidSaveVariant: kidSaveVariant, kidVarForm: kidVarForm,
 ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,
 setIdleForTest: function(ms){ IDLE_MS = ms; },
 setLessonForTest: function(id){ curLessonId = id; }
