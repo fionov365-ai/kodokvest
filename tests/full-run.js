@@ -10064,7 +10064,16 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
           st.editor.setCode('print("' + t.sample.out + '")\n');
           st.querySelector('[data-role="check"]').click();
           await tick();
+          /* ⚠️ С 1.162.0 константа без ввода проваливается РАНЬШЕ скрытых
+             наборов — по правилу эксперта ФИПИ «нет ввода — 0» ([фипи-16]). */
           if (won()){ bad("[алгоритмы] напечатанная константа сдала задачу с примера"); closeWin(); }
+          else if (!/не читает входные данные/i.test(msgText()))
+            bad("[алгоритмы] про отсутствие ввода при провале не сказано: " + msgText());
+          /* а константа, прочитавшая ввод для вида, ловится скрытыми наборами */
+          st.editor.setCode('n = int(input())\nfor i in range(n):\n    x = input()\nprint("' + t.sample.out + '")\n');
+          st.querySelector('[data-role="check"]').click();
+          await tick();
+          if (won()){ bad("[алгоритмы] константа после чтения ввода сдала задачу с примера"); closeWin(); }
           else if (!/скрыт/i.test(msgText()))
             bad("[алгоритмы] про скрытые данные при провале не сказано: " + msgText());
           /* а настоящий эталон проходит и открытый пример, и скрытые наборы */
@@ -10552,6 +10561,185 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     const v15 = items.find(x => x.n === 15);
     if (items.length !== 16 || !v15 || v15.id !== null || !/Робот/.test(v15.why))
       bad("[карта-огэ] в варианте ОГЭ задание 15 не отправлено к Роботу или номеров не 16");
+    viewReset(g);
+  }
+
+  /* --- 13в.10. [фипи-16] судья задания-программы ОГЭ — как эксперт ФИПИ ---
+     ⚠️ Слепок документа, а не пересказ (§ 4.44 RAZVITIE): методические
+     материалы ФИПИ для предметных комиссий, ОГЭ-2026, информатика, с. 53–55.
+     2 балла — верно на всех тестах; 1 — неверно не более чем на одном; 0 —
+     иначе; без ввода или без вывода — 0; не запускается — 0. Тестов в
+     образцах критериев три. Поменялся документ — меняй слепок вместе с ним. */
+  if (w.FIPI16 && typeof g.algoList === "function"){
+    const F = w.FIPI16, MP = w.MiniPy, XS = g.algoList();
+    const eng = { run: (c, o) => MP.run(c, o) };
+    const byId = id => XS.find(x => x.id === id);
+    const msgFull = () => { const m = doc.querySelector("#studio .msg"); return m ? m.textContent : ""; };
+
+    /* 1. Слепок чисел документа. */
+    if (F.MAX !== 2) bad("[фипи-16] максимальный балл " + F.MAX + ", а по МР ФИПИ 2026 — 2");
+    if ([0, 1, 2, 3].map(F.scoreOf).join() !== "2,1,0,0")
+      bad("[фипи-16] шкала по числу неверных тестов не 2/1/0/0: " + [0, 1, 2, 3].map(F.scoreOf).join());
+    if (F.MIN_TESTS !== 3) bad("[фипи-16] тестов в образцах ФИПИ три, а записано " + F.MIN_TESTS);
+    if (!/mr_oge_informatika_2026\.pdf$/.test(F.DOC.url) || F.DOC.pages !== "с. 53–55")
+      bad("[фипи-16] ссылка на документ ФИПИ потеряна или сменились страницы");
+    const et = F.examTask();
+    if (!et || et.n !== 16) bad("[фипи-16] программа ОГЭ не нашлась на своём номере: " + (et && et.n));
+
+    /* 2. Каждая задача, к которой применяется оценка: тестов эксперта не
+       меньше трёх, эталон получает 2 без предупреждений, заготовка — меньше. */
+    const ap = XS.filter(F.applies);
+    if (ap.length < XS.filter(x => x.group === "oge").length)
+      bad("[фипи-16] оценка применяется не ко всем задачам формата ОГЭ: " + ap.length);
+    ap.forEach(x => {
+      if (x.sets.length < F.MIN_TESTS)
+        bad("[фипи-16] у «" + x.id + "» скрытых тестов " + x.sets.length + " — эксперт гоняет три");
+      const gs = F.grade(eng, x.solution, x);
+      if (gs.score !== 2 || gs.zero || gs.prompts || gs.newer.length)
+        bad("[фипи-16] эталон «" + x.id + "» получил не чистые 2 балла: " + JSON.stringify(gs));
+      if (F.grade(eng, x.starter, x).score === 2)
+        bad("[фипи-16] заготовка «" + x.id + "» получает 2 балла");
+    });
+    if (XS.some(x => x.check.kind === "tests" && F.applies(x)))
+      bad("[фипи-16] задача-функция без ввода получила оценку эксперта");
+
+    /* 3. Правила на одной задаче — каждое своим случаем. */
+    const t = byId("oge-count-base");
+    if (!t) bad("[фипи-16] нет задачи oge-count-base");
+    else {
+      const G = code => F.grade(eng, code, t);
+      const c1 = G('print("' + t.sample.out + '")');
+      if (c1.score !== 0 || c1.zero !== "input") bad("[фипи-16] константа без ввода не получила 0 «нет ввода»: " + JSON.stringify(c1));
+      const c2 = G("n = int(input())\nfor i in range(n):\n    x = int(input())\n");
+      if (c2.score !== 0 || c2.zero !== "output") bad("[фипи-16] программа без вывода не получила 0 «нет вывода»: " + JSON.stringify(c2));
+      const one = t.solution.replace('print("NO")', "print(0)");   /* ломает ровно тест без подходящих */
+      const c3 = G(one);
+      if (c3.score !== 1 || c3.passed !== c3.total - 1) bad("[фипи-16] ошибка на одном тесте дала не 1 балл: " + JSON.stringify(c3));
+      const c4 = G(t.solution.replace("x % 7 == 1", "x % 7 == 0"));
+      if (c4.score !== 0 || c4.zero) bad("[фипи-16] ошибка на всех тестах дала не 0: " + JSON.stringify(c4));
+      const c5 = G("n = int(input(\nprint(1)");
+      if (c5.score !== 0 || c5.zero !== "syntax") bad("[фипи-16] незапускающаяся программа не получила 0: " + JSON.stringify(c5));
+      const prompt = t.solution.replace("n = int(input())", 'n = int(input("Введите количество: "))')
+                               .replace("x = int(input())", 'x = int(input("Число: "))');
+      const c6 = G(prompt);
+      if (c6.score !== 2 || !c6.prompts) bad("[фипи-16] input с приглашением свалил оценку или не замечен: " + JSON.stringify(c6));
+      const c7 = G("n = int(input())\nprint(1 // 0)");
+      if (c7.score !== 0 || c7.zero) bad("[фипи-16] падение программы названо не «тест не засчитан»: " + JSON.stringify(c7));
+
+      /* 4. Конструкции новее 3.7 — находятся в коде и не находятся в строках. */
+      const nw = F.newerSyntax("x = 2\nmatch x:\n    case 2:\n        print(1)\nif (k := 3) > 1:\n    print(f'{k=}')\n'a'.removeprefix('a')\n");
+      ["3.10", "3.8", "3.9"].forEach(ver => {
+        if (!nw.some(v => v.ver === ver)) bad("[фипи-16] не замечена конструкция Python " + ver + ": " + JSON.stringify(nw));
+      });
+      if (!nw.some(v => v.what === "match … case" && v.line === 2)) bad("[фипи-16] match найден не на своей строке");
+      const quiet = F.newerSyntax("# match x:\ns = 'k := 3'\nt = \"\"\"\nmatch y:\n    case 1:\n\"\"\"\nprint(f'{a>=b}')\n");
+      if (quiet.length) bad("[фипи-16] конструкция найдена в комментарии или строке: " + JSON.stringify(quiet));
+
+      /* 5. Экран задачи: правило видно до решения, балл — после проверки. */
+      g.state.algo = {};
+      g.openAlgo(t.id); await tick();
+      if (!/эксперт/.test(doc.getElementById("app").textContent))
+        bad("[фипи-16] на экране задачи не сказано, как её оценивает эксперт");
+      const st = studioOf();
+      if (st){
+        closeWin();   /* карточка победы чужого теста не должна читаться как наша */
+        st.editor.setCode(prompt);
+        st.querySelector('[data-role="check"]').click(); await tick();
+        if (!won()) bad("[фипи-16] программа с input(\"Введите…\") не засчитана: " + msgText());
+        else {
+          const card = doc.getElementById("wincard").textContent;
+          if (!/было бы 2 из 2/.test(card)) bad("[фипи-16] в победе нет «2 из 2»: " + card.slice(0, 200));
+          if (!/только одно число/.test(card)) bad("[фипи-16] в победе не предупреждено про текст приглашения");
+          if (!/ФИПИ/.test(card) || !/с\. 53–55/.test(card)) bad("[фипи-16] в победе не назван документ ФИПИ");
+          closeWin();
+        }
+        st.editor.setCode(one);
+        st.querySelector('[data-role="check"]').click(); await tick();
+        if (won()){ bad("[фипи-16] программа с ошибкой на одном тесте засчитана"); closeWin(); }
+        else if (!/было бы 1 из 2/.test(msgFull())) bad("[фипи-16] при ошибке на одном тесте нет «1 из 2»: " + msgText());
+        st.editor.setCode('print("' + t.sample.out + '")\n');
+        st.querySelector('[data-role="check"]').click(); await tick();
+        if (!/было бы 0 из 2/.test(msgFull()) || !/не читает/.test(msgFull()))
+          bad("[фипи-16] константа без ввода не получила «0 из 2» с причиной: " + msgText());
+        st.editor.setCode(t.solution.replace("if count == 0:", "if (c := count) == 0:"));
+        st.querySelector('[data-role="check"]').click(); await tick();
+        if (!/3\.8/.test(msgFull())) bad("[фипи-16] про конструкцию Python 3.8 не предупреждено: " + msgText());
+      }
+    }
+
+    /* 6. Итог экзамена ОГЭ: балл за программу есть, общего балла нет, и
+       пока идёт экзамен, балл молчит вместе с вердиктом. */
+    {
+      g.state.algo = {}; g.state.variant = {};
+      g.screenVariant(); await tick();
+      const tabO = doc.querySelector('[data-vtab="oge"]');
+      if (tabO){ tabO.click(); await tick(); }
+      const start = doc.querySelector('[data-vexam="30"]');
+      if (!start) bad("[фипи-16] на вкладке ОГЭ нет режима экзамена");
+      else {
+        start.click(); await tick();
+        const v = g.state.variant.oge;
+        const it = v && v.items.find(x => x.n === 16);
+        if (!it) bad("[фипи-16] в экзамене ОГЭ нет номера 16");
+        else {
+          it.id = "oge-count-base";          /* номер 16 — программа с вводом */
+          g.screenVariant(); await tick();
+          const go = doc.querySelector('[data-vgo="16"]');
+          if (!go) bad("[фипи-16] номер 16 в экзамене не открывается");
+          else {
+            go.click(); await tick();
+            const st = studioOf();
+            /* упавшая программа: ошибку экзамен показывает, а балл — нет */
+            st.editor.setCode("n = int(input())\nprint(1 // 0)\n");
+            st.querySelector('[data-role="check"]').click(); await tick();
+            if (/из 2/.test(msgFull())) bad("[фипи-16] на идущем экзамене при ошибке показан балл — вердикт утёк");
+            st.editor.setCode(t.solution.replace('print("NO")', "print(0)"));
+            st.querySelector('[data-role="check"]').click(); await tick();
+            if (/из 2/.test(msgFull())) bad("[фипи-16] на идущем экзамене показан балл — вердикт утёк");
+            const p = (g.state.variant.oge.pts || {})[16];
+            if (!p || p.s !== 1) bad("[фипи-16] балл за сданную программу не записан в экзамене: " + JSON.stringify(p));
+            g.state.variant.oge.endAt = Date.now() - 1000;
+            g.screenVariant(); await tick();
+            const txt = doc.getElementById("app").textContent;
+            if (!/как оценил бы эксперт/.test(txt) || !/1 из 2/.test(txt))
+              bad("[фипи-16] итог экзамена ОГЭ не показал балл за программу");
+            if (!/общего балла/.test(txt)) bad("[фипи-16] итог не объяснил, почему общего балла нет");
+            if (/первичный балл|из 100|стобалльн/i.test(txt)) bad("[фипи-16] итог выдумал общий балл");
+          }
+          /* задача-функция на номере 16 — балла нет, и это сказано */
+          const v2 = g.state.variant.oge;
+          v2.items.find(x => x.n === 16).id = "find-linear";
+          g.screenVariantDone(); await tick();
+          if (!/задача-функция/.test(doc.getElementById("app").textContent))
+            bad("[фипи-16] на номере 16 задача-функция, а итог не сказал, что балла нет");
+        }
+      }
+      g.state.variant = {};
+      const m = g.mergeProgress(
+        { savedAt:1, variant:{ oge:{ ex:"oge", seed:"OOOOOO", at:5, mins:30, endAt:9, closed:1, items:[],
+          done:{}, seen:{}, sent:{ 16:1 }, pts:{ 16:{ s:2, t:3, p:3, z:"", at:10 } } } } },
+        { savedAt:2, variant:{ oge:{ ex:"oge", seed:"OOOOOO", at:5, mins:30, endAt:9, closed:1, items:[],
+          done:{}, seen:{}, sent:{ 16:1 }, pts:{ 16:{ s:0, t:3, p:0, z:"input", at:20 } } } } });
+      const mp = ((m.variant.oge || {}).pts || {})[16];
+      if (!mp || mp.s !== 0) bad("[фипи-16] слияние устройств потеряло балл или взяло не последний: " + JSON.stringify(mp));
+    }
+
+    /* 7. Отрицательные числа: где условие допускает целые, в тестах они есть
+       (в Python -16 % 10 == 4, и ошибка на знаке — классика). */
+    let checkedNeg = 0;
+    XS.forEach(x => {
+      const txt = x.goal + " " + x.list.join(" ");
+      const allows = /целы[ех] числ|числа, целые|целых чис|быть отрицательн/i.test(txt);
+      if (!allows || /неотрицат|натурал|от 0 до/i.test(txt)) return;
+      checkedNeg++;
+      const data = [x.stdin || []].concat(x.sets || []).map(d => d.join(" ")).join(" ") +
+                   " " + ((x.check.calls || []).join(" "));
+      if (!/(^|[^\w])-\d/.test(data))
+        bad("[фипи-16] у «" + x.id + "» условие допускает целые, а отрицательных в тестах нет");
+    });
+    /* сторож не должен молча смотреть в пустоту: таких задач сейчас четыре */
+    if (checkedNeg < 4) bad("[фипи-16] задач, где условие допускает отрицательные, найдено " + checkedNeg + " — сторож ослеп");
+    g.state.algo = {}; g.state.variant = {};
     viewReset(g);
   }
 

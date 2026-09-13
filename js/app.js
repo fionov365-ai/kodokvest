@@ -2266,6 +2266,16 @@ function mergeProgress(a, b){
                 items: (va.items && va.items.length) ? va.items : vb.items,
                 done: mergeSet(va.done, vb.done), seen: mergeSet(va.seen, vb.seen),
                 sent: mergeSet(va.sent, vb.sent) };
+    /* pts — балл эксперта ФИПИ по номеру (js/fipi16.js). Это не множество, а
+       последний сданный ответ: по номеру побеждает сданный позже. Забудь
+       поле здесь — и итог на втором устройстве скажет «ответ не сдан». */
+    var pa = va.pts || {}, pb = vb.pts || {};
+    if (Object.keys(pa).length || Object.keys(pb).length){
+      one.pts = {};
+      Object.keys(mergeSet(pa, pb)).forEach(function(n){
+        one.pts[n] = !pa[n] ? pb[n] : !pb[n] ? pa[n] : ((pb[n].at || 0) > (pa[n].at || 0) ? pb[n] : pa[n]);
+      });
+    }
     out.variant[k] = one;
   });
 
@@ -7522,6 +7532,14 @@ function openAlgo(id){
       ? '<div class="ogesample"><div><b>Входные данные</b><pre>' +
         esc(x.sample.in.join("\n")) + '</pre></div>' +
         '<div><b>Выходные данные</b><pre>' + esc(x.sample.out) + '</pre></div></div>'
+      : '') +
+    /* Правило эксперта — до решения, а не только в вердикте: «данные
+       константами — 0» полезно знать раньше, чем написал print(3). */
+    (window.FIPI16 && FIPI16.applies(x)
+      ? '<p class="dim">📝 На ОГЭ такую программу проверяет эксперт: запускает её на ' +
+        'тестах, которых ученик не видит, и ставит 2, 1 или 0 баллов. Программа без ' +
+        'ввода данных получает 0. ' + (exam ? 'Сколько вышло бы — скажет итог варианта.'
+                                          : 'После проверки здесь будет написано, сколько вышло бы.') + '</p>'
       : '') + '</div>';
 
   h += '<div id="studio"></div>' +
@@ -7598,8 +7616,10 @@ function openAlgo(id){
    закрывается (js/variant.js, closeExam).
    ⚠️ А вот ошибку в самой программе прячь не смей: NameError и опечатку
    показывает и настоящий Python на настоящем экзамене. Это не вердикт. */
-function examSend(ok){
-  if (algoBack && algoBack.onSend) algoBack.onSend(!!ok);
+function examSend(ok, fg){
+  /* fg — оценка эксперта ФИПИ (js/fipi16.js), если она к задаче применима.
+     Вариант прячет её до итога так же, как и сам вердикт. */
+  if (algoBack && algoBack.onSend) algoBack.onSend(!!ok, fg || null);
   markActiveToday(); save(); refreshTop();
 }
 var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
@@ -7643,27 +7663,49 @@ function runAlgoCheck(x, ed, showMsg){
     }
   }
 
-  var res = eng.run(code, { stdin: stdin.slice() });
+  /* ===== оценка эксперта ФИПИ =====
+     Задача-программа из тем задания ОГЭ получает, кроме вердикта, балл так,
+     как его поставил бы эксперт: 2, 1 или 0 по скрытым наборам (js/fipi16.js,
+     там же — страницы документа ФИПИ). Считается ДО всех ранних выходов: балл
+     нужен и ребёнку, чья программа упала, и итогу варианта.
+     ⚠️ Приглашение input("Введите…") у таких задач не печатается ни в одном
+     прогоне: сверяется ответ, а о тексте приглашения говорит предупреждение. */
+  var fipi = !!(window.FIPI16 && FIPI16.applies(x));
+  var fg = fipi ? FIPI16.grade(eng, code, x) : null;
+  var fgHTML = (fg && !exam) ? FIPI16.verdictHTML(fg) : "";
+  var runOpts = function(din){ return { stdin: din, quietPrompt: fipi }; };
+
+  var res = eng.run(code, runOpts(stdin.slice()));
   /* ⚠️ Ошибку в самой программе показываем и на экзамене: опечатку и NameError
      настоящий Python тоже показывает, это не вердикт. Но ответ при этом всё
      равно считается сданным — иначе «сдал программу с ошибкой» не попало бы в
      итог вовсе, и вариант посчитал бы номер просто неоткрытым. */
   if (res.error){
-    if (exam) examSend(false);
-    ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return;
+    if (exam) examSend(false, fg);
+    ed.setError(res.error.line); showMsg("bad", errHTML(res.error) + fgHTML); return;
+  }
+
+  /* ⚠️ Нет ввода или нет вывода — 0 баллов у эксперта, даже если число
+     совпало (МР ФИПИ ОГЭ-2026, с. 54). Значит, и у нас это не победа:
+     программа print(3) с совпавшим числом ничему не научилась. */
+  if (fg && (fg.zero === "input" || fg.zero === "output")){
+    if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+    showMsg("bad", "<b>" + (fg.zero === "input" ? "Программа не читает входные данные"
+                                                : "Программа ничего не печатает") + "</b>" + fgHTML);
+    return;
   }
 
   var problem = null;
   if (x.check.kind === "tests"){
     problem = runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
   } else {
-    var exp = eng.run(x.solution, { stdin: stdin.slice() }).lines, got = res.lines;
+    var exp = eng.run(x.solution, runOpts(stdin.slice())).lines, got = res.lines;
     if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
       problem = diffBlock(exp, got);
   }
   if (problem){
-    if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
-    showMsg("bad", "<b>Ещё не то</b>" + problem); return;
+    if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+    showMsg("bad", "<b>Ещё не то</b>" + problem + fgHTML); return;
   }
 
   /* ===== скрытые наборы данных =====
@@ -7675,21 +7717,21 @@ function runAlgoCheck(x, ed, showMsg){
   if (x.sets && x.sets.length){
     for (var si = 0; si < x.sets.length; si++){
       var din = x.sets[si].slice();
-      var hres = eng.run(code, { stdin: din.slice() });
+      var hres = eng.run(code, runOpts(din.slice()));
       if (hres.error){
-        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+        if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
         ed.setError(hres.error.line);
         showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
           "а на другом наборе упала. Вход был:<pre>" + esc(din.join("\n")) + "</pre>" +
-          errHTML(hres.error));
+          errHTML(hres.error) + fgHTML);
         return;
       }
-      var hexp = eng.run(x.solution, { stdin: din.slice() }).lines, hgot = hres.lines;
+      var hexp = eng.run(x.solution, runOpts(din.slice())).lines, hgot = hres.lines;
       if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
-        if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+        if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
         showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
           "но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
-          "Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot));
+          "Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot) + fgHTML);
         return;
       }
     }
@@ -7700,18 +7742,18 @@ function runAlgoCheck(x, ed, showMsg){
   if (x.budget){
     var cost = res.steps || 0;
     if (cost > x.budget){
-      if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+      if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
       showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
         "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
-        "дело не в скорости компьютера, а в плане работы.");
+        "дело не в скорости компьютера, а в плане работы." + fgHTML);
       return;
     }
   }
-  if (exam){ examSend(true); showMsg("info", EXAM_SENT_MSG); return; }
-  winAlgo(x, res);
+  if (exam){ examSend(true, fg); showMsg("info", EXAM_SENT_MSG); return; }
+  winAlgo(x, res, fg);
 }
 
-function winAlgo(x, res){
+function winAlgo(x, res, fg){
   var first = !algoDone(x.id);
   algoMark(x.id);
   markActiveToday();
@@ -7726,6 +7768,7 @@ function winAlgo(x, res){
     '<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
     'а не сверил буквы кода.</p>' +
     '<div class="stepnote"><b>Что тут было.</b> ' + esc(x.note) + '</div>' +
+    (fg && window.FIPI16 ? FIPI16.verdictHTML(fg) : '') +
     (res && res.steps
       ? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
         plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +

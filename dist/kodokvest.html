@@ -1184,6 +1184,7 @@ background:rgba(0,224,184,.10);border:1px solid rgba(0,224,184,.22);
 color:var(--acc2);font-size:12px}
 .leanmark{margin-right:7px;font-size:14px;opacity:.9}
 .stepnote.lean{color:var(--acc2)}
+.msg .fipi16{margin-top:14px;padding-top:10px;border-top:1px dashed currentColor}
 .tsteps{margin:8px 0 0;padding-left:20px;color:var(--soft)}
 .tsteps li{margin-bottom:4px}
 .tbtn.help{font-weight:700}
@@ -3854,6 +3855,9 @@ this.disk = new PyDisk(opts.files || {});
 this.stdin = (opts.stdin || []).map(String);  
 this.stdinPos = 0;
 
+this.quietPrompt = !!opts.quietPrompt;
+this.prompts = 0;
+
 this.interactive = !!opts.interactive;
 if (opts.seed !== undefined && opts.seed !== null) this._seed = Math.trunc(opts.seed);
 this.modules = {};     
@@ -4112,7 +4116,11 @@ def("input", function(args, kw, line){
 if (args.length > 1)
 raise("TypeError", "input() принимает не больше одного приглашения.", line,
 { pymsg: "input expected at most 1 argument, got " + args.length });
-if (args.length === 1) I.write(pyStr(args[0]));
+if (args.length === 1){
+var приглашение = pyStr(args[0]);
+if (приглашение.length) I.prompts++;
+if (!I.quietPrompt) I.write(приглашение);
+}
 if (I.stdinPos >= I.stdin.length){
 if (I.interactive)
 raise("__AwaitInput__", "жду ввод игрока", line, { fatal: true });
@@ -6613,7 +6621,7 @@ for (var i = 0; i < steps; i++){ this.forward(side); this.turn(per); }
 function run(src, opts){
 opts = opts || {};
 var turtle = opts.turtle || new Turtle();
-var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
+var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed, quietPrompt: opts.quietPrompt });
 var PREV = CUR; CUR = I;
 var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
 var ast;
@@ -10591,7 +10599,7 @@ list: ["На вход в первой строке — количество чи
 "Переводить число целиком не нужно: последнюю цифру записи даёт остаток"],
 sample: { in:["6","12","15","10","71","50","11"], out:"3" },
 stdin: ["6", "12", "15", "10", "71", "50", "11"],
-sets: [["3","7","14","21"], ["4","8","15","1","22"]],
+sets: [["3","7","14","21"], ["4","8","15","1","22"], ["3","30000","29996","2"]],
 starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
 solution: "n = int(input())\n" +
 "count = 0\n" +
@@ -10630,7 +10638,7 @@ list: ["На вход в первой строке — количество чи
 "Встроенным max() не пользоваться: смысл в том, чтобы вести максимум самому"],
 sample: { in:["6","12","15","10","71","50","11"], out:"71" },
 stdin: ["6", "12", "15", "10", "71", "50", "11"],
-sets: [["3","7","14","28"], ["4","10","24","3","14"]],
+sets: [["3","7","14","28"], ["4","10","24","3","14"], ["4","29999","30000","7","13"]],
 starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
 solution: "n = int(input())\n" +
 "best = -1\n" +
@@ -10669,7 +10677,7 @@ list: ["На вход в первой строке — количество чи
 "Считать надо количество подходящих отдельно от суммы: сумма может выйти нулевой и по другой причине"],
 sample: { in:["5","9","4","12","7","6"], out:"27" },
 stdin: ["5", "9", "4", "12", "7", "6"],
-sets: [["3","1","2","4"], ["4","3","6","9","5"]],
+sets: [["3","1","2","4"], ["4","3","6","9","5"], ["3","30000","29999","3"]],
 starter: "n = int(input())\ntotal = 0\nfound = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(total)\n",
 solution: "n = int(input())\n" +
 "total = 0\n" +
@@ -10710,7 +10718,7 @@ list: ["На вход в первой строке — количество чи
 "Встроенным min() не пользоваться: смысл в том, чтобы вести минимум самому"],
 sample: { in:["5","7","12","9","4","15"], out:"4" },
 stdin: ["5", "7", "12", "9", "4", "15"],
-sets: [["4","3","9","7","5"], ["3","30000","2","6"]],
+sets: [["4","3","9","7","5"], ["3","30000","2","6"], ["5","9","8","7","2","11"]],
 starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(best)\n",
 solution: "n = int(input())\n" +
 "best = -1\n" +
@@ -10749,7 +10757,7 @@ list: ["На вход в первой строке — количество чи
 "Сумму и количество подходящих веди отдельными переменными"],
 sample: { in:["6","10","3","25","8","5","30"], out:"17" },
 stdin: ["6", "10", "3", "25", "8", "5", "30"],
-sets: [["3","7","11","13"], ["4","5","5","10","20"]],
+sets: [["3","7","11","13"], ["4","5","5","10","20"], ["4","30000","29995","1","2"]],
 starter: "n = int(input())\ntotal = 0\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n",
 solution: "n = int(input())\n" +
 "total = 0\n" +
@@ -10789,7 +10797,7 @@ list: ["На вход в первой строке — количество чи
 "Обе границы входят в диапазон: и 10, и 99 — двузначные"],
 sample: { in:["5","3","42","100","77","9"], out:"2" },
 stdin: ["5", "3", "42", "100", "77", "9"],
-sets: [["3","5","7","9"], ["4","10","99","100","50"]],
+sets: [["3","5","7","9"], ["4","10","99","100","50"], ["3","11","98","1000"]],
 starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n",
 solution: "n = int(input())\n" +
 "count = 0\n" +
@@ -10827,7 +10835,7 @@ list: ["На вход в первой строке — количество чи
 "Ноль — чётная цифра: число 30 подходит"],
 sample: { in:["5","12","7","30","45","8"], out:"3" },
 stdin: ["5", "12", "7", "30", "45", "8"],
-sets: [["3","1","3","5"], ["3","10","21","4"]],
+sets: [["3","1","3","5"], ["3","10","21","4"], ["4","29999","30000","11","20"]],
 starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n",
 solution: "n = int(input())\n" +
 "count = 0\n" +
@@ -10865,7 +10873,7 @@ list: ["На вход в первой строке — количество чи
 "Вывести одно число — сколько нашлось пар, или NO"],
 sample: { in:["6","3","9","4","6","12","5"], out:"2" },
 stdin: ["6", "3", "9", "4", "6", "12", "5"],
-sets: [["4","1","2","4","8"], ["5","3","6","9","2","3"]],
+sets: [["4","1","2","4","8"], ["5","3","6","9","2","3"], ["3","3","6","9"]],
 starter: "n = int(input())\ncount = 0\nprev = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\n    prev = x\n",
 solution: "n = int(input())\n" +
 "count = 0\n" +
@@ -10905,7 +10913,7 @@ list: ["На вход в первой строке — количество чи
 "Переводить число в пятеричную целиком не нужно"],
 sample: { in:["6","7","15","22","9","12","40"], out:"7" },
 stdin: ["6", "7", "15", "22", "9", "12", "40"],
-sets: [["3","5","10","20"], ["4","30000","17","102","4"]],
+sets: [["3","5","10","20"], ["4","30000","17","102","4"], ["3","29997","12","2"]],
 starter: "n = int(input())\nbest = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\n",
 solution: "n = int(input())\n" +
 "best = -1\n" +
@@ -10944,7 +10952,7 @@ list: ["На вход в первой строке — количество чи
 "Встроенными max() и sorted() не пользоваться: смысл в том, чтобы вести оба максимума самому"],
 sample: { in:["6","5","8","3","12","7","6"], out:"20" },
 stdin: ["6", "5", "8", "3", "12", "7", "6"],
-sets: [["3","2","9","7"], ["5","4","4","3","10","2"]],
+sets: [["3","2","9","7"], ["5","4","4","3","10","2"], ["4","30000","29998","2","4"]],
 starter: "n = int(input())\nbest1 = -1\nbest2 = -1\nfor i in range(n):\n    x = int(input())\n    # твой код\n",
 solution: "n = int(input())\n" +
 "best1 = -1\n" +
@@ -11371,7 +11379,7 @@ list: ["На вход в первой строке — количество чи
 "Сумму цифр накапливай циклом while: бери последнюю цифру и отрезай её"],
 sample: { in:["6","12","16","25","43","70","8"], out:"4" },
 stdin: ["6", "12", "16", "25", "43", "70", "8"],
-sets: [["5","5","11","34","43","52"], ["4","12","21","35","49"]],
+sets: [["5","5","11","34","43","52"], ["4","12","21","35","49"], ["3","7","16","29995"]],
 starter: "n = int(input())\ncount = 0\nfor i in range(n):\n    x = int(input())\n    # твой код\nprint(count)\n",
 solution: "n = int(input())\n" +
 "count = 0\n" +
@@ -15277,6 +15285,194 @@ ex.tasks.forEach(function(x){ t[self.state(x, countIn)]++; });
 return t;
 }
 };
+
+</script>
+
+<script>
+
+window.FIPI16 = (function(){
+
+var DOC = {
+title: "методические материалы ФИПИ для экспертов ОГЭ-2026 по информатике",
+pages: "с. 53–55",
+url: "https://doc.fipi.ru/oge/dlya-predmetnyh-komissiy-subektov-rf/2026/mr_oge_informatika_2026.pdf"
+};
+var MAX = 2;           
+var MIN_TESTS = 3;     
+
+function esc(s){
+return String(s).replace(/[&<>"]/g, function(c){
+return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c];
+});
+}
+
+function examTask(){
+var ex = (window.EXAMS || {}).oge;
+if (!ex) return null;
+for (var i = 0; i < ex.tasks.length; i++)
+if ((ex.tasks[i].g || []).indexOf("oge") >= 0) return ex.tasks[i];
+return null;
+}
+
+function applies(x){
+var t = examTask();
+return !!(t && x && x.check && x.check.kind === "output" &&
+Array.isArray(x.stdin) && Array.isArray(x.sets) && x.sets.length &&
+(t.g || []).indexOf(x.group) >= 0);
+}
+
+function scoreOf(failed){ return failed === 0 ? 2 : failed === 1 ? 1 : 0; }
+
+function same(a, b){
+return a.length === b.length && a.every(function(v, i){ return v === b[i]; });
+}
+
+function splitCode(src){
+var code = "", fbodies = [], i = 0, n = src.length;
+while (i < n){
+var c = src.charAt(i);
+if (c === "#"){
+while (i < n && src.charAt(i) !== "\n") i++;
+continue;
+}
+if (c === "'" || c === '"'){
+var j = code.length - 1, pre = "";
+while (j >= 0 && /[a-zA-Z]/.test(code.charAt(j)) && pre.length < 2){ pre = code.charAt(j) + pre; j--; }
+var isF = /f/i.test(pre) && (j < 0 || !/\w/.test(code.charAt(j)));
+var triple = src.substr(i, 3) === c + c + c;
+var q = triple ? c + c + c : c, k = i + q.length, body = "", torn = false;
+while (k < n && src.substr(k, q.length) !== q){
+if (src.charAt(k) === "\\"){ body += src.substr(k, 2); k += 2; continue; }
+if (!triple && src.charAt(k) === "\n"){ torn = true; break; }
+body += src.charAt(k); k++;
+}
+if (isF) fbodies.push({ body: body, line: code.split("\n").length });
+
+code += '""' + body.replace(/[^\n]/g, "");
+
+i = torn ? k : k + q.length;
+continue;
+}
+code += c; i++;
+}
+return { code: code, fbodies: fbodies };
+}
+
+var NEWER = [
+{ re: /^[ \t]*match[ \t]+[^=\n]*:[ \t]*$/m, what: "match … case", ver: "3.10",
+need: /^[ \t]*case[ \t]+[^\n]*:[ \t]*$/m },
+{ re: /:=/, what: "оператор «:=»", ver: "3.8" },
+{ re: /\bdef\s+\w+\s*\([^)]*(,|\()\s*\/\s*[,)]/, what: "параметры до «/» в def", ver: "3.8" },
+{ re: /\bmath\.(isqrt|prod|comb|perm|dist)\b|\bfrom\s+math\s+import\b[^\n]*\b(isqrt|prod|comb|perm|dist)\b/,
+what: "math.isqrt, math.prod, math.comb", ver: "3.8" },
+{ re: /\.(removeprefix|removesuffix)\s*\(/, what: "removeprefix и removesuffix", ver: "3.9" },
+{ re: /\bmath\.lcm\b|\bfrom\s+math\s+import\b[^\n]*\blcm\b/, what: "math.lcm", ver: "3.9" },
+{ re: /(:|->)\s*(list|dict|tuple|set)\[/, what: "list[int] и dict[…] в подсказках типов", ver: "3.9" },
+{ re: /\.bit_count\s*\(/, what: "bit_count()", ver: "3.10" },
+{ re: /\bitertools\.pairwise\b|\bfrom\s+itertools\s+import\b[^\n]*\bpairwise\b/, what: "itertools.pairwise", ver: "3.10" },
+{ re: /\bzip\s*\([^\n]*\bstrict\s*=/, what: "zip(…, strict=…)", ver: "3.10" },
+{ re: /\bexcept\s*\*/, what: "except*", ver: "3.11" }
+];
+
+function lineOf(text, idx){ return text.slice(0, idx).split("\n").length; }
+
+function newerSyntax(src){
+var sp = splitCode(String(src || "")), out = [];
+NEWER.forEach(function(r){
+var m = r.re.exec(sp.code);
+if (!m || (r.need && !r.need.test(sp.code))) return;
+out.push({ what: r.what, ver: r.ver, line: lineOf(sp.code, m.index) });
+});
+for (var i = 0; i < sp.fbodies.length; i++){
+if (/\{[^{}]*[^=!<>{]=\s*(![rsa])?(:[^{}]*)?\}/.test(sp.fbodies[i].body)){
+out.push({ what: "f-строка вида {x=}", ver: "3.8", line: sp.fbodies[i].line });
+break;
+}
+}
+return out;
+}
+
+function grade(eng, code, x){
+var marks = [], anyOk = false, readAny = false, printedAny = false,
+syntax = false, prompts = false;
+x.sets.forEach(function(din){
+var r = eng.run(code, { stdin: din.slice(), quietPrompt: true });
+var e = eng.run(x.solution, { stdin: din.slice(), quietPrompt: true });
+var it = r.interp || {};
+if (r.error && r.error.kind === "SyntaxError") syntax = true;
+if (!r.error) anyOk = true;
+if ((it.stdinPos || 0) > 0) readAny = true;
+if (it.prompts) prompts = true;
+if (r.lines.length) printedAny = true;
+marks.push(!r.error && same(e.lines, r.lines));
+});
+var failed = marks.filter(function(m){ return !m; }).length;
+
+var zero = syntax ? "syntax"
+: (anyOk && !readAny) ? "input"
+: (anyOk && !printedAny) ? "output"
+: null;
+return { score: zero ? 0 : scoreOf(failed), max: MAX, total: marks.length,
+passed: marks.length - failed, marks: marks, zero: zero,
+prompts: prompts, newer: newerSyntax(code) };
+}
+
+var ZERO_WHY = {
+syntax: "Программа не запускается. На экзамене такая получает 0 баллов, " +
+"даже если мысль в ней верная.",
+input:  "Программа не читает входные данные: числа стоят прямо в коде. " +
+"Эксперт ставит за это 0 баллов, даже если напечатанное число совпало.",
+output: "Программа ничего не печатает. Без вывода ответа эксперт ставит 0 баллов."
+};
+
+function warnHTML(g){
+var h = "";
+if (g.prompts)
+h += '<p>⚠️ <b>Текст в input("…")</b> здесь не мешает — ответ мы засчитали. ' +
+'Но эксперт видит всё, что напечатала программа, а условие просит вывести ' +
+'<b>только одно число</b>. В правилах ФИПИ про приглашение к вводу ничего не ' +
+'сказано, так что это риск: надёжнее писать <code>input()</code> без текста.</p>';
+if (g.newer && g.newer.length){
+var v = g.newer[0];
+h += '<p>⚠️ <b>' + esc(v.what) + '</b> (строка ' + v.line + ') есть только в Python ' +
+esc(v.ver) + ' и новее' +
+(g.newer.length > 1 ? ', и таких мест в программе ' + g.newer.length : '') + '. ' +
+'ФИПИ лишь рекомендует ставить экспертам ту же версию, что была на экзамене ' +
+'(с. 5 и 10), — если там окажется старый Python, программа не запустится и ' +
+'получит 0. Надёжнее обойтись без этого.</p>';
+}
+return h;
+}
+
+function verdictHTML(g){
+var h = '<div class="stepnote fipi16"><b>📝 На ОГЭ за эту программу было бы ' +
+g.score + ' из ' + g.max + ' баллов</b>';
+
+if (g.zero === "syntax" && g.newer && g.newer.length)
+h += '<p>Программа не запустилась: в ней ' + esc(g.newer[0].what) + ' из Python ' +
+esc(g.newer[0].ver) + '. Наш тренажёр такого не разбирает — как не разберёт и старая ' +
+'версия Python. На экзамене незапустившаяся программа получает 0 баллов.</p>';
+else if (g.zero) h += '<p>' + ZERO_WHY[g.zero] + '</p>';
+else h += '<p>Эксперт запускает программу на тестах, которых ученик не видит. ' +
+'Здесь их ' + g.total + ': ' +
+g.marks.map(function(m, i){ return "тест " + (i + 1) + " " + (m ? "✓" : "✗"); }).join(", ") +
+'. 2 балла — верно на всех, 1 — неверно не больше чем на одном, 0 — иначе.</p>';
+h += warnHTML(g);
+h += '<p class="dim">Правила — ' + esc(DOC.title) + ', ' + DOC.pages + '.</p></div>';
+return h;
+}
+
+function pack(g){
+return { s: g.score, t: g.total, p: g.passed, z: g.zero || "",
+pr: g.prompts ? 1 : 0, nw: (g.newer || []).slice(0, 3), at: Date.now() };
+}
+
+return { DOC: DOC, MAX: MAX, MIN_TESTS: MIN_TESTS, examTask: examTask,
+applies: applies, scoreOf: scoreOf, grade: grade, newerSyntax: newerSyntax,
+verdictHTML: verdictHTML, warnHTML: warnHTML, pack: pack,
+unpackWarnHTML: function(r){ return warnHTML({ prompts: !!(r && r.pr), newer: (r && r.nw) || [] }); },
+zeroWhy: function(z){ return ZERO_WHY[z] || ""; } };
+})();
 
 </script>
 
@@ -22682,12 +22878,15 @@ var w = cur(ex);
 return w ? clockOf(w) : { text: "0:00", soon: false, over: true };
 } : null,
 
-onSend: exam ? function(ok){
+onSend: exam ? function(ok, fg){
 var w = cur(ex);
 if (!w || over(w)) return;
 w.sent = w.sent || {};
 w.sent[n] = 1;
 if (ok) w.done[n] = 1; else delete w.done[n];
+
+w.pts = w.pts || {};
+if (fg && window.FIPI16) w.pts[n] = FIPI16.pack(fg); else delete w.pts[n];
 put(w);
 } : null,
 onWin: function(){
@@ -22702,6 +22901,35 @@ put(w);
 }
 });
 A.openAlgo(x.id);
+}
+
+function fipiCardHTML(v){
+var F = window.FIPI16;
+if (!F || v.ex !== "oge" || !isExam(v)) return "";
+var et = F.examTask();
+var x = et ? itemOf(v, et.n) : null;
+if (!x || !x.id) return "";
+var task = A.algoById(x.id);
+var h = '<div class="card"><h3>📝 Задание ' + x.n + ' — как оценил бы эксперт</h3>';
+if (!task || !F.applies(task)){
+return h + '<p>На этом номере в варианте стояла задача-функция — у неё нет ввода данных, ' +
+'поэтому по правилам эксперта ФИПИ её не оценить. Балла здесь нет, и выдумывать его ' +
+'мы не будем. В следующем варианте на этом номере будет программа с вводом.</p></div>';
+}
+var r = (v.pts || {})[x.n];
+if (!r)
+h += '<p><b>0 из ' + F.MAX + ' баллов</b> — ответ не сдан. На экзамене не сданное ' +
+'задание не оценивается вовсе.</p>';
+else {
+h += '<p><b>' + r.s + ' из ' + F.MAX + ' баллов</b>' +
+(r.z ? ' — ' + A.esc(F.zeroWhy(r.z)) :
+' — программа верна на ' + r.p + ' ' + A.plural(r.p, "тесте", "тестах", "тестах") +
+' из ' + r.t + '. 2 балла — верно на всех, 1 — неверно не больше чем на одном, 0 — иначе.') +
+'</p>';
+h += F.unpackWarnHTML(r);
+}
+return h + '<p class="dim">Правила — ' + A.esc(F.DOC.title) + ', ' + F.DOC.pages + '. ' +
+'Тесты эксперта ты не видел — как и на экзамене.</p></div>';
 }
 
 function screenVariantDone(){
@@ -22749,13 +22977,20 @@ t.able + '</b>, из них засчитано <b>' + t.done + '</b>.</p>' +
 'что не вышло, можно прямо сейчас: задачи ниже открываются как обычно, с подсказками ' +
 'и с объяснением. На итог этого захода разбор уже не влияет.</p></div>';
 
-h += '<div class="card"><h3>⚖️ Почему тут нет баллов</h3>' +
+var fipiRow = fipiCardHTML(v);
+h += fipiRow;
+
+h += '<div class="card"><h3>⚖️ Почему тут нет ' + (fipiRow ? 'общего балла' : 'баллов') + '</h3>' +
 '<p>Шкала перевода в экзаменационные баллы меняется каждый год, и она не наша: ' +
 'её объявляет тот, кто проводит экзамен. Назвать число, которого мы не знаем, ' +
 'значит соврать в единственном месте, где враньё выяснится в мае.</p>' +
 '<p class="dim">Поэтому итог здесь такой, каким мы можем за него отвечать: какие номера ' +
 'закрыты, какие просели, какие ты ещё не открывал. Настоящие баллы за такой вариант ' +
-'скажет только демоверсия своего года.</p></div>';
+'скажет только демоверсия своего года.</p>' +
+(fipiRow
+? '<p class="dim">Балл за программу выше — не исключение из этого правила: он стоит за ' +
+'одно задание, правила которого ФИПИ опубликовал целиком, и ни с чем не складывается.</p>'
+: '') + '</div>';
 
 var weakRows = v.items.filter(function(x){ return x.id && !v.done[x.n]; });
 if (weakRows.length){
@@ -29141,6 +29376,14 @@ closed: (va.closed || vb.closed) ? 1 : 0,
 items: (va.items && va.items.length) ? va.items : vb.items,
 done: mergeSet(va.done, vb.done), seen: mergeSet(va.seen, vb.seen),
 sent: mergeSet(va.sent, vb.sent) };
+
+var pa = va.pts || {}, pb = vb.pts || {};
+if (Object.keys(pa).length || Object.keys(pb).length){
+one.pts = {};
+Object.keys(mergeSet(pa, pb)).forEach(function(n){
+one.pts[n] = !pa[n] ? pb[n] : !pb[n] ? pa[n] : ((pb[n].at || 0) > (pa[n].at || 0) ? pb[n] : pa[n]);
+});
+}
 out.variant[k] = one;
 });
 
@@ -33444,6 +33687,13 @@ x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' 
 ? '<div class="ogesample"><div><b>Входные данные</b><pre>' +
 esc(x.sample.in.join("\n")) + '</pre></div>' +
 '<div><b>Выходные данные</b><pre>' + esc(x.sample.out) + '</pre></div></div>'
+: '') +
+
+(window.FIPI16 && FIPI16.applies(x)
+? '<p class="dim">📝 На ОГЭ такую программу проверяет эксперт: запускает её на ' +
+'тестах, которых ученик не видит, и ставит 2, 1 или 0 баллов. Программа без ' +
+'ввода данных получает 0. ' + (exam ? 'Сколько вышло бы — скажет итог варианта.'
+: 'После проверки здесь будет написано, сколько вышло бы.') + '</p>'
 : '') + '</div>';
 
 h += '<div id="studio"></div>' +
@@ -33499,8 +33749,9 @@ refreshTop();
 window.scrollTo({ top:0, behavior:"smooth" });
 }
 
-function examSend(ok){
-if (algoBack && algoBack.onSend) algoBack.onSend(!!ok);
+function examSend(ok, fg){
+
+if (algoBack && algoBack.onSend) algoBack.onSend(!!ok, fg || null);
 markActiveToday(); save(); refreshTop();
 }
 var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
@@ -33539,44 +33790,56 @@ return;
 }
 }
 
-var res = eng.run(code, { stdin: stdin.slice() });
+var fipi = !!(window.FIPI16 && FIPI16.applies(x));
+var fg = fipi ? FIPI16.grade(eng, code, x) : null;
+var fgHTML = (fg && !exam) ? FIPI16.verdictHTML(fg) : "";
+var runOpts = function(din){ return { stdin: din, quietPrompt: fipi }; };
+
+var res = eng.run(code, runOpts(stdin.slice()));
 
 if (res.error){
-if (exam) examSend(false);
-ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return;
+if (exam) examSend(false, fg);
+ed.setError(res.error.line); showMsg("bad", errHTML(res.error) + fgHTML); return;
+}
+
+if (fg && (fg.zero === "input" || fg.zero === "output")){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("bad", "<b>" + (fg.zero === "input" ? "Программа не читает входные данные"
+: "Программа ничего не печатает") + "</b>" + fgHTML);
+return;
 }
 
 var problem = null;
 if (x.check.kind === "tests"){
 problem = runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
 } else {
-var exp = eng.run(x.solution, { stdin: stdin.slice() }).lines, got = res.lines;
+var exp = eng.run(x.solution, runOpts(stdin.slice())).lines, got = res.lines;
 if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
 problem = diffBlock(exp, got);
 }
 if (problem){
-if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
-showMsg("bad", "<b>Ещё не то</b>" + problem); return;
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("bad", "<b>Ещё не то</b>" + problem + fgHTML); return;
 }
 
 if (x.sets && x.sets.length){
 for (var si = 0; si < x.sets.length; si++){
 var din = x.sets[si].slice();
-var hres = eng.run(code, { stdin: din.slice() });
+var hres = eng.run(code, runOpts(din.slice()));
 if (hres.error){
-if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
 ed.setError(hres.error.line);
 showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
 "а на другом наборе упала. Вход был:<pre>" + esc(din.join("\n")) + "</pre>" +
-errHTML(hres.error));
+errHTML(hres.error) + fgHTML);
 return;
 }
-var hexp = eng.run(x.solution, { stdin: din.slice() }).lines, hgot = hres.lines;
+var hexp = eng.run(x.solution, runOpts(din.slice())).lines, hgot = hres.lines;
 if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
-if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
 showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
 "но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
-"Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot));
+"Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot) + fgHTML);
 return;
 }
 }
@@ -33585,18 +33848,18 @@ return;
 if (x.budget){
 var cost = res.steps || 0;
 if (cost > x.budget){
-if (exam){ examSend(false); showMsg("info", EXAM_SENT_MSG); return; }
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
 showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
 "</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
-"дело не в скорости компьютера, а в плане работы.");
+"дело не в скорости компьютера, а в плане работы." + fgHTML);
 return;
 }
 }
-if (exam){ examSend(true); showMsg("info", EXAM_SENT_MSG); return; }
-winAlgo(x, res);
+if (exam){ examSend(true, fg); showMsg("info", EXAM_SENT_MSG); return; }
+winAlgo(x, res, fg);
 }
 
-function winAlgo(x, res){
+function winAlgo(x, res, fg){
 var first = !algoDone(x.id);
 algoMark(x.id);
 markActiveToday();
@@ -33609,6 +33872,7 @@ document.getElementById("wincard").innerHTML =
 '<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
 'а не сверил буквы кода.</p>' +
 '<div class="stepnote"><b>Что тут было.</b> ' + esc(x.note) + '</div>' +
+(fg && window.FIPI16 ? FIPI16.verdictHTML(fg) : '') +
 (res && res.steps
 ? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
 plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +

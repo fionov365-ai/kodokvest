@@ -1724,6 +1724,11 @@ function Interp(opts){
   this.disk = new PyDisk(opts.files || {});   // файлы с данными: живут в памяти запуска
   this.stdin = (opts.stdin || []).map(String);  // заранее записанные ответы для input()
   this.stdinPos = 0;
+  /* Судья задания 16 ОГЭ (js/fipi16.js) сверяет ответ, а не приглашение:
+     input("Введите число: ") не должен валить проверку. quietPrompt гасит
+     печать приглашения, prompts считает непустые — чтобы о них предупредить. */
+  this.quietPrompt = !!opts.quietPrompt;
+  this.prompts = 0;
   /* Интерактивный режим (игры): когда ответы кончились, программа не падает,
      а «замирает» на input() — раннер снаружи покажет поле ввода и запустит
      программу заново с добавленным ответом. seed фиксирует random, чтобы
@@ -2007,7 +2012,11 @@ Interp.prototype.installBuiltins = function(){
     if (args.length > 1)
       raise("TypeError", "input() принимает не больше одного приглашения.", line,
             { pymsg: "input expected at most 1 argument, got " + args.length });
-    if (args.length === 1) I.write(pyStr(args[0]));
+    if (args.length === 1){
+      var приглашение = pyStr(args[0]);
+      if (приглашение.length) I.prompts++;
+      if (!I.quietPrompt) I.write(приглашение);
+    }
     if (I.stdinPos >= I.stdin.length){
       if (I.interactive)
         raise("__AwaitInput__", "жду ввод игрока", line, { fatal: true });
@@ -4610,7 +4619,7 @@ Turtle.prototype.circle = function(r, extent){
 function run(src, opts){
   opts = opts || {};
   var turtle = opts.turtle || new Turtle();
-  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed });
+  var I = new Interp({ turtle: turtle, maxSteps: opts.maxSteps, sources: opts.sources, files: opts.files, stdin: opts.stdin, interactive: opts.interactive, seed: opts.seed, quietPrompt: opts.quietPrompt });
   var PREV = CUR; CUR = I;
   var result = { output: "", lines: [], turtle: turtle, error: null, steps: 0, interp: I };
   var ast;
