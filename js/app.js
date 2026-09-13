@@ -12897,7 +12897,17 @@ function fmtWhen(ts){
   return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear() +
          " " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
-function progressJSON(){ return JSON.stringify(S, null, 2); }
+/* Файл «Переноса»: всё состояние устройства, КРОМЕ пароля кабинета.
+   ⚠️ До 13.09.2026 сюда уходил и admin.pass — хэш пароля, открытым текстом в
+   файле и в поле на экране. Хэш короткого пароля подбирается перебором, а
+   файл носят по флешкам и мессенджерам. Пароль — свойство УСТРОЙСТВА, а не
+   прогресса: переносить его незачем, и загрузка его тоже не берёт. */
+function progressJSON(){
+  return JSON.stringify(S, function(k, v){
+    if (this === S.admin && k === "pass") return undefined;
+    return v;
+  }, 2);
+}
 function statBox(k, v){
   return '<div class="admstat"><span>' + k + '</span><b>' + v + '</b></div>';
 }
@@ -17712,7 +17722,8 @@ function screenAdmin(){
         '<button class="rbtn sec" data-act="copy">Скопировать текст</button>' +
       '</div>' +
       '<p class="dim">Способ без сервера: скачал здесь — вставил в это же поле на другом ' +
-      'устройстве. ⚠️ Загрузка файла <b>заменяет</b> прогресс целиком, а не сливает.</p>' +
+      'устройстве. ⚠️ Загрузка файла <b>заменяет</b> прогресс целиком, а не сливает. ' +
+      'Пароль кабинета в файл не входит и при загрузке не меняется.</p>' +
       '<textarea class="admjson" id="admjson" spellcheck="false">' + esc(progressJSON()) + '</textarea>' +
       '<div class="admrow"><button class="rbtn sec" data-act="import">Загрузить из этого поля</button></div>' +
       '<div class="msg" id="admmsg"></div></div>');
@@ -17960,11 +17971,16 @@ function screenAdmin(){
       var ok = true;
       try { ok = confirm("Заменить прогресс на этом устройстве загруженным? Нынешний будет стёрт."); } catch(e6){}
       if (!ok) return;
+      /* пароль остаётся тот, что у ЭТОГО устройства: из файла его не берём
+         (в старых файлах он есть), а без него загрузка оставила бы кабинет
+         без замка — пароль тогда придумал бы первый вошедший */
+      var keepPass = (S.admin && S.admin.pass) || "";
       Object.keys(S).forEach(function(k){ delete S[k]; });
       Object.assign(S, blankProgress());
       S.admin = { unlockAll:false };
       Object.keys(obj).forEach(function(k){ S[k] = obj[k]; });
       ensureShape(S);
+      S.admin.pass = keepPass;
       save(); refreshTop(); screenAdmin();
       say("ok", "<b>Прогресс загружен</b>Данные заменены.");
     }
@@ -19668,7 +19684,7 @@ window.__game = {
   bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
-  kidAttach: kidAttach, kidRename: kidRename,
+  kidAttach: kidAttach, kidRename: kidRename, progressJSON: progressJSON,
   kidsListFileText: kidsListFileText, kidsListParse: kidsListParse, kidsListMerge: kidsListMerge,
   kidsListLoadText: kidsListLoadText, kidsSaveNeeded: kidsSaveNeeded, kidsListMarkSaved: kidsListMarkSaved,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
