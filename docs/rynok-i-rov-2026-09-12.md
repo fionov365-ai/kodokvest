@@ -279,6 +279,55 @@ Telegram преподавателя → бесплатный интенсив в
 
 ---
 
+## 5.4. ⚠️ Поправки из мира (исследование 13.09.2026)
+
+Мировые аналоги подтвердили модель в одном и опровергли в двух местах.
+
+**Опровергнуто — переписать подачу:**
+1. **Запись «набрано / вставлено» — не уникальна.** CodeHS (школы США,
+   $3 150–3 750 за учителя в год), zyBooks и Codio давно записывают нажатия и
+   воспроизводят набор кода. Отличием остаётся не сама запись, а **кому она
+   видна**: родителю и репетитору без аккаунта. Продавать связку, а не запись.
+2. **«Независимый балл» сам по себе денег не приносит.** Семьи платят за
+   оценку с внешним признанием (AP → вуз, $100), массовые конкурсы (Bebras,
+   USACO) бесплатны и живут на спонсорах. Значит, **проверка «что умеет сам»
+   — магнит и повод прийти, а не товар**. Так она и стоит в § 6 — правильно.
+3. **Слово «доказательство» опасно.** Vanderbilt отключил детектор ИИ
+   (≈750 ложных обвинений в год), лазейка Grammarly Humanize, запись нажатий
+   не видит перепечатку с телефона, USACO перевела финал в очный формат.
+   Формулировка: **«повод поговорить», не «доказал списывание»**.
+
+**Подтверждено:**
+- **Учителю бесплатно, платит родитель — рабочая модель в масштабе:**
+  ClassDojo (51 млн учеников, прибыль к 2020, Plus $109,99/год родителю).
+- **Рост через учителей без рекламы:** Quizlet (прибылен с 2009 без внешних
+  денег, 50 млн в месяц в 2018), Gimkit и Blooket — сделаны школьниками, вход
+  ученика по коду без аккаунта.
+- **Инструмента с проверкой кода для частного репетитора нет** и за рубежом:
+  Wyzant, Preply, TutorCruncher, Teachworks код не проверяют.
+- **Бесплатный серверный продукт умирает:** Replit Teams for Education закрыт
+  01.08.2024 (серверы дороги), **GitHub Classroom закрыт 28.08.2026** с
+  удалением заданий и списков классов. Наш офлайн без сервера не имеет этой
+  статьи расходов — и «ваши задания лежат у вас» становится доводом.
+- Детское программирование переоценено: Tynker куплен BYJU'S за ~$200 млн
+  (2021), продан за $2,2 млн (2025).
+
+⚠️ **Проверить юристом:** школы при дистанционном обучении обязаны работать в
+государственных системах («Моя школа», 273-ФЗ ст. 16 и 98); продукт без ПДн,
+по-видимому, под это не попадает — не проверено.
+
+Источники: [CodeHS, прайс](https://s3.amazonaws.com/midas-instructional-materials/8fc863df-3b4d-4b3b-8a40-b2aeaa155391/CodeHSPricing.pdf),
+[CodeHS, честность](https://codehs.com/academic_integrity),
+[zyBooks coding trails](https://support.zybooks.com/hc/en-us/articles/360045732453-zyLab-coding-trails),
+[GitHub Classroom deprecated](https://github.blog/changelog/2026-08-27-github-classroom-deprecated/),
+[Replit — DataWars](https://www.datawars.io/articles/replit-teams-for-education-deprecation-all-you-need-to-know),
+[Tynker — EdWeek](https://marketbrief.edweek.org/strategy-operations/coding-provider-tynker-sold-for-2-1m-as-byjus-bankruptcy-plays-out/2025/06),
+[ClassDojo 2020](https://www.prnewswire.com/news-releases/as-education-shifts-online-classdojo-serves-51-million-students-worldwide-announces-profitability-and-new-solo-capitalist-funding-301216471.html),
+[Quizlet — EdSurge](https://www.edsurge.com/news/2015-11-23-bootstrapped-since-2005-quizlet-raises-12-million-to-reach-1-billion-learners),
+[Vanderbilt](https://www.vanderbilt.edu/brightspace/2023/08/16/guidance-on-ai-detection-and-why-were-disabling-turnitins-ai-detector/),
+[USACO — Scot Scoop](https://scotscoop.com/coding-olympiad-demotes-top-division-amid-cheating-concerns/),
+[Wyzant](https://support.wyzant.com/tutors/tutor-payments/what-is-the-fee-structure-for-tutors-listed-on-wyzant/).
+
 ## 6а. Выдача поиска по нашим дверям (замер 13.09.2026)
 
 ⚠️ Яндекс напрямую не открылся (капча); выдача снята другим поисковиком —
