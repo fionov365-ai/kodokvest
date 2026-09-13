@@ -19848,7 +19848,7 @@ window.__game = {
   showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
   screenVariant: screenVariant, screenVariantDone: screenVariantDone,
   variantOpenFor: variantOpenFor, variantStat: variantStat,
-  variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
+  variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant, variantSeedV2: VARIANT.seedV2, variantNewSeed: VARIANT.newSeed,
   screenRobot: screenRobot, openRobot: openRobot,
   screenProverka: screenProverka, proverka: PROVERKA,
   screenZashchita: screenZashchita, zashchita: ZASH, zqSources: zqSources,

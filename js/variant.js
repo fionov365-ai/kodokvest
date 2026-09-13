@@ -79,11 +79,34 @@ KVSCREENS.variant = function(A){
    диктуют голосом и переписывают от руки. */
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
+/* ⚠️ Версия сборки живёт В САМОМ КОДЕ (13.09.2026, RAZVITIE § 2.7).
+   В пуле номера 16 ОГЭ стояли задачи-функции без ввода данных, а эксперт ФИПИ
+   такую работу не оценивает: примерно в каждом пятом варианте итог говорил
+   «балла нет» на главном задании. Сузить пул для всех нельзя — код, который
+   репетитор уже продиктовал, собрал бы другой номер 16 (правило § 4.49).
+   Поэтому у новых кодов сумма номеров букв в азбуке даёт остаток SEED_V2 по
+   модулю 32: последняя буква подбирается под это, длина и азбука прежние.
+   Такой код — вторая версия сборки: номер 16 берётся только из программ с
+   вводом. Старый случайный код получает метку сам в 1 случае из 32, но
+   меняется у него только номер 16 и только если там стояла функция (4 задачи
+   из 22 в пуле): около 0,6% старых кодов. Замер 13.09.2026 на 400 кодах со
+   слепком прежней сборки. На ту дату разосланных кодов нет (§ 0). */
+var SEED_V2 = 7;
+function seedSum(s){
+  var n = 0;
+  for (var i = 0; i < s.length; i++) n += CODE_ABC.indexOf(s.charAt(i));
+  return n;
+}
+function seedV2(seed){
+  var s = cleanSeed(seed);
+  return !!s && seedSum(s) % 32 === SEED_V2;
+}
 function newSeed(){
   var s = "";
-  for (var i = 0; i < 6; i++)
+  for (var i = 0; i < 5; i++)
     s += CODE_ABC.charAt(Math.floor(Math.random() * CODE_ABC.length));
-  return s;
+  var last = ((SEED_V2 - seedSum(s)) % 32 + 32) % 32;
+  return s + CODE_ABC.charAt(last);
 }
 /* Код, названный человеком: с голоса, из строки ввода или из назначения
    репетитора. ⚠️ Приводим к верхнему регистру и проверяем КАЖДУЮ букву по той
@@ -150,6 +173,25 @@ function buildItems(exId, seed){
     var dup = free.length ? 0 : 1;
     var from = free.length ? free : pool;
     var id = from[Math.floor(rnd() * from.length) % from.length];
+    /* Вторая версия сборки: на номере задания-программы ОГЭ — только программа
+       с вводом, которую эксперт ФИПИ оценивает (FIPI16.applies).
+       ⚠️ Выбор сперва ТОТ ЖЕ, что раньше, и перевыбор — только если выпала
+       функция, и СВОИМ потоком от семени. Сузь пул до выбора — и при том же
+       случайном числе выпадет другая задача даже там, где стояла программа:
+       замер 13.09.2026 на 400 кодах, у меченых старых менялся каждый номер 16.
+       Общий поток rnd() при этом зовётся ровно один раз, как всегда. */
+    var F16 = window.FIPI16;
+    if (exId === "oge" && F16 && seedV2(seed) && !F16.applies(A.algoById(id))){
+      var et = F16.examTask && F16.examTask();
+      if (et && et.n === t.n){
+        var progs = from.filter(function(x){ return F16.applies(A.algoById(x)); });
+        if (!progs.length) progs = pool.filter(function(x){ return F16.applies(A.algoById(x)); });
+        if (progs.length){
+          var r16 = rngFrom(String(seed || "") + ":" + exId + ":prog");
+          id = progs[Math.floor(r16() * progs.length) % progs.length];
+        }
+      }
+    }
     used[id] = 1;
     /* off вместе с задачами — то самое четвёртое состояние карты (ОГЭ 14):
        половину задания мы закрываем, половину нет, и молчать об этом нельзя. */
@@ -932,5 +974,5 @@ function variantStat(){
 
 return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
          variantStat: variantStat, variantOpenFor: openFor,
-         buildItems: buildItems, makeVariant: makeVariant };
+         buildItems: buildItems, makeVariant: makeVariant, seedV2: seedV2, newSeed: newSeed };
 };

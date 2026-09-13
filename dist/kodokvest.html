@@ -22845,11 +22845,22 @@ KVSCREENS.variant = function(A){
 
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
+var SEED_V2 = 7;
+function seedSum(s){
+var n = 0;
+for (var i = 0; i < s.length; i++) n += CODE_ABC.indexOf(s.charAt(i));
+return n;
+}
+function seedV2(seed){
+var s = cleanSeed(seed);
+return !!s && seedSum(s) % 32 === SEED_V2;
+}
 function newSeed(){
 var s = "";
-for (var i = 0; i < 6; i++)
+for (var i = 0; i < 5; i++)
 s += CODE_ABC.charAt(Math.floor(Math.random() * CODE_ABC.length));
-return s;
+var last = ((SEED_V2 - seedSum(s)) % 32 + 32) % 32;
+return s + CODE_ABC.charAt(last);
 }
 
 function cleanSeed(raw){
@@ -22902,6 +22913,19 @@ var free = pool.filter(function(id){ return !used[id]; });
 var dup = free.length ? 0 : 1;
 var from = free.length ? free : pool;
 var id = from[Math.floor(rnd() * from.length) % from.length];
+
+var F16 = window.FIPI16;
+if (exId === "oge" && F16 && seedV2(seed) && !F16.applies(A.algoById(id))){
+var et = F16.examTask && F16.examTask();
+if (et && et.n === t.n){
+var progs = from.filter(function(x){ return F16.applies(A.algoById(x)); });
+if (!progs.length) progs = pool.filter(function(x){ return F16.applies(A.algoById(x)); });
+if (progs.length){
+var r16 = rngFrom(String(seed || "") + ":" + exId + ":prog");
+id = progs[Math.floor(r16() * progs.length) % progs.length];
+}
+}
+}
 used[id] = 1;
 
 return { n: t.n, t: t.t, id: id, dup: dup, why: t.off ? ("кроме: " + t.off) : "" };
@@ -23530,7 +23554,7 @@ return parts.join(" · ");
 
 return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
 variantStat: variantStat, variantOpenFor: openFor,
-buildItems: buildItems, makeVariant: makeVariant };
+buildItems: buildItems, makeVariant: makeVariant, seedV2: seedV2, newSeed: newSeed };
 };
 
 </script>
@@ -44527,7 +44551,7 @@ screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
 showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
 screenVariant: screenVariant, screenVariantDone: screenVariantDone,
 variantOpenFor: variantOpenFor, variantStat: variantStat,
-variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
+variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant, variantSeedV2: VARIANT.seedV2, variantNewSeed: VARIANT.newSeed,
 screenRobot: screenRobot, openRobot: openRobot,
 screenProverka: screenProverka, proverka: PROVERKA,
 screenZashchita: screenZashchita, zashchita: ZASH, zqSources: zqSources,
