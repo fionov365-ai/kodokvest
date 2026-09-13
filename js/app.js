@@ -16729,7 +16729,12 @@ function groupRow(code, st, serverAt){
                var v = (st.variant || {})[k];
                if (!v || !v.seed) return;
                out[k] = { seed: v.seed, mins: v.mins || 0, closed: v.closed ? 1 : 0,
-                          done: v.done || {}, sent: v.sent || {} };
+                          done: v.done || {}, sent: v.sent || {},
+                          /* какие номера в его варианте ВООБЩЕ были: вариант,
+                             собранный до 1.163.0, не знает Робота на 15-м, и
+                             «не закрыл» там значит «номера не было» */
+                          has: (v.items || []).filter(function(x){ return x.id; })
+                                              .map(function(x){ return x.n; }) };
              });
              return out;
            })(),
@@ -16890,11 +16895,19 @@ function groupVarReportHTML(rows){
     var items = VARIANT.buildItems(exId, seed).filter(function(x){ return x.id; });
     var lines = items.map(function(x){
       var n = mine.filter(function(r){ return ((r.vr[exId] || {}).done || {})[x.n]; }).length;
+      /* ⚠️ Знаменатель — те, у кого номер в варианте был. Снимок без has (старый
+         кабинет) считаем «был»: так было всегда, и хуже прежнего не станет. */
+      var had = mine.filter(function(r){
+        var h = (r.vr[exId] || {}).has;
+        return !Array.isArray(h) || h.indexOf(x.n) >= 0;
+      }).length;
       /* номер 15 ОГЭ — задача Робота, у неё свой список (1.163.0) */
       var t = x.kind === "robot" ? ROBOTS.robotById(x.id) : algoById(x.id);
-      return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n };
+      return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n, had: had };
     });
-    var weak = lines.slice().sort(function(a, b){ return a.ok - b.ok || a.n - b.n; });
+    var weak = lines.slice().sort(function(a, b){
+      return (a.ok / Math.max(1, a.had)) - (b.ok / Math.max(1, b.had)) || a.n - b.n;
+    });
 
     out += '<div class="card"><h3>📊 Как группа прошла вариант ' + esc(ex.title) + '</h3>' +
       '<p class="dim">Код <b>' + esc(seed) + '</b>' +
@@ -16919,15 +16932,17 @@ function groupVarReportHTML(rows){
 
     out += '<div class="exmap">';
     weak.slice(0, 8).forEach(function(l){
-      var st = l.ok === 0 ? "no" : (l.ok * 2 <= mine.length ? "part" : "yes");
+      var st = !l.had ? "soon" : l.ok === 0 ? "no" : (l.ok * 2 <= l.had ? "part" : "yes");
       out += '<div class="exrow ' + st + '"><span class="exn">' + l.n + '</span>' +
         '<span class="ext">' + esc(l.t) +
         '<span class="vartask">' + esc(l.title) + '</span></span>' +
-        '<span class="exact"><span class="excnt">закрыли ' + l.ok + ' из ' + mine.length +
+        '<span class="exact"><span class="excnt">закрыли ' + l.ok + ' из ' + l.had +
+        (l.had < mine.length ? ' · у ' + (mine.length - l.had) + ' номера не было: вариант собран до того, ' +
+          'как он появился' : '') +
         '</span></span></div>';
     });
     out += '</div>';
-    var allOk = lines.filter(function(l){ return l.ok === mine.length; }).length;
+    var allOk = lines.filter(function(l){ return l.had && l.ok === l.had; }).length;
     out += '<p class="dim">Показаны восемь самых трудных номеров из ' + lines.length +
       '. Закрыли все, кто собирал: ' + allOk + '.</p></div>';
   });

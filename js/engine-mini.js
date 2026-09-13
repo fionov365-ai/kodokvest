@@ -1342,11 +1342,21 @@ function parseFString(raw, line){
       if (depth > 0) raise("SyntaxError", "В f-строке не закрыта фигурная скобка.", line);
       i++;
       var split = splitFormatSpec(code);
-      var body = split.code.trim(), conv = null;
+      var body = split.code, conv = null;
       /* {x!r} — показать как repr, {x!s} — как str. В Python это «конверсия». */
-      var cm = /^(.*[^!])!([rsa])$/.exec(body);
-      if (cm){ body = cm[1].trim(); conv = cm[2]; }
-      parts.push({ code: body, spec: split.spec.trim(), conv: conv, line: line });
+      var cm = /^(.*[^!])!([rsa])\s*$/.exec(body);
+      if (cm){ body = cm[1]; conv = cm[2]; }
+      /* {x=} — «самодокументирующее» выражение (Python 3.8): печатается сам
+         текст до «=» включительно, с пробелами как написано, а за ним значение —
+         через repr, если нет ни конверсии, ни формата. До 13.09.2026 движок
+         молча печатал одно значение («5» вместо «x=5») — расхождение с python3.
+         «==», «!=», «<=», «>=» в конце выражения — не этот случай. */
+      if (/(^|[^=!<>])=\s*$/.test(body)){
+        parts.push({ text: body });
+        body = body.replace(/=\s*$/, "");
+        if (!conv && !split.spec.trim()) conv = "r";
+      }
+      parts.push({ code: body.trim(), spec: split.spec.trim(), conv: conv, line: line });
       continue;
     }
     if (c === "}"){ if (raw[i+1] === "}"){ buf += "}"; i += 2; continue; } buf += "}"; i++; continue; }

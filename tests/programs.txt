@@ -1569,3 +1569,15 @@ x, *tail = (10, 20, 30)
 print(x, tail)
 for head, *others in [[1, 2, 3], [4, 5]]:
     print(head, others)
+### fstring_selfdoc
+x = 5
+name = "аня"
+price = 3.14159
+print(f"{x=}")
+print(f"{ x = }")
+print(f"{name=}")
+print(f"{price=:.2f}")
+print(f"{name=!s}")
+print(f"{x + 1=}")
+print(f"{x==5}")
+print(f"{x>=3} {x!r}")

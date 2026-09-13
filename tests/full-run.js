@@ -7283,6 +7283,38 @@ function checkEncoding(){
           bad("[группа-вариант] в отчёте названы ученики — это лидерборд, а не разбор заданий");
       }
 
+      /* ⚠️ Вариант ОГЭ, собранный до 1.163.0, не знает Робота на номере 15.
+         Такой ученик не «не закрыл» 15-й — номера у него не было, и в
+         знаменатель он не идёт. Иначе отчёт показывает группе провал там, где
+         задания не давали. */
+      {
+        const seed = "OGEOGE";
+        const itemsNew = g.variantBuild("oge", seed);
+        const itemsOld = itemsNew.map(x => x.n === 15 ? { n: 15, t: x.t, id: null, dup: 0, why: "решается в разделе «Робот»" } : x);
+        const mk = (items, done) => {
+          const st = g.ensureShape({});
+          st.vtask = { oge: { seed: seed, mins: 0, at: Date.now(), due: "" } };
+          st.variant = { oge: { ex:"oge", seed: seed, at: Date.now(), mins:0, endAt:0, closed:1,
+                                items: items, done: done, seen: {}, sent: {} } };
+          return st;
+        };
+        /* всё закрыто, кроме 15-го: строка 15 обязана оказаться среди трудных */
+        const allBut15 = {};
+        itemsNew.forEach(x => { if (x.id && x.n !== 15) allBut15[x.n] = 1; });
+        g.groupState.rows = [
+          g.groupRow("var-a", mk(itemsNew, Object.assign({}, allBut15))),
+          g.groupRow("var-b", mk(itemsOld, Object.assign({}, allBut15)))
+        ];
+        g.screenGroup(); await tick();
+        const card = Array.prototype.slice.call(doc.querySelectorAll(".card"))
+          .filter(c => /Как группа прошла вариант ОГЭ/.test(c.textContent))[0];
+        const row15 = card && Array.prototype.slice.call(card.querySelectorAll(".exrow"))
+          .filter(r => /^15/.test(r.textContent.trim()))[0];
+        if (!row15) bad("[группа-вариант] в отчёте по ОГЭ нет строки номера 15");
+        else if (!/закрыли 0 из 1/.test(row15.textContent) || !/номера не было/.test(row15.textContent))
+          bad("[группа-вариант] ученик без номера 15 посчитан как не закрывший его: " + row15.textContent.trim());
+      }
+
       g.groupState.rows = null;
       g.grpVarState.note = "";
       try { fs.rmSync(vDir, { recursive:true, force:true }); } catch(e){}
@@ -10792,7 +10824,8 @@ function checkEncoding(){
     /* 2. Каждая задача формата ОГЭ: поле бесконечное, есть поле «очень больших
        длин» (сторона от 30 и проход длиннее 10), эталон — 2, заготовка — нет. */
     const ft = TS.filter(F.applies);
-    if (ft.length < 4) bad("[фипи-15] задач Робота формата ОГЭ " + ft.length + " — меньше четырёх");
+    /* порог тот же, что у тем экзамена (13.1а): пять задач */
+    if (ft.length < 5) bad("[фипи-15] задач Робота формата ОГЭ " + ft.length + " — меньше пяти");
     const longGap = rows => {
       const lines = rows.concat(rows[0].split("").map((_, x) => rows.map(r => r[x]).join("")));
       return lines.some(l => /#\.{11,}#/.test(l));
@@ -10851,6 +10884,19 @@ function checkEncoding(){
         const want = rows.map((l, y) => l.split("").map((c, x) =>
           c === "#" ? "#" : (y === ry && rows[y - 1][x] === "#") ? "*" : ".").join("")).join("\n");
         if (painted(tw, rows).join("\n") !== want) bad("[фипи-15] «Под стеной с проходом» на поле " + i + " закрашивает не то");
+      });
+      const tk = byId("rb-oge-corridor");
+      if (!tk) bad("[фипи-15] нет «Коридора с двумя проходами»");
+      else [tk.field].concat(tk.more).forEach((rows, i) => {
+        const ry = rows.findIndex(l => l.includes("@"));
+        const want = rows.map((l, y) => l.split("").map((c, x) =>
+          c === "#" ? "#" : (y === ry && rows[y - 1][x] === "#" && rows[y + 1][x] === "#") ? "*" : ".").join("")).join("\n");
+        if (painted(tk, rows).join("\n") !== want) bad("[фипи-15] «Коридор с двумя проходами» на поле " + i + " закрашивает не то");
+        const upper = rows[ry - 1], lower = rows[ry + 1];
+        for (let x = 0; x < upper.length; x++)
+          if (upper[x] === "." && lower[x] === "." && upper.slice(0, x).includes("#") && upper.slice(x).includes("#") &&
+              lower.slice(0, x).includes("#") && lower.slice(x).includes("#"))
+            { bad("[фипи-15] в «Коридоре» на поле " + i + " проходы перекрываются — условие обещает, что нет"); break; }
       });
 
       /* 4. Правила — каждое своим случаем, на образцах ФИПИ. */

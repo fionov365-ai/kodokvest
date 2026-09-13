@@ -3502,11 +3502,17 @@ code += raw[i]; i++;
 if (depth > 0) raise("SyntaxError", "В f-строке не закрыта фигурная скобка.", line);
 i++;
 var split = splitFormatSpec(code);
-var body = split.code.trim(), conv = null;
+var body = split.code, conv = null;
 
-var cm = /^(.*[^!])!([rsa])$/.exec(body);
-if (cm){ body = cm[1].trim(); conv = cm[2]; }
-parts.push({ code: body, spec: split.spec.trim(), conv: conv, line: line });
+var cm = /^(.*[^!])!([rsa])\s*$/.exec(body);
+if (cm){ body = cm[1]; conv = cm[2]; }
+
+if (/(^|[^=!<>])=\s*$/.test(body)){
+parts.push({ text: body });
+body = body.replace(/=\s*$/, "");
+if (!conv && !split.spec.trim()) conv = "r";
+}
+parts.push({ code: body.trim(), spec: split.spec.trim(), conv: conv, line: line });
 continue;
 }
 if (c === "}"){ if (raw[i+1] === "}"){ buf += "}"; i += 2; continue; } buf += "}"; i++; continue; }
@@ -14522,6 +14528,16 @@ make(30, 6, 14, 26, 4, 13)
 }
 function mapTask(make){ return { field: make(7, 2, 2, 5, 2, 1), more: cornerSet(make) }; }
 
+function corridor(L, ap, al, bp, bl){
+var g = grid(L + 2 * M, M + 3 + M);
+for (var i = 0; i < L; i++){
+if (i < ap || i >= ap + al) g[M][M + i] = "#";
+if (i < bp || i >= bp + bl) g[M + 2][M + i] = "#";
+}
+g[M + 1][M] = "@";
+return rows(g);
+}
+
 var up   = function(){ return flipY(corner.apply(null, arguments)); };
 var left = function(){ return transpose(corner.apply(null, arguments)); };
 var A = mapTask(corner), B = mapTask(up), C = mapTask(left);
@@ -14647,6 +14663,36 @@ hints: [
 "Вдоль вертикальной стены: «пока слева стена» (закрашивать), «пока слева свободно» (проход), «пока снизу свободно» (закрашивать до угла).",
 "Вдоль горизонтальной: «пока снизу стена» (закрашивать, шаг вправо), «пока снизу свободно» (проход), «пока снизу стена» (до конца).",
 "Угол закрашивает первый цикл вдоль горизонтальной стены: предыдущий остановился в углу, ещё не закрасив его."
+]
+},
+{
+id: "rb-oge-corridor", emoji: "🚇", title: "Коридор с двумя проходами", inf: true, fipi: true,
+tag: "формат ОГЭ · «и» и «или»",
+intro: "Две стены сразу, и проходы в них в разных местах. Одного условия не хватает — нужны связки.",
+goal: "Робот стоит у левого конца коридора высотой в одну клетку: сверху и снизу горизонтальные стены " +
+"одинаковой длины. В каждой стене ровно один проход, и проходы не друг над другом. Закрась все клетки " +
+"коридора, над которыми стена И под которыми стена, включая клетку Робота. Клетки у проходов остаются чистыми.",
+list: [
+"Длина стен, места и ширина проходов заранее неизвестны",
+"Проходы не у концов стен и не перекрываются",
+"Коридор кончается там, где кончаются обе стены; дальше поле бесконечное",
+"Конечное место Робота неважно, разбиться и зациклиться нельзя"
+],
+field: corridor(10, 2, 2, 6, 2),
+more: [corridor(4, 1, 1, 2, 1), corridor(6, 1, 2, 4, 1), corridor(8, 5, 2, 1, 3), corridor(32, 3, 12, 17, 13)],
+starter: "нц пока сверху стена\n  закрасить\n  вправо\nкц\n",
+solution: "нц пока (сверху стена) или (снизу стена)\n  если (сверху стена) и (снизу стена) то\n    закрасить\n  все\n  вправо\nкц\n",
+note: "Две связки делают здесь две разные работы, и перепутать их — ровно та ошибка, ради которой задача " +
+"написана. «Или» в цикле отвечает на вопрос «коридор ещё не кончился?»: пока хоть одна стена есть, " +
+"идём. «И» в условии отвечает на «красить ли эту клетку?»: только если стены с обеих сторон. Заготовка " +
+"спрашивает только про верхнюю стену и останавливается у первого же прохода. А кто напишет «или» и там, " +
+"и там, закрасит клетки у проходов — на коротких проходах это пара лишних клеток, а на длинных больше " +
+"десяти, и эксперт поставит 0.",
+hints: [
+"Цикл должен идти, пока коридор не кончился: «нц пока (сверху стена) или (снизу стена)».",
+"Красить надо не каждую клетку, а только ту, где стены с обеих сторон, — это «если … и … то».",
+"Шаг «вправо» стоит внутри цикла, но ВНЕ «если»: идти надо и мимо проходов.",
+"Условия со связками пишутся в скобках: «(сверху стена) и (снизу стена)»."
 ]
 }
 ]);
@@ -15734,13 +15780,13 @@ function reasonHTML(g){
 if (g.broke) return BROKE_WHY[g.broke.why] +
 (g.broke.field ? " Так вышло на скрытом поле №" + g.broke.field + "." : "");
 if (g.score === 2) return "На всех " + g.total + " полях закрашено ровно нужное — " +
-"и на поле со стенами по 30 клеток.";
+"и на поле с очень длинными стенами и проходами.";
 var h = "Алгоритм завершается и Робот цел. Больше всего ошибок на одном поле: " +
 "лишних — " + g.maxExtra + " " + kl(g.maxExtra) + ", пропущено — " + g.maxMissed + " " + kl(g.maxMissed) + ". ";
 return h + (g.score === 1
 ? "Это не больше 10 — на 1 балл."
 : "Больше 10 — это 0: эксперт считает ошибку при очень длинных стенах и проходах, " +
-"а на нашем поле со стенами по 30 клеток она уже переросла порог.");
+"а на нашем поле с очень длинными стенами она уже переросла порог.");
 }
 
 function verdictHTML(g){
@@ -23326,7 +23372,7 @@ h += '<p><b>0 из ' + F.MAX + ' баллов</b> — ответ не сдан �
 else
 h += '<p><b>' + r.s + ' из ' + F.MAX + ' баллов.</b> ' + A.esc(F.reasonHTML(F.unpack(r))) + '</p>';
 return h + '<p class="dim">Правила — ' + A.esc(F.DOC.title) + ', ' + F.DOC.pages + '. ' +
-'Скрытые поля, среди них со стенами по 30 клеток, ты не видел — как и на экзамене.</p></div>';
+'Скрытые поля, среди них с очень длинными стенами и проходами, ты не видел — как и на экзамене.</p></div>';
 }
 
 function programCardHTML(v){
@@ -41409,7 +41455,10 @@ Object.keys(st.variant || {}).forEach(function(k){
 var v = (st.variant || {})[k];
 if (!v || !v.seed) return;
 out[k] = { seed: v.seed, mins: v.mins || 0, closed: v.closed ? 1 : 0,
-done: v.done || {}, sent: v.sent || {} };
+done: v.done || {}, sent: v.sent || {},
+
+has: (v.items || []).filter(function(x){ return x.id; })
+.map(function(x){ return x.n; }) };
 });
 return out;
 })(),
@@ -41525,10 +41574,17 @@ var items = VARIANT.buildItems(exId, seed).filter(function(x){ return x.id; });
 var lines = items.map(function(x){
 var n = mine.filter(function(r){ return ((r.vr[exId] || {}).done || {})[x.n]; }).length;
 
+var had = mine.filter(function(r){
+var h = (r.vr[exId] || {}).has;
+return !Array.isArray(h) || h.indexOf(x.n) >= 0;
+}).length;
+
 var t = x.kind === "robot" ? ROBOTS.robotById(x.id) : algoById(x.id);
-return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n };
+return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n, had: had };
 });
-var weak = lines.slice().sort(function(a, b){ return a.ok - b.ok || a.n - b.n; });
+var weak = lines.slice().sort(function(a, b){
+return (a.ok / Math.max(1, a.had)) - (b.ok / Math.max(1, b.had)) || a.n - b.n;
+});
 
 out += '<div class="card"><h3>📊 Как группа прошла вариант ' + esc(ex.title) + '</h3>' +
 '<p class="dim">Код <b>' + esc(seed) + '</b>' +
@@ -41551,15 +41607,17 @@ out += '<p class="dim">⚠️ Вариант собрали меньше пят�
 
 out += '<div class="exmap">';
 weak.slice(0, 8).forEach(function(l){
-var st = l.ok === 0 ? "no" : (l.ok * 2 <= mine.length ? "part" : "yes");
+var st = !l.had ? "soon" : l.ok === 0 ? "no" : (l.ok * 2 <= l.had ? "part" : "yes");
 out += '<div class="exrow ' + st + '"><span class="exn">' + l.n + '</span>' +
 '<span class="ext">' + esc(l.t) +
 '<span class="vartask">' + esc(l.title) + '</span></span>' +
-'<span class="exact"><span class="excnt">закрыли ' + l.ok + ' из ' + mine.length +
+'<span class="exact"><span class="excnt">закрыли ' + l.ok + ' из ' + l.had +
+(l.had < mine.length ? ' · у ' + (mine.length - l.had) + ' номера не было: вариант собран до того, ' +
+'как он появился' : '') +
 '</span></span></div>';
 });
 out += '</div>';
-var allOk = lines.filter(function(l){ return l.ok === mine.length; }).length;
+var allOk = lines.filter(function(l){ return l.had && l.ok === l.had; }).length;
 out += '<p class="dim">Показаны восемь самых трудных номеров из ' + lines.length +
 '. Закрыли все, кто собирал: ' + allOk + '.</p></div>';
 });

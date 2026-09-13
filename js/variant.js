@@ -756,7 +756,7 @@ function robotCardHTML(v){
   else
     h += '<p><b>' + r.s + ' из ' + F.MAX + ' баллов.</b> ' + A.esc(F.reasonHTML(F.unpack(r))) + '</p>';
   return h + '<p class="dim">Правила — ' + A.esc(F.DOC.title) + ', ' + F.DOC.pages + '. ' +
-    'Скрытые поля, среди них со стенами по 30 клеток, ты не видел — как и на экзамене.</p></div>';
+    'Скрытые поля, среди них с очень длинными стенами и проходами, ты не видел — как и на экзамене.</p></div>';
 }
 /* Задание 16 — программа (js/fipi16.js). */
 function programCardHTML(v){
