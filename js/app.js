@@ -14505,12 +14505,22 @@ function screenAbout(){
         '<li>✈️ Работает без интернета</li>' +
         '<li>🔐 Ни почты, ни телефона</li>' +
       '</ul>' +
-      /* Прямая дорога взрослому. Вывеску читает чаще всего он, а не ребёнок,
-         и вопрос «а мне-то что с этого» у него возникает на первом же экране.
-         Раньше ответ лежал за четырьмя разделами вниз, и фаундер дважды его
-         не нашёл — значит не найдёт и родитель. */
-      '<p class="landjump">Родитель, учитель, репетитор? ' +
-      '<button class="linkjump" data-land="adults">Вот ваш кабинет →</button></p>' +
+      /* Развилка по роли — та же, что на /vitrina/ (13.09.2026, схема лучших
+         self-serve сайтов, rynok-i-rov-2026-09-12.md § 6в). Рассылаемый адрес
+         открывает ЭТУ вывеску, а не витрину, и без развилки новая схема
+         человеку по ссылке не видна.
+         ⚠️ Одной строкой на месте прежней «Родитель, учитель, репетитор? Вот
+         ваш кабинет →»: левая колонка первого экрана и так длиннее правой
+         (замер 13.09.2026 на 1440 px: 859 против 753), новый блок сделал бы
+         дыру справа больше (pravila-sajta.md § 6).
+         Родителю — проверка «что умеет сам»: бесплатный вход и результат без
+         знания Python (§ 2.3, проверка (2)). Репетитору — его страница сайта:
+         настоящая ссылка, человек вправе открыть её в новой вкладке. */
+      '<div class="landroles"><span>Кто вы:</span>' +
+        '<button class="rolepill" data-land="' + (started || known ? "on" : "try") + '">Я ученик</button>' +
+        '<button class="rolepill" data-land="parent">Я родитель</button>' +
+        '<a class="rolepill" href="repetitoru/">Я репетитор или учитель</a>' +
+      '</div>' +
       numsHTML +
     '</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
   '</section>';
@@ -14715,11 +14725,7 @@ function screenAbout(){
       var k = b.getAttribute("data-land");
       if (k === "on") return screenWorlds();
       if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-      if (k === "adults"){
-        var a = document.getElementById("adults");
-        if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
-        return;
-      }
+      if (k === "parent") return screenProverka();
       /* ⚠️ Ведёт СРАЗУ на вкладку ЕГЭ, а не на «Темы»: пришедший с вывески за
          экзаменом не должен искать его второй раз уже внутри продукта. */
       if (k === "exams") return openExamMap("ege");

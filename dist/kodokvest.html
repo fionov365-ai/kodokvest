@@ -1616,7 +1616,13 @@ background:linear-gradient(var(--acc-lt),var(--acc-lt)) 0 96%/100% .14em no-repe
 .landcta{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0}
 .landcta .bigbtn:first-child{box-shadow:0 10px 30px -10px var(--acc)}
 .landsub{margin:16px 0 0;font-size:13.5px;color:var(--faint)}
-.landjump{margin:18px 0 0;font-size:13.5px;color:var(--faint)}
+.landroles{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:16px 0 0;font-size:13.5px;color:var(--faint)}
+.landroles>span{margin-right:2px}
+.rolepill{display:inline-flex;align-items:center;min-height:32px;padding:5px 12px;border-radius:999px;
+border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px;
+font-weight:600;text-decoration:none;cursor:pointer}
+.rolepill:hover{border-color:var(--acc)}
+@media (max-width:640px){.rolepill{min-height:44px;padding:8px 14px}}
 .linkjump{background:none;border:none;padding:0;font:inherit;font-size:13.5px;
 font-weight:600;color:var(--accink);cursor:pointer;text-decoration:underline;
 text-underline-offset:3px;text-decoration-thickness:1px}
@@ -40144,8 +40150,11 @@ h += '<section class="landhero rv">' +
 '<li>🔐 Ни почты, ни телефона</li>' +
 '</ul>' +
 
-'<p class="landjump">Родитель, учитель, репетитор? ' +
-'<button class="linkjump" data-land="adults">Вот ваш кабинет →</button></p>' +
+'<div class="landroles"><span>Кто вы:</span>' +
+'<button class="rolepill" data-land="' + (started || known ? "on" : "try") + '">Я ученик</button>' +
+'<button class="rolepill" data-land="parent">Я родитель</button>' +
+'<a class="rolepill" href="repetitoru/">Я репетитор или учитель</a>' +
+'</div>' +
 numsHTML +
 '</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
 '</section>';
@@ -40267,11 +40276,7 @@ b.onclick = function(){
 var k = b.getAttribute("data-land");
 if (k === "on") return screenWorlds();
 if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-if (k === "adults"){
-var a = document.getElementById("adults");
-if (a && a.scrollIntoView) a.scrollIntoView({ behavior:"smooth", block:"start" });
-return;
-}
+if (k === "parent") return screenProverka();
 
 if (k === "exams") return openExamMap("ege");
 screenRoles();
