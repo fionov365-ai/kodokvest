@@ -5354,6 +5354,7 @@ function checkEncoding(){
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let variantChecked = 0;
   let proverkaChecked = 0;
+  let zqChecked = 0;
   let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
 
@@ -11308,6 +11309,212 @@ function checkEncoding(){
     if (problems.length === p0) proverkaChecked++;
   }
 
+  /* --- 13д. [защита-кода] вопросы по своей программе (js/screens-zashchita.js) ---
+     Обещания, на которых стоит экран:
+       1) у эталонов всех 11 проектов и 20 уроков, взятых вслепую, хоть один
+          посчитанный вопрос — механизм не молчит на длинном выводе и input()
+          (правило § 4.30: соседний myPredRun молчал бы);
+       2) ответ совпадает с независимым прогоном — считаем его здесь ЗАНОВО,
+          не через модуль: другое число вставляем сами, цикл считаем шагами,
+          переменную печатаем вставленной строкой;
+       3) неисполнимая программа получает честное «почему», а не пустоту;
+       4) ребёнку ответы спрятаны, взрослому видны; слова «доказал» и
+          «списал» нет, а «не доказательство, а повод поговорить» — есть. */
+  if (g.zashchita && w.MiniPy){
+    const p0 = problems.length;
+    const Z = g.zashchita, R = w.Runtime.get("mini"), MP = w.MiniPy;
+    const runOut = (code, stdin) => {
+      const r = R.run(code, { stdin: (stdin || []).slice() });
+      return r.error || r.awaitingInput ? null : String(r.output || "").replace(/\n+$/, "");
+    };
+    /* ответ вопроса — заново, своим способом */
+    const recount = (code, stdin, q) => {
+      if (q.kind === "mut"){
+        if (code.slice(q.at, q.at + String(q.from).length) !== String(q.from)) return { bad: "число не на своём месте" };
+        const was = runOut(code, stdin), out = runOut(code.slice(0, q.at) + q.to + code.slice(q.at + String(q.from).length), stdin);
+        if (out === null) return { bad: "изменённая программа не работает" };
+        if (out === was) return { bad: "изменённая программа печатает то же самое — вопрос ничего не проверяет" };
+        return { a: q.row !== undefined ? out.split("\n")[q.row] : out };
+      }
+      if (q.kind === "loop"){
+        /* счётчик вставлен в саму программу перед первой строкой тела: шаги
+           движка тут не годятся — lambda в той же строке даёт лишние шаги */
+        const ls = code.split("\n"), ind = (ls[q.bodyLine - 1].match(/^[ \t]*/) || [""])[0];
+        ls.splice(q.bodyLine - 1, 0, ind + "ZQN[0] += 1");
+        const out = runOut("ZQN = [0]\n" + ls.join("\n") + "\nprint(\"@@zq\", ZQN[0])", stdin);
+        const m = out === null ? null : /@@zq (\d+)\s*$/.exec(out);
+        return m ? { a: m[1] } : { bad: "не удалось вставить счётчик цикла" };
+      }
+      if (q.kind === "var"){
+        const ls = code.split("\n"), ind = (ls[q.line - 1].match(/^[ \t]*/) || [""])[0];
+        ls.splice(q.line, 0, ind + 'print("@@zq", repr(' + q.name + '))');
+        const out = runOut(ls.join("\n"), stdin);
+        if (out === null) return { bad: "не удалось вставить печать переменной" };
+        /* подсказка input() печатается без перевода строки — метку ищем внутри строки */
+        const hits = out.split("\n").filter(x => x.indexOf("@@zq ") >= 0).map(x => x.slice(x.indexOf("@@zq ") + 5));
+        if (hits.length !== q.times) return { bad: "строка выполнилась " + hits.length + " раз, а в вопросе " + q.times };
+        return { a: hits[hits.length - 1] };
+      }
+      return { bad: "неизвестный вид вопроса " + q.kind };
+    };
+    const verify = (label, code, stdin) => {
+      const m = Z.make(code, (stdin || []).join("\n"));
+      if (!m.ok){ bad("[защита-кода] у «" + label + "» ни одного вопроса: " + m.title + " — " + m.text); return 0; }
+      m.qs.forEach(q => {
+        if (q.kind === "var" && q.a.charAt(0) === "<")
+          bad("[защита-кода] «" + label + "»: спрошен объект — у python3 в его записи адрес памяти: " + q.a);
+        const r = recount(code, stdin, q);
+        if (r.bad) bad("[защита-кода] «" + label + "», вопрос «" + q.q + "»: " + r.bad);
+        else if (r.a !== q.a) bad("[защита-кода] «" + label + "», вопрос «" + q.q + "»: ответ " + JSON.stringify(q.a) +
+                                  ", а прогон даёт " + JSON.stringify(r.a));
+      });
+      return m.qs.length;
+    };
+
+    /* 13д.1. все проекты */
+    const PR = w.PROJECTS || [];
+    if (PR.length !== 11) bad("[защита-кода] проектов не 11: " + PR.length);
+    PR.forEach(p => { const l = p.steps[p.steps.length - 1]; verify("проект " + p.title, l.solution, l.stdin || []); });
+
+    /* 13д.2. двадцать уроков вслепую. Предусловие не зависит от модуля:
+       эталон работает, не случаен (семена 1 и 2 дают одно), и в нём есть то,
+       о чём спрашивают, — целое число в коде или цикл. Выбор — сдвигом от
+       фиксированного семени, чтобы прогон не мигал. */
+    const pool = [];
+    Object.keys(CONTENT).forEach(wk => Object.keys(CONTENT[wk]).forEach(id => {
+      const t = (CONTENT[wk][id] || {}).task;
+      if (!t || !t.solution || (t.files || []).length) return;
+      const stdin = t.stdin || [];
+      const o1 = R.run(t.solution, { stdin: stdin.slice(), seed: 1 }), o2 = R.run(t.solution, { stdin: stdin.slice(), seed: 2 });
+      if (o1.error || o1.awaitingInput || o1.output !== o2.output) return;
+      if (/(^|[^A-Za-z_0-9.])(random|randint|choice|shuffle)(?![A-Za-z_0-9])/.test(t.solution)) return;
+      /* число спрашивается только через вывод: у рисунка черепашки чисел много, а печатать нечего */
+      const hasNum = String(o1.output || "").trim() && /(^|[^A-Za-z_0-9.])\d+/.test(g.codeSkeleton(t.solution));
+      if (!hasNum && !/(^|\n)[ \t]*(for|while)[ \t(]/.test(t.solution)) return;
+      pool.push({ id, code: t.solution, stdin });
+    }));
+    let seed = 20260913;
+    const pick = pool.map(x => { seed = (seed * 1103515245 + 12345) % 2147483648; return { x, k: seed }; })
+                     .sort((a, b) => a.k - b.k).slice(0, 20).map(y => y.x);
+    if (pick.length < 20) bad("[защита-кода] годных уроков для выборки меньше 20: " + pick.length);
+    pick.forEach(x => verify("урок " + x.id, x.code, x.stdin));
+
+    /* 13д.3. неисполнимое — честно и по делу */
+    [["ввод без ответов", "name = input()\nprint(name * 2)", /ввод/i],
+     ["случайность", "import random\nprint(random.randint(1, 6))", /случайн/i],
+     ["ошибка", "x = 10\nprint(x / 0)", /ошибк/i],
+     ["не разобрал", "x = = 1\nprint(x)", /не разобрал/i],
+     ["файл", "f = open(\"оценки.txt\")\nprint(f.read())", /файл/i],
+     ["нечего спросить", "print(\"привет\")", /нечего/i],
+     ["пусто", "   ", /нет/i]].forEach(([k, code, re]) => {
+      const m = Z.make(code, "");
+      if (m.ok) bad("[защита-кода] «" + k + "»: неисполнимая программа получила вопросы");
+      else if (!re.test(m.title + " " + m.text) || String(m.text).trim().length < 20)
+        bad("[защита-кода] «" + k + "»: отказ не объясняет причину: " + m.title + " — " + m.text);
+    });
+    /* 13д.3а. три ловушки, найденные этой же проверкой 13.09.2026 */
+    { /* lambda в строке тела: движок даёт шаг на каждый её вызов */
+      const c1 = "nums = [5, 2, 8]\nfor i in range(3):\n    top = sorted(nums, key=lambda v: -v)[0]\nprint(top + i)";
+      const m1 = Z.make(c1, "");
+      const lq = m1.ok && m1.qs.find(q => q.kind === "loop");
+      if (!lq || lq.a !== "3") bad("[защита-кода] lambda в теле цикла сбила счёт: " + (lq ? lq.a : "вопроса нет"));
+      verify("lambda в цикле", c1, []);
+      /* try: строка могла начаться и не закончиться */
+      const c2 = "total = 0\nfor a in [\"1\", \"x\", \"2\", \"y\"]:\n    try:\n        total += int(a)\n    except ValueError:\n        pass\nprint(total)";
+      const m2 = Z.make(c2, "");
+      if (m2.ok && m2.qs.some(q => q.kind === "var" && q.line === 4)) bad("[защита-кода] спрошена переменная внутри try — там строка прерывается исключением");
+      verify("try в цикле", c2, []);
+      /* объект: адрес памяти вместо ответа */
+      const c3 = "class T:\n    pass\nt = T()\nx = 5 + 2\nprint(x)";
+      const m3 = Z.make(c3, "");
+      if (m3.ok && m3.qs.some(q => q.kind === "var" && q.name === "t")) bad("[защита-кода] спрошен объект — ответить на это нечем");
+    }
+    /* ответы на input() из поля — считаются */
+    { const m = Z.make("n = int(input())\nfor i in range(n):\n    print(i * 3)", "4");
+      if (!m.ok || !m.qs.some(q => q.kind === "loop" && q.a === "4")) bad("[защита-кода] ответы на input() из поля не учтены"); }
+
+    /* 13д.4. экран: ученик */
+    const kidCode = "total = 0\nfor i in range(5):\n    total += i * 2\nprint(total)";
+    g.screenZashchita({ mode: "kid", code: kidCode, stdin: [] }); await tick();
+    const app = () => doc.getElementById("app");
+    if (w.location.hash !== "#zashchita") bad("[защита-кода] у экрана нет своего адреса: «" + w.location.hash + "»");
+    const kidM = Z.make(kidCode, "");
+    const inputs = [...doc.querySelectorAll("[data-zqa]")];
+    if (!kidM.ok || inputs.length !== kidM.qs.length) bad("[защита-кода] у ученика полей ответа " + inputs.length + ", а вопросов " + (kidM.qs || []).length);
+    if (doc.querySelector("#zqout .docans")) bad("[защита-кода] ребёнку ответы видны до проверки");
+    const ckb = doc.getElementById("zqcheck");
+    if (!ckb) bad("[защита-кода] у ученика нет кнопки «Проверить ответы»");
+    else {
+      inputs.forEach((el, i) => { el.value = kidM.qs[i].a; });
+      ckb.click(); await tick();
+      if (!/Понял свою программу/.test(app().textContent)) bad("[защита-кода] верные ответы не дали «Понял свою программу»");
+      doc.querySelectorAll("[data-zqa]").forEach(el => { el.value = "не знаю"; });
+      doc.getElementById("zqcheck").click(); await tick();
+      if (!/Стоит разобрать/.test(app().textContent)) bad("[защита-кода] неверные ответы не дали «Стоит разобрать»");
+      if (doc.querySelector("#zqout .docans")) bad("[защита-кода] после проверки ответы показаны без просьбы");
+      const rv = doc.getElementById("zqreveal");
+      if (!rv) bad("[защита-кода] после проверки нельзя посмотреть ответы");
+      else { rv.click(); await tick();
+        if (doc.querySelectorAll("#zqout .docans").length !== kidM.qs.length) bad("[защита-кода] «Показать ответы» показал не все ответы"); }
+    }
+    const kt = app().textContent;
+    if (!/не доказательство/.test(kt) || !/повод поговорить/.test(kt)) bad("[защита-кода] на экране не сказано «не доказательство, а повод поговорить»");
+    if (/списал|доказал/i.test(kt)) bad("[защита-кода] на экране слово «списал» или «доказал»");
+    if (!/не весь Python/.test(kt)) bad("[защита-кода] экран не говорит, что движок исполняет не весь Python");
+
+    /* 13д.5. экран: взрослый видит ответы и печатает */
+    doc.querySelector('[data-zqmode="adult"]').click(); await tick();
+    if (doc.querySelectorAll("#zqout .docans").length !== kidM.qs.length) bad("[защита-кода] взрослому видны не все ответы");
+    const prb = doc.getElementById("zqprint");
+    if (!prb) bad("[защита-кода] у взрослого нет листа на печать");
+    else { prb.click(); await tick();
+      const box = doc.getElementById("docbox"), lay = doc.getElementById("doc");
+      if (!box || box.innerHTML.indexOf("docpage") < 0 || (lay && lay.hidden)) bad("[защита-кода] лист на печать не открылся");
+      else if ((box.innerHTML.match(/class="docans"/g) || []).length !== kidM.qs.length) bad("[защита-кода] на листе не все ответы");
+      if (lay) lay.hidden = true; }
+
+    /* 13д.5а. заголовок называет настоящее число вопросов (§ 4.35): у
+       программы без целых чисел вопроса «замени число» нет, и «три вопроса»
+       было бы обещанием, которого нет */
+    { const c2 = "names = [\"Аня\", \"Боря\", \"Вера\"]\nlongest = \"\"\nfor name in names:\n    if len(name) > len(longest):\n        longest = name\nprint(longest)";
+      const m2 = Z.make(c2, "");
+      g.screenZashchita({ mode: "kid", code: c2, stdin: [] }); await tick();
+      const h3 = (doc.querySelector("#zqout h3") || {}).textContent || "";
+      if (!m2.ok || m2.qs.length === 3 || h3.indexOf(String(m2.qs.length) + " вопрос") < 0)
+        bad("[защита-кода] заголовок не называет настоящее число вопросов: «" + h3 + "», вопросов " + (m2.qs || []).length); }
+
+    /* 13д.6. неисполнимая программа на экране — сообщение, а не пустота */
+    g.screenZashchita({ mode: "kid", code: "name = input()\nprint(name)", stdin: [] }); await tick();
+    const why = doc.querySelector("#zqout .zqwhy");
+    if (!why || why.textContent.trim().length < 30) bad("[защита-кода] неисполнимая программа на экране — пустое место");
+
+    /* 13д.7. двери */
+    g.screenTrain(); await tick();
+    const tc = doc.querySelector('[data-train="zashchita"]');
+    if (!tc) bad("[защита-кода] в «Тренировках» нет карточки");
+    else { tc.click(); await tick();
+      if (!doc.getElementById("zqcode")) bad("[защита-кода] карточка «Тренировок» не открыла экран"); }
+    g.screenAdult(); await tick();
+    const ad = doc.querySelector("[data-zqopen]");
+    if (!ad) bad("[защита-кода] в кабинете взрослого нет карточки");
+    else { ad.click(); await tick();
+      if (!doc.querySelector('[data-zqmode="adult"].on')) bad("[защита-кода] дверь из кабинета открыла не режим взрослого"); }
+    const rep = fs.readFileSync(path.join(__dirname, "..", "repetitoru", "index.html"), "utf8");
+    if (!/href="\.\.\/#zashchita"/.test(rep)) bad("[защита-кода] на /repetitoru/ нет двери в защиту");
+
+    /* 13д.8. собранный проект — в списке «взять из проекта», с ответами на input() */
+    { const projБыл = JSON.parse(JSON.stringify(g.state.projects || {}));
+      const pg = PR.find(p => (p.steps[p.steps.length - 1].stdin || []).length);
+      g.state.projects[pg.id] = { step: pg.steps.length, done: 1, doneAt: 5000, code: pg.steps[pg.steps.length - 1].solution };
+      const src = g.zqSources().find(x => x.from.indexOf(pg.title) >= 0);
+      if (!src) bad("[защита-кода] собранного проекта нет среди программ «взять из проекта»");
+      else if (!src.stdin.length || !Z.make(src.code, src.stdin.join("\n")).ok) bad("[защита-кода] проект из списка пришёл без ответов на input()");
+      g.state.projects = projБыл; }
+
+    viewReset(g);
+    if (problems.length === p0) zqChecked++;
+  }
+
   /* --- 14. чему движок научился --- */
   if (w.MiniPy){
     const p0 = problems.length;
@@ -11437,6 +11644,7 @@ function checkEncoding(){
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
   console.log(`проверка «что умеет сам»: ${proverkaChecked ? "да" : "нет"}`);
+  console.log(`защита своего кода: ${zqChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`адрес следует за экраном (кругооборот): ${routeChecked ? "да" : "нет"}`);
   console.log(`страницы сайта: ссылки и карта сайта: ${pagesChecked ? "да" : "нет"}`);

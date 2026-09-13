@@ -2569,7 +2569,7 @@ var PLACE_RU = {
   folio:"в портфолио", works:"на витрине", home:"на главном экране",
   world:"выбирает урок", train:"выбирает тренировку", guide:"читает инструкцию",
   account:"в профиле", trace:"смотрит, как шла работа", web:"в разделе «HTML и CSS»",
-  defense:"готовит проект к защите"
+  defense:"готовит проект к защите", zashchita:"на экране «Защита своего кода»"
 };
 /* Чем занят, по чужому снимку. serverAt — серверное время последней записи:
    сравнивать его с часами зрителя чуть нечестно, но дрейф часов много меньше
@@ -4171,6 +4171,12 @@ function trainCards(){
       why: "Десять задач по нарастающей, от счёта до классов, без подсказок. В конце — код из шестнадцати знаков: по нему итог откроется на телефоне взрослого, без регистрации.",
       when: "Когда надо узнать, что получается самому, — неважно, где учишься.",
       stat: typeof proverkaStat === "function" ? proverkaStat() : "" },
+    /* Рядом с проверкой по смыслу: та спрашивает «что умеет сам» на наших
+       задачах, эта — «понимает ли свою программу». go обёрткой — модуль ниже. */
+    { id:"zashchita", em:"🛡", title:"Защита своего кода", go: function(){ screenZashchita({ mode:"kid" }); },
+      why: "До трёх вопросов о твоей же программе: что напечатает, если поменять число, сколько раз повторится цикл, что окажется в переменной. Ответы считает движок.",
+      when: "Когда надо показать, что понимаешь свой код, а не только умеешь его запустить.",
+      stat: "без ИИ, программа никуда не уходит" },
     { id:"variant", em:"📝", title:"Пробный вариант", go: screenVariant,
       why: "Весь экзамен подряд, как в мае: по одной задаче на каждый номер и по порядку. Можно тренировкой, а можно в режиме экзамена — со временем, без подсказок и без ответа проверки.",
       when: "Когда темы решаются по отдельности, а целиком экзамен ни разу не пробовал.",
@@ -7843,7 +7849,7 @@ function myExamSources(){
     var dr = draftGet(id);
     if (!dr || dr.files.length !== 1) return;   /* вопрос про одну страницу кода */
     var l = CURRICULUM.byId(id);
-    out.push({ code: dr.files[0].code,
+    out.push({ code: dr.files[0].code, id: id,
                from: "твоя программа из урока " + l.num + " «" + l.title + "»" });
   });
   return out;
@@ -10165,6 +10171,34 @@ var PROVERKA = KVSCREENS.proverka({
 });
 var screenProverka = PROVERKA.screenProverka,
     proverkaStat = PROVERKA.proverkaStat;
+
+/* ================= защита своего кода =================
+   Своим файлом (js/screens-zashchita.js): зачем и почему это не
+   «доказательство» — в шапке того файла. Состояния не пишет вовсе.
+   Источники программ — те же, что у «Задачи по своей программе» (свои
+   программы и черновики сданных уроков без открытого решения), плюс
+   собранные проекты с ответами на input() из их последнего шага. */
+function zqSources(){
+  var out = myExamSources().map(function(x){
+    var l = x.id ? CURRICULUM.byId(x.id) : null;
+    var body = l ? (CONTENT["world" + l.world] || {})[l.id] : null;
+    return { code: x.code, from: x.from, stdin: ((body && body.task && body.task.stdin) || []).slice() };
+  });
+  projectsList().forEach(function(p){
+    if (!projectDone(p.id)) return;
+    var last = p.steps[p.steps.length - 1];
+    out.unshift({ code: projectState(p.id).code || last.solution, stdin: (last.stdin || []).slice(),
+                  from: "твой проект «" + p.title + "»" });
+  });
+  return out;
+}
+var ZASH = KVSCREENS.zashchita({
+  app: app, esc: esc, plural: plural, KIND_RU: KIND_RU,
+  codeSkeleton: codeSkeleton, enterScreen: enterScreen, setRoute: setRoute, refreshTop: refreshTop,
+  homeLabel: function(){ return homeLabel(); }, goHome: function(){ goHome(); },
+  screenTrain: function(){ screenTrain(); }, sources: zqSources
+});
+var screenZashchita = ZASH.screenZashchita;
 /* ================= мастерская: полка деталей и верстак =================
    Ставка Г из docs/foresight-2027.md § 3, дешёвый вход по § 12 п. 5:
    НЕ переписывать сто уроков в сквозную линию, а надстроить сверху.
@@ -11039,6 +11073,7 @@ function screenAdult(){
   g1 += heatHTML(S);
   g1 += paceStatHTML();
   g1 += PROVERKA.cardHTML(S);
+  g1 += ZASH.cardHTML();
 
   g2 += frameEditorHTML(f);
 
@@ -12683,6 +12718,7 @@ var ROUTES = [
   { h:"#algo",    place:"algo",    t:"Алгоритмы, ОГЭ и ЕГЭ",       open:function(){ screenAlgo(); } },
   { h:"#variant", place:"variant", t:"Пробный вариант экзамена",   open:function(){ screenVariant(); } },
   { h:"#proverka", place:"proverka", t:"Проверка: что умеет сам",  open:function(){ screenProverka(); } },
+  { h:"#zashchita", place:"zashchita", t:"Защита своего кода",     open:function(){ screenZashchita(); } },
   { h:"#shop",    place:"shop",    t:"Мастерская: полка и верстак",open:function(){ screenShop(); } },
   { h:"#sand",    place:"sand",    t:"Песочница",                  open:function(){ screenSandbox(); } },
   { h:"#path",    place:"path",    t:"Карта пути",                 open:function(){ screenPath(); } },
@@ -15364,7 +15400,7 @@ function kidRender(savedNote){
            замер занятий и запись авторства читали своё состояние напрямую, и
            снимок в них проведён отдельным доводом (zanAll/authorList).
            Разбор трёх ролей. */
-        heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false) + PROVERKA.cardHTML(st));
+        heatHTML(st) + paceStatHTML(st) + authorCardHTML(st, false) + PROVERKA.cardHTML(st) + ZASH.cardHTML());
 
   h += kidPaneHTML("frame",
     frameEditorHTML(frame()) +
@@ -18506,6 +18542,22 @@ var HELP = {
      закрыть прямо здесь: если не ответить, число придумают за нас. */
   /* Подсказка проверки отвечает взрослому раньше, чем ребёнку: взрослый
      приходит сюда с вопросом «сколько это баллов» и «можно ли верить». */
+  /* Подсказка защиты отвечает взрослому на два вопроса сразу: «можно ли
+     этому верить» и «что делать, если не ответил». */
+  zashchita: { t:"🛡 Защита своего кода", h:
+    '<h4>Что это</h4>' +
+    '<p>До трёх вопросов о программе ученика: что она напечатает, если заменить число; сколько раз ' +
+    'выполнится тело цикла; что окажется в переменной. Ответ не угадан — движок прогоняет ' +
+    'программу (или её копию с другим числом) прямо на этом устройстве.</p>' +
+    '<h4>Два режима</h4>' +
+    '<p><b>Отвечает ученик</b> — ответы спрятаны до конца, итог «понял» или «стоит разобрать». ' +
+    '<b>Смотрит взрослый</b> — вопросы сразу с ответами и лист на печать: Python знать не нужно.</p>' +
+    '<h4>Если не ответил</h4>' +
+    '<p>Это не доказательство, а повод поговорить. Спросите, как он думал: ошибиться в своём ' +
+    'коде может каждый, а взявший чужой код бывает, что понимает его.</p>' +
+    '<h4>Когда вопросов нет</h4>' +
+    '<p>Движок исполняет не весь Python. Экран назовёт причину: ввод без ответов, случайность, ' +
+    'ошибка, файл с данными или запись, которую движок не знает.</p>' },
   proverka: { t:"🔎 Проверка — что ребёнок умеет сам", h:
     '<h4>Что это</h4>' +
     '<p>Десять ступеней по нарастающей: счёт, текст, условие, циклы, списки, функции, словари, ' +
@@ -19499,6 +19551,7 @@ window.__game = {
   variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
   screenRobot: screenRobot, openRobot: openRobot,
   screenProverka: screenProverka, proverka: PROVERKA,
+  screenZashchita: screenZashchita, zashchita: ZASH, zqSources: zqSources,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
   solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,
   screenShop: screenShop, partsFrom: partsFrom, partsList: partsList, partAdd: partAdd,

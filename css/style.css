@@ -823,6 +823,17 @@ a.bigbtn{text-align:center;text-decoration:none}
 .deffield textarea{width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);
   border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font:inherit;resize:vertical}
 .deffield textarea:focus{outline:none;border-color:var(--acc)}
+/* Защита своего кода (js/screens-zashchita.js): поле программы и ответы —
+   во всю ширину карточки (§ 4.13), шрифт кода моноширинный. */
+.zqcode,.zqans{display:block;width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);
+  border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin:8px 0 4px;resize:vertical}
+.zqcode,textarea.zqans{font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+input.zqans{font:inherit}
+.zqcode:focus,.zqans:focus{outline:none;border-color:var(--acc)}
+.zqlist{padding-left:22px}
+.zqlist>li{margin:0 0 16px}
+.zqlist>li>b{display:block}
+.zqsrc{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px}
 .defdocs{display:grid;gap:12px}
 .defdoc{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0}
 .defdoc h3{margin:0 0 4px}
