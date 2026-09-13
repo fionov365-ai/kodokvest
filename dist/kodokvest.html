@@ -13928,8 +13928,8 @@ var DIRS = { "вверх":[0,-1], "вниз":[0,1], "влево":[-1,0], "впр
 var STOR = { "сверху":[0,-1], "снизу":[0,1], "слева":[-1,0], "справа":[1,0] };
 var MAX_STEPS = 20000;           
 
-function parseField(rows){
-var f = { w:0, h:rows.length, walls:{}, painted:{}, x:0, y:0, found:false };
+function parseField(rows, inf){
+var f = { w:0, h:rows.length, walls:{}, painted:{}, x:0, y:0, found:false, inf: !!inf };
 rows.forEach(function(row, y){
 var chars = Array.from(row);
 if (chars.length > f.w) f.w = chars.length;
@@ -13964,13 +13964,19 @@ function samePainted(a, b){
 var ka = paintedKeys(a), kb = paintedKeys(b);
 return ka.length === kb.length && ka.join(";") === kb.join(";");
 }
+function outside(f, x, y){ return x < 0 || y < 0 || x >= f.w || y >= f.h; }
 function free(f, dx, dy){
 var nx = f.x + dx, ny = f.y + dy;
-if (nx < 0 || ny < 0 || nx >= f.w || ny >= f.h) return false;
+if (outside(f, nx, ny)) return !!f.inf;
 return !f.walls[nx + "," + ny];
 }
 
 function err(line, msg){ return { line: line, msg: msg }; }
+function loopErr(line){
+var e = err(line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+e.loop = true;
+return e;
+}
 
 function tokens(s){
 return s.replace(/\(/g, " ( ").replace(/\)/g, " ) ").split(/\s+/).filter(Boolean);
@@ -14067,7 +14073,7 @@ return prog;
 }
 
 function run(text, field){
-var f = { w:field.w, h:field.h, walls:field.walls, painted:{}, x:field.x, y:field.y };
+var f = { w:field.w, h:field.h, walls:field.walls, painted:{}, x:field.x, y:field.y, inf: !!field.inf };
 Object.keys(field.painted).forEach(function(k){ f.painted[k] = 1; });
 var steps = 0, prog;
 try { prog = parse(text); }
@@ -14086,19 +14092,26 @@ function block(list){
 for (var i = 0; i < list.length; i++){
 var st = list[i];
 if (++steps > MAX_STEPS)
-throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+throw loopErr(st.line);
 if (st.t === "закрасить"){ f.painted[f.x + "," + f.y] = 1; continue; }
 if (DIRS[st.t]){
 var d = DIRS[st.t];
 if (!free(f, d[0], d[1]))
 throw err(st.line, "Робот разбился: «" + st.t + "» упирается в стену.");
+
+if (outside(f, f.x + d[0], f.y + d[1])){
+var away = err(st.line, "Робот ушёл далеко за стены. Поле на экзамене бесконечное: " +
+"цикл, который здесь дошёл бы до края, там никогда не остановится.");
+away.away = true;
+throw away;
+}
 f.x += d[0]; f.y += d[1]; continue;
 }
 if (st.t === "раз"){ for (var k = 0; k < st.n; k++) block(st.body); continue; }
 if (st.t === "пока"){
 while (cond(st.cond)){
 if (++steps > MAX_STEPS)
-throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+throw loopErr(st.line);
 block(st.body);
 }
 continue;
@@ -14463,6 +14476,181 @@ hints: [
 }
 
 ];
+
+(function(){
+var M = 2;                      
+function grid(w, h){
+var g = [];
+for (var y = 0; y < h; y++){ var r = []; for (var x = 0; x < w; x++) r.push("."); g.push(r); }
+return g;
+}
+function rows(g){ return g.map(function(r){ return r.join(""); }); }
+function flipY(rs){ return rs.slice().reverse(); }
+function transpose(rs){
+var out = [];
+for (var x = 0; x < rs[0].length; x++){
+var line = "";
+for (var y = 0; y < rs.length; y++) line += rs[y].charAt(x);
+out.push(line);
+}
+return out;
+}
+
+function wall(L, p, q){
+var g = grid(L + 2 * M, M + 2 + M);
+for (var i = 0; i < L; i++) if (i < p || i >= p + q) g[M][M + i] = "#";
+g[M + 1][M] = "@";
+return rows(g);
+}
+
+function corner(H, hp, hl, V, vp, vl){
+var x1 = M + H, g = grid(x1 + 1 + M, M + V + 1 + M);
+for (var i = 0; i < H; i++) if (i < hp || i >= hp + hl) g[M][M + i] = "#";
+g[M][x1] = "#";
+for (var j = 0; j < V; j++) if (j < vp || j >= vp + vl) g[M + 1 + j][x1] = "#";
+g[M + 1][M] = "@";
+return rows(g);
+}
+
+function cornerSet(make){
+return [
+make(3, 1, 1, 3, 1, 1),
+make(6, 1, 4, 4, 2, 1),
+make(9, 4, 4, 7, 1, 5),
+make(30, 6, 14, 26, 4, 13)
+];
+}
+function mapTask(make){ return { field: make(7, 2, 2, 5, 2, 1), more: cornerSet(make) }; }
+
+var up   = function(){ return flipY(corner.apply(null, arguments)); };
+var left = function(){ return transpose(corner.apply(null, arguments)); };
+var A = mapTask(corner), B = mapTask(up), C = mapTask(left);
+
+window.ROBOT_TASKS = window.ROBOT_TASKS.concat([
+{
+id: "rb-oge-wall", emoji: "🧱", title: "Под стеной с проходом", inf: true, fipi: true,
+tag: "формат ОГЭ · одна стена",
+intro: "Разминка перед форматом экзамена: одна стена, один проход, длины неизвестны. Поле бесконечное — держаться за край нельзя.",
+goal: "Над Роботом горизонтальная стена, он стоит под её левым концом. В стене ровно один проход. " +
+"Закрась все клетки непосредственно под стеной, включая ту, где стоит Робот. Клетки под проходом " +
+"остаются чистыми.",
+list: [
+"Длина стены, место и ширина прохода заранее неизвестны",
+"Проход не у самого края стены: слева и справа от него есть стена",
+"Поле бесконечное: за концом стены пусто, края поля нет",
+"Где Робот окажется в конце — неважно, но разбиться и зациклиться нельзя"
+],
+field: wall(9, 3, 2),
+more: [wall(3, 1, 1), wall(6, 1, 4), wall(8, 5, 2), wall(34, 7, 15)],
+starter: "нц пока справа свободно\n  закрасить\n  вправо\nкц\n",
+solution: "нц пока сверху стена\n  закрасить\n  вправо\nкц\nнц пока сверху свободно\n  вправо\nкц\nнц пока сверху стена\n  закрасить\n  вправо\nкц\n",
+note: "Три цикла подряд, и каждый кончается на своей границе: первый — у начала прохода, второй — " +
+"у его конца, третий — у конца стены. Заготовка ведёт Робота «пока справа свободно», а справа " +
+"свободно всегда: поле бесконечное. На нарисованном поле она дошла бы до края и остановилась, " +
+"а на экзамене не остановится никогда — эксперт ставит за такое 0.",
+hints: [
+"Спрашивай не «можно ли идти вправо» (можно всегда), а «есть ли стена сверху».",
+"Первый цикл: «нц пока сверху стена / закрасить / вправо / кц» — он остановится под проходом.",
+"Второй цикл проходит под проходом, ничего не закрашивая: «нц пока сверху свободно / вправо / кц».",
+"Третий — копия первого: после прохода стена продолжается до своего конца."
+]
+},
+{
+id: "rb-oge-corner", emoji: "📐", title: "Угол двух стен", inf: true, fipi: true,
+tag: "формат ОГЭ · две стены",
+intro: "Ровно тот каркас, что на экзамене: две стены сходятся углом, в каждой по проходу, длины неизвестны.",
+goal: "Горизонтальная стена над Роботом правым концом упирается в верхний конец вертикальной стены, " +
+"уходящей вниз. В каждой стене ровно один проход. Робот стоит под левым концом горизонтальной стены. " +
+"Закрась все клетки непосредственно под горизонтальной стеной и непосредственно левее вертикальной, " +
+"кроме клетки, где Робот стоит в начале. Клетки у проходов остаются чистыми.",
+list: [
+"Длины стен, место и ширина проходов заранее неизвестны",
+"Проходы не у концов стен: с обеих сторон от прохода есть стена",
+"Клетка в самом углу — и под одной стеной, и левее другой: её закрасить один раз",
+"Поле бесконечное; конечное место Робота неважно, разбиться и зациклиться нельзя"
+],
+field: A.field, more: A.more,
+starter: "вправо\nнц пока справа свободно\n  закрасить\n  вправо\nкц\nнц пока справа стена\n  закрасить\n  вниз\nкц\n",
+solution: "вправо\nнц пока сверху стена\n  закрасить\n  вправо\nкц\nнц пока сверху свободно\n  вправо\nкц\n" +
+"нц пока справа свободно\n  закрасить\n  вправо\nкц\nнц пока справа стена\n  закрасить\n  вниз\nкц\n" +
+"нц пока справа свободно\n  вниз\nкц\nнц пока справа стена\n  закрасить\n  вниз\nкц\n",
+note: "Шесть циклов по три на стену, и это не длинно, а честно: у каждой стены три участка — до " +
+"прохода, проход и после прохода. Заготовка забыла про проходы: под проходом она красит " +
+"клетки, а ниже прохода в вертикальной стене останавливается. ⚠️ Угловую клетку закрашивает " +
+"четвёртый цикл, а не третий: третий кончается, когда справа выросла стена, — то есть ровно " +
+"в углу, ещё не закрасив его.",
+hints: [
+"Первая команда — «вправо»: клетку, где Робот стоит в начале, закрашивать не нужно.",
+"Вдоль горизонтальной стены — три цикла, как в задаче «Под стеной с проходом», только третий идёт «пока справа свободно»: он должен остановиться в углу.",
+"Вдоль вертикальной стены — те же три участка, но условие смотрит вправо, а шаг — вниз.",
+"Проверь угол: третий цикл кончается в углу, не закрасив его, — угол закрасит первый цикл вдоль вертикальной стены."
+]
+},
+{
+id: "rb-oge-up", emoji: "🪜", title: "Угол вверх", inf: true, fipi: true,
+tag: "формат ОГЭ · зеркало",
+intro: "Та же конструкция, отражённая вверх. Проверка, что понял приём, а не выучил текст программы.",
+goal: "Горизонтальная стена под Роботом правым концом упирается в нижний конец вертикальной стены, " +
+"уходящей вверх. В каждой стене ровно один проход. Робот стоит над левым концом горизонтальной стены. " +
+"Закрась все клетки непосредственно над горизонтальной стеной и непосредственно левее вертикальной, " +
+"кроме клетки, где Робот стоит в начале. Клетки у проходов остаются чистыми.",
+list: [
+"Длины стен, место и ширина проходов заранее неизвестны",
+"Проходы не у концов стен: с обеих сторон от прохода есть стена",
+"Угловая клетка закрашивается один раз",
+"Поле бесконечное; конечное место Робота неважно, разбиться и зациклиться нельзя"
+],
+field: B.field, more: B.more,
+starter: "вправо\nнц пока снизу стена\n  закрасить\n  вправо\nкц\nнц пока снизу свободно\n  вправо\nкц\n" +
+"нц пока справа свободно\n  закрасить\n  вправо\nкц\nнц пока справа стена\n  закрасить\n  вниз\nкц\n",
+solution: "вправо\nнц пока снизу стена\n  закрасить\n  вправо\nкц\nнц пока снизу свободно\n  вправо\nкц\n" +
+"нц пока справа свободно\n  закрасить\n  вправо\nкц\nнц пока справа стена\n  закрасить\n  вверх\nкц\n" +
+"нц пока справа свободно\n  вверх\nкц\nнц пока справа стена\n  закрасить\n  вверх\nкц\n",
+note: "Отражение меняет в программе ровно два слова: «сверху» на «снизу» в условиях вдоль " +
+"горизонтальной стены и «вниз» на «вверх» в шагах вдоль вертикальной. Заготовка поменяла " +
+"первое и забыла второе — и Робот, дойдя до угла, шагнул вниз, прочь от стены. На экзамене " +
+"вариантов конструкции несколько, и выручает не память, а вопрос «куда смотрит условие и " +
+"куда идёт шаг».",
+hints: [
+"Вдоль горизонтальной стены всё как в «Угле двух стен», только стена снизу: «пока снизу стена».",
+"Вертикальная стена уходит вверх — значит, и шаги вдоль неё «вверх».",
+"Условия вдоль вертикальной стены прежние: «справа стена» и «справа свободно».",
+"Если Робот после угла пошёл вниз и ничего не закрасил — проверь направление шагов в последних трёх циклах."
+]
+},
+{
+id: "rb-oge-left", emoji: "🧭", title: "Стена слева и снизу", inf: true, fipi: true,
+tag: "формат ОГЭ · поворот",
+intro: "Конструкция повёрнута: сначала вертикальная стена, потом горизонтальная. Порядок циклов тот же, слова другие.",
+goal: "Слева от Робота вертикальная стена; её нижний конец соединён с левым концом горизонтальной стены, " +
+"уходящей вправо. В каждой стене ровно один проход. Робот стоит справа от верхнего конца вертикальной стены. " +
+"Закрась все клетки непосредственно правее вертикальной стены и непосредственно над горизонтальной, " +
+"кроме клетки, где Робот стоит в начале. Клетки у проходов остаются чистыми.",
+list: [
+"Длины стен, место и ширина проходов заранее неизвестны",
+"Проходы не у концов стен: с обеих сторон от прохода есть стена",
+"Угловая клетка закрашивается один раз",
+"Поле бесконечное; конечное место Робота неважно, разбиться и зациклиться нельзя"
+],
+field: C.field, more: C.more,
+starter: "вниз\nнц пока слева стена\n  закрасить\n  вниз\nкц\nнц пока снизу свободно\n  закрасить\n  вниз\nкц\n" +
+"нц пока снизу стена\n  закрасить\n  вправо\nкц\n",
+solution: "вниз\nнц пока слева стена\n  закрасить\n  вниз\nкц\nнц пока слева свободно\n  вниз\nкц\n" +
+"нц пока снизу свободно\n  закрасить\n  вниз\nкц\nнц пока снизу стена\n  закрасить\n  вправо\nкц\n" +
+"нц пока снизу свободно\n  вправо\nкц\nнц пока снизу стена\n  закрасить\n  вправо\nкц\n",
+note: "Поворот меняет роли сторон: то, что в «Угле двух стен» было «сверху», здесь «слева», а то, что " +
+"было «справа», — «снизу». Сама программа остаётся шестью циклами по три на стену. Заготовка " +
+"пропустила оба прохода: у вертикальной стены она проехала мимо прохода, закрашивая, а у " +
+"горизонтальной остановилась на нём.",
+hints: [
+"Первая команда — «вниз»: стартовую клетку не закрашиваем.",
+"Вдоль вертикальной стены: «пока слева стена» (закрашивать), «пока слева свободно» (проход), «пока снизу свободно» (закрашивать до угла).",
+"Вдоль горизонтальной: «пока снизу стена» (закрашивать, шаг вправо), «пока снизу свободно» (проход), «пока снизу стена» (до конца).",
+"Угол закрашивает первый цикл вдоль горизонтальной стены: предыдущий остановился в углу, ещё не закрасив его."
+]
+}
+]);
+})();
 
 </script>
 
@@ -15472,6 +15660,113 @@ applies: applies, scoreOf: scoreOf, grade: grade, newerSyntax: newerSyntax,
 verdictHTML: verdictHTML, warnHTML: warnHTML, pack: pack,
 unpackWarnHTML: function(r){ return warnHTML({ prompts: !!(r && r.pr), newer: (r && r.nw) || [] }); },
 zeroWhy: function(z){ return ZERO_WHY[z] || ""; } };
+})();
+
+</script>
+
+<script>
+
+window.FIPI15 = (function(){
+
+var DOC = {
+title: "методические материалы ФИПИ для экспертов ОГЭ-2026 по информатике",
+pages: "с. 41–44",
+url: "https://doc.fipi.ru/oge/dlya-predmetnyh-komissiy-subektov-rf/2026/mr_oge_informatika_2026.pdf"
+};
+var MAX = 2;        
+var LIMIT = 10;     
+
+function applies(t){ return !!(t && t.fipi); }
+
+function fieldsOf(t){ return [t.field].concat(t.more || []); }
+
+function diff(a, b){
+var n = 0;
+Object.keys(a).forEach(function(k){ if (!b[k]) n++; });
+return n;
+}
+
+function scoreOf(broken, maxExtra, maxMissed){
+if (broken) return 0;
+if (!maxExtra && !maxMissed) return 2;
+return (maxExtra <= LIMIT && maxMissed <= LIMIT) ? 1 : 0;
+}
+
+function grade(R, text, t){
+try { R.parse(text); }
+catch(e){ return { score: null, max: MAX, parse: e }; }
+var all = fieldsOf(t), maxExtra = 0, maxMissed = 0, broke = null, big = 0;
+all.forEach(function(rows, i){
+big = Math.max(big, rows.length, rows[0].length);
+if (broke) return;
+var got = R.run(text, R.parseField(rows, t.inf));
+var want = R.run(t.solution, R.parseField(rows, t.inf));
+if (got.error){
+broke = { why: got.error.away ? "away" : got.error.loop ? "loop" : "crash",
+field: i, line: got.error.line, msg: got.error.msg };
+return;
+}
+maxExtra = Math.max(maxExtra, diff(got.field.painted, want.field.painted));
+maxMissed = Math.max(maxMissed, diff(want.field.painted, got.field.painted));
+});
+return { score: scoreOf(broke, maxExtra, maxMissed), max: MAX, broke: broke,
+maxExtra: maxExtra, maxMissed: maxMissed, total: all.length, big: big };
+}
+
+function esc(s){
+return String(s).replace(/[&<>"]/g, function(c){
+return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c];
+});
+}
+function kl(n){
+var a = n % 10, b = n % 100;
+return (a === 1 && b !== 11) ? "клетка" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "клетки" : "клеток";
+}
+
+var BROKE_WHY = {
+away:  "Алгоритм держится за край поля. На экзамене поле бесконечное, и такой цикл не " +
+"кончается — эксперт ставит 0.",
+loop:  "Алгоритм не завершается: один из циклов никогда не кончается. Это 0 баллов.",
+crash: "Робот разбивается о стену. Аварийный останов — 0 баллов."
+};
+
+function reasonHTML(g){
+if (g.broke) return BROKE_WHY[g.broke.why] +
+(g.broke.field ? " Так вышло на скрытом поле №" + g.broke.field + "." : "");
+if (g.score === 2) return "На всех " + g.total + " полях закрашено ровно нужное — " +
+"и на поле со стенами по 30 клеток.";
+var h = "Алгоритм завершается и Робот цел. Больше всего ошибок на одном поле: " +
+"лишних — " + g.maxExtra + " " + kl(g.maxExtra) + ", пропущено — " + g.maxMissed + " " + kl(g.maxMissed) + ". ";
+return h + (g.score === 1
+? "Это не больше 10 — на 1 балл."
+: "Больше 10 — это 0: эксперт считает ошибку при очень длинных стенах и проходах, " +
+"а на нашем поле со стенами по 30 клеток она уже переросла порог.");
+}
+
+function verdictHTML(g){
+if (g.score === null)
+return '<div class="stepnote fipi16"><b>📝 Балл за экзамен здесь не назвать</b>' +
+'<p>Эксперт ФИПИ не снижает балл за ошибки записи — он читает алгоритм глазами ' +
+'(с. 43–44). Мы глазами не читаем: сначала исправь запись, и проверка скажет, ' +
+'сколько было бы.</p></div>';
+return '<div class="stepnote fipi16"><b>📝 На ОГЭ за этот алгоритм было бы ' +
+g.score + ' из ' + g.max + ' баллов</b><p>' + esc(reasonHTML(g)) + '</p>' +
+'<p>2 балла — верно при любых длинах стен и проходов; 1 — алгоритм завершается, ' +
+'Робот цел, лишних и пропущенных клеток не больше 10; 0 — иначе.</p>' +
+'<p class="dim">Правила — ' + esc(DOC.title) + ', ' + DOC.pages + '.</p></div>';
+}
+
+function pack(g){
+return { s: g.score, e: g.maxExtra || 0, m: g.maxMissed || 0, t: g.total || 0,
+b: g.broke ? { why: g.broke.why, field: g.broke.field } : null, at: Date.now() };
+}
+function unpack(r){
+return { score: r.s, max: MAX, maxExtra: r.e, maxMissed: r.m, total: r.t, broke: r.b };
+}
+
+return { DOC: DOC, MAX: MAX, LIMIT: LIMIT, applies: applies, scoreOf: scoreOf,
+grade: grade, verdictHTML: verdictHTML, reasonHTML: reasonHTML,
+pack: pack, unpack: unpack };
 })();
 
 </script>
@@ -20864,12 +21159,22 @@ var cur = null;
 var code = "";                   
 var last = null;                 
 
+var ctx = null;
+var sentNote = false;            
+
+var EXAM_SENT = '<div class="msg show info"><b>Ответ записан</b>Верно или нет — скажет итог ' +
+'варианта, когда выйдет время или ты нажмёшь «Завершить». Запускать программу можно сколько ' +
+'угодно — на поле из условия видно, что закрасил Робот, как в КуМире. Сдать заново тоже можно: ' +
+'считается последний ответ.</div>';
+
 function taskById(id){
 var xs = window.ROBOT_TASKS || [];
 for (var i = 0; i < xs.length; i++) if (xs[i].id === id) return xs[i];
 return null;
 }
 function fields(t){ return [t.field].concat(t.more || []); }
+
+function pole(t, rows){ return window.ROBOT.parseField(rows, t.inf); }
 
 function fieldHTML(rows, cls){
 var h = '<div class="rbf ' + (cls || "") + '" style="--rbw:' + rows[0].length + '">';
@@ -20886,8 +21191,8 @@ function check(t, text){
 var R = window.ROBOT, out = { ok:true, shown:null, error:null, badField:-1 };
 var all = fields(t);
 for (var i = 0; i < all.length; i++){
-var got = R.run(text, R.parseField(all[i]));
-var want = R.run(t.solution, R.parseField(all[i]));
+var got = R.run(text, pole(t, all[i]));
+var want = R.run(t.solution, pole(t, all[i]));
 if (i === 0) out.shown = got.field;
 if (got.error){ out.ok = false; out.error = got.error; out.badField = i; break; }
 if (!R.samePainted(got.field, want.field)){
@@ -20900,6 +21205,10 @@ return out;
 }
 
 function verdictHTML(t, res){
+var fg = res.fg ? window.FIPI15.verdictHTML(res.fg) : "";
+return baseVerdictHTML(t, res).replace(/<\/div>$/, fg + "</div>");
+}
+function baseVerdictHTML(t, res){
 if (res.ok)
 return '<div class="msg show ok"><b>Решено ✓</b>Программа сработала на всех ' +
 fields(t).length + ' полях, а не только на нарисованном.</div>';
@@ -20917,30 +21226,42 @@ return '<div class="msg show bad"><b>Закрашено не то</b>Сравн�
 '</div><div><span class="dim">нужно</span>' + fieldHTML(window.ROBOT.fieldRows(res.want)) + '</div></div></div>';
 }
 
-function openRobot(id){
+function openRobot(id, from){
 var t = taskById(id);
 if (!t) return screenRobot();
-if (!cur || cur.id !== id){ cur = t; code = t.starter; last = null; }
+
+if (arguments.length > 1){ ctx = from || null; sentNote = false; }
+if (!cur || cur.id !== id){ cur = t; code = t.starter; last = null; sentNote = false; }
 A.enterScreen("train", "robot");
+var exam = !!(ctx && ctx.exam);
 
 var shown = last && last.shown ? window.ROBOT.fieldRows(last.shown) : t.field;
-var h = '<div class="lvlhead"><div><div class="idx">исполнитель «Робот» · формат ОГЭ</div>' +
+var h = (ctx ? '<div class="crumbs"><span id="rbcrumb">' + A.esc(ctx.crumb) + '</span> › ' +
+t.emoji + ' ' + A.esc(t.title) + '</div>' : '') +
+'<div class="lvlhead"><div><div class="idx">исполнитель «Робот» · ' +
+(t.fipi ? 'формат ОГЭ' : 'приём для задания 15 ОГЭ') + '</div>' +
 '<h1>' + t.emoji + ' ' + A.esc(t.title) + '</h1></div>' +
-(A.algoDone(t.id) ? '<div class="right"><span class="tag">решено ✓</span></div>' : '') + '</div>' +
+(exam ? '<div class="right"><span class="examclock" id="rbclock">⏱</span></div>'
+: (A.algoDone(t.id) && !ctx ? '<div class="right"><span class="tag">решено ✓</span></div>' : '')) + '</div>' +
 '<p class="lede">' + A.esc(t.intro) + '</p>' +
 '<div class="card"><h3>Что нужно сделать</h3><p>' + A.esc(t.goal) + '</p>' +
 '<ul class="trrules">' + t.list.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ul></div>' +
 '<div class="rbwrap">' +
 '<div class="rbleft"><div class="rbhead">Поле</div>' + fieldHTML(shown) +
 '<p class="dim">Робот 🤖 · закрашенные клетки — цветные · тёмные — стены. ' +
-'Проверка гоняет программу ещё на <b>' + (fields(t).length - 1) + '</b> скрытых полях.</p></div>' +
+'Проверка гоняет программу ещё на <b>' + (fields(t).length - 1) + '</b> скрытых полях.' +
+(t.inf ? ' Поле бесконечное: за нарисованным краем пусто, держаться за край нельзя.' : '') +
+(t.fipi ? ' На ОГЭ такой алгоритм оценивает эксперт — 2, 1 или 0 баллов; ' +
+(exam ? 'сколько вышло бы, скажет итог варианта.' : 'после проверки здесь будет написано, сколько было бы.') : '') +
+'</p></div>' +
 '<div class="rbright"><div class="rbhead">Программа</div>' +
 '<textarea id="rbcode" class="rbcode" spellcheck="false" rows="10">' + A.esc(code) + '</textarea>' +
 '<div class="admrow"><button class="rbtn check" id="rbrun">▶ Выполнить</button>' +
+(exam ? '<button class="rbtn check" id="rbsend">✎ Сдать ответ</button>' : '') +
 '<button class="rbtn sec" id="rbreset">Сначала</button></div>' +
 '</div>' +
 '</div>' +
-'<div id="rbmsg">' + (last ? verdictHTML(t, last) : "") + '</div>' +
+'<div id="rbmsg">' + (exam ? examMsgHTML() : (last ? verdictHTML(t, last) : "")) + '</div>' +
 '<div class="card"><h3>Язык Робота</h3>' +
 '<p class="dim">Тот же, что в КуМире на экзамене, — слово в слово.</p>' +
 '<div class="rbref">' +
@@ -20953,30 +21274,86 @@ var h = '<div class="lvlhead"><div><div class="idx">исполнитель «Р�
 '<div><b>Ветвление</b><code>если &lt;условие&gt; то<br>  …<br>иначе<br>  …<br>все</code></div>' +
 '<div><b>Комментарий</b><code>| после палочки</code></div>' +
 '</div></div>' +
-(A.algoDone(t.id)
+
+(exam
+? '<div class="hintbox"><span class="tip">режим экзамена: подсказок нет, а верно ли решено — ' +
+'скажет итог варианта, а не эта страница</span></div>'
+: (A.algoDone(t.id) && !ctx) || (last && last.ok)
 ? '<div class="card"><h3>Разбор</h3><p>' + A.esc(t.note) + '</p></div>'
 : '<div class="card"><h3>Подсказки</h3><ol class="rbhints">' +
 t.hints.map(function(s){ return '<li>' + A.esc(s) + '</li>'; }).join("") + '</ol></div>') +
-'<div class="pager"><button class="bigbtn ghost" id="rbback">← Ко всем задачам</button></div>';
+'<div class="pager"><button class="bigbtn ghost" id="rbback">← ' +
+A.esc(ctx ? (last && last.ok && !exam ? ctx.winLabel.replace(/^←\s*/, "") : ctx.backLabel) : "Ко всем задачам") +
+'</button></div>';
 
 A.app.innerHTML = h;
 var ta = document.getElementById("rbcode");
 ta.addEventListener("input", function(){ code = ta.value; });
 document.getElementById("rbrun").onclick = function(){
 code = ta.value;
+if (exam){
+
+var R = window.ROBOT, r = R.run(code, pole(t, t.field));
+last = { ok: false, shown: r.field, run: r.error };
+sentNote = false;
+return openRobot(id);
+}
 last = check(t, code);
-if (last.ok && !A.algoDone(t.id)) A.algoMark(t.id);
+if (t.fipi && window.FIPI15) last.fg = window.FIPI15.grade(window.ROBOT, code, t);
+if (last.ok){
+
+if (!A.algoDone(t.id)) A.algoMark(t.id);
+if (ctx && ctx.onWin) ctx.onWin(t);
+}
+openRobot(id);
+};
+var send = document.getElementById("rbsend");
+if (send) send.onclick = function(){
+code = ta.value;
+var res = check(t, code);
+var fg = (t.fipi && window.FIPI15) ? window.FIPI15.grade(window.ROBOT, code, t) : null;
+if (ctx && ctx.onSend) ctx.onSend(!!res.ok, fg);
+sentNote = true;
 openRobot(id);
 };
 document.getElementById("rbreset").onclick = function(){
-code = t.starter; last = null; openRobot(id);
+code = t.starter; last = null; sentNote = false; openRobot(id);
 };
-document.getElementById("rbback").onclick = function(){ cur = null; last = null; screenRobot(); };
+var goBack = function(){
+var back = ctx; cur = null; last = null; ctx = null; sentNote = false;
+return back ? back.go() : screenRobot();
+};
+document.getElementById("rbback").onclick = goBack;
+var crumb = document.getElementById("rbcrumb");
+if (crumb) crumb.onclick = goBack;
+
+var clk = document.getElementById("rbclock");
+if (clk && ctx && ctx.clock){
+var tick = function(){
+if (!document.body.contains(clk) || !ctx || !ctx.clock) return clearInterval(cid);
+var c = ctx.clock();
+clk.textContent = "⏱ " + c.text;
+clk.classList.toggle("soon", !!c.soon);
+if (c.over){ clearInterval(cid); goBack(); }
+};
+var cid = setInterval(tick, 1000);
+tick();
+}
 A.refreshTop();
+}
+
+function examMsgHTML(){
+var h = "";
+if (last && last.run)
+h += '<div class="msg show bad"><b>Ошибка при запуске</b>Строка ' + last.run.line + ': ' +
+A.esc(last.run.msg) + '</div>';
+if (sentNote) h += EXAM_SENT;
+return h;
 }
 
 function screenRobot(){
 A.enterScreen("train", "robot");
+ctx = null;
 var xs = window.ROBOT_TASKS || [];
 var done = xs.filter(function(x){ return A.algoDone(x.id); }).length;
 var h = '<div class="lvlhead"><div><div class="idx">информатика: исполнитель</div>' +
@@ -20990,26 +21367,39 @@ var h = '<div class="lvlhead"><div><div class="idx">информатика: ис
 'На экзамене требуют ровно этого: решение обязано работать при любой длине стены.</li>' +
 '<li><b>Одно расхождение с КуМиром, и оно нарочное:</b> у нас стена — это клетка, а не ребро ' +
 'между клетками. Для программы разницы нет: «справа свободно» значит то же самое.</li>' +
+'<li><b>Задачи «формат ОГЭ» устроены как на экзамене:</b> две стены с проходами на ' +
+'бесконечном поле, и балл за них считается по правилам эксперта ФИПИ — 2, 1 или 0. ' +
+'Остальные задачи учат приёмы по одному и держатся за край поля; баллов за них нет.</li>' +
 '<li><b>Робот не заменяет Python.</b> Он закрывает задание 15, где просят исполнителя; ' +
 'задание 16 — обычная программа, и она в разделе «Алгоритмы». На экзамене нужны оба.</li>' +
-'</ul></div><div class="gamegrid">';
-xs.forEach(function(t){
+'</ul></div>';
+
+var groups = [["📄 Формат ОГЭ", xs.filter(function(t){ return t.fipi; })],
+["🧩 Приёмы по одному", xs.filter(function(t){ return !t.fipi; })]];
+groups.forEach(function(gr){
+if (!gr[1].length) return;
+h += '<div class="sect"><h2>' + gr[0] + '</h2><div class="line"></div><span class="cnt">' +
+gr[1].filter(function(x){ return A.algoDone(x.id); }).length + ' из ' + gr[1].length + '</span></div>' +
+'<div class="gamegrid">';
+gr[1].forEach(function(t){
 h += '<button class="gamecard" data-rb="' + A.esc(t.id) + '">' +
 '<span class="gemoji">' + t.emoji + '</span>' +
 '<b>' + A.esc(t.title) + (A.algoDone(t.id) ? ' <span class="edittag done">решено ✓</span>' : '') + '</b>' +
 '<span>' + A.esc(t.intro) + '</span>' +
 '<span class="wtag">' + A.esc(t.tag) + '</span></button>';
 });
-h += '</div><div class="pager"><button class="bigbtn ghost" id="rbtomap">← К тренировкам</button></div>';
+h += '</div>';
+});
+h += '<div class="pager"><button class="bigbtn ghost" id="rbtomap">← К тренировкам</button></div>';
 A.app.innerHTML = h;
 A.app.querySelectorAll("[data-rb]").forEach(function(b){
-b.onclick = function(){ openRobot(b.getAttribute("data-rb")); };
+b.onclick = function(){ openRobot(b.getAttribute("data-rb"), null); };
 });
 document.getElementById("rbtomap").onclick = A.screenTrain;
 A.refreshTop();
 }
 
-return { screenRobot: screenRobot, openRobot: openRobot };
+return { screenRobot: screenRobot, openRobot: openRobot, robotById: taskById };
 };
 
 </script>
@@ -22435,8 +22825,16 @@ if (!ex) return [];
 var rnd = rngFrom(String(seed || "") + ":" + exId), used = {};
 return ex.tasks.map(function(t){
 var pool = (t.g && t.g.length) ? tasksIn(t.g) : [];
-if (t.robot)
+
+if (t.robot){
+var rb = (window.ROBOT_TASKS || []).filter(function(x){ return x.fipi; })
+.map(function(x){ return x.id; }).sort();
+if (!rb.length)
 return { n: t.n, t: t.t, id: null, dup: 0, why: "решается в разделе «Робот»" };
+var rr = rngFrom(String(seed || "") + ":" + exId + ":robot");
+return { n: t.n, t: t.t, id: rb[Math.floor(rr() * rb.length) % rb.length],
+kind: "robot", dup: 0, why: "" };
+}
 if (!pool.length)
 return { n: t.n, t: t.t, id: null, dup: 0,
 why: t.off ? ("судить нечем: " + t.off) : "задач по этой теме пока нет" };
@@ -22526,6 +22924,11 @@ if (v.seen[x.n]) { t.tried++; t.weak.push(x.n); }
 else t.left++;
 });
 return t;
+}
+
+function taskOf(x){
+if (!x || !x.id) return null;
+return x.kind === "robot" ? A.robotById(x.id) : A.algoById(x.id);
 }
 function itemOf(v, n){
 for (var i = 0; i < v.items.length; i++) if (v.items[i].n === n) return v.items[i];
@@ -22800,14 +23203,13 @@ tabsHTML() +
 h += assignCardHTML(v.ex);
 
 h += '<div class="exmap">';
-v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
+v.items.forEach(function(x){ h += rowHTML(v, x, taskOf(x)); });
 h += '</div>';
 
-if (v.ex === "oge")
+if (v.ex === "oge" && itemOf(v, 15) && !itemOf(v, 15).id)
 h += '<div class="note"><b>Задание 15 решается в разделе «Робот»</b>' +
-'На экзамене это алгоритм для исполнителя, и у него свой язык с русскими командами. ' +
-'В вариант он не встроен: решай его в «Тренировках» → «Робот». Задание 16 — обычная ' +
-'программа, оно в варианте есть.</div>';
+'Этот вариант собран до того, как Робот вошёл в вариант, поэтому номер 15 здесь пустой: ' +
+'решай его в «Тренировках» → «Робот». В новом варианте он будет на своём месте.</div>';
 
 if (t.dup)
 h += '<div class="note"><b>Повторы в варианте — это про нас, а не про тебя</b>' +
@@ -22866,7 +23268,7 @@ if (!x || !x.id) return screenVariant();
 var ex = v.ex, exam = isExam(v) && !v.closed;
 v.seen[n] = 1;
 put(v);
-A.setAlgoBack({
+var back = ({
 crumb: (exam ? "Экзамен № " : "Вариант № ") + v.seed,
 backLabel: exam ? "В экзамен" : "В вариант",
 winLabel: exam ? "← Вернуться в экзамен" : "← Вернуться в вариант",
@@ -22886,7 +23288,8 @@ w.sent[n] = 1;
 if (ok) w.done[n] = 1; else delete w.done[n];
 
 w.pts = w.pts || {};
-if (fg && window.FIPI16) w.pts[n] = FIPI16.pack(fg); else delete w.pts[n];
+var F = x.kind === "robot" ? window.FIPI15 : window.FIPI16;
+if (fg && F && fg.score !== null) w.pts[n] = F.pack(fg); else delete w.pts[n];
 put(w);
 } : null,
 onWin: function(){
@@ -22900,12 +23303,35 @@ w.done[n] = 1;
 put(w);
 }
 });
+if (x.kind === "robot") return A.openRobot(x.id, back);
+A.setAlgoBack(back);
 A.openAlgo(x.id);
 }
 
 function fipiCardHTML(v){
+if (v.ex !== "oge" || !isExam(v)) return "";
+return robotCardHTML(v) + programCardHTML(v);
+}
+
+function robotCardHTML(v){
+var F = window.FIPI15;
+var x = null;
+v.items.forEach(function(it){ if (it.kind === "robot") x = it; });
+if (!F || !x || !x.id) return "";
+var h = '<div class="card"><h3>🤖 Задание ' + x.n + ' — как оценил бы эксперт</h3>';
+var r = (v.pts || {})[x.n];
+if (!r)
+h += '<p><b>0 из ' + F.MAX + ' баллов</b> — ответ не сдан или алгоритм не разобрался. ' +
+'Не сданное задание на экзамене не оценивается вовсе.</p>';
+else
+h += '<p><b>' + r.s + ' из ' + F.MAX + ' баллов.</b> ' + A.esc(F.reasonHTML(F.unpack(r))) + '</p>';
+return h + '<p class="dim">Правила — ' + A.esc(F.DOC.title) + ', ' + F.DOC.pages + '. ' +
+'Скрытые поля, среди них со стенами по 30 клеток, ты не видел — как и на экзамене.</p></div>';
+}
+
+function programCardHTML(v){
 var F = window.FIPI16;
-if (!F || v.ex !== "oge" || !isExam(v)) return "";
+if (!F) return "";
 var et = F.examTask();
 var x = et ? itemOf(v, et.n) : null;
 if (!x || !x.id) return "";
@@ -22988,15 +23414,16 @@ h += '<div class="card"><h3>⚖️ Почему тут нет ' + (fipiRow ? 'о
 'закрыты, какие просели, какие ты ещё не открывал. Настоящие баллы за такой вариант ' +
 'скажет только демоверсия своего года.</p>' +
 (fipiRow
-? '<p class="dim">Балл за программу выше — не исключение из этого правила: он стоит за ' +
-'одно задание, правила которого ФИПИ опубликовал целиком, и ни с чем не складывается.</p>'
+? '<p class="dim">Баллы за задания выше — не исключение из этого правила: каждый стоит за ' +
+'одно задание, правила которого ФИПИ опубликовал целиком, и ни с чем не складывается — ' +
+'даже друг с другом: сумма двух заданий из шестнадцати ничего не говорит об экзамене.</p>'
 : '') + '</div>';
 
 var weakRows = v.items.filter(function(x){ return x.id && !v.done[x.n]; });
 if (weakRows.length){
 h += '<div class="sect"><h2>Что осталось</h2><div class="line"></div>' +
 '<span class="cnt">' + weakRows.length + '</span></div><div class="exmap">';
-weakRows.forEach(function(x){ h += rowHTML(v, x, A.algoById(x.id)); });
+weakRows.forEach(function(x){ h += rowHTML(v, x, taskOf(x)); });
 h += '</div>';
 }
 
@@ -35851,6 +36278,8 @@ algoList: algoList, algoById: algoById,
 
 algoMark: algoMark,
 openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
+
+openRobot: function(id, ctx){ openRobot(id, ctx); }, robotById: ROBOTS.robotById,
 screenTrain: function(){ screenTrain(); },
 variantGet: function(){ return S.variant || {}; },
 variantSet: function(v){ S.variant = v || {}; save(); },
@@ -41095,7 +41524,8 @@ var closed = mine.filter(function(r){ return (r.vr[exId] || {}).closed; }).lengt
 var items = VARIANT.buildItems(exId, seed).filter(function(x){ return x.id; });
 var lines = items.map(function(x){
 var n = mine.filter(function(r){ return ((r.vr[exId] || {}).done || {})[x.n]; }).length;
-var t = algoById(x.id);
+
+var t = x.kind === "robot" ? ROBOTS.robotById(x.id) : algoById(x.id);
 return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n };
 });
 var weak = lines.slice().sort(function(a, b){ return a.ok - b.ok || a.n - b.n; });
@@ -43284,6 +43714,7 @@ showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
 screenVariant: screenVariant, screenVariantDone: screenVariantDone,
 variantOpenFor: variantOpenFor, variantStat: variantStat,
 variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
+screenRobot: screenRobot, openRobot: openRobot,
 screenProverka: screenProverka, proverka: PROVERKA,
 solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
 solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,

@@ -45,8 +45,12 @@ var STOR = { "сверху":[0,-1], "снизу":[0,1], "слева":[-1,0], "с
 var MAX_STEPS = 20000;          /* защита от «нц пока … кц» без выхода */
 
 /* ---------- поле ---------- */
-function parseField(rows){
-  var f = { w:0, h:rows.length, walls:{}, painted:{}, x:0, y:0, found:false };
+/* inf — поле «бесконечное», как на экзамене (МР ФИПИ ОГЭ-2026, с. 43): за
+   нарисованным краем пусто, а не стена. Задачи формата ОГЭ рисуют стены с
+   запасом по краям, и уйти за этот запас значит одно — цикл, который на
+   настоящем бесконечном поле не остановится. */
+function parseField(rows, inf){
+  var f = { w:0, h:rows.length, walls:{}, painted:{}, x:0, y:0, found:false, inf: !!inf };
   rows.forEach(function(row, y){
     var chars = Array.from(row);
     if (chars.length > f.w) f.w = chars.length;
@@ -83,9 +87,10 @@ function samePainted(a, b){
   var ka = paintedKeys(a), kb = paintedKeys(b);
   return ka.length === kb.length && ka.join(";") === kb.join(";");
 }
+function outside(f, x, y){ return x < 0 || y < 0 || x >= f.w || y >= f.h; }
 function free(f, dx, dy){
   var nx = f.x + dx, ny = f.y + dy;
-  if (nx < 0 || ny < 0 || nx >= f.w || ny >= f.h) return false;
+  if (outside(f, nx, ny)) return !!f.inf;
   return !f.walls[nx + "," + ny];
 }
 
@@ -94,6 +99,11 @@ function free(f, dx, dy){
    лени, а то, как язык и выглядит у школьника в тетради; заодно номер строки
    в ошибке всегда честный. */
 function err(line, msg){ return { line: line, msg: msg }; }
+function loopErr(line){
+  var e = err(line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+  e.loop = true;
+  return e;
+}
 
 function tokens(s){
   return s.replace(/\(/g, " ( ").replace(/\)/g, " ) ").split(/\s+/).filter(Boolean);
@@ -191,7 +201,7 @@ function parse(text){
 
 /* ---------- выполнение ---------- */
 function run(text, field){
-  var f = { w:field.w, h:field.h, walls:field.walls, painted:{}, x:field.x, y:field.y };
+  var f = { w:field.w, h:field.h, walls:field.walls, painted:{}, x:field.x, y:field.y, inf: !!field.inf };
   Object.keys(field.painted).forEach(function(k){ f.painted[k] = 1; });
   var steps = 0, prog;
   try { prog = parse(text); }
@@ -210,19 +220,28 @@ function run(text, field){
     for (var i = 0; i < list.length; i++){
       var st = list[i];
       if (++steps > MAX_STEPS)
-        throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+        throw loopErr(st.line);
       if (st.t === "закрасить"){ f.painted[f.x + "," + f.y] = 1; continue; }
       if (DIRS[st.t]){
         var d = DIRS[st.t];
         if (!free(f, d[0], d[1]))
           throw err(st.line, "Робот разбился: «" + st.t + "» упирается в стену.");
+        /* ⚠️ На бесконечном поле шаг за нарисованный запас — это не «вышел
+           погулять», а цикл, который держится за край поля. На экзамене поле
+           без края, и такой цикл не кончается (с. 43). */
+        if (outside(f, f.x + d[0], f.y + d[1])){
+          var away = err(st.line, "Робот ушёл далеко за стены. Поле на экзамене бесконечное: " +
+            "цикл, который здесь дошёл бы до края, там никогда не остановится.");
+          away.away = true;
+          throw away;
+        }
         f.x += d[0]; f.y += d[1]; continue;
       }
       if (st.t === "раз"){ for (var k = 0; k < st.n; k++) block(st.body); continue; }
       if (st.t === "пока"){
         while (cond(st.cond)){
           if (++steps > MAX_STEPS)
-            throw err(st.line, "Программа не останавливается: похоже, условие цикла никогда не станет ложным.");
+            throw loopErr(st.line);
           block(st.body);
         }
         continue;

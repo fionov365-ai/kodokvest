@@ -10110,6 +10110,8 @@ var VARIANT = KVSCREENS.variant({
      это вердикт, о котором режим экзамена молчит. */
   algoMark: algoMark,
   openAlgo: function(id){ openAlgo(id); }, setAlgoBack: setAlgoBack,
+  /* Задание 15 ОГЭ — Робот (1.163.0): свой экран, тот же договор контекста. */
+  openRobot: function(id, ctx){ openRobot(id, ctx); }, robotById: ROBOTS.robotById,
   screenTrain: function(){ screenTrain(); },
   variantGet: function(){ return S.variant || {}; },
   variantSet: function(v){ S.variant = v || {}; save(); },
@@ -16888,7 +16890,8 @@ function groupVarReportHTML(rows){
     var items = VARIANT.buildItems(exId, seed).filter(function(x){ return x.id; });
     var lines = items.map(function(x){
       var n = mine.filter(function(r){ return ((r.vr[exId] || {}).done || {})[x.n]; }).length;
-      var t = algoById(x.id);
+      /* номер 15 ОГЭ — задача Робота, у неё свой список (1.163.0) */
+      var t = x.kind === "robot" ? ROBOTS.robotById(x.id) : algoById(x.id);
       return { n: x.n, t: x.t, title: t ? t.title : x.id, ok: n };
     });
     var weak = lines.slice().sort(function(a, b){ return a.ok - b.ok || a.n - b.n; });
@@ -19466,6 +19469,7 @@ window.__game = {
   screenVariant: screenVariant, screenVariantDone: screenVariantDone,
   variantOpenFor: variantOpenFor, variantStat: variantStat,
   variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant,
+  screenRobot: screenRobot, openRobot: openRobot,
   screenProverka: screenProverka, proverka: PROVERKA,
   solvedPack: solvedPack, solvedUnpack: solvedUnpack, solvedLink: solvedLink,
   solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, screenSolved: screenSolved,

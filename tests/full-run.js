@@ -174,7 +174,6 @@ function checkEncoding(){
   }
 }
 
-function poleCopy(RB, rows){ return RB.parseField(rows); }
 (async function(){
   await tick(60);
   checkEncoding();
@@ -9974,13 +9973,13 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
         const все = [t.field].concat(t.more || []);
         let разошлась = false;
         все.forEach((rows, i) => {
-          const поле = RB.parseField(rows);
+          const поле = RB.parseField(rows, t.inf);
           if (!поле.found) return bad("[робот] на поле " + i + " задачи «" + t.id + "» нет робота");
-          const эт = RB.run(t.solution, poleCopy(RB, rows));
+          const эт = RB.run(t.solution, RB.parseField(rows, t.inf));
           if (эт.error)
             return bad("[робот] эталон «" + t.id + "» падает на поле " + i +
                        " (строка " + эт.error.line + "): " + эт.error.msg);
-          const заг = RB.run(t.starter, poleCopy(RB, rows));
+          const заг = RB.run(t.starter, RB.parseField(rows, t.inf));
           if (заг.error || !RB.samePainted(эт.field, заг.field)) разошлась = true;
         });
         if (!разошлась)
@@ -10167,6 +10166,13 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
             bad("[вариант] номер " + t.n + " остался пустым, хотя задачи по его темам есть");
           if (!it.why)
             bad("[вариант] у пустого номера " + t.n + " не написана причина");
+          return;
+        }
+        /* номер 15 ОГЭ — Робот (1.163.0): задача из ROBOT_TASKS, формата ОГЭ */
+        if (t.robot){
+          const rt = (w.ROBOT_TASKS || []).find(r => r.id === it.id);
+          if (it.kind !== "robot" || !rt || !rt.fipi)
+            bad("[вариант] номеру " + t.n + " (Робот) назначена не задача Робота формата ОГЭ: «" + it.id + "»");
           return;
         }
         const task = taskById(it.id);
@@ -10557,10 +10563,32 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (!rb) bad("[карта-огэ] в строке задания 15 нет кнопки к Роботу");
     else { rb.click(); await tick();
       if (!/Робот/.test(doc.getElementById("app").textContent)) bad("[карта-огэ] кнопка задания 15 не открыла Робота"); }
+    /* ⚠️ С 1.163.0 номер 15 в варианте — задача Робота формата ОГЭ (раньше
+       строка стояла пустой со ссылкой на раздел). */
     const items = g.variantBuild("oge", "TEST42");
     const v15 = items.find(x => x.n === 15);
-    if (items.length !== 16 || !v15 || v15.id !== null || !/Робот/.test(v15.why))
-      bad("[карта-огэ] в варианте ОГЭ задание 15 не отправлено к Роботу или номеров не 16");
+    const rt15 = v15 && (w.ROBOT_TASKS || []).find(r => r.id === v15.id);
+    if (items.length !== 16 || !v15 || v15.kind !== "robot" || !rt15 || !rt15.fipi)
+      bad("[карта-огэ] в варианте ОГЭ на номере 15 не задача Робота формата ОГЭ или номеров не 16");
+    /* ⚠️ Робот в варианте НЕ сдвигает остальные номера: код, продиктованный
+       репетитором до 1.163.0, обязан собрать те же задачи на 1–14 и 16.
+       Проверяем, убрав задачи формата ОГЭ: сборка обязана совпасть по всем
+       номерам, кроме 15-го. */
+    {
+      const RT = w.ROBOT_TASKS;
+      const seeds = ["TEST42", "ABCDEF", "ZZZ999", "K7M2PQ", "22HHJJ", "QWERTY"];
+      const withRb = seeds.map(sd => g.variantBuild("oge", sd));
+      w.ROBOT_TASKS = RT.filter(r => !r.fipi);
+      const without = seeds.map(sd => g.variantBuild("oge", sd));
+      w.ROBOT_TASKS = RT;
+      seeds.forEach((sd, i) => {
+        const a = withRb[i].filter(x => x.n !== 15).map(x => x.id).join();
+        const b = without[i].filter(x => x.n !== 15).map(x => x.id).join();
+        if (a !== b) bad("[карта-огэ] Робот в варианте сдвинул выбор других номеров для кода " + sd);
+      });
+      if (without[0].find(x => x.n === 15).id !== null)
+        bad("[карта-огэ] без задач формата ОГЭ номер 15 не остался пустым");
+    }
     viewReset(g);
   }
 
@@ -10739,6 +10767,202 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     });
     /* сторож не должен молча смотреть в пустоту: таких задач сейчас четыре */
     if (checkedNeg < 4) bad("[фипи-16] задач, где условие допускает отрицательные, найдено " + checkedNeg + " — сторож ослеп");
+    g.state.algo = {}; g.state.variant = {};
+    viewReset(g);
+  }
+
+  /* --- 13в.11. [фипи-15] Робот — задание 15 ОГЭ — как эксперт ФИПИ ---
+     ⚠️ Слепок документа (§ 4.44 RAZVITIE): МР ФИПИ для экспертов ОГЭ-2026,
+     раздел 2.4. с. 41 — 2: верно при всех допустимых данных; 1: завершается,
+     Робот цел, лишних не больше 10 и незакрашенных нужных не больше 10; 0 —
+     иначе. с. 43 — поле бесконечное, «до края» не завершается. с. 44 — ошибку
+     считают при очень больших длинах. с. 48–49 — пример 1 (закрашена
+     стартовая клетка) — 1 балл, пример 2 (ещё и клетки над проходом) — 0. */
+  if (w.FIPI15 && w.ROBOT && typeof g.openRobot === "function"){
+    const F = w.FIPI15, R = w.ROBOT, TS = w.ROBOT_TASKS || [];
+    const byId = id => TS.find(t => t.id === id);
+
+    /* 1. Слепок чисел. */
+    if (F.MAX !== 2 || F.LIMIT !== 10) bad("[фипи-15] максимум или порог не 2 и 10: " + F.MAX + ", " + F.LIMIT);
+    const sc = [[false,0,0],[false,10,10],[false,11,0],[false,0,11],[true,0,0]].map(a => F.scoreOf.apply(null, a)).join();
+    if (sc !== "2,1,0,0,0") bad("[фипи-15] шкала 2/1/0 не по документу: " + sc);
+    if (F.DOC.pages !== "с. 41–44" || !/mr_oge_informatika_2026\.pdf$/.test(F.DOC.url))
+      bad("[фипи-15] ссылка на документ ФИПИ потеряна или сменились страницы");
+
+    /* 2. Каждая задача формата ОГЭ: поле бесконечное, есть поле «очень больших
+       длин» (сторона от 30 и проход длиннее 10), эталон — 2, заготовка — нет. */
+    const ft = TS.filter(F.applies);
+    if (ft.length < 4) bad("[фипи-15] задач Робота формата ОГЭ " + ft.length + " — меньше четырёх");
+    const longGap = rows => {
+      const lines = rows.concat(rows[0].split("").map((_, x) => rows.map(r => r[x]).join("")));
+      return lines.some(l => /#\.{11,}#/.test(l));
+    };
+    ft.forEach(t => {
+      if (!t.inf) bad("[фипи-15] у «" + t.id + "» поле не бесконечное — край станет стеной");
+      const all = [t.field].concat(t.more || []);
+      if (!all.some(r => Math.max(r.length, r[0].length) >= 30 && longGap(r)))
+        bad("[фипи-15] у «" + t.id + "» нет поля с длинными стенами и проходом длиннее 10");
+      const gs = F.grade(R, t.solution, t);
+      if (gs.score !== 2) bad("[фипи-15] эталон «" + t.id + "» получил " + gs.score + ": " + JSON.stringify(gs.broke));
+      if (F.grade(R, t.starter, t).score === 2) bad("[фипи-15] заготовка «" + t.id + "» получает 2 балла");
+      /* на бесконечном поле ни одна стена не касается края нарисованного */
+      all.forEach((r, i) => {
+        if (/#/.test(r[0] + r[r.length - 1] + r.map(x => x[0] + x[x.length - 1]).join("")))
+          bad("[фипи-15] у «" + t.id + "» на поле " + i + " стена касается края — запаса нет");
+      });
+    });
+
+    /* 3. Эталон закрашивает то, что сказано словами, — посчитано из геометрии
+       поля, а не из самого эталона. Зеркало и поворот обязаны давать зеркало
+       и поворот закрашенного. */
+    const painted = (t, rows) => R.fieldRows(R.run(t.solution, R.parseField(rows, true)).field)
+                                  .map(l => l.replace(/[@+]/g, m => m === "+" ? "*" : "."));
+    const cornerWant = rows => {
+      const H = rows.length, W = rows[0].length;
+      let ry = 0, rx = 0;
+      rows.forEach((l, y) => { const x = l.indexOf("@"); if (x >= 0){ ry = y; rx = x; } });
+      const yH = ry - 1;
+      let xV = -1;
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (rows[y][x] === "#") xV = Math.max(xV, x);
+      return rows.map((l, y) => l.split("").map((c, x) => {
+        if (c === "#") return "#";
+        if (x === rx && y === ry) return ".";
+        const under = y === yH + 1 && x < xV && rows[yH][x] === "#";
+        const left = x === xV - 1 && y > yH && rows[y][xV] === "#";
+        return (under || left) ? "*" : ".";
+      }).join(""));
+    };
+    const tc = byId("rb-oge-corner"), tu = byId("rb-oge-up"), tl = byId("rb-oge-left"), tw = byId("rb-oge-wall");
+    if (!tc || !tu || !tl || !tw) bad("[фипи-15] нет одной из четырёх задач формата ОГЭ");
+    else {
+      const fl = rs => rs.slice().reverse();
+      const tr = rs => rs[0].split("").map((_, x) => rs.map(r => r[x]).join(""));
+      [tc.field].concat(tc.more).forEach((rows, i) => {
+        const got = painted(tc, rows).join("\n"), want = cornerWant(rows).join("\n");
+        if (got !== want) bad("[фипи-15] «Угол двух стен» на поле " + i + " закрашивает не то, что сказано:\n" + got + "\nнужно:\n" + want);
+        const up = [tu.field].concat(tu.more)[i], lf = [tl.field].concat(tl.more)[i];
+        if (painted(tu, up).join("\n") !== fl(painted(tc, rows)).join("\n"))
+          bad("[фипи-15] «Угол вверх» на поле " + i + " — не зеркало «Угла двух стен»");
+        if (painted(tl, lf).join("\n") !== tr(painted(tc, rows)).join("\n"))
+          bad("[фипи-15] «Стена слева и снизу» на поле " + i + " — не поворот «Угла двух стен»");
+      });
+      [tw.field].concat(tw.more).forEach((rows, i) => {
+        const ry = rows.findIndex(l => l.includes("@"));
+        const want = rows.map((l, y) => l.split("").map((c, x) =>
+          c === "#" ? "#" : (y === ry && rows[y - 1][x] === "#") ? "*" : ".").join("")).join("\n");
+        if (painted(tw, rows).join("\n") !== want) bad("[фипи-15] «Под стеной с проходом» на поле " + i + " закрашивает не то");
+      });
+
+      /* 4. Правила — каждое своим случаем, на образцах ФИПИ. */
+      const G = (t, c) => F.grade(R, c, t);
+      const ex1 = G(tc, "закрасить\n" + tc.solution);
+      if (ex1.score !== 1 || ex1.maxExtra !== 1) bad("[фипи-15] пример 1 (закрашена стартовая клетка) — не 1 балл: " + JSON.stringify(ex1));
+      const passPaint = tc.solution.replace("нц пока сверху свободно\n  вправо\nкц", "нц пока сверху свободно\n  закрасить\n  вправо\nкц");
+      const ex2 = G(tc, "закрасить\n" + passPaint);
+      if (ex2.score !== 0 || ex2.maxExtra <= 10) bad("[фипи-15] пример 2 (клетки под проходом) — не 0 при длинном проходе: " + JSON.stringify(ex2));
+      /* пример 3: шаги под картинку из условия, без циклов вдоль стен */
+      const onField = G(tc, "вправо\nзакрасить\nвправо\nвправо\nвправо\nзакрасить\nзакрасить\n");
+      if (onField.score !== 0) bad("[фипи-15] решение по рисунку не получило 0");
+      const edge = G(tw, "нц пока справа свободно\n  закрасить\n  вправо\nкц\n");
+      if (edge.score !== 0 || !edge.broke || edge.broke.why !== "away")
+        bad("[фипи-15] решение «до края поля» не названо незавершающимся: " + JSON.stringify(edge.broke));
+      /* решение, верное на КОНЕЧНОМ поле: идёт до края и красит только под
+         стеной. На экзамене поле бесконечное — это 0 (с. 43). */
+      const EDGE = "нц пока справа свободно\n  если сверху стена то\n    закрасить\n  все\n  вправо\nкц\n";
+      if (R.run(EDGE, R.parseField(tw.field)).error) bad("[фипи-15] решение «до края» падает и на конечном поле — случай не тот");
+      const edge2 = G(tw, EDGE);
+      if (edge2.score !== 0 || !edge2.broke || edge2.broke.why !== "away")
+        bad("[фипи-15] решение, верное только на конечном поле, не получило 0: " + JSON.stringify(edge2.broke));
+      const loop = G(tw, "нц пока сверху стена\n  закрасить\nкц\n");
+      if (loop.score !== 0 || !loop.broke || loop.broke.why !== "loop") bad("[фипи-15] вечный цикл не дал 0");
+      const crash = G(tc, "вверх\n");
+      if (crash.score !== 0 || !crash.broke || crash.broke.why !== "crash") bad("[фипи-15] разбившийся Робот не дал 0");
+      const miss = G(tc, tc.solution.replace(/нц пока справа стена\n  закрасить\n  вниз\nкц\n$/, "нц пока справа стена\n  вниз\nкц\n"));
+      if (miss.score !== 1 || miss.maxMissed < 1 || miss.maxMissed > 10) bad("[фипи-15] пропущено немного клеток — не 1 балл: " + JSON.stringify(miss));
+      if (G(tc, "нц пока справа\n").score !== null) bad("[фипи-15] у неразобранной записи назван балл");
+
+      /* 5. Экран задачи: разделы, балл после проверки. */
+      g.state.algo = {};
+      g.screenRobot(); await tick();
+      const secs = [...doc.querySelectorAll("#app .sect h2")].map(h => h.textContent);
+      if (!/Формат ОГЭ/.test(secs[0] || "")) bad("[фипи-15] в разделе «Робот» формат ОГЭ не стоит первым: " + secs.join(" | "));
+      const card = doc.querySelector('[data-rb="rb-oge-corner"]');
+      if (!card) bad("[фипи-15] в списке нет «Угла двух стен»");
+      else {
+        card.click(); await tick();
+        const run = async c => { doc.getElementById("rbcode").value = c; doc.getElementById("rbrun").click(); await tick();
+                                  return (doc.getElementById("rbmsg") || {}).textContent || ""; };
+        if (!/эксперт/.test(doc.getElementById("app").textContent)) bad("[фипи-15] на экране задачи не сказано про оценку эксперта");
+        let m = await run("закрасить\n" + tc.solution);
+        if (!/было бы 1 из 2/.test(m)) bad("[фипи-15] после проверки нет «1 из 2»: " + m.slice(0, 160));
+        m = await run(tc.solution);
+        if (!/Решено/.test(m) || !/было бы 2 из 2/.test(m)) bad("[фипи-15] эталон на экране — не «Решено» и «2 из 2»: " + m.slice(0, 160));
+        if (!g.state.algo["rb-oge-corner"]) bad("[фипи-15] решённая задача не отмечена");
+        m = await run("нц пока справа\n");
+        if (!/не назвать/.test(m)) bad("[фипи-15] у неразобранной записи на экране не сказано, что балла нет");
+        doc.getElementById("rbback").click(); await tick();
+      }
+      /* экран обязан судить на бесконечном поле, а не только судья */
+      g.openRobot("rb-oge-wall", null); await tick();
+      if (doc.getElementById("rbcode")){
+        doc.getElementById("rbcode").value = EDGE;
+        doc.getElementById("rbrun").click(); await tick();
+        const m = doc.getElementById("rbmsg").textContent;
+        if (/Решено/.test(m) || !/бесконечное/.test(m))
+          bad("[фипи-15] экран засчитал решение «до края поля» или не объяснил про бесконечное поле: " + m.slice(0, 160));
+      }
+
+      /* 6. Экзамен ОГЭ: номер 15 — Робот, судья молчит, балл — в итоге. */
+      g.state.algo = {}; g.state.variant = {};
+      g.screenVariant(); await tick();
+      const tabO = doc.querySelector('[data-vtab="oge"]');
+      if (tabO){ tabO.click(); await tick(); }
+      const start = doc.querySelector('[data-vexam="30"]');
+      if (!start) bad("[фипи-15] нет режима экзамена на вкладке ОГЭ");
+      else {
+        start.click(); await tick();
+        const v = g.state.variant.oge;
+        const it = v.items.find(x => x.n === 15);
+        it.id = "rb-oge-corner";
+        g.screenVariant(); await tick();
+        const go = doc.querySelector('[data-vgo="15"]');
+        if (!go) bad("[фипи-15] номер 15 в экзамене ОГЭ не открывается");
+        else {
+          if (!/Угол двух стен/.test(go.closest(".exrow").textContent)) bad("[фипи-15] в строке номера 15 не названа задача Робота");
+          go.click(); await tick();
+          if (!doc.getElementById("rbcode")) bad("[фипи-15] номер 15 открыл не экран Робота");
+          if (doc.querySelector(".rbhints")) bad("[фипи-15] на экзамене у Робота есть подсказки");
+          if (!doc.getElementById("rbclock")) bad("[фипи-15] на экзамене у Робота нет часов");
+          if (!doc.getElementById("rbsend")) { bad("[фипи-15] на экзамене у Робота нет кнопки «Сдать ответ»"); }
+          else {
+          doc.getElementById("rbcode").value = tc.solution;
+          doc.getElementById("rbrun").click(); await tick();
+          if (/Решено|из 2/.test(doc.getElementById("app").textContent)) bad("[фипи-15] запуск на экзамене выдал вердикт или балл");
+          doc.getElementById("rbcode").value = "вверх\n";
+          doc.getElementById("rbsend").click(); await tick();
+          const badMsg = doc.getElementById("rbmsg").textContent;
+          doc.getElementById("rbcode").value = "закрасить\n" + tc.solution;
+          doc.getElementById("rbsend").click(); await tick();
+          const okMsg = doc.getElementById("rbmsg").textContent;
+          if (!/записан/.test(okMsg)) bad("[фипи-15] сдача на экзамене не сказала «ответ записан»");
+          if (badMsg !== okMsg) bad("[фипи-15] сданные верный и неверный ответы отвечают по-разному");
+          if (/из 2/.test(okMsg)) bad("[фипи-15] на экзамене показан балл Робота");
+          const p = (g.state.variant.oge.pts || {})[15];
+          if (!p || p.s !== 1) bad("[фипи-15] балл Робота не записан в экзамене: " + JSON.stringify(p));
+          if (g.state.algo["rb-oge-corner"]) bad("[фипи-15] задача экзамена сразу отмечена решённой — вердикт утёк");
+          doc.getElementById("rbback").click(); await tick();
+          if (!/Вариант|Экзамен/.test(doc.getElementById("app").textContent)) bad("[фипи-15] из задачи экзамена не вернулись в вариант");
+          g.state.variant.oge.endAt = Date.now() - 1000;
+          g.screenVariant(); await tick();
+          const txt = doc.getElementById("app").textContent;
+          if (!/Задание 15 — как оценил бы эксперт/.test(txt) || !/1 из 2 баллов/.test(txt))
+            bad("[фипи-15] итог экзамена ОГЭ не показал балл за Робота");
+          if (!/Задание 16 — как оценил бы эксперт/.test(txt)) bad("[фипи-15] итог потерял карточку задания 16");
+          if (/первичный балл|из 4 баллов|из 100/.test(txt)) bad("[фипи-15] итог сложил баллы двух заданий");
+          }
+        }
+      }
+    }
     g.state.algo = {}; g.state.variant = {};
     viewReset(g);
   }

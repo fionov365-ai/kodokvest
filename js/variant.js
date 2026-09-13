@@ -130,8 +130,19 @@ function buildItems(exId, seed){
   var rnd = rngFrom(String(seed || "") + ":" + exId), used = {};
   return ex.tasks.map(function(t){
     var pool = (t.g && t.g.length) ? tasksIn(t.g) : [];
-    if (t.robot)
-      return { n: t.n, t: t.t, id: null, dup: 0, why: "решается в разделе «Робот»" };
+    /* ⚠️ Задание 15 — Робот (с 1.163.0 он в варианте). Задачу берём только
+       формата ОГЭ (fipi) и СВОИМ потоком случайных чисел от того же семени:
+       общий поток сдвинул бы выбор всех номеров после 15-го, и код, который
+       репетитор продиктовал вчера, собрал бы сегодня другой номер 16. */
+    if (t.robot){
+      var rb = (window.ROBOT_TASKS || []).filter(function(x){ return x.fipi; })
+                                          .map(function(x){ return x.id; }).sort();
+      if (!rb.length)
+        return { n: t.n, t: t.t, id: null, dup: 0, why: "решается в разделе «Робот»" };
+      var rr = rngFrom(String(seed || "") + ":" + exId + ":robot");
+      return { n: t.n, t: t.t, id: rb[Math.floor(rr() * rb.length) % rb.length],
+               kind: "robot", dup: 0, why: "" };
+    }
     if (!pool.length)
       return { n: t.n, t: t.t, id: null, dup: 0,
                why: t.off ? ("судить нечем: " + t.off) : "задач по этой теме пока нет" };
@@ -252,6 +263,11 @@ function tally(v){
     else t.left++;
   });
   return t;
+}
+/* Задача строки: у Робота свой список (js/robot-tasks.js), у остальных — ALGO. */
+function taskOf(x){
+  if (!x || !x.id) return null;
+  return x.kind === "robot" ? A.robotById(x.id) : A.algoById(x.id);
 }
 function itemOf(v, n){
   for (var i = 0; i < v.items.length; i++) if (v.items[i].n === n) return v.items[i];
@@ -587,18 +603,17 @@ function screenVariant(){
   h += assignCardHTML(v.ex);
 
   h += '<div class="exmap">';
-  v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null); });
+  v.items.forEach(function(x){ h += rowHTML(v, x, taskOf(x)); });
   h += '</div>';
 
   /* ⚠️ Задание 15 ОГЭ — исполнитель «Робот»: у него свой язык и свой судья, в
      вариант он не встроен (строка стоит с причиной). До 13.09.2026 здесь было
      «15 — две задачи по выбору»: так было до 2025 года, а с 2025-го 15 и 16
      обязательны оба (спецификация ФИПИ 2026). */
-  if (v.ex === "oge")
+  if (v.ex === "oge" && itemOf(v, 15) && !itemOf(v, 15).id)
     h += '<div class="note"><b>Задание 15 решается в разделе «Робот»</b>' +
-      'На экзамене это алгоритм для исполнителя, и у него свой язык с русскими командами. ' +
-      'В вариант он не встроен: решай его в «Тренировках» → «Робот». Задание 16 — обычная ' +
-      'программа, оно в варианте есть.</div>';
+      'Этот вариант собран до того, как Робот вошёл в вариант, поэтому номер 15 здесь пустой: ' +
+      'решай его в «Тренировках» → «Робот». В новом варианте он будет на своём месте.</div>';
 
   if (t.dup)
     h += '<div class="note"><b>Повторы в варианте — это про нас, а не про тебя</b>' +
@@ -669,7 +684,7 @@ function openItem(n){
   var ex = v.ex, exam = isExam(v) && !v.closed;
   v.seen[n] = 1;
   put(v);
-  A.setAlgoBack({
+  var back = ({
     crumb: (exam ? "Экзамен № " : "Вариант № ") + v.seed,
     backLabel: exam ? "В экзамен" : "В вариант",
     winLabel: exam ? "← Вернуться в экзамен" : "← Вернуться в вариант",
@@ -692,9 +707,10 @@ function openItem(n){
       w.sent[n] = 1;
       if (ok) w.done[n] = 1; else delete w.done[n];
       /* Балл эксперта ФИПИ — тоже последний сданный, как и сам ответ. Молчит
-         до итога вместе с вердиктом. */
+         до итога вместе с вердиктом. Упаковщик свой у Робота и у программы. */
       w.pts = w.pts || {};
-      if (fg && window.FIPI16) w.pts[n] = FIPI16.pack(fg); else delete w.pts[n];
+      var F = x.kind === "robot" ? window.FIPI15 : window.FIPI16;
+      if (fg && F && fg.score !== null) w.pts[n] = F.pack(fg); else delete w.pts[n];
       put(w);
     } : null,
     onWin: function(){
@@ -712,6 +728,8 @@ function openItem(n){
       put(w);
     }
   });
+  if (x.kind === "robot") return A.openRobot(x.id, back);
+  A.setAlgoBack(back);
   A.openAlgo(x.id);
 }
 
@@ -721,8 +739,29 @@ function openItem(n){
    подсказками, и «балл» за такой заход ничего не измеряет. Балл тренировки
    ребёнок и так видит на экране задачи после каждой проверки. */
 function fipiCardHTML(v){
+  if (v.ex !== "oge" || !isExam(v)) return "";
+  return robotCardHTML(v) + programCardHTML(v);
+}
+/* Задание 15 — алгоритм для Робота (js/fipi15.js). */
+function robotCardHTML(v){
+  var F = window.FIPI15;
+  var x = null;
+  v.items.forEach(function(it){ if (it.kind === "robot") x = it; });
+  if (!F || !x || !x.id) return "";
+  var h = '<div class="card"><h3>🤖 Задание ' + x.n + ' — как оценил бы эксперт</h3>';
+  var r = (v.pts || {})[x.n];
+  if (!r)
+    h += '<p><b>0 из ' + F.MAX + ' баллов</b> — ответ не сдан или алгоритм не разобрался. ' +
+      'Не сданное задание на экзамене не оценивается вовсе.</p>';
+  else
+    h += '<p><b>' + r.s + ' из ' + F.MAX + ' баллов.</b> ' + A.esc(F.reasonHTML(F.unpack(r))) + '</p>';
+  return h + '<p class="dim">Правила — ' + A.esc(F.DOC.title) + ', ' + F.DOC.pages + '. ' +
+    'Скрытые поля, среди них со стенами по 30 клеток, ты не видел — как и на экзамене.</p></div>';
+}
+/* Задание 16 — программа (js/fipi16.js). */
+function programCardHTML(v){
   var F = window.FIPI16;
-  if (!F || v.ex !== "oge" || !isExam(v)) return "";
+  if (!F) return "";
   var et = F.examTask();
   var x = et ? itemOf(v, et.n) : null;
   if (!x || !x.id) return "";
@@ -824,15 +863,16 @@ function screenVariantDone(){
     'закрыты, какие просели, какие ты ещё не открывал. Настоящие баллы за такой вариант ' +
     'скажет только демоверсия своего года.</p>' +
     (fipiRow
-      ? '<p class="dim">Балл за программу выше — не исключение из этого правила: он стоит за ' +
-        'одно задание, правила которого ФИПИ опубликовал целиком, и ни с чем не складывается.</p>'
+      ? '<p class="dim">Баллы за задания выше — не исключение из этого правила: каждый стоит за ' +
+        'одно задание, правила которого ФИПИ опубликовал целиком, и ни с чем не складывается — ' +
+        'даже друг с другом: сумма двух заданий из шестнадцати ничего не говорит об экзамене.</p>'
       : '') + '</div>';
 
   var weakRows = v.items.filter(function(x){ return x.id && !v.done[x.n]; });
   if (weakRows.length){
     h += '<div class="sect"><h2>Что осталось</h2><div class="line"></div>' +
       '<span class="cnt">' + weakRows.length + '</span></div><div class="exmap">';
-    weakRows.forEach(function(x){ h += rowHTML(v, x, A.algoById(x.id)); });
+    weakRows.forEach(function(x){ h += rowHTML(v, x, taskOf(x)); });
     h += '</div>';
   }
 
