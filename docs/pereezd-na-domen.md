@@ -44,6 +44,7 @@ location.pathname`; манифест ходит по «.», service worker — �
 | `sitemap.xml` | **все** `<loc>` | статика |
 | `individualnyi-proekt/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `semeynoe-obuchenie/index.html` | то же | статика |
+| `roditelyu/index.html` | `canonical`, `og:url`, `og:image` (заведена 13.09.2026) | статика |
 | `repetitoru/index.html` | то же | статика |
 | `shkole/index.html` | то же | статика |
 | `baza/index.html` | `canonical` | статика |

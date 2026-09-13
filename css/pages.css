@@ -38,6 +38,10 @@ body{
   font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
 }
 .wrap{max-width:1080px; margin:0 auto; padding:0 16px}
+/* Ссылки в тексте — цветом темы (13.09.2026). Без этого правила в тёмной теме
+   стоял браузерный синий rgb(0,0,238) на фоне rgb(13,16,32) и ссылки-источники
+   почти не читались (RAZVITIE § 2.6). Кнопки, меню и подвал цвет задают сами. */
+a{color:var(--accent)}
 
 /* ---- шапка: одна строка, дорога назад слева ---- */
 .top{border-bottom:1px solid var(--line); background:var(--card)}
@@ -143,3 +147,28 @@ footer nav{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
 .doc ol,.doc ul{padding-left:22px}
 .doc li{margin:6px 0}
 .doc .upd{color:var(--dim); font-size:15px}
+
+/* ---- первый экран: одно главное действие и развилка по роли (13.09.2026) ----
+   Схема лучших self-serve сайтов (rynok-i-rov-2026-09-12.md § 6в): сначала
+   попробовать, потом выбрать, кто ты. Главная кнопка крупнее всех на странице,
+   роли — рядом, но тише: дорога к действию одна. */
+.btn.big{min-height:56px; padding:14px 28px; font-size:18px}
+.roles{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0 8px}
+.roles .dim{color:var(--dim); margin-right:4px}
+@media (max-width:640px){
+  .btn.big{width:100%; font-size:17px; padding:14px 18px; text-align:center}
+  .roles .btn{flex:1 1 100%}
+}
+.btnrow.end{margin-top:18px}
+
+/* ---- плашка безопасности под обещаниями ---- */
+.note.safe{margin-top:14px}
+.note p{margin:0 0 8px}
+.note p:last-child{margin-bottom:0}
+
+/* ---- частые вопросы: <details> раскрывает браузер, скриптов нет ---- */
+.faq{display:grid; gap:10px}
+.faq details{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:0 18px}
+.faq summary{cursor:pointer; font-weight:600; min-height:48px; display:flex; align-items:center; padding:10px 0}
+.faq details[open] summary{border-bottom:1px solid var(--line)}
+.faq details p{margin:12px 0 14px; color:var(--dim)}
