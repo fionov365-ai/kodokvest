@@ -153,6 +153,9 @@ function ensureShape(o){
      собственность устройства взрослого. */
   if (!Array.isArray(o.admin.kids)) o.admin.kids = [];
   o.admin.kids = o.admin.kids.filter(function(k){ return k && typeof k.code === "string"; });
+  /* какой список учеников уже сохранён файлом (kidsListMarkSaved) */
+  if (typeof o.admin.kidsSavedSig !== "string") o.admin.kidsSavedSig = "";
+  if (typeof o.admin.kidsSavedAt !== "number") o.admin.kidsSavedAt = 0;
   return o;
 }
 /* стереть результаты занятий, оставив имя, расписание и сделанное ребёнком */
@@ -13116,6 +13119,66 @@ function kidRename(code, name){
   S.admin.labels[code] = k.name;
   saveLocal();
 }
+/* ---------- список учеников файлом (13.09.2026, RAZVITIE § 2.6) ----------
+   Список живёт только в браузере репетитора: имена на сервер не уходят
+   (CLOUD_SKIP), и это обещание, а не недоделка. Следствие было нигде не
+   сказано: сменил компьютер или почистил браузер — имена пропали, а коды
+   пришлось бы вспоминать по одному. Файл лечит это, не трогая обещания.
+   ⚠️ Почему не старый «Перенос прогресса файлом» из панели: тот отдаёт всё
+   состояние устройства целиком — вместе с паролем кабинета открытым текстом —
+   и при загрузке ЗАМЕНЯЕТ всё. Здесь в файле только имена и коды, а загрузка
+   ДОБАВЛЯЕТ: уже знакомый ученик не задваивается, его подпись не трогается.
+   ⚠️ Прогресс в файл не кладём: он лежит на сервере под кодом, и ученик
+   возвращается со всеми занятиями сам, как через «Вернуть по коду». */
+var KIDS_FILE_KIND = "fionika-ucheniki";
+function kidsListSig(){
+  return kidsList().map(function(k){ return k.code; }).sort().join(",");
+}
+function kidsListFileText(){
+  return JSON.stringify({
+    kind: KIDS_FILE_KIND, v: 1, savedAt: new Date().toISOString(),
+    kids: kidsList().map(function(k){ return { code: k.code, name: k.name || "" }; })
+  }, null, 2);
+}
+/* Файл сохранён — запоминаем, КАКОЙ список в нём. Напоминание гаснет по
+   действию, а не по показу, и возвращается, когда в списке появился ученик,
+   которого в файле нет. */
+function kidsListMarkSaved(){
+  S.admin.kidsSavedSig = kidsListSig();
+  S.admin.kidsSavedAt = Date.now();
+  saveLocal();
+}
+function kidsSaveNeeded(){
+  return kidsList().length >= 3 && (S.admin.kidsSavedSig || "") !== kidsListSig();
+}
+/* Разобрать текст файла. Принимаем и свой файл, и старый файл прогресса из
+   «Переноса» (в нём список лежит в admin.kids): репетитор, который уже
+   спасался им, не должен остаться ни с чем. */
+function kidsListParse(text){
+  var obj = null;
+  try { obj = JSON.parse(String(text || "")); } catch(e){
+    return { error: "Файл не читается. Нужен файл списка, сохранённый кнопкой «Сохранить список файлом»." };
+  }
+  var raw = null;
+  if (obj && obj.kind === KIDS_FILE_KIND && Array.isArray(obj.kids)) raw = obj.kids;
+  else if (obj && obj.admin && Array.isArray(obj.admin.kids)) raw = obj.admin.kids;
+  if (!raw) return { error: "Это не список учеников. Нужен файл, сохранённый кнопкой «Сохранить список файлом»." };
+  return { kids: raw.filter(function(k){ return k && typeof k === "object"; }).map(function(k){
+    return { code: String(k.code || ""), name: String(k.name || "") };
+  }) };
+}
+/* Добавить учеников из файла к списку. Ничего не стирает и не переименовывает. */
+function kidsListMerge(kids){
+  var r = { added: 0, already: 0, skipped: 0 };
+  (kids || []).forEach(function(k){
+    var v = (typeof Cloud !== "undefined" && Cloud.validCode(k.code)) || "";
+    if (!v){ r.skipped++; return; }
+    if (kidGet(v)){ r.already++; return; }
+    kidAttach(v, k.name);
+    r.added++;
+  });
+  return r;
+}
 /* Ссылка-приглашение. Открыв её, устройство ребёнка привязывается к своему
    коду (обработчик ?kid= при загрузке) — регистрироваться отдельно не нужно. */
 function kidLink(code){
@@ -15054,10 +15117,13 @@ function screenAdminLogin(){
   refreshTop();
 }
 /* Главный экран кабинета: список учеников. */
-function screenKids(){
+function screenKids(note){
   enterScreen("home", "kids");
   kidTarget = null;
   var kids = kidsList();
+  /* ⚠️ note — только строка: backTarget отдаёт screenKids значением, и кнопка
+     «назад» передала бы сюда событие клика */
+  note = (typeof note === "string") ? note : "";
   var h = '<div class="lvlhead"><div><div class="idx">кабинет взрослого</div>' +
     '<h1>👨‍👩‍👦 Мои ученики</h1></div></div>' +
     roomNavHTML("kids") +
@@ -15066,6 +15132,14 @@ function screenKids(){
   if (!serverOn())
     h += '<p class="warnline">⚠️ Сервер не подключён: адрес не указан в <code>js/cloud-config.js</code>. ' +
          'Без него ученики не смогут заниматься на своих устройствах.</p>';
+
+  if (note) h += '<div class="note"><b>Готово</b>' + esc(note) + '</div>';
+  /* Карточка файла ОДНА, меняется только её место: пока список не сохранён
+     (три ученика и больше), она стоит первой и говорит, почему; сохранили —
+     уходит под список. Две кнопки «сохранить» в двух местах были бы двумя
+     дорогами к одному действию (pravila-sajta.md § 13). */
+  var fileFirst = kidsSaveNeeded();
+  if (fileFirst) h += kidsFileCardHTML(true);
 
   /* ⚠️ Никаких плиток-дублей. День 1.103.0: под навигацией стояла сетка
      плиток, где «Группа» и «Панель» повторяли навигацию строчкой выше, а
@@ -15109,6 +15183,7 @@ function screenKids(){
         '</div></div>';
     }).join("") + '</div>';
   }
+  if (!fileFirst) h += kidsFileCardHTML(false);
   /* В подвале остаётся только то, что уводит ИЗ кабинета: сами инструменты
      переехали наверх, в плитки. ⚠️ «Выйти» и «больше не кабинет» — разные
      вещи и разные кнопки: первое — выйти из комнаты, второе — съехать. */
@@ -15197,14 +15272,89 @@ function screenKids(){
       }
       if (act === "off"){
         if (!confirm("Сделать это устройство обычным?\n\nКабинет и пароль будут забыты, " +
-                     "список учеников тоже. На сервере ничего не изменится."))
+                     "список учеников тоже. На сервере ничего не изменится." +
+                     (kidsList().length ? "\n\nСохраните список файлом раньше — иначе имена придётся вспоминать." : "")))
           return;
         adminDeviceOff();
         return screenWorlds();
       }
+      if (act === "listsave"){
+        if (!kidsList().length){
+          fm.className = "msg show bad";
+          fm.innerHTML = "<b>Сохранять пока нечего</b>В списке нет ни одного ученика.";
+          return;
+        }
+        var d = new Date(), pad = function(n){ return (n < 10 ? "0" : "") + n; };
+        var fname = "fionika-ucheniki-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + ".json";
+        if (!downloadText(fname, kidsListFileText(), null, "application/json")){
+          fm.className = "msg show bad";
+          fm.innerHTML = "<b>Браузер не дал сохранить файл</b>Попробуйте другой браузер на этом компьютере.";
+          return;
+        }
+        var was = fileFirst;
+        kidsListMarkSaved();
+        if (was) return screenKids("Список сохранён файлом " + fname + " в папке загрузок.");
+        fm.className = "msg show ok";
+        fm.innerHTML = "<b>Список сохранён</b>Файл " + esc(fname) + " — в папке загрузок.";
+        return;
+      }
     };
   });
+  var fileIn = document.getElementById("kidfilein"), fm = document.getElementById("kidfilemsg");
+  if (fileIn) fileIn.onchange = function(){
+    var f = fileIn.files && fileIn.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){ kidsListLoadText(String(rd.result || ""), fm); };
+    rd.onerror = function(){
+      fm.className = "msg show bad";
+      fm.innerHTML = "<b>Файл не открылся</b>Попробуйте выбрать его ещё раз.";
+    };
+    rd.readAsText(f);
+  };
   refreshTop();
+}
+/* Карточка «Список учеников файлом». warn — список ещё не сохранён. */
+function kidsFileCardHTML(warn){
+  var at = S.admin.kidsSavedAt ? new Date(S.admin.kidsSavedAt).toLocaleDateString("ru-RU") : "";
+  return '<div class="card kidfile' + (warn ? " warn" : "") + '" id="kidfile">' +
+    '<h3>' + (warn ? "⚠️ Сохраните список учеников файлом" : "Список учеников файлом") + '</h3>' +
+    '<p class="dim">Имена учеников живут только в этом браузере — на сервер они не уходят. ' +
+    'Сменили компьютер или почистили браузер — загрузите файл, и ученики вернутся со всеми занятиями. ' +
+    'В файле имена и коды: храните его как список класса.' +
+    (at && !warn ? ' Последний раз сохранён ' + esc(at) + '.' : "") + '</p>' +
+    '<div class="admrow">' +
+      '<button class="rbtn ' + (warn ? "check" : "sec") + '" data-kact="listsave">↓ Сохранить список файлом</button>' +
+      '<label class="rbtn sec kidfilepick">↑ Загрузить из файла' +
+        '<input type="file" id="kidfilein" accept=".json,application/json"></label>' +
+    '</div><div class="msg" id="kidfilemsg"></div></div>';
+}
+/* Загрузка списка: разобрать, добавить, сказать словами, что произошло.
+   Отдельно от обработчика файла — так её зовёт и тест, без FileReader. */
+function kidsListLoadText(text, msgEl){
+  var r = kidsListParse(text);
+  if (r.error){
+    if (msgEl){ msgEl.className = "msg show bad"; msgEl.innerHTML = "<b>Не получилось</b>" + esc(r.error); }
+    return null;
+  }
+  var m = kidsListMerge(r.kids);
+  var parts = [];
+  if (m.added) parts.push("добавлено " + m.added + " " + plural(m.added, "ученик", "ученика", "учеников"));
+  if (m.already) parts.push(m.already + " уже " + plural(m.already, "был", "были", "были") + " в списке");
+  if (m.skipped) parts.push(m.skipped + " " + plural(m.skipped, "строка", "строки", "строк") + " без годного кода " +
+    plural(m.skipped, "пропущена", "пропущены", "пропущено"));
+  var said = parts.length ? parts.join(", ") : "в файле нет ни одного ученика";
+  if (m.added){
+    /* список целиком совпал с файлом — файл и есть сохранённая копия, и
+       напоминать о нём незачем */
+    var inFile = r.kids.map(function(k){ return (typeof Cloud !== "undefined" && Cloud.validCode(k.code)) || ""; });
+    if (kidsList().every(function(k){ return inFile.indexOf(k.code) >= 0; })) kidsListMarkSaved();
+    screenKids("Список загружен: " + said + ". Занятия подтянутся с сервера по коду.");
+  } else if (msgEl){
+    msgEl.className = "msg show" + (m.skipped && !m.already ? " bad" : " ok");
+    msgEl.innerHTML = "<b>Ничего нового</b>" + esc(said.charAt(0).toUpperCase() + said.slice(1)) + ".";
+  }
+  return m;
 }
 /* Один ученик: ссылка, расписание (правится удалённо) и отчёт. */
 function screenKid(code, note){
@@ -19519,6 +19669,8 @@ window.__game = {
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
   kidAttach: kidAttach, kidRename: kidRename,
+  kidsListFileText: kidsListFileText, kidsListParse: kidsListParse, kidsListMerge: kidsListMerge,
+  kidsListLoadText: kidsListLoadText, kidsSaveNeeded: kidsSaveNeeded, kidsListMarkSaved: kidsListMarkSaved,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
   isParentDevice: isParentDevice, parentOf: parentOf, parentDeviceOff: parentDeviceOff,
   parentLink: parentLink, becomeAdmin: becomeAdmin, becomeParent: becomeParent,

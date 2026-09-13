@@ -1962,6 +1962,14 @@ body.focus .toTop{display:none}
 .kidmain b{font-size:18px}
 .kidcode{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;color:var(--faint)}
 .kidacts{display:flex;gap:8px;flex-wrap:wrap}
+/* список учеников файлом (13.09.2026): пока не сохранён — карточка первой и
+   цветом предупреждения; поле выбора файла спрятано в подпись-кнопку, но
+   остаётся доступным с клавиатуры (фокус рисуется на подписи) */
+.card.kidfile.warn{background:var(--warnbg);border-color:var(--warnline)}
+.card.kidfile.warn h3{color:var(--warnink)}
+.kidfilepick{position:relative;display:inline-flex;align-items:center;line-height:normal}
+.kidfilepick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.kidfilepick:focus-within{outline:2px solid var(--acc);outline-offset:2px}
 .prow{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
 .madelink{border:1px solid var(--okline);background:var(--okbg);border-radius:12px;
   padding:10px 12px;margin:10px 0;font-size:14px;line-height:1.5}

@@ -9606,6 +9606,103 @@ function checkEncoding(){
           if (!/data-kact="attach"/.test(kh)) bad("[кабинет] нет кнопки возврата по коду");
           if (!/Вернуть ученика по коду/.test(doc.getElementById("app").textContent))
             bad("[кабинет] карточка возврата не названа словами");
+
+          /* --- список учеников файлом (13.09.2026, RAZVITIE § 2.6) ---
+             Список живёт только в браузере репетитора (CLOUD_SKIP). Сменил
+             компьютер — имена пропали. Проверяем круг целиком: сохранил →
+             «новый компьютер» → загрузил → ученики на месте, никто не
+             задвоен, чужая подпись не переписана, прогресс не тронут. */
+          if (typeof g.kidsListFileText !== "function" || typeof g.kidsListLoadText !== "function")
+            bad("[список-файлом] нет сохранения или загрузки списка учеников");
+          else {
+            g.kidsList().slice().forEach(k => g.kidDrop(k.code));
+            g.state.admin.kidsSavedSig = "";
+            g.kidAttach("sova-aaaa1", "Аня");
+            g.kidAttach("kit-bbbb2", "Боря");
+            if (g.kidsSaveNeeded()) bad("[список-файлом] напоминание уже при двух учениках — рано, это шум");
+            g.kidAttach("les-cccc3", "Вера");
+            if (!g.kidsSaveNeeded()) bad("[список-файлом] три ученика, файла нет — а напоминания нет");
+
+            /* напоминание — та же карточка, поставленная ПЕРВОЙ */
+            g.screenKids(); await tick();
+            const app1 = doc.getElementById("app").innerHTML;
+            const fc = doc.getElementById("kidfile");
+            if (!fc || !fc.classList.contains("warn")) bad("[список-файлом] несохранённый список не предупреждён карточкой");
+            else if (app1.indexOf('id="kidfile"') > app1.indexOf('id="kidadd"'))
+              bad("[список-файлом] предупреждение стоит ниже формы добавления — его не увидят");
+            if (doc.querySelectorAll("#kidfile").length !== 1) bad("[список-файлом] карточек файла на экране " + doc.querySelectorAll("#kidfile").length + ", а должна быть ровно одна");
+
+            /* кнопка сохраняет файл по-настоящему — ловим ссылку, не уходя со страницы */
+            let скачано = null;
+            const origClick = w.HTMLAnchorElement.prototype.click;
+            w.HTMLAnchorElement.prototype.click = function(){ скачано = { name: this.download, href: this.href }; };
+            try {
+              const sb = doc.querySelector('[data-kact="listsave"]');
+              if (!sb) bad("[список-файлом] нет кнопки «Сохранить список файлом»");
+              else { sb.click(); await tick(); }
+            } finally { w.HTMLAnchorElement.prototype.click = origClick; }
+            let файл = "";
+            if (!скачано) bad("[список-файлом] кнопка сохранения ничего не отдала");
+            else {
+              if (!/^fionika-ucheniki-\d{4}-\d{2}-\d{2}\.json$/.test(скачано.name || ""))
+                bad("[список-файлом] имя файла не то: " + скачано.name);
+              try { файл = decodeURIComponent(String(скачано.href).replace(/^data:[^,]*,/, "")); } catch(e){}
+            }
+            if (!файл) файл = g.kidsListFileText();   /* чтобы проверить остальное, даже если отдача сломана */
+            if (g.kidsSaveNeeded()) bad("[список-файлом] после сохранения напоминание не погасло");
+            g.screenKids(); await tick();
+            const app2 = doc.getElementById("app").innerHTML;
+            if (doc.getElementById("kidfile") && doc.getElementById("kidfile").classList.contains("warn"))
+              bad("[список-файлом] сохранённый список всё ещё красится предупреждением");
+            if (app2.indexOf('id="kidfile"') < app2.indexOf('id="kidlist"'))
+              bad("[список-файлом] сохранённый список: карточка файла не ушла под список");
+
+            /* ⚠️ в файле только имена и коды — ни пароля кабинета, ни прогресса */
+            let obj = null;
+            try { obj = JSON.parse(файл); } catch(e){ bad("[список-файлом] файл не разбирается как JSON"); }
+            if (obj){
+              if (!Array.isArray(obj.kids) || obj.kids.length !== 3) bad("[список-файлом] в файле не три ученика");
+              if (/"pass"|"stars"|"admin"|"xp"/.test(файл))
+                bad("[список-файлом] в файл утекло лишнее (пароль, прогресс или admin): " + файл.slice(0, 120));
+              if (!obj.kids.some(k => k.code === "kit-bbbb2" && k.name === "Боря"))
+                bad("[список-файлом] имя ученика не легло в файл рядом с кодом");
+            }
+
+            /* «новый компьютер»: список пуст, один ученик уже заведён под своей подписью */
+            const звёзды = JSON.stringify(g.state.stars);
+            g.kidsList().slice().forEach(k => g.kidDrop(k.code));
+            g.state.admin.kidsSavedSig = "";
+            g.kidAttach("kit-bbbb2", "Борис Петрович");
+            const сЛишним = JSON.stringify(Object.assign({}, obj || {},
+              { kids: ((obj && obj.kids) || []).concat([{ code: "НЕ КОД!", name: "Мусор" }]) }));
+            const m = g.kidsListLoadText(сЛишним, null);
+            if (!m) bad("[список-файлом] свой же файл не загрузился");
+            else if (m.added !== 2 || m.already !== 1 || m.skipped !== 1)
+              bad("[список-файлом] загрузка посчитала не так: " + JSON.stringify(m) + " — ждали 2 добавлено, 1 уже был, 1 пропущен");
+            if (g.kidsList().length !== 3) bad("[список-файлом] после загрузки в списке " + g.kidsList().length + " учеников, а не 3");
+            if (g.kidsList().filter(k => k.code === "kit-bbbb2").length !== 1) bad("[список-файлом] загрузка задвоила ученика");
+            const боря = g.kidGet("kit-bbbb2");
+            if (!боря || боря.name !== "Борис Петрович")
+              bad("[список-файлом] загрузка переписала подпись, которую репетитор дал на этом компьютере: " + (боря && боря.name));
+            const аня = g.kidGet("sova-aaaa1");
+            if (!аня || аня.name !== "Аня") bad("[список-файлом] ученик из файла вернулся без имени");
+            if (JSON.stringify(g.state.stars) !== звёзды) bad("[список-файлом] загрузка списка тронула прогресс устройства");
+
+            /* мусор не портит список, старый файл «Переноса» принимается */
+            const до = g.kidsList().length;
+            if (g.kidsListLoadText("это не файл", null) !== null) bad("[список-файлом] мусор принят за список");
+            if (g.kidsList().length !== до) bad("[список-файлом] мусор изменил список");
+            const старый = g.kidsListParse(JSON.stringify({ xp: 10, stars: {}, admin: { pass: "x", kids: [{ code: "old-dddd4", name: "Гоша" }] } }));
+            if (!старый.kids || старый.kids[0].code !== "old-dddd4")
+              bad("[список-файлом] старый файл прогресса из «Переноса» не отдал список учеников");
+
+            /* и на экране это названо словами, а поле файла есть */
+            if (!doc.getElementById("kidfilein")) bad("[список-файлом] на экране нет поля выбора файла");
+            if (!/Список учеников файлом|Сохраните список учеников файлом/.test(doc.getElementById("app").textContent))
+              bad("[список-файлом] карточка не названа словами");
+            g.kidsList().slice().forEach(k => g.kidDrop(k.code));
+            g.state.admin.kidsSavedSig = ""; g.state.admin.kidsSavedAt = 0;
+          }
         }
       } finally {
         w.Cloud.load = origLoad; w.Cloud.hasUrl = origHas;
