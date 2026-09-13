@@ -10528,6 +10528,33 @@ function poleCopy(RB, rows){ return RB.parseField(rows); }
     if (problems.length === p0) variantChecked++;
   }
 
+  /* --- 13в.9. [карта-огэ] структура ОГЭ сверена со спецификацией ФИПИ 2026 ---
+     ⚠️ До 13.09.2026 карта говорила «15 заданий, задание 15 — программа или
+     Робот на выбор»: так было до 2025 года. С 2025 года заданий 16, 15 —
+     Робот, 16 — программа, оба обязательны. Тесты молчали, потому что
+     сверяли карту с самой собой. Теперь структура записана здесь слепком. */
+  if (w.EXAMS && w.EXAMS.oge){
+    const oge = w.EXAMS.oge;
+    if (oge.total !== 16 || oge.tasks.length !== 16)
+      bad(`[карта-огэ] в ОГЭ ${oge.total} заданий (строк ${oge.tasks.length}) — по спецификации 2026 их 16`);
+    const t15 = oge.tasks.find(x => x.n === 15), t16 = oge.tasks.find(x => x.n === 16);
+    if (!t15 || !t15.robot) bad("[карта-огэ] задание 15 обязано быть исполнителем «Робот»");
+    if (!t16 || !(t16.g || []).includes("oge")) bad("[карта-огэ] задание 16 обязано быть программой (группа oge)");
+    if (t15 && w.EXAMS.state(t15, () => 0) !== "yes") bad("[карта-огэ] задание 15 не видит задач Робота");
+    g.openExamMap("oge"); await tick();
+    const txt = doc.getElementById("app").textContent;
+    if (/по выбору/.test(txt)) bad("[карта-огэ] карта ОГЭ всё ещё говорит «по выбору» про задание 15");
+    const rb = doc.querySelector("#app .exrow [data-exrobot]");
+    if (!rb) bad("[карта-огэ] в строке задания 15 нет кнопки к Роботу");
+    else { rb.click(); await tick();
+      if (!/Робот/.test(doc.getElementById("app").textContent)) bad("[карта-огэ] кнопка задания 15 не открыла Робота"); }
+    const items = g.variantBuild("oge", "TEST42");
+    const v15 = items.find(x => x.n === 15);
+    if (items.length !== 16 || !v15 || v15.id !== null || !/Робот/.test(v15.why))
+      bad("[карта-огэ] в варианте ОГЭ задание 15 не отправлено к Роботу или номеров не 16");
+    viewReset(g);
+  }
+
   /* --- 13г. [проверка] «что умеет сам» (js/proverka.js) ---
      Обещания, которые здесь стерегутся, — ровно те, на которых проверка
      продаётся взрослому: код открывает ТОТ ЖЕ итог где угодно; код с опечаткой

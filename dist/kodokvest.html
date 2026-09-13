@@ -15239,7 +15239,7 @@ tasks: [
 
 oge: {
 id: "oge", em: "📄", title: "ОГЭ", full: "ОГЭ · 9 класс", year: 2026,
-total: 15,
+total: 16,
 langs: "изучаемый в школе язык или исполнитель «Робот»",
 tasks: [
 { n:1,  t:"Количественные параметры информационных объектов", g:["info"] },
@@ -15256,11 +15256,14 @@ tasks: [
 { n:12, t:"Файловая система",                                 g:["files"] },
 { n:13, t:"Презентация или текстовый документ",               g:[], off:"ответ здесь файл с оформлением, а не значение" },
 { n:14, t:"Электронные таблицы и диаграмма",                  g:["data"], off:"диаграмма — ответ там файл, а не значение" },
-{ n:15, t:"Программа или алгоритм для «Робота»",              g:["oge","search","sort"] }
+
+{ n:15, t:"Алгоритм для исполнителя «Робот»",                 g:[], robot:1 },
+{ n:16, t:"Программа на языке программирования",              g:["oge","search","sort"] }
 ]
 },
 
 state: function(task, countIn){
+if (task.robot) return (window.ROBOT_TASKS || []).length ? "yes" : "soon";
 var est = task.g && task.g.length && countIn(task.g) > 0;
 
 if (est && task.off) return "part";
@@ -20783,7 +20786,7 @@ var done = xs.filter(function(x){ return A.algoDone(x.id); }).length;
 var h = '<div class="lvlhead"><div><div class="idx">информатика: исполнитель</div>' +
 '<h1>🤖 Робот</h1></div><div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
 '<p class="lede">Исполнитель с пятью командами и своим языком — русскими словами. ' +
-'Это <b>задание 15.1 ОГЭ</b>: там, где в школе дают КуМир, и там, где Python не примут.</p>' +
+'Это <b>задание 15 ОГЭ</b>: там, где в школе дают КуМир, и там, где Python не примут.</p>' +
 '<div class="card"><h3>⚖️ Честно про этот раздел</h3><ul class="trrules">' +
 '<li><b>Язык взят кумировский слово в слово.</b> Свой синтаксис было бы приятнее сочинять, ' +
 'но на экзамене принимают КуМир. Выучив «нц пока … кц» здесь, в КуМире пишешь то же самое.</li>' +
@@ -20791,8 +20794,8 @@ var h = '<div class="lvlhead"><div><div class="idx">информатика: ис
 'На экзамене требуют ровно этого: решение обязано работать при любой длине стены.</li>' +
 '<li><b>Одно расхождение с КуМиром, и оно нарочное:</b> у нас стена — это клетка, а не ребро ' +
 'между клетками. Для программы разницы нет: «справа свободно» значит то же самое.</li>' +
-'<li><b>Робот не заменяет Python.</b> Он закрывает ту половину задания 15, где просят ' +
-'исполнителя; вторая половина, 15.2, — обычная программа, и она в разделе «Алгоритмы».</li>' +
+'<li><b>Робот не заменяет Python.</b> Он закрывает задание 15, где просят исполнителя; ' +
+'задание 16 — обычная программа, и она в разделе «Алгоритмы». На экзамене нужны оба.</li>' +
 '</ul></div><div class="gamegrid">';
 xs.forEach(function(t){
 h += '<button class="gamecard" data-rb="' + A.esc(t.id) + '">' +
@@ -22236,6 +22239,8 @@ if (!ex) return [];
 var rnd = rngFrom(String(seed || "") + ":" + exId), used = {};
 return ex.tasks.map(function(t){
 var pool = (t.g && t.g.length) ? tasksIn(t.g) : [];
+if (t.robot)
+return { n: t.n, t: t.t, id: null, dup: 0, why: "решается в разделе «Робот»" };
 if (!pool.length)
 return { n: t.n, t: t.t, id: null, dup: 0,
 why: t.off ? ("судить нечем: " + t.off) : "задач по этой теме пока нет" };
@@ -22603,10 +22608,10 @@ v.items.forEach(function(x){ h += rowHTML(v, x, x.id ? A.algoById(x.id) : null);
 h += '</div>';
 
 if (v.ex === "oge")
-h += '<div class="note"><b>Задание 15 — это две задачи по выбору</b>' +
-'В варианте стоит 15.2 — обычная программа. Второй вариант того же номера, 15.1, ' +
-'решается исполнителем «Робот» с русскими командами: у него свой язык и свой раздел ' +
-'в «Тренировках». Выбирают на экзамене одно из двух.</div>';
+h += '<div class="note"><b>Задание 15 решается в разделе «Робот»</b>' +
+'На экзамене это алгоритм для исполнителя, и у него свой язык с русскими командами. ' +
+'В вариант он не встроен: решай его в «Тренировках» → «Робот». Задание 16 — обычная ' +
+'программа, оно в варианте есть.</div>';
 
 if (t.dup)
 h += '<div class="note"><b>Повторы в варианте — это про нас, а не про тебя</b>' +
@@ -30621,7 +30626,7 @@ var d = xs.filter(function(x){ return algoDone(x.id); }).length;
 return xs.length ? d + " из " + xs.length + " готово" : "";
 })() },
 { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
-why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
+why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
 when: "Когда в школе ведут КуМир, а не Python.",
 stat: (function(){
 var xs = window.ROBOT_TASKS || [];
@@ -33255,7 +33260,12 @@ esc(ex.langs) + '.</p>' +
 ex.tasks.forEach(function(x){
 var st = EXAMS.state(x, algoCountIn);
 var right;
-if (st === "yes"){
+if (st === "yes" && x.robot){
+var rxs = window.ROBOT_TASKS || [];
+right = '<span class="excnt">' + rxs.filter(function(r){ return algoDone(r.id); }).length +
+' из ' + rxs.length + '</span>' +
+'<button class="rbtn sec" data-exrobot="1">Решать</button>';
+} else if (st === "yes"){
 var n = algoCountIn(x.g), d = algoDoneIn(x.g);
 right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
 '<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
@@ -33282,9 +33292,10 @@ h += '</div>' +
 '<div class="admrow"><button class="rbtn check" data-exvariant="' + esc(ex.id) + '">' +
 '📝 Собрать пробный вариант</button></div></div>' +
 (ex.id === "oge"
-? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
-'15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
-'свой язык и свой раздел. ' +
+? '<div class="note"><b>Задания 15 и 16 — оба обязательны</b>' +
+'15 — алгоритм для исполнителя «Робот», у него свой язык и свой раздел. 16 — обычная ' +
+'программа, она в темах выше. До 2025 года это было одно задание на выбор; теперь ' +
+'на экзамене есть оба, и за каждое до двух баллов.' +
 '<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
 : '') +
 '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
@@ -33317,8 +33328,9 @@ app.querySelectorAll("[data-algotab]").forEach(function(b){
 b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
 });
 
-var rb = app.querySelector("[data-exrobot]");
-if (rb) rb.onclick = function(){ screenRobot(); };
+app.querySelectorAll("[data-exrobot]").forEach(function(rb){
+rb.onclick = function(){ screenRobot(); };
+});
 var vb = app.querySelector("[data-exvariant]");
 if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
 app.querySelectorAll("[data-exgo]").forEach(function(b){
@@ -42838,7 +42850,7 @@ routeHash: routeHash, setRoute: setRoute, routeFor: routeFor, BASE_TITLE: BASE_T
 place: function(){ return curPlace; }, tab: function(){ return curTab; },
 screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
 screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
-screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
+openExamMap: openExamMap, screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
 algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
 screenWeb: function(){ screenWeb(); }, openWeb: function(id){ openWeb(id); },
 screenDefense: function(id){ screenDefense(id); },

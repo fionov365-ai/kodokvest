@@ -4135,7 +4135,7 @@ function trainCards(){
         return xs.length ? d + " из " + xs.length + " готово" : "";
       })() },
     { id:"robot", em:"🤖", title:"Робот", go: screenRobot,
-      why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15.1 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
+      why: "Исполнитель с пятью командами и своим языком — русскими словами. Это задание 15 ОГЭ: там, где в школе дают КуМир и где Python не примут.",
       when: "Когда в школе ведут КуМир, а не Python.",
       stat: (function(){
         var xs = window.ROBOT_TASKS || [];
@@ -7185,12 +7185,12 @@ function revCard(x){
 /* ================= алгоритмы и формат ОГЭ =================
    Вторая дверь под вывеску «информатика» (docs/vyveska.md). Внутри предмета
    самое искомое — экзамен и алгоритмы, и на наш движок это ложится целиком:
-   задачи в формате ОГЭ 15.2 читают input() и печатают ответ, а судит их тот
+   задачи в формате ОГЭ 16 читают input() и печатают ответ, а судит их тот
    же интерпретатор, что и уроки.
 
    ⚠️ ЧЕСТНАЯ ГРАНИЦА, И ОНА НАПИСАНА НА ЭКРАНЕ. Мы не готовим к ОГЭ целиком:
-   в экзамене пятнадцать заданий, и большинство — про кодирование информации,
-   таблицы и файлы, а не про программирование. Мы закрываем задание 15.2 и
+   в экзамене шестнадцать заданий, и большинство — про кодирование информации,
+   таблицы и файлы, а не про программирование. Мы закрываем задание 16 и
    алгоритмическую часть. Обещать больше — врать, и вранью тут цена особая:
    родитель узнает о нём в мае.
 
@@ -7311,7 +7311,12 @@ function examMapHTML(ex){
   ex.tasks.forEach(function(x){
     var st = EXAMS.state(x, algoCountIn);
     var right;
-    if (st === "yes"){
+    if (st === "yes" && x.robot){
+      var rxs = window.ROBOT_TASKS || [];
+      right = '<span class="excnt">' + rxs.filter(function(r){ return algoDone(r.id); }).length +
+        ' из ' + rxs.length + '</span>' +
+        '<button class="rbtn sec" data-exrobot="1">Решать</button>';
+    } else if (st === "yes"){
       var n = algoCountIn(x.g), d = algoDoneIn(x.g);
       right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
         '<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
@@ -7346,9 +7351,10 @@ function examMapHTML(ex){
     '<div class="admrow"><button class="rbtn check" data-exvariant="' + esc(ex.id) + '">' +
     '📝 Собрать пробный вариант</button></div></div>' +
     (ex.id === "oge"
-      ? '<div class="note"><b>Задание 15 — это две разные задачи по выбору</b>' +
-        '15.2 — обычная программа, она в темах выше. 15.1 — исполнитель «Робот», у него ' +
-        'свой язык и свой раздел. ' +
+      ? '<div class="note"><b>Задания 15 и 16 — оба обязательны</b>' +
+        '15 — алгоритм для исполнителя «Робот», у него свой язык и свой раздел. 16 — обычная ' +
+        'программа, она в темах выше. До 2025 года это было одно задание на выбор; теперь ' +
+        'на экзамене есть оба, и за каждое до двух баллов.' +
         '<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
       : '') +
     '<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
@@ -7385,8 +7391,9 @@ function screenAlgo(){
       b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
     });
     /* «Решать» ведёт к первой НЕрешённой задаче темы, а не в начало списка. */
-    var rb = app.querySelector("[data-exrobot]");
-    if (rb) rb.onclick = function(){ screenRobot(); };
+    app.querySelectorAll("[data-exrobot]").forEach(function(rb){
+      rb.onclick = function(){ screenRobot(); };
+    });
     var vb = app.querySelector("[data-exvariant]");
     if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
     app.querySelectorAll("[data-exgo]").forEach(function(b){
@@ -19246,7 +19253,7 @@ window.__game = {
   place: function(){ return curPlace; }, tab: function(){ return curTab; },
   screenWorlds: screenWorlds, screenWorld: screenWorld, openLesson: openLesson,
   screenTrain: screenTrain, trainCards: trainCards, nextLesson: nextLesson,
-  screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
+  openExamMap: openExamMap, screenAlgo: screenAlgo, openAlgo: openAlgo, algoList: algoList, algoById: algoById,
   algoDone: algoDone, ALGO_GROUPS: ALGO_GROUPS,
   screenWeb: function(){ screenWeb(); }, openWeb: function(id){ openWeb(id); },
   screenDefense: function(id){ screenDefense(id); },
