@@ -1356,15 +1356,23 @@ function translit(s){
   }
   return out;
 }
-/* код ученика из имени: латиницей, маленькими, плюс короткий случайный хвост —
-   чтобы у двух детей с одним именем коды не совпали */
-function slugFromName(name){
-  var base = translit(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 18);
-  if (base.length < 2) base = "kid";
+/* Код ученика: нейтральное слово и короткий случайный хвост — «sova-3f7a2».
+   ⚠️ БЕЗ ИМЕНИ, решение фаундера 13.09.2026. До этого код собирался из имени
+   латиницей («anya-3f7a»), и имя уходило на сервер ключом записи — при том что
+   сам снимок имя честно вырезал (CLOUD_SKIP), а политика обещала «код с именем
+   не связан». Слово нужно только затем, чтобы код легко продиктовать; угадать
+   его оно не помогает — вся случайность в хвосте, как и раньше.
+   ⚠️ Уже выданные коды не меняются: код — ключ прогресса, смени его — и
+   ребёнок потеряет всё. Политика говорит об этом прямо.
+   Слова — не имена: «vera», «mira», «nika» и подобные в список не берём. */
+var CODE_WORDS = ["kot", "yozh", "sova", "lis", "kit", "bobr", "orel", "volk", "enot", "les",
+  "reka", "gora", "more", "pole", "sad", "luch", "dozhd", "sneg", "grom", "veter",
+  "kometa", "orbita", "raketa", "planeta", "atom", "pixel", "bit", "bayt", "kod", "cikl",
+  "robot", "kvant", "vektor", "prizma", "kubik", "shar", "romb", "krug", "tochka", "mayak"];
+function newKidCode(){
+  var word = CODE_WORDS[Math.floor(Math.random() * CODE_WORDS.length) % CODE_WORDS.length];
   var suf = (Math.random().toString(36) + "00000").slice(2, 7);   /* 5 знаков */
-  var code = (base + "-" + suf).slice(0, 32);
-  if (!/^[a-z0-9]/.test(code)) code = "k" + code.slice(1);
-  return Cloud.validCode(code) || ("kid-" + suf);
+  return Cloud.validCode(word + "-" + suf) || ("kid-" + suf);
 }
 /* очистить локальный прогресс — чтобы войти в другой аккаунт начисто, а не
    смешать двух детей на одном устройстве. Настройки устройства (admin) не трогаем. */
@@ -1387,7 +1395,7 @@ function doRegister(name, onErr, opts){
   if (myCode() || S.name) resetProgressLocal();
   S.name = name;
   if (serverOn()){
-    Cloud.setCode(slugFromName(name));
+    Cloud.setCode(newKidCode());
     save();
     /* ⚠️ Карту миров показываем СРАЗУ, не дожидаясь сети. Раньше отрисовка
        висела в then у cloudPush, и получалось две беды: ребёнок пару секунд
@@ -6414,7 +6422,7 @@ function screenRegister(){
       '<p class="dim">Если у тебя есть код ученика с другого устройства — впиши его, ' +
       'чтобы открыть свой прогресс.</p>' +
       '<label class="reglbl">Код ученика' +
-      '<input type="text" id="regcode" placeholder="например, anya-3f7a" autocomplete="off" spellcheck="false" maxlength="32"></label>' +
+      '<input type="text" id="regcode" placeholder="например, sova-3f7a2" autocomplete="off" spellcheck="false" maxlength="32"></label>' +
       '<div class="msg" id="loginmsg"></div>' +
       '<div class="winrow"><button class="bigbtn ghost" id="loginbtn">Войти по коду</button></div></div>';
   } else {
@@ -8786,7 +8794,7 @@ function certList(){
   /* «Курс целиком» стоит последним намеренно: это главный лист, и он не должен
      теряться между сертификатами за разделы. */
   out.push({
-    id: "course", kind: "course", icon: "🏆", title: "Курс пройден целиком",
+    id: "course", kind: "course", icon: "🏆", title: "Путь пройден целиком",
     ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
   });
   return out;
@@ -8818,7 +8826,7 @@ function certBodyHTML(kind){
       var pr = projectOfWorld(x.n);
       if (pr) names.push("«" + pr.title + "»");
     });
-    what = 'Курс «Фионика» пройден целиком: <b>' + CURRICULUM.total + " " +
+    what = 'Путь по «Фионике» пройден целиком: <b>' + CURRICULUM.total + " " +
       plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
       plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
       (names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
@@ -8837,15 +8845,18 @@ function certBodyHTML(kind){
   var tally = sect
     ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
     : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
-  /* ⚠️ Лист за курс называется «Курс пройден», а не «Сертификат об окончании
-     курса» (решение фаундера 11.09.2026). Старая надпись была единственной
+  /* ⚠️ Лист за весь путь называется «Путь пройден» (решение фаундера
+     13.09.2026; с 11.09.2026 было «Курс пройден», до того — «Сертификат об
+     окончании курса»). «Курс» ушёл вслед за «окончанием»: слово ближе к
+     «образовательной программе», а её мы не реализуем — на этом и стоит
+     «лицензия не нужна» (docs/licenziya-proverka-2026-09-13.md). Старая надпись была единственной
      строкой продукта, которая сама объявляла себя документом об обучении, —
      а лицензия нам не нужна ровно потому, что мы даём доступ к программе, а не
      обучение с документом на выходе. Отсюда же мелкая строка внизу листа.
      Разбор: vitrina-litsenziya-napravleniya-2026-09-09.md § 1.3. */
   return '<div class="certsheet">' +
     '<div class="certmark">🐍 Фионика</div>' +
-    '<div class="certkind">' + (course ? "Курс пройден" : "Сертификат") + '</div>' +
+    '<div class="certkind">' + (course ? "Путь пройден" : "Сертификат") + '</div>' +
     '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
     '<div class="certrule"></div>' +
     '<div class="certwhat">' + what + '</div>' +
@@ -13020,12 +13031,12 @@ function kidGet(code){
   return kidsList().filter(function(k){ return k.code === code; })[0] || null;
 }
 /* Завести ученика: имя даёт взрослый, код придумывает тренажёр — тот же
-   slugFromName, что и при обычной регистрации, поэтому код читаемый и
-   не угадываемый (имя + случайный хвост). */
+   newKidCode, что и при обычной регистрации: слово + случайный хвост, без имени.
+   Имя остаётся у взрослого в labels и на сервер не уходит. */
 function kidAdd(name){
   name = String(name || "").trim().slice(0, 40);
   if (name.length < 2) return null;
-  var code = slugFromName(name);
+  var code = newKidCode();
   var kid = { code: code, name: name, addedAt: Date.now() };
   S.admin.kids = kidsList().concat([kid]);
   S.admin.labels = S.admin.labels || {};
@@ -14264,7 +14275,7 @@ function landAuthHTML(){
       '</p>';
   return '<div class="ldauthrow">' +
       '<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
-        ' aria-label="Код ученика" placeholder="например, anya-3f7a">' +
+        ' aria-label="Код ученика" placeholder="например, sova-3f7a2">' +
       '<button class="bigbtn" data-auth="go">Войти →</button>' +
     '</div><div class="msg" id="ldmsg"></div>' +
     '<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
@@ -19344,7 +19355,7 @@ window.__game = {
   shieldWouldSave: shieldWouldSave,
   coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
-  doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
+  doLogin: doLogin, doLogout: doLogout, newKidCode: newKidCode, myName: myName,
   myCode: myCode, needsRegister: needsRegister,
   installTipHTML: installTipHTML, installPossible: installPossible,
   installReady: installReady, INSTALL_AFTER: INSTALL_AFTER, installDone: installDone,

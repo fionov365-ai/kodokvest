@@ -29212,13 +29212,14 @@ out += TRANSLIT.hasOwnProperty(ch) ? TRANSLIT[ch] : ch;
 return out;
 }
 
-function slugFromName(name){
-var base = translit(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 18);
-if (base.length < 2) base = "kid";
+var CODE_WORDS = ["kot", "yozh", "sova", "lis", "kit", "bobr", "orel", "volk", "enot", "les",
+"reka", "gora", "more", "pole", "sad", "luch", "dozhd", "sneg", "grom", "veter",
+"kometa", "orbita", "raketa", "planeta", "atom", "pixel", "bit", "bayt", "kod", "cikl",
+"robot", "kvant", "vektor", "prizma", "kubik", "shar", "romb", "krug", "tochka", "mayak"];
+function newKidCode(){
+var word = CODE_WORDS[Math.floor(Math.random() * CODE_WORDS.length) % CODE_WORDS.length];
 var suf = (Math.random().toString(36) + "00000").slice(2, 7);    
-var code = (base + "-" + suf).slice(0, 32);
-if (!/^[a-z0-9]/.test(code)) code = "k" + code.slice(1);
-return Cloud.validCode(code) || ("kid-" + suf);
+return Cloud.validCode(word + "-" + suf) || ("kid-" + suf);
 }
 
 function resetProgressLocal(){
@@ -29234,7 +29235,7 @@ var stay = !!(opts && opts.stay);
 if (myCode() || S.name) resetProgressLocal();
 S.name = name;
 if (serverOn()){
-Cloud.setCode(slugFromName(name));
+Cloud.setCode(newKidCode());
 save();
 
 refreshTop(); if (!stay) screenWorlds();
@@ -33194,7 +33195,7 @@ h += '<div class="card"><h3>Уже занимался раньше?</h3>' +
 '<p class="dim">Если у тебя есть код ученика с другого устройства — впиши его, ' +
 'чтобы открыть свой прогресс.</p>' +
 '<label class="reglbl">Код ученика' +
-'<input type="text" id="regcode" placeholder="например, anya-3f7a" autocomplete="off" spellcheck="false" maxlength="32"></label>' +
+'<input type="text" id="regcode" placeholder="например, sova-3f7a2" autocomplete="off" spellcheck="false" maxlength="32"></label>' +
 '<div class="msg" id="loginmsg"></div>' +
 '<div class="winrow"><button class="bigbtn ghost" id="loginbtn">Войти по коду</button></div></div>';
 } else {
@@ -35175,7 +35176,7 @@ ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.
 });
 
 out.push({
-id: "course", kind: "course", icon: "🏆", title: "Курс пройден целиком",
+id: "course", kind: "course", icon: "🏆", title: "Путь пройден целиком",
 ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
 });
 return out;
@@ -35205,7 +35206,7 @@ CURRICULUM.forEach(function(x){
 var pr = projectOfWorld(x.n);
 if (pr) names.push("«" + pr.title + "»");
 });
-what = 'Курс «Фионика» пройден целиком: <b>' + CURRICULUM.total + " " +
+what = 'Путь по «Фионике» пройден целиком: <b>' + CURRICULUM.total + " " +
 plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
 plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
 (names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
@@ -35226,7 +35227,7 @@ var tally = sect
 
 return '<div class="certsheet">' +
 '<div class="certmark">🐍 Фионика</div>' +
-'<div class="certkind">' + (course ? "Курс пройден" : "Сертификат") + '</div>' +
+'<div class="certkind">' + (course ? "Путь пройден" : "Сертификат") + '</div>' +
 '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
 '<div class="certrule"></div>' +
 '<div class="certwhat">' + what + '</div>' +
@@ -38654,7 +38655,7 @@ return kidsList().filter(function(k){ return k.code === code; })[0] || null;
 function kidAdd(name){
 name = String(name || "").trim().slice(0, 40);
 if (name.length < 2) return null;
-var code = slugFromName(name);
+var code = newKidCode();
 var kid = { code: code, name: name, addedAt: Date.now() };
 S.admin.kids = kidsList().concat([kid]);
 S.admin.labels = S.admin.labels || {};
@@ -39497,7 +39498,7 @@ return '<div class="landcta"><button class="bigbtn" data-auth="try">Начать
 '</p>';
 return '<div class="ldauthrow">' +
 '<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
-' aria-label="Код ученика" placeholder="например, anya-3f7a">' +
+' aria-label="Код ученика" placeholder="например, sova-3f7a2">' +
 '<button class="bigbtn" data-auth="go">Войти →</button>' +
 '</div><div class="msg" id="ldmsg"></div>' +
 '<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
@@ -43632,7 +43633,7 @@ shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, us
 shieldWouldSave: shieldWouldSave,
 coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
 screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
-doLogin: doLogin, doLogout: doLogout, slugFromName: slugFromName, myName: myName,
+doLogin: doLogin, doLogout: doLogout, newKidCode: newKidCode, myName: myName,
 myCode: myCode, needsRegister: needsRegister,
 installTipHTML: installTipHTML, installPossible: installPossible,
 installReady: installReady, INSTALL_AFTER: INSTALL_AFTER, installDone: installDone,
