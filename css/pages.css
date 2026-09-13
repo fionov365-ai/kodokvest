@@ -54,6 +54,18 @@ a{color:var(--accent)}
   min-height:44px; display:flex; align-items:center;
 }
 .top nav a:hover{color:var(--ink); background:var(--bg)}
+/* ⚠️ Телефон: меню не съедает первый экран (13.09.2026, слово фаундера).
+   Семь пунктов справа от логотипа ложились в четыре строки по 44 px — около
+   190 px сверху до заголовка. Теперь логотип отдельной строкой, пункты под
+   ним во всю ширину и плотнее: две строки на 375 px. Всё видно сразу —
+   прокрутку вбок не берём, «Цена» и «О проекте» за краем никто не найдёт.
+   Высота пункта остаётся 44 px: это цель для пальца (правила сайта, § 8). */
+@media (max-width:640px){
+  .top .wrap{flex-wrap:wrap; gap:0 12px; padding-top:4px; padding-bottom:4px}
+  .logo{min-height:40px}
+  .top nav{margin-left:-8px; width:calc(100% + 16px); gap:0}
+  .top nav a{padding:10px 8px; font-size:15px}
+}
 
 /* ---- первый экран ---- */
 header.hero{padding:40px 0 8px}
