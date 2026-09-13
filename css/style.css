@@ -1965,6 +1965,12 @@ body.focus .toTop{display:none}
 /* список учеников файлом (13.09.2026): пока не сохранён — карточка первой и
    цветом предупреждения; поле выбора файла спрятано в подпись-кнопку, но
    остаётся доступным с клавиатуры (фокус рисуется на подписи) */
+/* «Я застрял» (13.09.2026): у ребёнка — под подсказками, у взрослого — над сводкой */
+.helpcard{margin:10px 0 0;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--panel2);font-size:14px}
+.helpcard.on{border-color:var(--acc);background:rgba(124,92,255,.08)}
+.helprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.helprow .rbtn{min-height:40px}
+.cabcall{margin:0 0 10px;padding:10px 14px;border-radius:12px;border:1px solid var(--acc);background:rgba(124,92,255,.10);font-weight:600}
 .card.kidfile.warn{background:var(--warnbg);border-color:var(--warnline)}
 .card.kidfile.warn h3{color:var(--warnink)}
 /* «Это моё устройство, а не ребёнка» при первом пароле (13.09.2026): цель для пальца 44 px */

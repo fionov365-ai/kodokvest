@@ -9954,6 +9954,91 @@ function checkEncoding(){
       bad("[честность] на /semeynoe-obuchenie/ не сказано, что задания 15 и 16 ОГЭ оцениваются по критериям эксперта ФИПИ");
   }
 
+  /* --- 12в. «Я застрял» — сигнал от ребёнка взрослому (13.09.2026, RAZVITIE § 2.6) ---
+     Первая связь «снизу вверх». Граница фаундера: не переписка — три готовые
+     фразы, ни одного поля для текста. Гаснет сам по сдаче урока и через сутки. */
+  if (typeof g.helpCall !== "function") bad("[застрял] нет сигнала «Я застрял»");
+  else {
+    const было = { help: g.state.help, stars: g.state.stars, log: g.state.log };
+    const origCode = w.Cloud.myCode, origHas = w.Cloud.hasUrl;
+    try {
+      g.state.help = {};
+      g.state.stars = JSON.parse(JSON.stringify(было.stars || {}));
+      g.state.log = JSON.parse(JSON.stringify(было.log || {}));
+      delete g.state.stars.vars; if (g.state.log.vars) delete g.state.log.vars.solvedAt;
+
+      /* без кода ученика звать некого — кнопки нет */
+      w.Cloud.myCode = () => ""; w.Cloud.hasUrl = () => true;
+      g.openLesson("vars"); await tick(); await tick();
+      if (doc.getElementById("helpbtn")) bad("[застрял] кнопка есть у гостя без кода — сигнал никто не увидит");
+
+      w.Cloud.myCode = () => "help-kid1";
+      g.openLesson("vars"); await tick(); await tick();
+      const hb = doc.getElementById("helpbtn");
+      if (!hb) bad("[застрял] в уроке нет кнопки «Застрял — позвать взрослого»");
+      else {
+        hb.click(); await tick();
+        const out = doc.getElementById("helpout");
+        const фразы = [...out.querySelectorAll('[data-help]')].filter(b => /^\d$/.test(b.getAttribute("data-help")));
+        if (фразы.length !== 3) bad("[застрял] готовых фраз не три: " + фразы.length);
+        if (out.querySelector("input, textarea, [contenteditable]"))
+          bad("[застрял] в сигнале появилось поле для текста — это уже переписка");
+        const вторая = фразы[1];
+        if (вторая){
+          вторая.click(); await tick();
+          const h = g.state.help || {};
+          if (h.lesson !== "vars" || h.why !== 1 || h.off) bad("[застрял] сигнал не записался: " + JSON.stringify(h));
+          if (!/Ты позвал взрослого/.test(doc.getElementById("helpout").textContent))
+            bad("[застрял] ребёнку не сказано, что взрослый позван и что это не звонок");
+          const hb2 = doc.getElementById("helpbtn");
+          if (!hb2 || !hb2.disabled) bad("[застрял] позвать можно второй раз подряд");
+        }
+      }
+
+      /* сигнал уезжает обычным снимком на сервер — отдельной отправки нет */
+      if (!((g.cloudSnapshot() || {}).help || {}).at) bad("[застрял] сигнал не попадает в снимок для сервера");
+
+      /* взрослый видит — по снимку ребёнка */
+      const снимок = () => g.ensureShape(JSON.parse(JSON.stringify(g.state)));
+      const st = снимок();
+      const line = g.helpLineHTML(st).replace(/<[^>]+>/g, "");
+      if (!/Зовёт: урок \d+ «/.test(line) || line.indexOf(g.HELP_WHY[1]) < 0)
+        bad("[застрял] взрослому не показано, кто зовёт и почему: " + line);
+      if (!/Зовёт/.test(g.presenceDetailHTML(st, 0))) bad("[застрял] строки зова нет в сводке «что он делает сейчас»");
+
+      /* урок сдан ПОСЛЕ зова — гаснет; сдан раньше — нет */
+      const at = st.help.at;
+      const сдан = снимок(); сдан.stars.vars = 3; сдан.log.vars = Object.assign({}, сдан.log.vars, { solvedAt: at + 1000 });
+      if (g.helpActive(сдан)) bad("[застрял] урок сдан, а зов не погас");
+      const раньше = снимок(); раньше.stars.vars = 3; раньше.log.vars = Object.assign({}, раньше.log.vars, { solvedAt: at - 60000 });
+      if (!g.helpActive(раньше)) bad("[застрял] зов погас из-за сдачи урока, случившейся ДО зова");
+      const старый = снимок(); старый.help.at = Date.now() - 25 * 3600e3;
+      if (g.helpActive(старый)) bad("[застрял] зов суточной давности всё ещё горит");
+
+      /* в группе — первой пометкой и выше в списке */
+      const рЗов = g.groupRow("help-kid1", st, 0), рБез = g.groupRow("help-kid1", g.ensureShape(Object.assign(снимок(), { help: {} })), 0);
+      if (!рЗов.marks.length || рЗов.marks[0].k !== "help") bad("[застрял] в группе зов не первой пометкой");
+      /* ⚠️ больше, чем даёт одна лишняя пометка (10): иначе «поднят» только тем,
+         что у него на пометку больше, и тихо молчащий ребёнок его обгонит */
+      if (!(рЗов.rank - рБез.rank > 40)) bad("[застрял] зовущий ученик в группе не поднят выше: +" + (рЗов.rank - рБез.rank));
+
+      /* отмена побеждает старый зов при слиянии, а не воскрешает его */
+      const зов = снимок();
+      g.helpCancel();
+      const отмена = снимок();
+      if (g.helpActive(отмена)) bad("[застрял] отменённый зов всё ещё горит");
+      зов.savedAt = 1; отмена.savedAt = 2;
+      if (g.helpActive(g.mergeProgress(зов, отмена)) || g.helpActive(g.mergeProgress(отмена, зов)))
+        bad("[застрял] при слиянии устройств отменённый зов воскрес");
+      const пусто = g.ensureShape({});
+      if (!g.helpActive(g.mergeProgress(пусто, зов))) bad("[застрял] при слиянии с пустым устройством зов потерялся");
+    } finally {
+      w.Cloud.myCode = origCode; w.Cloud.hasUrl = origHas;
+      g.state.help = было.help || {}; g.state.stars = было.stars; g.state.log = было.log;
+      viewReset(g);
+    }
+  }
+
   /* --- 12а. логотип: дорога на страницу сайта --- */
   let logoChecked = 0;
   if (typeof g.goLogo === "function"){

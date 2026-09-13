@@ -89,7 +89,11 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      /* Проверка «что умеет сам» (js/proverka.js): одна
                         живая или последняя закрытая. Итог по построению живёт
                         в коде результата; здесь только ход проверки. */
-                     "proverka"];
+                     "proverka",
+                     /* «Я застрял» (13.09.2026): { at, lesson, why, off }.
+                        Один сигнал на ученика, три готовые фразы — без
+                        свободного текста, см. HELP_WHY. */
+                     "help"];
 /* codeSaved — единственный ответ продукта на «потерял код — потерял прогресс».
    ⚠️ Это НЕ восстановление: восстанавливать нечем и не будет чем, потому что
    ни почты, ни телефона мы не спрашиваем, и это обещание на вывеске. Это
@@ -2183,6 +2187,12 @@ function mergeProgress(a, b){
                      marks: Array.isArray(base.marks) ? base.marks : [] };
   });
 
+  /* «Я застрял»: самый свежий из двух. ⚠️ Отмена — тоже запись (off: 1) со
+     своим временем, а не пустота: иначе старый зов с другого устройства
+     воскрес бы при первом же обмене с сервером. */
+  var ha = a.help || {}, hb = b.help || {};
+  out.help = (hb.at || 0) > (ha.at || 0) ? hb : ha;
+
   /* статус «чем занят сейчас» — просто самый свежий из двух */
   out.now = (a.now && b.now) ? ((a.now.at || 0) >= (b.now.at || 0) ? a.now : b.now)
                              : (a.now || b.now || null);
@@ -2602,7 +2612,7 @@ function presenceHTML(st, serverAt){
    уже сделано сегодня и как идёт занятие. Всё считается из обычного снимка
    прогресса — ребёнок ничего дополнительного не отправляет. */
 function presenceDetailHTML(st, serverAt){
-  var h = presenceHTML(st, serverAt);
+  var h = helpLineHTML(st) + presenceHTML(st, serverAt);
   var day = dayKey();
   var lg = (st && st.log) || {}, sm = (st && st.stars) || {};
 
@@ -4071,6 +4081,88 @@ function hintHTML(x, i){
   return '<div class="step"><b>' + (i + 1) + '.</b> ' + body + ex + '</div>';
 }
 
+/* ===== «Я застрял» — сигнал от ребёнка взрослому (13.09.2026, RAZVITIE § 2.6) =====
+   Вся связь в продукте шла сверху вниз: заметка, домашка, расписание,
+   вариант. Ребёнок не мог сказать «я застрял» — ровно в ту минуту занятия,
+   когда связь нужнее всего.
+   ⚠️ Граница, без которой это делать было нельзя (слово фаундера): это НЕ
+   переписка. Три готовые фразы и ни одного поля для текста — значит нет ни
+   мессенджера, ни модерации, ни персональных данных. Сигнал уезжает обычным
+   снимком прогресса (schedulePush), новых запросов нет.
+   Гаснет сам: урок сдан после зова или прошли сутки. Ребёнок может отменить. */
+var HELP_WHY = ["не понимаю задание", "код не работает, не знаю почему", "сделал, но не уверен"];
+var HELP_TTL = 24 * 3600e3;
+var helpPick = false;          /* открыт ли выбор фразы на экране урока */
+/* Живой сигнал по ЛЮБОМУ снимку — у ребёнка по своему, у взрослого по чужому. */
+function helpActive(st){
+  var h = (st || {}).help;
+  if (!h || !h.at || h.off || !h.lesson || !HELP_WHY[h.why]) return null;
+  if (Date.now() - h.at > HELP_TTL) return null;
+  var g = ((st.log || {})[h.lesson]) || {};
+  if ((st.stars || {})[h.lesson] !== undefined && (g.solvedAt || 0) >= h.at) return null;
+  return h;
+}
+/* Звать есть кого, только когда прогресс уезжает на сервер под кодом:
+   без кода и сервера сигнал не увидит никто, а кнопка в пустоту — враньё. */
+function helpCan(){ return !!(myCode() && serverOn()); }
+function helpCall(lessonId, i){
+  if (!HELP_WHY[i]) return null;
+  S.help = { at: Date.now(), lesson: lessonId, why: i, off: 0 };
+  save();
+  return S.help;
+}
+function helpCancel(){
+  S.help = { at: Date.now(), lesson: "", why: -1, off: 1 };
+  save();
+}
+function helpBoxHTML(lessonId){
+  var h = helpActive(S);
+  if (h && h.lesson === lessonId)
+    return '<div class="helpcard on">🙋 <b>Ты позвал взрослого:</b> «' + esc(HELP_WHY[h.why]) + '». ' +
+      'Он увидит это в своём кабинете, когда откроет его, — это не звонок. Пока ждёшь, попробуй подсказку ' +
+      'или запусти код ещё раз. <button class="linkjump" data-help="off">Отменить</button></div>';
+  if (!helpPick) return "";
+  return '<div class="helpcard">Что случилось? Взрослый увидит ровно эту фразу и урок — больше ничего.' +
+    '<div class="helprow">' + HELP_WHY.map(function(w, i){
+      return '<button class="rbtn sec" data-help="' + i + '">' + esc(w) + '</button>';
+    }).join("") + '<button class="linkjump" data-help="close">Не надо</button></div></div>';
+}
+function wireHelp(lessonId){
+  var btn = document.getElementById("helpbtn"), out = document.getElementById("helpout");
+  if (!btn || !out) return;
+  function draw(){
+    out.innerHTML = helpBoxHTML(lessonId);
+    var on = helpActive(S);
+    btn.disabled = !!(on && on.lesson === lessonId);
+    out.querySelectorAll("[data-help]").forEach(function(b){
+      b.onclick = function(){
+        var k = b.getAttribute("data-help");
+        if (k === "close"){ helpPick = false; return draw(); }
+        if (k === "off"){ helpCancel(); helpPick = false; return draw(); }
+        helpCall(lessonId, parseInt(k, 10));
+        helpPick = false;
+        draw();
+      };
+    });
+  }
+  btn.onclick = function(){ helpPick = !helpPick; draw(); };
+  helpPick = false;
+  draw();
+}
+/* Строка взрослому — первой в сводке «что он делает сейчас»: и в карточке
+   ученика у репетитора, и в кабинете родителя, и при опросе раз в минуту. */
+function helpLineHTML(st){
+  var h = helpActive(st);
+  if (!h) return "";
+  var l = CURRICULUM.byId(h.lesson);
+  var mins = Math.max(0, Math.round((Date.now() - h.at) / 60000));
+  return '<p class="cabcall">🙋 Зовёт: ' + (l ? 'урок ' + l.num + ' «' + esc(l.title) + '»' : esc(h.lesson)) +
+    ' — «' + esc(HELP_WHY[h.why]) + '», ' +
+    (mins < 1 ? 'только что' : mins < 60 ? mins + ' ' + plural(mins, "минуту", "минуты", "минут") + ' назад'
+      : Math.round(mins / 60) + ' ' + plural(Math.round(mins / 60), "час", "часа", "часов") + ' назад') +
+    '. Погаснет сам, когда урок будет сдан.</p>';
+}
+
 function wireHint(hints, onTake){
   var btn = document.getElementById("hintbtn");
   if (!btn) return;
@@ -4737,7 +4829,9 @@ function openLesson(id){
       '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
       '<button class="rbtn sec" id="solbtn">Показать решение</button>' +
       (body.task.files ? '' : '<button class="rbtn sec" id="lintbtn" title="что можно сделать чище">🧹 Ревью кода</button>') +
-      '<span class="tip">за подсказку теряется одна звезда, за ревью — нет</span></div><div class="hintout" id="hintout"></div>';
+      (helpCan() ? '<button class="rbtn sec" id="helpbtn">🙋 Застрял — позвать взрослого</button>' : '') +
+      '<span class="tip">за подсказку теряется одна звезда, за ревью — нет</span></div><div class="hintout" id="hintout"></div>' +
+      '<div id="helpout"></div>';
 
     var prev = pos > 0 ? ready[pos-1] : null, next = pos < ready.length-1 ? ready[pos+1] : null;
     var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← К списку уроков</button><span class="sp"></span>' +
@@ -4956,6 +5050,7 @@ function openLesson(id){
         studio.editor.setNotes(myNote.marks);
     }
     wireHint(body.task.hints, function(){ logOf(l.id).hints++; save(); });
+    wireHelp(l.id);
     document.getElementById("solbtn").onclick = function(){
       session.shown = true;
       logOf(l.id).shown++; save();
@@ -15680,6 +15775,7 @@ function kidWatch(code, seq){
           kidTarget.data.zan = freshD.zan;
           kidTarget.data.daily = freshD.daily;
           kidTarget.data.hw = freshD.hw;
+          kidTarget.data.help = freshD.help;
           kidTarget.data.variant = freshD.variant;
           kidTarget.data.vtask = freshD.vtask;
         }
@@ -17082,6 +17178,12 @@ function groupRow(code, st, serverAt){
   var hwOpen = hwAllRecs.length - hwDone;
   if (hwAllRecs.length && hwOpen)
     marks.push({ k:"hw", txt:"домашка: сдано " + hwDone + " из " + hwAllRecs.length });
+  /* «Я застрял» — первой пометкой: ребёнок сам попросил, и ждёт он сейчас */
+  var called = helpActive(st);
+  if (called){
+    var cl = CURRICULUM.byId(called.lesson);
+    marks.unshift({ k:"help", txt:"🙋 зовёт: «" + HELP_WHY[called.why] + "»" + (cl ? ", урок " + cl.num : "") });
+  }
   if (ready) marks.push({ k:"ready", txt:"часть работы пришла готовой: " + ready +
     " " + plural(ready, "урок", "урока", "уроков") });
   if (ahead) marks.push({ k:"ahead", txt:"в решении непройденное: " + ahead +
@@ -17130,7 +17232,7 @@ function groupRow(code, st, serverAt){
               Сразу за ним — затык: этот ребёнок ещё ходит, но стоит на месте,
               и разговор с ним нужен раньше, чем с тем, у кого просто набежали
               пометки. Если не поговорить, он и станет следующим молчащим. */
-           rank: (quiet >= GROUP_QUIET_DAYS ? 100 : 0) + (stuck ? 40 : 0) +
+           rank: (quiet >= GROUP_QUIET_DAYS ? 100 : 0) + (stuck ? 40 : 0) + (called ? 60 : 0) +
                  marks.length * 10 - week };
 }
 
@@ -19861,7 +19963,7 @@ window.__game = {
   bootWhere: bootWhere, adminUnlocked: adminUnlocked, adminLock: adminLock,
   adminPassOk: adminPassOk, adminDeviceOff: adminDeviceOff,
   kidsList: kidsList, kidAdd: kidAdd, kidDrop: kidDrop, kidGet: kidGet,
-  kidAttach: kidAttach, kidRename: kidRename, kidWorkHere: kidWorkHere, progressJSON: progressJSON,
+  kidAttach: kidAttach, kidRename: kidRename, helpActive: helpActive, helpCall: helpCall, helpCancel: helpCancel, helpLineHTML: helpLineHTML, HELP_WHY: HELP_WHY, kidWorkHere: kidWorkHere, progressJSON: progressJSON,
   kidsListFileText: kidsListFileText, kidsListParse: kidsListParse, kidsListMerge: kidsListMerge,
   kidsListLoadText: kidsListLoadText, kidsSaveNeeded: kidsSaveNeeded, kidsListMarkSaved: kidsListMarkSaved,
   kidLink: kidLink, frameEditorHTML: frameEditorHTML,
