@@ -24013,6 +24013,544 @@ buildSave: buildSave, buildDrop: buildDrop, PART_MAX: PART_MAX, BUILD_MAX: BUILD
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.certs = function(A){
+
+function worldSolvedCount(n){
+var w = CURRICULUM.world(n), c = 0;
+if (w) w.lessons.forEach(function(l){ if (A.solved(l.id)) c++; });
+return c;
+}
+function worldStars(n){
+var w = CURRICULUM.world(n), s = 0;
+if (w) w.lessons.forEach(function(l){ s += A.starsOf(l.id); });
+return s;
+}
+function worldWhole(n){
+var w = CURRICULUM.world(n);
+return !!w && w.lessons.length > 0 && worldSolvedCount(n) === w.lessons.length;
+}
+
+function certWorldReady(n){
+var p = A.projectOfWorld(n);
+return worldWhole(n) && !!p && A.projectDone(p.id);
+}
+function certCourseReady(){
+if (!CURRICULUM.length) return false;
+for (var i = 0; i < CURRICULUM.length; i++)
+if (!certWorldReady(CURRICULUM[i].n)) return false;
+return true;
+}
+
+function certWorldAt(n){
+var w = CURRICULUM.world(n), t = 0;
+if (!w) return 0;
+w.lessons.forEach(function(l){
+var g = A.S().log[l.id] || {};
+if ((g.solvedAt || 0) > t) t = g.solvedAt;
+});
+var p = A.projectOfWorld(n);
+if (p){ var d = A.projectState(p.id).doneAt || 0; if (d > t) t = d; }
+return t;
+}
+function certCourseAt(){
+var t = 0;
+CURRICULUM.forEach(function(w){ var x = certWorldAt(w.n); if (x > t) t = x; });
+return t;
+}
+
+function certWorldNeed(n){
+var w = CURRICULUM.world(n), p = A.projectOfWorld(n), bits = [];
+var left = w ? w.lessons.length - worldSolvedCount(n) : 0;
+if (left > 0) bits.push(left + " " + A.plural(left, "урок", "урока", "уроков"));
+if (p && !A.projectDone(p.id)) bits.push("проект «" + p.title + "»");
+return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
+}
+function certCourseNeed(){
+var left = 0;
+CURRICULUM.forEach(function(w){ if (!certWorldReady(w.n)) left++; });
+return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
+}
+
+var WARM_KIND = { predict:"угадай вывод", blocks:"собери из блоков", memory:"предскажи память" };
+var SECTION_CERTS = [
+{ id:"warmups", icon:"🧩", title:"Разминка пройдена целиком",
+what:"Разминка",
+all: function(){ return A.warmupsList().length; },
+done: function(){
+return A.warmupsList().filter(function(x){ return A.warmupDone(x.id); }).length;
+},
+unit: ["разминка", "разминки", "разминок"],
+line: function(d, t){
+
+var seen = [], ok = 1;
+A.warmupsList().forEach(function(x){
+var nm = WARM_KIND[x.type];
+if (!nm){ ok = 0; return; }
+if (seen.indexOf(nm) < 0) seen.push(nm);
+});
+var tail = (ok && seen.length)
+? ' — ' + seen.map(function(n){ return '«' + n + '»'; }).join(", ") + '.'
+: '.';
+return 'Раздел «Разминка» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+A.plural(t, "упражнения", "упражнений", "упражнений") + tail;
+} },
+{ id:"ailab", icon:"🤖", title:"Раздел «Ты и ИИ» пройден",
+what:"Ты и ИИ",
+all: function(){ return A.ailabList().length; },
+done: function(){
+return A.ailabList().filter(function(x){ return A.ailabDone(x.id); }).length;
+},
+unit: ["задание", "задания", "заданий"],
+project: 0,
+line: function(d, t){
+var p = A.projectOfWorld(0);
+return 'Раздел «Ты и ИИ» пройден полностью: <b>' + d + ' из ' + t + '</b> ' +
+A.plural(t, "задание", "задания", "заданий") +
+(p ? ', проект «' + A.esc(p.title) + '» собран' : '') +
+'. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
+} },
+{ id:"web", icon:"🌐", title:"Раздел «HTML и CSS» пройден",
+what:"HTML и CSS",
+all: function(){ return (window.WEB_TASKS || []).length; },
+done: function(){
+return (window.WEB_TASKS || []).filter(function(x){ return A.algoDone(x.id); }).length;
+},
+unit: ["задание", "задания", "заданий"],
+line: function(d, t){
+return 'Раздел «HTML и CSS» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
+A.plural(t, "задания", "заданий", "заданий") +
+' — от первого тега до страницы с раскладкой. Каждую страницу проверял браузер.';
+} }
+];
+function sectionCert(id){
+for (var i = 0; i < SECTION_CERTS.length; i++)
+if (SECTION_CERTS[i].id === id) return SECTION_CERTS[i];
+return null;
+}
+function certSectionReady(id){
+var c = sectionCert(id);
+if (!c || !c.all()) return false;
+if (c.done() !== c.all()) return false;
+if (c.project !== undefined){
+var p = A.projectOfWorld(c.project);
+if (!p || !A.projectDone(p.id)) return false;
+}
+return true;
+}
+
+function certSectionAt(id){
+if (!certSectionReady(id)) return 0;
+A.S().certAt = A.S().certAt || {};
+if (!A.S().certAt[id]){ A.S().certAt[id] = Date.now(); A.save(); }
+return A.S().certAt[id];
+}
+function certSectionNeed(id){
+var c = sectionCert(id);
+if (!c) return "";
+var bits = [], left = c.all() - c.done();
+if (left > 0) bits.push(left + " " + A.plural(left, c.unit[0], c.unit[1], c.unit[2]));
+if (c.project !== undefined){
+var p = A.projectOfWorld(c.project);
+if (p && !A.projectDone(p.id)) bits.push("проект «" + p.title + "»");
+}
+return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
+}
+
+function certList(){
+var out = [];
+CURRICULUM.forEach(function(w){
+out.push({
+id: "world" + w.n, kind: w.n, icon: w.icon,
+title: "Мир " + w.n + ": " + w.title,
+ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
+});
+});
+SECTION_CERTS.forEach(function(c){
+out.push({
+id: c.id, kind: c.id, icon: c.icon, title: c.title, section: 1,
+ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.id)
+});
+});
+
+out.push({
+id: "course", kind: "course", icon: "🏆", title: "Путь пройден целиком",
+ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
+});
+return out;
+}
+
+function certBodyHTML(kind){
+var sect = sectionCert(kind);
+var course = kind === "course";
+var w = (course || sect) ? null : CURRICULUM.world(kind);
+var p = (course || sect) ? null : A.projectOfWorld(kind);
+var at = sect ? certSectionAt(kind) : (course ? certCourseAt() : certWorldAt(kind));
+var stars = 0, top = 0, what = "";
+
+if (sect){
+what = sect.line(sect.done(), sect.all());
+} else if (course){
+CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
+top = CURRICULUM.total * 3;
+var names = [];
+CURRICULUM.forEach(function(x){
+var pr = A.projectOfWorld(x.n);
+if (pr) names.push("«" + pr.title + "»");
+});
+what = 'Путь по «Фионике» пройден целиком: <b>' + CURRICULUM.total + " " +
+A.plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
+A.plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
+(names.length ? '<span class="certlist">' + A.esc(names.join(", ")) + '</span>' : '');
+} else {
+stars = worldStars(kind);
+top = (w ? w.lessons.length : 0) * 3;
+what = 'Мир ' + kind + ' «' + A.esc(w ? w.title : "") + '» пройден полностью: <b>' +
+(w ? w.lessons.length : 0) + " из " + (w ? w.lessons.length : 0) + '</b> ' +
+A.plural(w ? w.lessons.length : 0, "урок", "урока", "уроков") +
+(p ? ', проект «' + A.esc(p.title) + '» собран' : '') + '.';
+}
+
+var name = A.myName();
+
+var tally = sect
+? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
+: '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
+
+return '<div class="certsheet">' +
+'<div class="certmark">🐍 Фионика</div>' +
+'<div class="certkind">' + (course ? "Путь пройден" : "Сертификат") + '</div>' +
+'<div class="certname">' + A.esc(name || "Ученик Фионики") + '</div>' +
+'<div class="certrule"></div>' +
+'<div class="certwhat">' + what + '</div>' +
+tally +
+'<div class="certfoot"><span>Выдан ' + A.fmtDay(at) + '</span>' +
+'<span>Python с нуля · без установки · в браузере</span></div>' +
+'<div class="certlegal">Не является документом об образовании</div>' +
+'</div>';
+}
+
+function openCert(kind){
+var el = document.getElementById("cert"), box = document.getElementById("certbox");
+if (!el || !box) return;
+box.innerHTML = certBodyHTML(kind);
+el.hidden = false;
+}
+function closeCert(){
+var el = document.getElementById("cert");
+if (el) el.hidden = true;
+}
+function certIsOpen(){
+var el = document.getElementById("cert");
+return !!el && !el.hidden;
+}
+
+return { certList: certList, certWorldReady: certWorldReady,
+openCert: openCert, closeCert: closeCert, certIsOpen: certIsOpen,
+SECTION_CERTS: SECTION_CERTS, certBodyHTML: certBodyHTML,
+certCourseAt: certCourseAt, certCourseNeed: certCourseNeed, certCourseReady: certCourseReady,
+certSectionAt: certSectionAt, certSectionNeed: certSectionNeed, certSectionReady: certSectionReady,
+certWorldAt: certWorldAt, certWorldNeed: certWorldNeed,
+worldSolvedCount: worldSolvedCount, worldStars: worldStars, worldWhole: worldWhole };
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.folio = function(A){
+
+function folioStat(value, label){
+return '<div class="fstat"><b>' + value + '</b><span>' + label + '</span></div>';
+}
+function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
+
+function screenFolio(){
+A.enterScreen("mine", "folio");
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+
+var projects = A.projectsList();
+var built = 0;
+projects.forEach(function(p){ if (A.projectDone(p.id)) built++; });
+var certs = A.certList(), gotCerts = 0;
+certs.forEach(function(c){ if (c.ready) gotCerts++; });
+var lessonsDone = Object.keys(A.S().stars).length;
+var name = A.myName();
+
+var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
+'<h1>🎒 ' + (name ? A.esc(name) + ": мои работы" : "Моё") + '</h1></div>' +
+'<div class="right"><span class="tag">твои работы</span></div></div>' +
+'<p class="lede">Здесь собрано всё сделанное своими руками: программы из проектов, рисунки, ' +
+'свои задания для друзей и сертификаты. Эту страницу можно показать кому угодно — ' +
+'родителям, учителю, друзьям.</p>';
+
+h += '<div class="fstats">' +
+folioStat(lessonsDone + ' <i>из ' + CURRICULUM.total + '</i>', "уроков пройдено") +
+folioStat("★ " + A.totalStars(), "звёзд собрано") +
+folioStat(built + ' <i>из ' + projects.length + '</i>', "программ готово") +
+folioStat(gotCerts + ' <i>из ' + certs.length + '</i>', "сертификатов") +
+'</div>';
+
+var shelfN = A.partsList().length, madeN = A.buildsList().length;
+h += '<div class="card shopcard"><h3>🔧 Мастерская</h3>' +
+(shelfN
+? '<p>На полке <b>' + shelfN + '</b> ' + A.plural(shelfN, "деталь", "детали", "деталей") +
+' — функции, которые ты написал сам' +
+(madeN ? ', и собрано вещей: <b>' + madeN + '</b>' : '') + '.</p>'
+: '<p class="dim">Полка пока пустая. Деталью становится функция, которую ты написал сам, — ' +
+'они начинаются в уроке про <code>def</code>.</p>') +
+'<div class="admrow"><button class="rbtn check" id="toshop">Открыть мастерскую →</button></div></div>';
+
+h += '<div class="sect"><h2>Готовые программы</h2><div class="line"></div>' +
+'<span class="cnt">' + built + ' из ' + projects.length + '</span></div>';
+
+if (!projects.length){
+h += '<div class="note"><b>Программ пока нет</b>Они появятся, когда будет собран первый проект.</div>';
+} else {
+h += '<p class="dim">Кнопка «Скачать .py» отдаёт готовый файл: сохрани его и набери ' +
+'в терминале <code>python3 имя.py</code> — программа пойдёт в настоящем Python. ' +
+'Рисующей программе тренажёр допишет первую строку <code>from turtle import *</code> ' +
+'и последнюю <code>done()</code>: в тренажёре команды черепашки встроены, ' +
+'а в настоящем Python их надо подключить.</p>';
+}
+projects.forEach(function(p){
+var st = A.projectState(p.id), done = A.projectDone(p.id), open = A.projectOpen(p);
+var where = A.projectWhere(p);
+var stat = done ? "собрана ✓"
+: (st.step > 0 ? "шагов " + st.step + " из " + p.steps.length
+: (open ? "можно собирать" : "закрыта"));
+h += '<div class="fproj' + (done ? " done" : (open ? "" : " locked")) + '">' +
+'<div class="fptop"><span class="pjemoji">' + p.emoji + '</span>' +
+'<div class="fpttl"><span class="pjkicker">' + A.esc(where) + '</span>' +
+'<b>' + A.esc(p.title) + '</b>' +
+'<span class="fpsub">' + A.esc(p.tagline) + '</span></div>' +
+'<span class="fpstat' + (done ? " ok" : "") + '">' + stat + '</span></div>';
+if (done){
+var code = st.code || p.steps[p.steps.length - 1].solution;
+var n = code.replace(/\n+$/, "").split("\n").length;
+h += '<pre class="fpcode">' + A.esc(code) + '</pre>' +
+'<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
+'<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
+'<button class="rbtn sec" data-py="' + p.id + '">⬇ Скачать .py</button>' +
+'<button class="rbtn sec" data-todef="' + p.id + '">📁 К защите</button>' +
+'<span class="fplen">' + n + " " + A.plural(n, "строка", "строки", "строк") + '</span></div>';
+} else {
+h += '<div class="fpbtns">' + (open
+? '<button class="rbtn" data-open="' + p.id + '">' +
+(st.step > 0 ? "Продолжить" : "Собрать") + '</button>'
+: '<span class="soontag">откроется, когда будет пройден ' + A.esc(projectGate(p)) + '</span>') +
+'</div>';
+}
+h += '</div>';
+});
+
+var works = A.myWorksList();
+h += '<div class="sect"><h2>Мои программы</h2><div class="line"></div>' +
+'<span class="cnt">' + works.length + '</span></div>';
+if (!works.length){
+h += '<div class="note"><b>Пока пусто</b>Напиши что-нибудь в песочнице и нажми там ' +
+'«Назвать и сохранить в «Моё»». Название и описание придумываешь ты сам — ' +
+'и по ссылке друг откроет программу и запустит её, не видя кода.' +
+'<button class="rbtn" id="folio-sand">Открыть песочницу</button></div>';
+} else {
+h += '<div class="hubgrid">' + works.map(function(x){
+var n = x.code.replace(/\n+$/, "").split("\n").length;
+return '<div class="hubcard"><span class="hubem">🛠</span>' +
+'<b>' + A.esc(x.title) + '</b>' +
+'<span class="hubwhy">' + A.esc(x.about || "без описания") + '</span>' +
+'<span class="hubstat">' + A.fmtDay(x.at) + ' · ' + n + ' ' +
+A.plural(n, "строка", "строки", "строк") + '</span>' +
+'<div class="picbtns">' +
+'<button class="rbtn sec" data-worklink="' + x.id + '">🔗 Ссылка</button>' +
+'<button class="rbtn sec" data-workopen="' + x.id + '">→ В песочницу</button>' +
+'<button class="rbtn sec" data-workdel="' + x.id + '">Удалить</button>' +
+'</div></div>';
+}).join("") + '</div>' +
+'<p class="dim">Программа целиком лежит внутри ссылки, сервер для этого не нужен. ' +
+'Тот, кто её откроет, увидит работающую программу и кнопку «Заглянуть в код» — ' +
+'но только если сам захочет.</p>';
+}
+
+var pics = A.galleryList();
+h += '<div class="sect"><h2>Мои рисунки</h2><div class="line"></div>' +
+'<span class="cnt">' + pics.length + '</span></div>';
+if (!pics.length){
+h += '<div class="note"><b>Рисунков пока нет</b>Нарисуй что-нибудь в песочнице ' +
+'и нажми там «Сохранить рисунок в галерею». Хранится программа, а не картинка, ' +
+'поэтому рисунок можно открыть и переделать в любой момент.</div>';
+} else {
+h += '<div class="pics">' + pics.map(function(x){
+var n = x.code.replace(/\n+$/, "").split("\n").length;
+return '<div class="pic" data-pic="' + x.id + '">' +
+'<canvas class="picart"></canvas>' +
+'<div class="picbody"><b>' + A.esc(x.title) + '</b>' +
+'<span class="picsub">' + A.fmtDay(x.at) + ' · ' + n + ' ' +
+A.plural(n, "строка", "строки", "строк") + '</span>' +
+'<div class="picbtns">' +
+'<button class="rbtn sec" data-png="' + x.id + '">⬇ PNG</button>' +
+'<button class="rbtn sec" data-picopen="' + x.id + '">→ В песочницу</button>' +
+'<button class="rbtn sec" data-picdel="' + x.id + '">Удалить</button>' +
+'</div></div></div>';
+}).join("") + '</div>';
+}
+
+var tasks = A.myTasksList();
+h += '<div class="sect"><h2>Свои задания</h2><div class="line"></div>' +
+'<span class="cnt">' + tasks.length + '</span></div>';
+if (!tasks.length){
+h += '<div class="note"><b>Заданий пока нет</b>Придумать задачу труднее, чем решить: ' +
+'придётся объяснить её словами тому, кто твоего кода не видит. ' +
+'<button class="rbtn" id="folio-mine">Составить задание</button></div>';
+} else {
+h += '<div class="hubgrid">' + tasks.map(function(t){
+return '<div class="hubcard"><span class="hubem">✍️</span>' +
+'<b>' + A.esc(t.title) + '</b>' +
+'<span class="hubwhy">' + A.esc(t.goal) + '</span>' +
+'<span class="hubstat">' + A.fmtDay(t.at) + ' · ответ из ' + t.lines.length + ' ' +
+A.plural(t.lines.length, "строки", "строк", "строк") + '</span>' +
+'<div class="picbtns"><button class="rbtn sec" data-tasklink="' + t.id + '">Скопировать ссылку</button>' +
+'<button class="rbtn sec" data-taskopen="' + t.id + '">Открыть</button></div></div>';
+}).join("") + '</div>' +
+'<p class="dim">Ссылку можно отправить кому угодно: задание целиком лежит внутри неё, ' +
+'сервер для этого не нужен. Составить ещё одно — на экране «Своё задание».</p>';
+}
+
+h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
+'<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
+'<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
+'проект мира. Отдельно — за разделы вне сотни: всю «Разминку» и весь «Ты и ИИ». ' +
+'Любой можно распечатать или сохранить в PDF.</p><div class="certs">';
+certs.forEach(function(c){
+h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
+'<span class="cticon">' + c.icon + '</span>' +
+'<span class="ctbody"><b>' + A.esc(c.title) + '</b>' +
+'<span>' + (c.ready ? "Выдан " + A.fmtDay(c.at) : A.esc(c.need)) + '</span></span>' +
+(c.ready ? '<button class="rbtn" data-cert="' + c.id + '">Показать</button>'
+: '<span class="soontag">пока нет</span>') +
+'</div>';
+});
+h += '</div>';
+
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+
+A.app.innerHTML = h;
+var tsh = document.getElementById("toshop");
+if (tsh) tsh.onclick = A.screenShop;
+A.app.querySelectorAll("[data-open]").forEach(function(b){
+b.onclick = function(){
+var id = b.getAttribute("data-open");
+if (A.projectDone(id)) A.screenProjectDone(id); else A.openProject(id);
+};
+});
+
+A.app.querySelectorAll(".pic").forEach(function(card){
+var x = A.galleryAll()[card.getAttribute("data-pic")];
+if (!x) return;
+var res = A.galleryDrawing(x.code);
+var cv = card.querySelector("canvas");
+if (res && res.turtle) A.drawTurtle(cv, res.turtle);
+else card.classList.add("broken");
+});
+A.app.querySelectorAll("[data-png]").forEach(function(b){
+b.onclick = function(){
+var id = b.getAttribute("data-png");
+var card = A.app.querySelector('.pic[data-pic="' + id + '"]');
+var cv = card && card.querySelector("canvas");
+var x = A.galleryAll()[id];
+if (!cv || !x) return;
+try { A.downloadDataURL(A.pyFileName(x.title).replace(/\.py$/, "") + ".png",
+cv.toDataURL("image/png"), b); } catch(e){}
+};
+});
+A.app.querySelectorAll("[data-picopen]").forEach(function(b){
+b.onclick = function(){
+var x = A.galleryAll()[b.getAttribute("data-picopen")];
+if (!x) return;
+A.openInSandbox(x.code);
+};
+});
+A.app.querySelectorAll("[data-picdel]").forEach(function(b){
+b.onclick = function(){ A.galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
+});
+A.app.querySelectorAll("[data-worklink]").forEach(function(b){
+b.onclick = function(){
+var x = A.myWorkById(b.getAttribute("data-worklink"));
+if (x) A.copyText(A.myWorkLink(x), b);
+};
+});
+A.app.querySelectorAll("[data-workopen]").forEach(function(b){
+b.onclick = function(){
+var x = A.myWorkById(b.getAttribute("data-workopen"));
+if (!x) return;
+A.openInSandbox(x.code);
+};
+});
+A.app.querySelectorAll("[data-workdel]").forEach(function(b){
+b.onclick = function(){
+var x = A.myWorkById(b.getAttribute("data-workdel"));
+var yes = true;
+try { yes = confirm("Удалить «" + ((x && x.title) || "программу") + "»? Вернуть будет нельзя."); }
+catch(e){}
+if (!yes) return;
+A.myWorkDrop(b.getAttribute("data-workdel"));
+screenFolio();
+};
+});
+var fs2 = document.getElementById("folio-sand");
+if (fs2) fs2.onclick = A.screenSandbox;
+var fm = document.getElementById("folio-mine");
+if (fm) fm.onclick = function(){ A.screenMyTasks(); };
+A.app.querySelectorAll("[data-tasklink]").forEach(function(b){
+b.onclick = function(){
+var t = A.myTasksAll()[b.getAttribute("data-tasklink")];
+if (t) A.copyText(A.taskLink(t), b);
+};
+});
+A.app.querySelectorAll("[data-taskopen]").forEach(function(b){
+b.onclick = function(){
+var id = b.getAttribute("data-taskopen"), t = A.myTasksAll()[id];
+if (t) A.openFriendTask(t, { own:true, id:id });
+};
+});
+A.app.querySelectorAll("[data-py]").forEach(function(b){
+b.onclick = function(){
+var p = A.projectById(b.getAttribute("data-py"));
+if (!p) return;
+var st = A.projectState(p.id);
+var code = st.code || p.steps[p.steps.length - 1].solution;
+A.downloadText(A.pyFileName(p.title), A.pyFileText(p.title, code), b);
+};
+});
+A.app.querySelectorAll("[data-copy]").forEach(function(b){
+b.onclick = function(){
+var p = A.projectById(b.getAttribute("data-copy"));
+if (!p) return;
+var st = A.projectState(p.id);
+A.copyText(st.code || p.steps[p.steps.length - 1].solution, b);
+};
+});
+A.app.querySelectorAll("[data-todef]").forEach(function(b){
+b.onclick = function(){ A.screenDefense(b.getAttribute("data-todef")); };
+});
+A.app.querySelectorAll("[data-cert]").forEach(function(b){
+b.onclick = function(){
+var v = b.getAttribute("data-cert");
+A.openCert(v === "course" ? "course" : +v.replace("world", ""));
+};
+});
+document.getElementById("tomap").onclick = A.goHome;
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+return { screenFolio: screenFolio };
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.variant = function(A){
 
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -33600,7 +34138,9 @@ solved: solved, solvedCount: solvedCount, starsOf: starsOf,
 lessonOpen: lessonOpen, nextLesson: nextLesson, openLesson: openLesson,
 allWorldsContent: allWorldsContent, worldCountdown: worldCountdown,
 worldReadyLessons: worldReadyLessons, reviewDue: reviewDue,
-hwPending: hwPending, certList: certList,
+hwPending: hwPending,
+
+certList: function(){ return certList(); },
 
 partsList: function(){ return partsList(); }, buildsList: function(){ return buildsList(); },
 galleryList: galleryList, myTasksList: myTasksList,
@@ -33608,7 +34148,9 @@ projectsList: projectsList, projectDone: projectDone,
 trainCards: trainCards, welcomeBackHTML: welcomeBackHTML,
 installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
 aboutFootHTML: aboutFootHTML, wireAboutFoot: wireAboutFoot,
-screenWorld: screenWorld, screenTrain: screenTrain, screenFolio: screenFolio,
+screenWorld: screenWorld, screenTrain: screenTrain,
+
+screenFolio: function(){ screenFolio(); },
 screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
 screenMyTasks: screenMyTasks,
 
@@ -34711,7 +35253,7 @@ draftFlush: draftFlush, draftSchedule: draftSchedule, makeStudio: makeStudio,
 galleryAll: galleryAll, galleryDrawing: galleryDrawing, gallerySave: gallerySave,
 myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkSave: myWorkSave,
 
-screenFolio: screenFolio, screenStale: screenStale,
+screenFolio: function(){ screenFolio(); }, screenStale: screenStale,
 screenViz: function(o){ screenViz(o); },
 screenWorlds: screenWorlds,
 SANDBOX_START: SANDBOX_START, SANDBOX_START_PY: SANDBOX_START_PY,
@@ -35298,7 +35840,9 @@ var ACCOUNT = KVSCREENS.account({
 app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
 myCode: myCode, myName: myName, serverOn: serverOn, doLogout: doLogout,
 openAccessCard: openAccessCard, codeSaved: codeSaved, markCodeSaved: markCodeSaved,
-goHome: goHome, screenAbout: screenAbout, screenFolio: screenFolio,
+goHome: goHome, screenAbout: screenAbout,
+
+screenFolio: function(){ screenFolio(); },
 screenGuide: screenGuide, screenRoles: screenRoles,
 themeGet: themeGet, themeSet: themeSet, sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx,
 speak: speak, voiceAuto: voiceAuto, voiceAutoSet: voiceAutoSet,
@@ -36808,225 +37352,29 @@ return true;
 return false;
 }
 
-function worldSolvedCount(n){
-var w = CURRICULUM.world(n), c = 0;
-if (w) w.lessons.forEach(function(l){ if (solved(l.id)) c++; });
-return c;
-}
-function worldStars(n){
-var w = CURRICULUM.world(n), s = 0;
-if (w) w.lessons.forEach(function(l){ s += starsOf(l.id); });
-return s;
-}
-function worldWhole(n){
-var w = CURRICULUM.world(n);
-return !!w && w.lessons.length > 0 && worldSolvedCount(n) === w.lessons.length;
-}
-
-function certWorldReady(n){
-var p = projectOfWorld(n);
-return worldWhole(n) && !!p && projectDone(p.id);
-}
-function certCourseReady(){
-if (!CURRICULUM.length) return false;
-for (var i = 0; i < CURRICULUM.length; i++)
-if (!certWorldReady(CURRICULUM[i].n)) return false;
-return true;
-}
-
-function certWorldAt(n){
-var w = CURRICULUM.world(n), t = 0;
-if (!w) return 0;
-w.lessons.forEach(function(l){
-var g = S.log[l.id] || {};
-if ((g.solvedAt || 0) > t) t = g.solvedAt;
-});
-var p = projectOfWorld(n);
-if (p){ var d = projectState(p.id).doneAt || 0; if (d > t) t = d; }
-return t;
-}
-function certCourseAt(){
-var t = 0;
-CURRICULUM.forEach(function(w){ var x = certWorldAt(w.n); if (x > t) t = x; });
-return t;
-}
-
-function certWorldNeed(n){
-var w = CURRICULUM.world(n), p = projectOfWorld(n), bits = [];
-var left = w ? w.lessons.length - worldSolvedCount(n) : 0;
-if (left > 0) bits.push(left + " " + plural(left, "урок", "урока", "уроков"));
-if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
-return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
-}
-function certCourseNeed(){
-var left = 0;
-CURRICULUM.forEach(function(w){ if (!certWorldReady(w.n)) left++; });
-return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
-}
-
-var WARM_KIND = { predict:"угадай вывод", blocks:"собери из блоков", memory:"предскажи память" };
-var SECTION_CERTS = [
-{ id:"warmups", icon:"🧩", title:"Разминка пройдена целиком",
-what:"Разминка",
-all: function(){ return warmupsList().length; },
-done: function(){
-return warmupsList().filter(function(x){ return warmupDone(x.id); }).length;
-},
-unit: ["разминка", "разминки", "разминок"],
-line: function(d, t){
-
-var seen = [], ok = 1;
-warmupsList().forEach(function(x){
-var nm = WARM_KIND[x.type];
-if (!nm){ ok = 0; return; }
-if (seen.indexOf(nm) < 0) seen.push(nm);
-});
-var tail = (ok && seen.length)
-? ' — ' + seen.map(function(n){ return '«' + n + '»'; }).join(", ") + '.'
-: '.';
-return 'Раздел «Разминка» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
-plural(t, "упражнения", "упражнений", "упражнений") + tail;
-} },
-{ id:"ailab", icon:"🤖", title:"Раздел «Ты и ИИ» пройден",
-what:"Ты и ИИ",
-all: function(){ return ailabList().length; },
-done: function(){
-return ailabList().filter(function(x){ return ailabDone(x.id); }).length;
-},
-unit: ["задание", "задания", "заданий"],
-project: 0,
-line: function(d, t){
-var p = projectOfWorld(0);
-return 'Раздел «Ты и ИИ» пройден полностью: <b>' + d + ' из ' + t + '</b> ' +
-plural(t, "задание", "задания", "заданий") +
-(p ? ', проект «' + esc(p.title) + '» собран' : '') +
-'. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
-} },
-{ id:"web", icon:"🌐", title:"Раздел «HTML и CSS» пройден",
-what:"HTML и CSS",
-all: function(){ return (window.WEB_TASKS || []).length; },
-done: function(){
-return (window.WEB_TASKS || []).filter(function(x){ return algoDone(x.id); }).length;
-},
-unit: ["задание", "задания", "заданий"],
-line: function(d, t){
-return 'Раздел «HTML и CSS» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
-plural(t, "задания", "заданий", "заданий") +
-' — от первого тега до страницы с раскладкой. Каждую страницу проверял браузер.';
-} }
-];
-function sectionCert(id){
-for (var i = 0; i < SECTION_CERTS.length; i++)
-if (SECTION_CERTS[i].id === id) return SECTION_CERTS[i];
-return null;
-}
-function certSectionReady(id){
-var c = sectionCert(id);
-if (!c || !c.all()) return false;
-if (c.done() !== c.all()) return false;
-if (c.project !== undefined){
-var p = projectOfWorld(c.project);
-if (!p || !projectDone(p.id)) return false;
-}
-return true;
-}
-
-function certSectionAt(id){
-if (!certSectionReady(id)) return 0;
-S.certAt = S.certAt || {};
-if (!S.certAt[id]){ S.certAt[id] = Date.now(); save(); }
-return S.certAt[id];
-}
-function certSectionNeed(id){
-var c = sectionCert(id);
-if (!c) return "";
-var bits = [], left = c.all() - c.done();
-if (left > 0) bits.push(left + " " + plural(left, c.unit[0], c.unit[1], c.unit[2]));
-if (c.project !== undefined){
-var p = projectOfWorld(c.project);
-if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
-}
-return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
-}
-
-function certList(){
-var out = [];
-CURRICULUM.forEach(function(w){
-out.push({
-id: "world" + w.n, kind: w.n, icon: w.icon,
-title: "Мир " + w.n + ": " + w.title,
-ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
-});
-});
-SECTION_CERTS.forEach(function(c){
-out.push({
-id: c.id, kind: c.id, icon: c.icon, title: c.title, section: 1,
-ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.id)
-});
-});
-
-out.push({
-id: "course", kind: "course", icon: "🏆", title: "Путь пройден целиком",
-ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
-});
-return out;
-}
-
 function fmtDay(ts){
 if (!ts) return "—";
 var d = new Date(ts), p = function(x){ return (x < 10 ? "0" : "") + x; };
 return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
 }
 
-function certBodyHTML(kind){
-var sect = sectionCert(kind);
-var course = kind === "course";
-var w = (course || sect) ? null : CURRICULUM.world(kind);
-var p = (course || sect) ? null : projectOfWorld(kind);
-var at = sect ? certSectionAt(kind) : (course ? certCourseAt() : certWorldAt(kind));
-var stars = 0, top = 0, what = "";
-
-if (sect){
-what = sect.line(sect.done(), sect.all());
-} else if (course){
-CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
-top = CURRICULUM.total * 3;
-var names = [];
-CURRICULUM.forEach(function(x){
-var pr = projectOfWorld(x.n);
-if (pr) names.push("«" + pr.title + "»");
+var CERTS = KVSCREENS.certs({
+esc: esc, plural: plural, save: save, myName: myName, fmtDay: fmtDay,
+solved: solved, starsOf: starsOf,
+projectOfWorld: projectOfWorld, projectDone: projectDone, projectState: projectState,
+warmupsList: warmupsList, warmupDone: warmupDone, ailabList: ailabList, ailabDone: ailabDone,
+algoDone: algoDone,
+S: function(){ return S; }
 });
-what = 'Путь по «Фионике» пройден целиком: <b>' + CURRICULUM.total + " " +
-plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
-plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
-(names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
-} else {
-stars = worldStars(kind);
-top = (w ? w.lessons.length : 0) * 3;
-what = 'Мир ' + kind + ' «' + esc(w ? w.title : "") + '» пройден полностью: <b>' +
-(w ? w.lessons.length : 0) + " из " + (w ? w.lessons.length : 0) + '</b> ' +
-plural(w ? w.lessons.length : 0, "урок", "урока", "уроков") +
-(p ? ', проект «' + esc(p.title) + '» собран' : '') + '.';
-}
-
-var name = myName();
-
-var tally = sect
-? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
-: '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
-
-return '<div class="certsheet">' +
-'<div class="certmark">🐍 Фионика</div>' +
-'<div class="certkind">' + (course ? "Путь пройден" : "Сертификат") + '</div>' +
-'<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
-'<div class="certrule"></div>' +
-'<div class="certwhat">' + what + '</div>' +
-tally +
-'<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
-'<span>Python с нуля · без установки · в браузере</span></div>' +
-'<div class="certlegal">Не является документом об образовании</div>' +
-'</div>';
-}
+var certList = CERTS.certList, certWorldReady = CERTS.certWorldReady,
+openCert = CERTS.openCert, closeCert = CERTS.closeCert, certIsOpen = CERTS.certIsOpen,
+SECTION_CERTS = CERTS.SECTION_CERTS, certBodyHTML = CERTS.certBodyHTML,
+certCourseAt = CERTS.certCourseAt, certCourseNeed = CERTS.certCourseNeed,
+certCourseReady = CERTS.certCourseReady, certSectionAt = CERTS.certSectionAt,
+certSectionNeed = CERTS.certSectionNeed, certSectionReady = CERTS.certSectionReady,
+certWorldAt = CERTS.certWorldAt, certWorldNeed = CERTS.certWorldNeed,
+worldSolvedCount = CERTS.worldSolvedCount, worldStars = CERTS.worldStars,
+worldWhole = CERTS.worldWhole;
 
 function accessLink(code){
 try { return location.origin + location.pathname + "?kid=" + encodeURIComponent(code); }
@@ -37058,307 +37406,32 @@ box.innerHTML = accessCardHTML(code, name);
 el.hidden = false;
 }
 
-function openCert(kind){
-var el = document.getElementById("cert"), box = document.getElementById("certbox");
-if (!el || !box) return;
-box.innerHTML = certBodyHTML(kind);
-el.hidden = false;
-}
-function closeCert(){
-var el = document.getElementById("cert");
-if (el) el.hidden = true;
-}
-function certIsOpen(){
-var el = document.getElementById("cert");
-return !!el && !el.hidden;
-}
-
-function folioStat(value, label){
-return '<div class="fstat"><b>' + value + '</b><span>' + label + '</span></div>';
-}
-
 function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.world; }
-function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
 
-function screenFolio(){
-enterScreen("mine", "folio");
-session = { id:null, attempts:0, hints:0, shown:false };
+var FOLIO = KVSCREENS.folio({
+app: app, esc: esc, plural: plural, fmtDay: fmtDay, myName: myName,
+enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+totalStars: totalStars, certList: certList, openCert: openCert,
+projectsList: projectsList, projectById: projectById, projectDone: projectDone,
+projectOpen: projectOpen, projectState: projectState, projectWhere: projectWhere,
+openProject: openProject, screenProjectDone: screenProjectDone,
+myWorksList: myWorksList, myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkDrop: myWorkDrop,
+galleryList: galleryList, galleryAll: galleryAll, galleryDrawing: galleryDrawing,
+galleryDrop: galleryDrop, drawTurtle: drawTurtle,
+myTasksList: myTasksList, myTasksAll: myTasksAll, taskLink: taskLink,
+openFriendTask: openFriendTask, screenMyTasks: screenMyTasks,
+downloadDataURL: downloadDataURL, downloadText: downloadText,
+pyFileName: pyFileName, pyFileText: pyFileText, copyText: copyText,
+screenSandbox: screenSandbox,
 
-var projects = projectsList();
-var built = 0;
-projects.forEach(function(p){ if (projectDone(p.id)) built++; });
-var certs = certList(), gotCerts = 0;
-certs.forEach(function(c){ if (c.ready) gotCerts++; });
-var lessonsDone = Object.keys(S.stars).length;
-var name = myName();
-
-var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
-'<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Моё") + '</h1></div>' +
-'<div class="right"><span class="tag">твои работы</span></div></div>' +
-'<p class="lede">Здесь собрано всё сделанное своими руками: программы из проектов, рисунки, ' +
-'свои задания для друзей и сертификаты. Эту страницу можно показать кому угодно — ' +
-'родителям, учителю, друзьям.</p>';
-
-h += '<div class="fstats">' +
-folioStat(lessonsDone + ' <i>из ' + CURRICULUM.total + '</i>', "уроков пройдено") +
-folioStat("★ " + totalStars(), "звёзд собрано") +
-folioStat(built + ' <i>из ' + projects.length + '</i>', "программ готово") +
-folioStat(gotCerts + ' <i>из ' + certs.length + '</i>', "сертификатов") +
-'</div>';
-
-var shelfN = partsList().length, madeN = buildsList().length;
-h += '<div class="card shopcard"><h3>🔧 Мастерская</h3>' +
-(shelfN
-? '<p>На полке <b>' + shelfN + '</b> ' + plural(shelfN, "деталь", "детали", "деталей") +
-' — функции, которые ты написал сам' +
-(madeN ? ', и собрано вещей: <b>' + madeN + '</b>' : '') + '.</p>'
-: '<p class="dim">Полка пока пустая. Деталью становится функция, которую ты написал сам, — ' +
-'они начинаются в уроке про <code>def</code>.</p>') +
-'<div class="admrow"><button class="rbtn check" id="toshop">Открыть мастерскую →</button></div></div>';
-
-h += '<div class="sect"><h2>Готовые программы</h2><div class="line"></div>' +
-'<span class="cnt">' + built + ' из ' + projects.length + '</span></div>';
-
-if (!projects.length){
-h += '<div class="note"><b>Программ пока нет</b>Они появятся, когда будет собран первый проект.</div>';
-} else {
-h += '<p class="dim">Кнопка «Скачать .py» отдаёт готовый файл: сохрани его и набери ' +
-'в терминале <code>python3 имя.py</code> — программа пойдёт в настоящем Python. ' +
-'Рисующей программе тренажёр допишет первую строку <code>from turtle import *</code> ' +
-'и последнюю <code>done()</code>: в тренажёре команды черепашки встроены, ' +
-'а в настоящем Python их надо подключить.</p>';
-}
-projects.forEach(function(p){
-var st = projectState(p.id), done = projectDone(p.id), open = projectOpen(p);
-var where = projectWhere(p);
-var stat = done ? "собрана ✓"
-: (st.step > 0 ? "шагов " + st.step + " из " + p.steps.length
-: (open ? "можно собирать" : "закрыта"));
-h += '<div class="fproj' + (done ? " done" : (open ? "" : " locked")) + '">' +
-'<div class="fptop"><span class="pjemoji">' + p.emoji + '</span>' +
-'<div class="fpttl"><span class="pjkicker">' + esc(where) + '</span>' +
-'<b>' + esc(p.title) + '</b>' +
-'<span class="fpsub">' + esc(p.tagline) + '</span></div>' +
-'<span class="fpstat' + (done ? " ok" : "") + '">' + stat + '</span></div>';
-if (done){
-var code = st.code || p.steps[p.steps.length - 1].solution;
-var n = code.replace(/\n+$/, "").split("\n").length;
-h += '<pre class="fpcode">' + esc(code) + '</pre>' +
-'<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
-'<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
-'<button class="rbtn sec" data-py="' + p.id + '">⬇ Скачать .py</button>' +
-'<button class="rbtn sec" data-todef="' + p.id + '">📁 К защите</button>' +
-'<span class="fplen">' + n + " " + plural(n, "строка", "строки", "строк") + '</span></div>';
-} else {
-h += '<div class="fpbtns">' + (open
-? '<button class="rbtn" data-open="' + p.id + '">' +
-(st.step > 0 ? "Продолжить" : "Собрать") + '</button>'
-: '<span class="soontag">откроется, когда будет пройден ' + esc(projectGate(p)) + '</span>') +
-'</div>';
-}
-h += '</div>';
+openInSandbox: function(code){ S.sandbox = code; save(); screenSandbox(); },
+partsList: function(){ return partsList(); }, buildsList: function(){ return buildsList(); },
+screenShop: function(){ screenShop(); },
+screenDefense: function(id){ screenDefense(id); },
+S: function(){ return S; },
+newSession: function(v){ session = v; return v; }
 });
-
-var works = myWorksList();
-h += '<div class="sect"><h2>Мои программы</h2><div class="line"></div>' +
-'<span class="cnt">' + works.length + '</span></div>';
-if (!works.length){
-h += '<div class="note"><b>Пока пусто</b>Напиши что-нибудь в песочнице и нажми там ' +
-'«Назвать и сохранить в «Моё»». Название и описание придумываешь ты сам — ' +
-'и по ссылке друг откроет программу и запустит её, не видя кода.' +
-'<button class="rbtn" id="folio-sand">Открыть песочницу</button></div>';
-} else {
-h += '<div class="hubgrid">' + works.map(function(x){
-var n = x.code.replace(/\n+$/, "").split("\n").length;
-return '<div class="hubcard"><span class="hubem">🛠</span>' +
-'<b>' + esc(x.title) + '</b>' +
-'<span class="hubwhy">' + esc(x.about || "без описания") + '</span>' +
-'<span class="hubstat">' + fmtDay(x.at) + ' · ' + n + ' ' +
-plural(n, "строка", "строки", "строк") + '</span>' +
-'<div class="picbtns">' +
-'<button class="rbtn sec" data-worklink="' + x.id + '">🔗 Ссылка</button>' +
-'<button class="rbtn sec" data-workopen="' + x.id + '">→ В песочницу</button>' +
-'<button class="rbtn sec" data-workdel="' + x.id + '">Удалить</button>' +
-'</div></div>';
-}).join("") + '</div>' +
-'<p class="dim">Программа целиком лежит внутри ссылки, сервер для этого не нужен. ' +
-'Тот, кто её откроет, увидит работающую программу и кнопку «Заглянуть в код» — ' +
-'но только если сам захочет.</p>';
-}
-
-var pics = galleryList();
-h += '<div class="sect"><h2>Мои рисунки</h2><div class="line"></div>' +
-'<span class="cnt">' + pics.length + '</span></div>';
-if (!pics.length){
-h += '<div class="note"><b>Рисунков пока нет</b>Нарисуй что-нибудь в песочнице ' +
-'и нажми там «Сохранить рисунок в галерею». Хранится программа, а не картинка, ' +
-'поэтому рисунок можно открыть и переделать в любой момент.</div>';
-} else {
-h += '<div class="pics">' + pics.map(function(x){
-var n = x.code.replace(/\n+$/, "").split("\n").length;
-return '<div class="pic" data-pic="' + x.id + '">' +
-'<canvas class="picart"></canvas>' +
-'<div class="picbody"><b>' + esc(x.title) + '</b>' +
-'<span class="picsub">' + fmtDay(x.at) + ' · ' + n + ' ' +
-plural(n, "строка", "строки", "строк") + '</span>' +
-'<div class="picbtns">' +
-'<button class="rbtn sec" data-png="' + x.id + '">⬇ PNG</button>' +
-'<button class="rbtn sec" data-picopen="' + x.id + '">→ В песочницу</button>' +
-'<button class="rbtn sec" data-picdel="' + x.id + '">Удалить</button>' +
-'</div></div></div>';
-}).join("") + '</div>';
-}
-
-var tasks = myTasksList();
-h += '<div class="sect"><h2>Свои задания</h2><div class="line"></div>' +
-'<span class="cnt">' + tasks.length + '</span></div>';
-if (!tasks.length){
-h += '<div class="note"><b>Заданий пока нет</b>Придумать задачу труднее, чем решить: ' +
-'придётся объяснить её словами тому, кто твоего кода не видит. ' +
-'<button class="rbtn" id="folio-mine">Составить задание</button></div>';
-} else {
-h += '<div class="hubgrid">' + tasks.map(function(t){
-return '<div class="hubcard"><span class="hubem">✍️</span>' +
-'<b>' + esc(t.title) + '</b>' +
-'<span class="hubwhy">' + esc(t.goal) + '</span>' +
-'<span class="hubstat">' + fmtDay(t.at) + ' · ответ из ' + t.lines.length + ' ' +
-plural(t.lines.length, "строки", "строк", "строк") + '</span>' +
-'<div class="picbtns"><button class="rbtn sec" data-tasklink="' + t.id + '">Скопировать ссылку</button>' +
-'<button class="rbtn sec" data-taskopen="' + t.id + '">Открыть</button></div></div>';
-}).join("") + '</div>' +
-'<p class="dim">Ссылку можно отправить кому угодно: задание целиком лежит внутри неё, ' +
-'сервер для этого не нужен. Составить ещё одно — на экране «Своё задание».</p>';
-}
-
-h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
-'<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
-'<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
-'проект мира. Отдельно — за разделы вне сотни: всю «Разминку» и весь «Ты и ИИ». ' +
-'Любой можно распечатать или сохранить в PDF.</p><div class="certs">';
-certs.forEach(function(c){
-h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
-'<span class="cticon">' + c.icon + '</span>' +
-'<span class="ctbody"><b>' + esc(c.title) + '</b>' +
-'<span>' + (c.ready ? "Выдан " + fmtDay(c.at) : esc(c.need)) + '</span></span>' +
-(c.ready ? '<button class="rbtn" data-cert="' + c.id + '">Показать</button>'
-: '<span class="soontag">пока нет</span>') +
-'</div>';
-});
-h += '</div>';
-
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-
-app.innerHTML = h;
-var tsh = document.getElementById("toshop");
-if (tsh) tsh.onclick = screenShop;
-app.querySelectorAll("[data-open]").forEach(function(b){
-b.onclick = function(){
-var id = b.getAttribute("data-open");
-if (projectDone(id)) screenProjectDone(id); else openProject(id);
-};
-});
-
-app.querySelectorAll(".pic").forEach(function(card){
-var x = galleryAll()[card.getAttribute("data-pic")];
-if (!x) return;
-var res = galleryDrawing(x.code);
-var cv = card.querySelector("canvas");
-if (res && res.turtle) drawTurtle(cv, res.turtle);
-else card.classList.add("broken");
-});
-app.querySelectorAll("[data-png]").forEach(function(b){
-b.onclick = function(){
-var id = b.getAttribute("data-png");
-var card = app.querySelector('.pic[data-pic="' + id + '"]');
-var cv = card && card.querySelector("canvas");
-var x = galleryAll()[id];
-if (!cv || !x) return;
-try { downloadDataURL(pyFileName(x.title).replace(/\.py$/, "") + ".png",
-cv.toDataURL("image/png"), b); } catch(e){}
-};
-});
-app.querySelectorAll("[data-picopen]").forEach(function(b){
-b.onclick = function(){
-var x = galleryAll()[b.getAttribute("data-picopen")];
-if (!x) return;
-S.sandbox = x.code; save();
-screenSandbox();
-};
-});
-app.querySelectorAll("[data-picdel]").forEach(function(b){
-b.onclick = function(){ galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
-});
-app.querySelectorAll("[data-worklink]").forEach(function(b){
-b.onclick = function(){
-var x = myWorkById(b.getAttribute("data-worklink"));
-if (x) copyText(myWorkLink(x), b);
-};
-});
-app.querySelectorAll("[data-workopen]").forEach(function(b){
-b.onclick = function(){
-var x = myWorkById(b.getAttribute("data-workopen"));
-if (!x) return;
-S.sandbox = x.code; save();
-screenSandbox();
-};
-});
-app.querySelectorAll("[data-workdel]").forEach(function(b){
-b.onclick = function(){
-var x = myWorkById(b.getAttribute("data-workdel"));
-var yes = true;
-try { yes = confirm("Удалить «" + ((x && x.title) || "программу") + "»? Вернуть будет нельзя."); }
-catch(e){}
-if (!yes) return;
-myWorkDrop(b.getAttribute("data-workdel"));
-screenFolio();
-};
-});
-var fs2 = document.getElementById("folio-sand");
-if (fs2) fs2.onclick = screenSandbox;
-var fm = document.getElementById("folio-mine");
-if (fm) fm.onclick = function(){ screenMyTasks(); };
-app.querySelectorAll("[data-tasklink]").forEach(function(b){
-b.onclick = function(){
-var t = myTasksAll()[b.getAttribute("data-tasklink")];
-if (t) copyText(taskLink(t), b);
-};
-});
-app.querySelectorAll("[data-taskopen]").forEach(function(b){
-b.onclick = function(){
-var id = b.getAttribute("data-taskopen"), t = myTasksAll()[id];
-if (t) openFriendTask(t, { own:true, id:id });
-};
-});
-app.querySelectorAll("[data-py]").forEach(function(b){
-b.onclick = function(){
-var p = projectById(b.getAttribute("data-py"));
-if (!p) return;
-var st = projectState(p.id);
-var code = st.code || p.steps[p.steps.length - 1].solution;
-downloadText(pyFileName(p.title), pyFileText(p.title, code), b);
-};
-});
-app.querySelectorAll("[data-copy]").forEach(function(b){
-b.onclick = function(){
-var p = projectById(b.getAttribute("data-copy"));
-if (!p) return;
-var st = projectState(p.id);
-copyText(st.code || p.steps[p.steps.length - 1].solution, b);
-};
-});
-app.querySelectorAll("[data-todef]").forEach(function(b){
-b.onclick = function(){ screenDefense(b.getAttribute("data-todef")); };
-});
-app.querySelectorAll("[data-cert]").forEach(function(b){
-b.onclick = function(){
-var v = b.getAttribute("data-cert");
-openCert(v === "course" ? "course" : +v.replace("world", ""));
-};
-});
-document.getElementById("tomap").onclick = goHome;
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
+var screenFolio = FOLIO.screenFolio;
 
 function zanBlockLabel(b){
 if (b.k === "warm") return "Разминка";

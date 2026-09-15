@@ -4331,7 +4331,9 @@ var HOME = KVSCREENS.home({
   lessonOpen: lessonOpen, nextLesson: nextLesson, openLesson: openLesson,
   allWorldsContent: allWorldsContent, worldCountdown: worldCountdown,
   worldReadyLessons: worldReadyLessons, reviewDue: reviewDue,
-  hwPending: hwPending, certList: certList,
+  hwPending: hwPending,
+  /* ⚠️ Обёрткой: сертификаты с 15.09.2026 модуль ниже по файлу (§ 4.40). */
+  certList: function(){ return certList(); },
   /* ⚠️ Обёртками: мастерская с 15.09.2026 модуль ниже по файлу (§ 4.40). */
   partsList: function(){ return partsList(); }, buildsList: function(){ return buildsList(); },
   galleryList: galleryList, myTasksList: myTasksList,
@@ -4339,7 +4341,9 @@ var HOME = KVSCREENS.home({
   trainCards: trainCards, welcomeBackHTML: welcomeBackHTML,
   installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
   aboutFootHTML: aboutFootHTML, wireAboutFoot: wireAboutFoot,
-  screenWorld: screenWorld, screenTrain: screenTrain, screenFolio: screenFolio,
+  screenWorld: screenWorld, screenTrain: screenTrain,
+  /* ⚠️ Обёрткой: портфолио — модуль ниже по файлу (§ 4.40). */
+  screenFolio: function(){ screenFolio(); },
   screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
   screenMyTasks: screenMyTasks,
   /* ⚠️ Обёрткой: экраны разминки с 15.09.2026 модуль ниже по файлу (§ 4.40). */
@@ -5725,7 +5729,8 @@ var SANDBOX = KVSCREENS.sandbox({
   myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkSave: myWorkSave,
   /* ⚠️ screenViz — обёрткой: визуализатор с 15.09.2026 модуль, его переменная
      присваивается НИЖЕ по файлу, и значением сюда приехал бы undefined (§ 4.40). */
-  screenFolio: screenFolio, screenStale: screenStale,
+  /* ⚠️ Обёрткой: портфолио — модуль ниже по файлу (§ 4.40). */
+  screenFolio: function(){ screenFolio(); }, screenStale: screenStale,
   screenViz: function(o){ screenViz(o); },
   screenWorlds: screenWorlds,
   SANDBOX_START: SANDBOX_START, SANDBOX_START_PY: SANDBOX_START_PY,
@@ -6420,7 +6425,9 @@ var ACCOUNT = KVSCREENS.account({
   app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
   myCode: myCode, myName: myName, serverOn: serverOn, doLogout: doLogout,
   openAccessCard: openAccessCard, codeSaved: codeSaved, markCodeSaved: markCodeSaved,
-  goHome: goHome, screenAbout: screenAbout, screenFolio: screenFolio,
+  goHome: goHome, screenAbout: screenAbout,
+  /* ⚠️ Обёрткой: портфолио — модуль ниже по файлу (§ 4.40). */
+  screenFolio: function(){ screenFolio(); },
   screenGuide: screenGuide, screenRoles: screenRoles,
   themeGet: themeGet, themeSet: themeSet, sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx,
   speak: speak, voiceAuto: voiceAuto, voiceAutoSet: voiceAutoSet,
@@ -8276,266 +8283,34 @@ function downloadText(name, text, btn, mime){
   return false;
 }
 
-/* ================= экран: портфолио и сертификаты =================
-   Проектов шесть, и каждый — законченная программа, написанная ребёнком.
-   По отдельности они разбросаны по мирам; здесь собраны в одном месте
-   вместе со сводкой и сертификатами. Это единственный экран, сделанный
-   не для занятий, а для ПОКАЗА: родителям, учителю, кому угодно.
-
-   Про сертификат важно одно: он выдаётся не за «прошёл уроки», а за уроки
-   ПЛЮС собранный проект мира. Сертификат без сделанной вещи — бумажка,
-   и ребёнок это чувствует раньше взрослых.
-
-   Своего прогресса раздел не заводит: и сводка, и сертификаты считаются
-   из S.stars, S.log и S.projects. Единственная добавка — projects[id].doneAt,
-   дата сборки проекта: без неё дата на сертификате менялась бы при каждом
-   открытии, а такому «документу» грош цена.
-   ============================================================ */
-
-function worldSolvedCount(n){
-  var w = CURRICULUM.world(n), c = 0;
-  if (w) w.lessons.forEach(function(l){ if (solved(l.id)) c++; });
-  return c;
-}
-function worldStars(n){
-  var w = CURRICULUM.world(n), s = 0;
-  if (w) w.lessons.forEach(function(l){ s += starsOf(l.id); });
-  return s;
-}
-function worldWhole(n){
-  var w = CURRICULUM.world(n);
-  return !!w && w.lessons.length > 0 && worldSolvedCount(n) === w.lessons.length;
-}
-
-/* сертификат мира: все уроки мира пройдены И проект мира собран */
-function certWorldReady(n){
-  var p = projectOfWorld(n);
-  return worldWhole(n) && !!p && projectDone(p.id);
-}
-function certCourseReady(){
-  if (!CURRICULUM.length) return false;
-  for (var i = 0; i < CURRICULUM.length; i++)
-    if (!certWorldReady(CURRICULUM[i].n)) return false;
-  return true;
-}
-/* дата выдачи: самое позднее из «последний урок мира пройден» и «проект собран».
-   Дату берём из журнала, а не из текущего дня — иначе сертификат «переписывался»
-   бы при каждом открытии. */
-function certWorldAt(n){
-  var w = CURRICULUM.world(n), t = 0;
-  if (!w) return 0;
-  w.lessons.forEach(function(l){
-    var g = S.log[l.id] || {};
-    if ((g.solvedAt || 0) > t) t = g.solvedAt;
-  });
-  var p = projectOfWorld(n);
-  if (p){ var d = projectState(p.id).doneAt || 0; if (d > t) t = d; }
-  return t;
-}
-function certCourseAt(){
-  var t = 0;
-  CURRICULUM.forEach(function(w){ var x = certWorldAt(w.n); if (x > t) t = x; });
-  return t;
-}
-/* чего не хватает до сертификата — словами, без «выполнено 60%» */
-function certWorldNeed(n){
-  var w = CURRICULUM.world(n), p = projectOfWorld(n), bits = [];
-  var left = w ? w.lessons.length - worldSolvedCount(n) : 0;
-  if (left > 0) bits.push(left + " " + plural(left, "урок", "урока", "уроков"));
-  if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
-  return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
-}
-function certCourseNeed(){
-  var left = 0;
-  CURRICULUM.forEach(function(w){ if (!certWorldReady(w.n)) left++; });
-  return left ? ("Осталось миров: " + left + " из " + CURRICULUM.length + ".") : "";
-}
-
-/* ---- сертификаты за разделы вне сотни ----
-   Устроены как у миров: задания раздела ПЛЮС его проект, если он есть.
-   Отличие одно, и оно в дате. У урока есть solvedAt в журнале, а разминка и
-   задание «Ты и ИИ» отмечались единицей, без времени, — восстановить задним
-   числом нечего. Поэтому дату выдачи ЗАПОМИНАЕМ в S.certAt в тот момент,
-   когда раздел закрылся, и больше не трогаем: сертификат, распечатанный
-   сегодня и через месяц, обязан быть одним и тем же листом. */
-var WARM_KIND = { predict:"угадай вывод", blocks:"собери из блоков", memory:"предскажи память" };
-var SECTION_CERTS = [
-  { id:"warmups", icon:"🧩", title:"Разминка пройдена целиком",
-    what:"Разминка",
-    all: function(){ return warmupsList().length; },
-    done: function(){
-      return warmupsList().filter(function(x){ return warmupDone(x.id); }).length;
-    },
-    unit: ["разминка", "разминки", "разминок"],
-    line: function(d, t){
-      /* Перечень механик считаем по самим разминкам, а не пишем строкой:
-         добавится шестой тип — лист соврёт, и заметить это будет некому. */
-      var seen = [], ok = 1;
-      warmupsList().forEach(function(x){
-        var nm = WARM_KIND[x.type];
-        if (!nm){ ok = 0; return; }
-        if (seen.indexOf(nm) < 0) seen.push(nm);
-      });
-      var tail = (ok && seen.length)
-        ? ' — ' + seen.map(function(n){ return '«' + n + '»'; }).join(", ") + '.'
-        : '.';
-      return 'Раздел «Разминка» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
-        plural(t, "упражнения", "упражнений", "упражнений") + tail;
-    } },
-  { id:"ailab", icon:"🤖", title:"Раздел «Ты и ИИ» пройден",
-    what:"Ты и ИИ",
-    all: function(){ return ailabList().length; },
-    done: function(){
-      return ailabList().filter(function(x){ return ailabDone(x.id); }).length;
-    },
-    unit: ["задание", "задания", "заданий"],
-    project: 0,
-    line: function(d, t){
-      var p = projectOfWorld(0);
-      return 'Раздел «Ты и ИИ» пройден полностью: <b>' + d + ' из ' + t + '</b> ' +
-        plural(t, "задание", "задания", "заданий") +
-        (p ? ', проект «' + esc(p.title) + '» собран' : '') +
-        '. Проверялось не умение писать код, а умение спорить с ИИ и находить его ошибки.';
-    } },
-  { id:"web", icon:"🌐", title:"Раздел «HTML и CSS» пройден",
-    what:"HTML и CSS",
-    all: function(){ return (window.WEB_TASKS || []).length; },
-    done: function(){
-      return (window.WEB_TASKS || []).filter(function(x){ return algoDone(x.id); }).length;
-    },
-    unit: ["задание", "задания", "заданий"],
-    line: function(d, t){
-      return 'Раздел «HTML и CSS» пройден целиком: <b>' + d + ' из ' + t + '</b> ' +
-        plural(t, "задания", "заданий", "заданий") +
-        ' — от первого тега до страницы с раскладкой. Каждую страницу проверял браузер.';
-    } }
-];
-function sectionCert(id){
-  for (var i = 0; i < SECTION_CERTS.length; i++)
-    if (SECTION_CERTS[i].id === id) return SECTION_CERTS[i];
-  return null;
-}
-function certSectionReady(id){
-  var c = sectionCert(id);
-  if (!c || !c.all()) return false;
-  if (c.done() !== c.all()) return false;
-  if (c.project !== undefined){
-    var p = projectOfWorld(c.project);
-    if (!p || !projectDone(p.id)) return false;
-  }
-  return true;
-}
-/* Дата выдачи. Ставится один раз — в момент, когда раздел закрылся. Если
-   раздел закрыли ДО того, как сертификаты появились, ставим сейчас: это
-   честно, лист и правда выдан сегодня, а выдумывать прошлую дату нельзя. */
-function certSectionAt(id){
-  if (!certSectionReady(id)) return 0;
-  S.certAt = S.certAt || {};
-  if (!S.certAt[id]){ S.certAt[id] = Date.now(); save(); }
-  return S.certAt[id];
-}
-function certSectionNeed(id){
-  var c = sectionCert(id);
-  if (!c) return "";
-  var bits = [], left = c.all() - c.done();
-  if (left > 0) bits.push(left + " " + plural(left, c.unit[0], c.unit[1], c.unit[2]));
-  if (c.project !== undefined){
-    var p = projectOfWorld(c.project);
-    if (p && !projectDone(p.id)) bits.push("проект «" + p.title + "»");
-  }
-  return bits.length ? "Осталось: " + bits.join(" и ") + "." : "";
-}
-
-function certList(){
-  var out = [];
-  CURRICULUM.forEach(function(w){
-    out.push({
-      id: "world" + w.n, kind: w.n, icon: w.icon,
-      title: "Мир " + w.n + ": " + w.title,
-      ready: certWorldReady(w.n), at: certWorldAt(w.n), need: certWorldNeed(w.n)
-    });
-  });
-  SECTION_CERTS.forEach(function(c){
-    out.push({
-      id: c.id, kind: c.id, icon: c.icon, title: c.title, section: 1,
-      ready: certSectionReady(c.id), at: certSectionAt(c.id), need: certSectionNeed(c.id)
-    });
-  });
-  /* «Курс целиком» стоит последним намеренно: это главный лист, и он не должен
-     теряться между сертификатами за разделы. */
-  out.push({
-    id: "course", kind: "course", icon: "🏆", title: "Путь пройден целиком",
-    ready: certCourseReady(), at: certCourseAt(), need: certCourseNeed()
-  });
-  return out;
-}
-
+/* ================= сертификаты =================
+   ⚠️ Уехали в js/certs.js — разрез 15.09.2026 вместе с экраном портфолио,
+   но своим файлом (почему — в шапке js/certs.js). fmtDay остался здесь: это
+   общий формат даты, им пользуется и пакет к защите. */
 function fmtDay(ts){
   if (!ts) return "—";
   var d = new Date(ts), p = function(x){ return (x < 10 ? "0" : "") + x; };
   return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
 }
 
-/* Текст сертификата написан безлично («пройден», а не «прошёл»): курс учат
-   и мальчики, и девочки, а угадывать род по имени — плохая идея. */
-function certBodyHTML(kind){
-  var sect = sectionCert(kind);
-  var course = kind === "course";
-  var w = (course || sect) ? null : CURRICULUM.world(kind);
-  var p = (course || sect) ? null : projectOfWorld(kind);
-  var at = sect ? certSectionAt(kind) : (course ? certCourseAt() : certWorldAt(kind));
-  var stars = 0, top = 0, what = "";
+var CERTS = KVSCREENS.certs({
+  esc: esc, plural: plural, save: save, myName: myName, fmtDay: fmtDay,
+  solved: solved, starsOf: starsOf,
+  projectOfWorld: projectOfWorld, projectDone: projectDone, projectState: projectState,
+  warmupsList: warmupsList, warmupDone: warmupDone, ailabList: ailabList, ailabDone: ailabDone,
+  algoDone: algoDone,
+  S: function(){ return S; }
+});
+var certList = CERTS.certList, certWorldReady = CERTS.certWorldReady,
+    openCert = CERTS.openCert, closeCert = CERTS.closeCert, certIsOpen = CERTS.certIsOpen,
+    SECTION_CERTS = CERTS.SECTION_CERTS, certBodyHTML = CERTS.certBodyHTML,
+    certCourseAt = CERTS.certCourseAt, certCourseNeed = CERTS.certCourseNeed,
+    certCourseReady = CERTS.certCourseReady, certSectionAt = CERTS.certSectionAt,
+    certSectionNeed = CERTS.certSectionNeed, certSectionReady = CERTS.certSectionReady,
+    certWorldAt = CERTS.certWorldAt, certWorldNeed = CERTS.certWorldNeed,
+    worldSolvedCount = CERTS.worldSolvedCount, worldStars = CERTS.worldStars,
+    worldWhole = CERTS.worldWhole;
 
-  if (sect){
-    what = sect.line(sect.done(), sect.all());
-  } else if (course){
-    CURRICULUM.forEach(function(x){ stars += worldStars(x.n); });
-    top = CURRICULUM.total * 3;
-    var names = [];
-    CURRICULUM.forEach(function(x){
-      var pr = projectOfWorld(x.n);
-      if (pr) names.push("«" + pr.title + "»");
-    });
-    what = 'Путь по «Фионике» пройден целиком: <b>' + CURRICULUM.total + " " +
-      plural(CURRICULUM.total, "урок", "урока", "уроков") + '</b> и <b>' + names.length + " " +
-      plural(names.length, "собранный проект", "собранных проекта", "собранных проектов") + '</b>.' +
-      (names.length ? '<span class="certlist">' + esc(names.join(", ")) + '</span>' : '');
-  } else {
-    stars = worldStars(kind);
-    top = (w ? w.lessons.length : 0) * 3;
-    what = 'Мир ' + kind + ' «' + esc(w ? w.title : "") + '» пройден полностью: <b>' +
-      (w ? w.lessons.length : 0) + " из " + (w ? w.lessons.length : 0) + '</b> ' +
-      plural(w ? w.lessons.length : 0, "урок", "урока", "уроков") +
-      (p ? ', проект «' + esc(p.title) + '» собран' : '') + '.';
-  }
-
-  var name = myName();
-  /* Звёзд в разделах вне сотни нет — и рисовать «★ 0 из 0» на листе нельзя.
-     Вместо счёта звёзд у раздела стоит счёт сделанного. */
-  var tally = sect
-    ? '<div class="certstars">' + sect.icon + ' ' + sect.done() + ' из ' + sect.all() + '</div>'
-    : '<div class="certstars">★ ' + stars + ' из ' + top + '</div>';
-  /* ⚠️ Лист за весь путь называется «Путь пройден» (решение фаундера
-     13.09.2026; с 11.09.2026 было «Курс пройден», до того — «Сертификат об
-     окончании курса»). «Курс» ушёл вслед за «окончанием»: слово ближе к
-     «образовательной программе», а её мы не реализуем — на этом и стоит
-     «лицензия не нужна» (docs/licenziya-proverka-2026-09-13.md). Старая надпись была единственной
-     строкой продукта, которая сама объявляла себя документом об обучении, —
-     а лицензия нам не нужна ровно потому, что мы даём доступ к программе, а не
-     обучение с документом на выходе. Отсюда же мелкая строка внизу листа.
-     Разбор: vitrina-litsenziya-napravleniya-2026-09-09.md § 1.3. */
-  return '<div class="certsheet">' +
-    '<div class="certmark">🐍 Фионика</div>' +
-    '<div class="certkind">' + (course ? "Путь пройден" : "Сертификат") + '</div>' +
-    '<div class="certname">' + esc(name || "Ученик Фионики") + '</div>' +
-    '<div class="certrule"></div>' +
-    '<div class="certwhat">' + what + '</div>' +
-    tally +
-    '<div class="certfoot"><span>Выдан ' + fmtDay(at) + '</span>' +
-    '<span>Python с нуля · без установки · в браузере</span></div>' +
-    '<div class="certlegal">Не является документом об образовании</div>' +
-  '</div>';
-}
 
 /* ================= карточка доступа =================
    ⚠️ Зачем она есть. Аккаунта в продукте нет — есть код ученика, и
@@ -8582,320 +8357,39 @@ function openAccessCard(code, name){
   el.hidden = false;
 }
 
-/* Сертификат живёт ОВЕРЛЕЕМ, как шпаргалка: его печатают, а печать берёт
-   документ целиком. В @media print всё, кроме листа, скрыто. */
-function openCert(kind){
-  var el = document.getElementById("cert"), box = document.getElementById("certbox");
-  if (!el || !box) return;
-  box.innerHTML = certBodyHTML(kind);
-  el.hidden = false;
-}
-function closeCert(){
-  var el = document.getElementById("cert");
-  if (el) el.hidden = true;
-}
-function certIsOpen(){
-  var el = document.getElementById("cert");
-  return !!el && !el.hidden;
-}
-
-function folioStat(value, label){
-  return '<div class="fstat"><b>' + value + '</b><span>' + label + '</span></div>';
-}
 /* где живёт проект: у пяти это мир, у «Напарника» — раздел «Ты и ИИ».
    Подпись и фраза про замок разные: «Мир 2» в подпись годится, а во фразу
    «откроется, когда будет пройден …» с разделом получалось косноязычие. */
 function projectWhere(p){ return p.world === 0 ? "Ты и ИИ" : "Мир " + p.world; }
-function projectGate(p){ return p.world === 0 ? "раздел «Ты и ИИ»" : "Мир " + p.world; }
 
-function screenFolio(){
-  enterScreen("mine", "folio");
-  session = { id:null, attempts:0, hints:0, shown:false };
-
-  var projects = projectsList();
-  var built = 0;
-  projects.forEach(function(p){ if (projectDone(p.id)) built++; });
-  var certs = certList(), gotCerts = 0;
-  certs.forEach(function(c){ if (c.ready) gotCerts++; });
-  var lessonsDone = Object.keys(S.stars).length;
-  var name = myName();
-
-  var h = '<div class="lvlhead"><div><div class="idx">портфолио</div>' +
-    '<h1>🎒 ' + (name ? esc(name) + ": мои работы" : "Моё") + '</h1></div>' +
-    '<div class="right"><span class="tag">твои работы</span></div></div>' +
-    '<p class="lede">Здесь собрано всё сделанное своими руками: программы из проектов, рисунки, ' +
-    'свои задания для друзей и сертификаты. Эту страницу можно показать кому угодно — ' +
-    'родителям, учителю, друзьям.</p>';
-
-  h += '<div class="fstats">' +
-    folioStat(lessonsDone + ' <i>из ' + CURRICULUM.total + '</i>', "уроков пройдено") +
-    folioStat("★ " + totalStars(), "звёзд собрано") +
-    folioStat(built + ' <i>из ' + projects.length + '</i>', "программ готово") +
-    folioStat(gotCerts + ' <i>из ' + certs.length + '</i>', "сертификатов") +
-    '</div>';
-
-  /* Мастерская стоит ПЕРЕД готовыми программами: проекты показывают, что
-     ребёнок прошёл курс, а полка — что он сделал сам и что из этого осталось.
-     Для накопления важно, чтобы оно попадалось на глаза первым. */
-  var shelfN = partsList().length, madeN = buildsList().length;
-  h += '<div class="card shopcard"><h3>🔧 Мастерская</h3>' +
-    (shelfN
-      ? '<p>На полке <b>' + shelfN + '</b> ' + plural(shelfN, "деталь", "детали", "деталей") +
-        ' — функции, которые ты написал сам' +
-        (madeN ? ', и собрано вещей: <b>' + madeN + '</b>' : '') + '.</p>'
-      : '<p class="dim">Полка пока пустая. Деталью становится функция, которую ты написал сам, — ' +
-        'они начинаются в уроке про <code>def</code>.</p>') +
-    '<div class="admrow"><button class="rbtn check" id="toshop">Открыть мастерскую →</button></div></div>';
-
-  h += '<div class="sect"><h2>Готовые программы</h2><div class="line"></div>' +
-    '<span class="cnt">' + built + ' из ' + projects.length + '</span></div>';
-
-  if (!projects.length){
-    h += '<div class="note"><b>Программ пока нет</b>Они появятся, когда будет собран первый проект.</div>';
-  } else {
-    h += '<p class="dim">Кнопка «Скачать .py» отдаёт готовый файл: сохрани его и набери ' +
-      'в терминале <code>python3 имя.py</code> — программа пойдёт в настоящем Python. ' +
-      'Рисующей программе тренажёр допишет первую строку <code>from turtle import *</code> ' +
-      'и последнюю <code>done()</code>: в тренажёре команды черепашки встроены, ' +
-      'а в настоящем Python их надо подключить.</p>';
-  }
-  projects.forEach(function(p){
-    var st = projectState(p.id), done = projectDone(p.id), open = projectOpen(p);
-    var where = projectWhere(p);
-    var stat = done ? "собрана ✓"
-             : (st.step > 0 ? "шагов " + st.step + " из " + p.steps.length
-                            : (open ? "можно собирать" : "закрыта"));
-    h += '<div class="fproj' + (done ? " done" : (open ? "" : " locked")) + '">' +
-      '<div class="fptop"><span class="pjemoji">' + p.emoji + '</span>' +
-      '<div class="fpttl"><span class="pjkicker">' + esc(where) + '</span>' +
-      '<b>' + esc(p.title) + '</b>' +
-      '<span class="fpsub">' + esc(p.tagline) + '</span></div>' +
-      '<span class="fpstat' + (done ? " ok" : "") + '">' + stat + '</span></div>';
-    if (done){
-      var code = st.code || p.steps[p.steps.length - 1].solution;
-      var n = code.replace(/\n+$/, "").split("\n").length;
-      h += '<pre class="fpcode">' + esc(code) + '</pre>' +
-        '<div class="fpbtns"><button class="rbtn" data-open="' + p.id + '">Открыть и запустить</button>' +
-        '<button class="rbtn sec" data-copy="' + p.id + '">Скопировать код</button>' +
-        '<button class="rbtn sec" data-py="' + p.id + '">⬇ Скачать .py</button>' +
-        '<button class="rbtn sec" data-todef="' + p.id + '">📁 К защите</button>' +
-        '<span class="fplen">' + n + " " + plural(n, "строка", "строки", "строк") + '</span></div>';
-    } else {
-      h += '<div class="fpbtns">' + (open
-        ? '<button class="rbtn" data-open="' + p.id + '">' +
-            (st.step > 0 ? "Продолжить" : "Собрать") + '</button>'
-        : '<span class="soontag">откроется, когда будет пройден ' + esc(projectGate(p)) + '</span>') +
-        '</div>';
-    }
-    h += '</div>';
-  });
-
-  /* ===== мои программы =====
-     Стоит ПЕРЕД рисунками: рисунок — это тоже программа, но названная нами,
-     а здесь лежит то, что ребёнок назвал сам. Своё имя важнее нашего. */
-  var works = myWorksList();
-  h += '<div class="sect"><h2>Мои программы</h2><div class="line"></div>' +
-    '<span class="cnt">' + works.length + '</span></div>';
-  if (!works.length){
-    h += '<div class="note"><b>Пока пусто</b>Напиши что-нибудь в песочнице и нажми там ' +
-      '«Назвать и сохранить в «Моё»». Название и описание придумываешь ты сам — ' +
-      'и по ссылке друг откроет программу и запустит её, не видя кода.' +
-      '<button class="rbtn" id="folio-sand">Открыть песочницу</button></div>';
-  } else {
-    h += '<div class="hubgrid">' + works.map(function(x){
-      var n = x.code.replace(/\n+$/, "").split("\n").length;
-      return '<div class="hubcard"><span class="hubem">🛠</span>' +
-        '<b>' + esc(x.title) + '</b>' +
-        '<span class="hubwhy">' + esc(x.about || "без описания") + '</span>' +
-        '<span class="hubstat">' + fmtDay(x.at) + ' · ' + n + ' ' +
-          plural(n, "строка", "строки", "строк") + '</span>' +
-        '<div class="picbtns">' +
-          '<button class="rbtn sec" data-worklink="' + x.id + '">🔗 Ссылка</button>' +
-          '<button class="rbtn sec" data-workopen="' + x.id + '">→ В песочницу</button>' +
-          '<button class="rbtn sec" data-workdel="' + x.id + '">Удалить</button>' +
-        '</div></div>';
-    }).join("") + '</div>' +
-    '<p class="dim">Программа целиком лежит внутри ссылки, сервер для этого не нужен. ' +
-    'Тот, кто её откроет, увидит работающую программу и кнопку «Заглянуть в код» — ' +
-    'но только если сам захочет.</p>';
-  }
-
-  /* ===== мои рисунки ===== */
-  var pics = galleryList();
-  h += '<div class="sect"><h2>Мои рисунки</h2><div class="line"></div>' +
-    '<span class="cnt">' + pics.length + '</span></div>';
-  if (!pics.length){
-    h += '<div class="note"><b>Рисунков пока нет</b>Нарисуй что-нибудь в песочнице ' +
-      'и нажми там «Сохранить рисунок в галерею». Хранится программа, а не картинка, ' +
-      'поэтому рисунок можно открыть и переделать в любой момент.</div>';
-  } else {
-    h += '<div class="pics">' + pics.map(function(x){
-      var n = x.code.replace(/\n+$/, "").split("\n").length;
-      return '<div class="pic" data-pic="' + x.id + '">' +
-        '<canvas class="picart"></canvas>' +
-        '<div class="picbody"><b>' + esc(x.title) + '</b>' +
-        '<span class="picsub">' + fmtDay(x.at) + ' · ' + n + ' ' +
-          plural(n, "строка", "строки", "строк") + '</span>' +
-        '<div class="picbtns">' +
-          '<button class="rbtn sec" data-png="' + x.id + '">⬇ PNG</button>' +
-          '<button class="rbtn sec" data-picopen="' + x.id + '">→ В песочницу</button>' +
-          '<button class="rbtn sec" data-picdel="' + x.id + '">Удалить</button>' +
-        '</div></div></div>';
-    }).join("") + '</div>';
-  }
-
-  /* ===== свои задания ===== */
-  var tasks = myTasksList();
-  h += '<div class="sect"><h2>Свои задания</h2><div class="line"></div>' +
-    '<span class="cnt">' + tasks.length + '</span></div>';
-  if (!tasks.length){
-    h += '<div class="note"><b>Заданий пока нет</b>Придумать задачу труднее, чем решить: ' +
-      'придётся объяснить её словами тому, кто твоего кода не видит. ' +
-      '<button class="rbtn" id="folio-mine">Составить задание</button></div>';
-  } else {
-    h += '<div class="hubgrid">' + tasks.map(function(t){
-      return '<div class="hubcard"><span class="hubem">✍️</span>' +
-        '<b>' + esc(t.title) + '</b>' +
-        '<span class="hubwhy">' + esc(t.goal) + '</span>' +
-        '<span class="hubstat">' + fmtDay(t.at) + ' · ответ из ' + t.lines.length + ' ' +
-          plural(t.lines.length, "строки", "строк", "строк") + '</span>' +
-        '<div class="picbtns"><button class="rbtn sec" data-tasklink="' + t.id + '">Скопировать ссылку</button>' +
-        '<button class="rbtn sec" data-taskopen="' + t.id + '">Открыть</button></div></div>';
-    }).join("") + '</div>' +
-    '<p class="dim">Ссылку можно отправить кому угодно: задание целиком лежит внутри неё, ' +
-    'сервер для этого не нужен. Составить ещё одно — на экране «Своё задание».</p>';
-  }
-
-  h += '<div class="sect"><h2>Сертификаты</h2><div class="line"></div>' +
-    '<span class="cnt">' + gotCerts + ' из ' + certs.length + '</span></div>' +
-    '<p class="dim">Сертификат даётся не за прочитанные уроки, а за уроки плюс собранный ' +
-    'проект мира. Отдельно — за разделы вне сотни: всю «Разминку» и весь «Ты и ИИ». ' +
-    'Любой можно распечатать или сохранить в PDF.</p><div class="certs">';
-  certs.forEach(function(c){
-    h += '<div class="certcard' + (c.ready ? " got" : "") + '">' +
-      '<span class="cticon">' + c.icon + '</span>' +
-      '<span class="ctbody"><b>' + esc(c.title) + '</b>' +
-      '<span>' + (c.ready ? "Выдан " + fmtDay(c.at) : esc(c.need)) + '</span></span>' +
-      (c.ready ? '<button class="rbtn" data-cert="' + c.id + '">Показать</button>'
-               : '<span class="soontag">пока нет</span>') +
-      '</div>';
-  });
-  h += '</div>';
-
-  h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-
-  app.innerHTML = h;
-  var tsh = document.getElementById("toshop");
-  if (tsh) tsh.onclick = screenShop;
-  app.querySelectorAll("[data-open]").forEach(function(b){
-    b.onclick = function(){
-      var id = b.getAttribute("data-open");
-      if (projectDone(id)) screenProjectDone(id); else openProject(id);
-    };
-  });
-  /* Рисунки считаются заново: в прогрессе лежит программа, а не картинка.
-     Прогон честный, тем же движком, — значит и рисунок тот же самый. */
-  app.querySelectorAll(".pic").forEach(function(card){
-    var x = galleryAll()[card.getAttribute("data-pic")];
-    if (!x) return;
-    var res = galleryDrawing(x.code);
-    var cv = card.querySelector("canvas");
-    if (res && res.turtle) drawTurtle(cv, res.turtle);
-    else card.classList.add("broken");
-  });
-  app.querySelectorAll("[data-png]").forEach(function(b){
-    b.onclick = function(){
-      var id = b.getAttribute("data-png");
-      var card = app.querySelector('.pic[data-pic="' + id + '"]');
-      var cv = card && card.querySelector("canvas");
-      var x = galleryAll()[id];
-      if (!cv || !x) return;
-      try { downloadDataURL(pyFileName(x.title).replace(/\.py$/, "") + ".png",
-                            cv.toDataURL("image/png"), b); } catch(e){}
-    };
-  });
-  app.querySelectorAll("[data-picopen]").forEach(function(b){
-    b.onclick = function(){
-      var x = galleryAll()[b.getAttribute("data-picopen")];
-      if (!x) return;
-      S.sandbox = x.code; save();
-      screenSandbox();
-    };
-  });
-  app.querySelectorAll("[data-picdel]").forEach(function(b){
-    b.onclick = function(){ galleryDrop(b.getAttribute("data-picdel")); screenFolio(); };
-  });
-  app.querySelectorAll("[data-worklink]").forEach(function(b){
-    b.onclick = function(){
-      var x = myWorkById(b.getAttribute("data-worklink"));
-      if (x) copyText(myWorkLink(x), b);
-    };
-  });
-  app.querySelectorAll("[data-workopen]").forEach(function(b){
-    b.onclick = function(){
-      var x = myWorkById(b.getAttribute("data-workopen"));
-      if (!x) return;
-      S.sandbox = x.code; save();
-      screenSandbox();
-    };
-  });
-  app.querySelectorAll("[data-workdel]").forEach(function(b){
-    b.onclick = function(){
-      var x = myWorkById(b.getAttribute("data-workdel"));
-      var yes = true;
-      try { yes = confirm("Удалить «" + ((x && x.title) || "программу") + "»? Вернуть будет нельзя."); }
-      catch(e){}
-      if (!yes) return;
-      myWorkDrop(b.getAttribute("data-workdel"));
-      screenFolio();
-    };
-  });
-  var fs2 = document.getElementById("folio-sand");
-  if (fs2) fs2.onclick = screenSandbox;
-  var fm = document.getElementById("folio-mine");
-  if (fm) fm.onclick = function(){ screenMyTasks(); };
-  app.querySelectorAll("[data-tasklink]").forEach(function(b){
-    b.onclick = function(){
-      var t = myTasksAll()[b.getAttribute("data-tasklink")];
-      if (t) copyText(taskLink(t), b);
-    };
-  });
-  app.querySelectorAll("[data-taskopen]").forEach(function(b){
-    b.onclick = function(){
-      var id = b.getAttribute("data-taskopen"), t = myTasksAll()[id];
-      if (t) openFriendTask(t, { own:true, id:id });
-    };
-  });
-  app.querySelectorAll("[data-py]").forEach(function(b){
-    b.onclick = function(){
-      var p = projectById(b.getAttribute("data-py"));
-      if (!p) return;
-      var st = projectState(p.id);
-      var code = st.code || p.steps[p.steps.length - 1].solution;
-      downloadText(pyFileName(p.title), pyFileText(p.title, code), b);
-    };
-  });
-  app.querySelectorAll("[data-copy]").forEach(function(b){
-    b.onclick = function(){
-      var p = projectById(b.getAttribute("data-copy"));
-      if (!p) return;
-      var st = projectState(p.id);
-      copyText(st.code || p.steps[p.steps.length - 1].solution, b);
-    };
-  });
-  app.querySelectorAll("[data-todef]").forEach(function(b){
-    b.onclick = function(){ screenDefense(b.getAttribute("data-todef")); };
-  });
-  app.querySelectorAll("[data-cert]").forEach(function(b){
-    b.onclick = function(){
-      var v = b.getAttribute("data-cert");
-      openCert(v === "course" ? "course" : +v.replace("world", ""));
-    };
-  });
-  document.getElementById("tomap").onclick = goHome;
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
+/* ================= экран: портфолио =================
+   ⚠️ Уехал в js/screens-folio.js — разрез 15.09.2026. Это перекрёсток, как
+   Главное: 44 имени внутрь, почему — в шапке того файла. Обёртками — то, что
+   присваивается ниже по файлу: мастерская, пакет к защите. */
+var FOLIO = KVSCREENS.folio({
+  app: app, esc: esc, plural: plural, fmtDay: fmtDay, myName: myName,
+  enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+  totalStars: totalStars, certList: certList, openCert: openCert,
+  projectsList: projectsList, projectById: projectById, projectDone: projectDone,
+  projectOpen: projectOpen, projectState: projectState, projectWhere: projectWhere,
+  openProject: openProject, screenProjectDone: screenProjectDone,
+  myWorksList: myWorksList, myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkDrop: myWorkDrop,
+  galleryList: galleryList, galleryAll: galleryAll, galleryDrawing: galleryDrawing,
+  galleryDrop: galleryDrop, drawTurtle: drawTurtle,
+  myTasksList: myTasksList, myTasksAll: myTasksAll, taskLink: taskLink,
+  openFriendTask: openFriendTask, screenMyTasks: screenMyTasks,
+  downloadDataURL: downloadDataURL, downloadText: downloadText,
+  pyFileName: pyFileName, pyFileText: pyFileText, copyText: copyText,
+  screenSandbox: screenSandbox,
+  /* слот песочницы пишет не портфолио, а этот вход (§ 4.5) */
+  openInSandbox: function(code){ S.sandbox = code; save(); screenSandbox(); },
+  partsList: function(){ return partsList(); }, buildsList: function(){ return buildsList(); },
+  screenShop: function(){ screenShop(); },
+  screenDefense: function(id){ screenDefense(id); },
+  S: function(){ return S; },
+  newSession: function(v){ session = v; return v; }
+});
+var screenFolio = FOLIO.screenFolio;
 
 
 /* ================= экран занятия =================

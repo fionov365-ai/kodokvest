@@ -10241,6 +10241,88 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- [двери-моё] дороги в «Моё» и из «Моего» жмутся, а не только рисуются ---
+     ⚠️ Родилась из разреза портфолио 15.09.2026 (1.185.0, § 4.55). Три двери
+     проверка молча пропускала — нарочная поломка каждой давала зелёный прогон:
+       1) «🎒 Открыть «Моё»» в песочнице: кнопка появляется только ПОСЛЕ
+          сохранения программы, и её никто не жал;
+       2) «Моё» в профиле: экран профиля показывали, но кнопку не жали;
+       3) «→ В песочницу» у программы и рисунка: проверялось, что кнопка ЕСТЬ,
+          а что она кладёт код в песочницу — нет. Это отдельный вход
+          openInSandbox: слот песочницы портфолио не пишет само (§ 4.5). */
+  let foldoorsChecked = 0;
+  if (typeof g.screenFolio === "function" && typeof g.screenSandbox === "function"){
+    const p0 = problems.length;
+    const worksWas = g.state.works, sandWas = g.state.sandbox, galWas = g.state.gallery;
+    const onFolio = () => /мои работы|Моё/.test((doc.querySelector(".lvlhead h1") || {}).textContent || "") &&
+                          /Готовые программы/.test(doc.getElementById("app").textContent);
+
+    /* 1) песочница → сохранить → «Открыть «Моё»» */
+    g.state.works = {};
+    g.screenSandbox(); await tick();
+    const st = studioOf();
+    const tw = doc.getElementById("towork");
+    if (!st || !tw) bad("[двери-моё] в песочнице нет редактора или кнопки «Назвать и сохранить»");
+    else {
+      st.editor.setCode('print("дверь")');
+      tw.click(); await tick();
+      doc.getElementById("worktitle").value = "Дверь";
+      doc.getElementById("worksave").click(); await tick();
+      const wf = doc.getElementById("workfolio");
+      if (!wf) bad("[двери-моё] после сохранения в песочнице нет кнопки «Открыть «Моё»»");
+      else { wf.click(); await tick();
+        if (!onFolio()) bad("[двери-моё] «Открыть «Моё»» из песочницы не открыла портфолио"); }
+    }
+
+    /* 2) профиль → «Моё» */
+    g.screenAccount(); await tick();
+    const gf = doc.getElementById("gofolio");
+    if (!gf) bad("[двери-моё] в профиле нет кнопки «Моё»");
+    else { gf.click(); await tick();
+      if (!onFolio()) bad("[двери-моё] кнопка «Моё» в профиле не открыла портфолио"); }
+
+    /* 3) «Моё» → «→ В песочницу» у программы и у рисунка: код обязан уехать */
+    g.state.works = {}; g.state.sandbox = "";
+    const wid = g.myWorkSave("Своя", "", 'print("своя программа")');
+    g.screenFolio(); await tick();
+    const wo = doc.querySelector('[data-workopen="' + wid + '"]');
+    if (!wo) bad("[двери-моё] у программы в «Моём» нет «→ В песочницу»");
+    else { wo.click(); await tick();
+      if (g.state.sandbox !== 'print("своя программа")')
+        bad("[двери-моё] «→ В песочницу» у программы не положила её код в песочницу");
+      if (g.place() !== "sand") bad("[двери-моё] «→ В песочницу» у программы не открыла песочницу: " + g.place()); }
+    g.state.sandbox = "";
+    const pid = g.gallerySave("forward(50)\n");
+    g.screenFolio(); await tick();
+    const po = doc.querySelector('[data-picopen="' + pid + '"]');
+    if (!po) bad("[двери-моё] у рисунка в «Моём» нет «→ В песочницу»");
+    else { po.click(); await tick();
+      if (g.state.sandbox !== "forward(50)\n")
+        bad("[двери-моё] «→ В песочницу» у рисунка не положила его программу в песочницу"); }
+
+    /* 4) «📁 К защите» у собранного проекта — кнопка есть только у собранного,
+          и до 1.185.0 её не жал никто: поломка двери проходила зелёной. */
+    const projWas = JSON.parse(JSON.stringify(g.state.projects || {}));
+    const pj = (w.PROJECTS || [])[0];
+    if (!pj) bad("[двери-моё] проектов нет — «К защите» проверить не на чем");
+    else {
+      g.state.projects = g.state.projects || {};
+      g.state.projects[pj.id] = { step: pj.steps.length, done: Date.now(),
+                                  code: pj.steps[pj.steps.length - 1].solution };
+      g.screenFolio(); await tick();
+      const td = doc.querySelector('[data-todef="' + pj.id + '"]');
+      if (!td) bad("[двери-моё] у собранного проекта в «Моём» нет «К защите»");
+      else { td.click(); await tick();
+        if (!/Пакет к защите|к защите/i.test((doc.querySelector(".lvlhead") || {}).textContent || ""))
+          bad("[двери-моё] «К защите» из «Моего» не открыла пакет к защите: " + g.place()); }
+    }
+    g.state.projects = projWas;
+
+    g.state.works = worksWas; g.state.sandbox = sandWas; g.state.gallery = galWas;
+    if (problems.length === p0) foldoorsChecked++;
+    viewReset(g);
+  }
+
   /* --- 12бис. одно имя — одна функция ---
      ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
      workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
@@ -12431,6 +12513,7 @@ function checkEncoding(){
   console.log(`карта пути: ${pathChecked ? "да" : "нет"}`);
   console.log(`выпускной мира: ${gradChecked ? "да" : "нет"}`);
   console.log(`свой проект с именем: ${workChecked ? "да" : "нет"}`);
+  console.log(`двери в «Моё» и из него жмутся: ${foldoorsChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
