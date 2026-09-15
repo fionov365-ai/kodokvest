@@ -3731,6 +3731,25 @@ function checkEncoding(){
             во всех четырёх страницах справочника. */
       if (raw.indexOf("pravo/politika/") >= 0 && raw.indexOf("pravo/soglashenie/") < 0)
         bad("[страницы] " + page + ": в подвале есть «Конфиденциальность», но нет «Условий»");
+      /* 4) инлайн-стилей на страницах нет (чистка 15.09.2026, 1.181.0): одно
+            и то же оформление стояло десятью копиями style="…", и правка
+            цвета требовала бы десяти правок. Стиль живёт в css/pages.css. */
+      if (/style="/.test(raw))
+        bad("[страницы] " + page + ": инлайн-стиль style=\"…\" — оформлению место в css/pages.css " +
+            "(классы .fine, .gap, .btnrow.end)");
+      /* 5) у каждой таблицы шапка размечена шапкой: <thead>, в ней th со
+            scope, тело — <tbody>. Без этого читалка экрана читает таблицу
+            цен как простыню из 33 ячеек без столбцов. */
+      const таблиц = (raw.match(/<table[ >]/g) || []).length;
+      const шапок = (raw.match(/<thead>/g) || []).length;
+      const тел = (raw.match(/<tbody>/g) || []).length;
+      if (таблиц !== шапок || таблиц !== тел)
+        bad("[страницы] " + page + ": таблиц " + таблиц + ", а <thead> " + шапок + " и <tbody> " + тел);
+      const thBezScope = (raw.match(/<th(?:\s[^>]*)?>/g) || []).filter(t => t.indexOf("scope=") < 0).length;
+      if (thBezScope)
+        bad("[страницы] " + page + ": " + thBezScope + " <th> без scope — столбец не назван для читалки экрана");
+      if (/<th scope="col">\s*<\/th>/.test(raw))
+        bad("[страницы] " + page + ": пустая ячейка шапки таблицы — столбец без имени");
     });
     if (problems.length === p0) siteNumsChecked++;
   }
