@@ -3836,9 +3836,21 @@ function checkEncoding(){
     g.state.hw = {};
     if (hwOne) g.state.hw[g.hwKey(hwOne.id, 1)] =
       { id: hwOne.id, seed: 1, due: "", by: "репетитор", at: Date.now(), done: 0, tries: 0 };
+    /* ⚠️ И кнопка «Начать с разминки» — из того же класса и так же прячется:
+       её рисует только карточка «С возвращением», то есть после паузы от
+       четырёх дней. У ученика, занимавшегося сегодня, её нет, и проверка была
+       к ней слепа. Поймано 15.09.2026 нарочной поломкой разреза разминки
+       (1.183.0): screenWarmups, отданный в договор значением, давал мёртвую
+       кнопку при зелёном прогоне. Поэтому ребёнок «возвращается» после
+       десяти дней. */
+    const daysBak = g.state.days;
+    const back10 = new Date(); back10.setDate(back10.getDate() - 10);
+    g.state.days = {}; g.state.days[g.dayKey(back10)] = 1;
     g.screenWorlds(); await tick();
     if (hwOne && !doc.getElementById("go-hw"))
       bad("[главный] домашка задана, а кнопки домашки на Главном нет — проверка ниже её не увидит");
+    if (!doc.getElementById("cbwarm"))
+      bad("[главный] после паузы нет кнопки «Начать с разминки» — проверка ниже её не увидит");
     /* [data-help] и [data-theme-set] разбирает общий обработчик на body,
        свой onclick им не ставят; у ссылки-подвала своя привязка по классу. */
     const skip = b => b.hasAttribute("data-help") || b.hasAttribute("data-theme-set") ||
@@ -3851,6 +3863,7 @@ function checkEncoding(){
       bad("[главный] кнопки без обработчика: " + dead.join(", ") +
           " — такая кнопка выглядит живой и молча не отвечает");
     g.state.hw = {};                 /* заданная выше задача не должна протечь дальше */
+    g.state.days = daysBak;          /* и выдуманная пауза тоже */
     if (problems.length === p0) liveBtnChecked++;
     viewReset(g);
   }
