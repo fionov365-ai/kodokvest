@@ -10318,6 +10318,48 @@ function checkEncoding(){
     }
     g.state.projects = projWas;
 
+    /* 5) «Своё задание»: четыре двери, которые до 1.186.0 не стерегло ничего —
+          нарочная поломка каждой давала зелёный прогон (разрез «своих заданий»).
+          Кнопка на Главном есть всегда, но её обработчик ищет экран только при
+          нажатии; «Составить задание» в «Моём» рисуется при пустом списке,
+          «Открыть» — при непустом; черновик сохраняется при УХОДЕ с экрана. */
+    const mtWas = g.state.mytasks, draftWas = g.state.mytaskDraft;
+    g.state.mytasks = {}; g.state.mytaskDraft = null;
+    g.screenWorlds(); await tick();
+    const gm = doc.getElementById("gomine");
+    if (!gm) bad("[двери-моё] на Главном нет кнопки «Задать задачу»");
+    else { gm.click(); await tick();
+      if (g.place() !== "mytasks") bad("[двери-моё] «Задать задачу» на Главном не открыла экран задания: " + g.place()); }
+
+    g.screenFolio(); await tick();
+    const fmn = doc.getElementById("folio-mine");
+    if (!fmn) bad("[двери-моё] в пустом «Моём» нет «Составить задание»");
+    else { fmn.click(); await tick();
+      if (g.place() !== "mytasks") bad("[двери-моё] «Составить задание» из «Моего» не открыла экран задания: " + g.place()); }
+
+    const tid = g.myTaskSave({ title: "Дверь", goal: "Напечатай слово дверь один раз.", code: 'print("дверь")', lines: ["дверь"] });
+    g.screenFolio(); await tick();
+    const tto = doc.querySelector('[data-taskopen="' + tid + '"]');
+    if (!tto) bad("[двери-моё] у своего задания в «Моём» нет «Открыть»");
+    else { tto.click(); await tick();
+      if (g.place() !== "friendtask") bad("[двери-моё] «Открыть» у задания в «Моём» не открыла его: " + g.place()); }
+
+    /* черновик: начал задание → ушёл на Главное → вернулся — поля на месте */
+    g.state.mytasks = {}; g.state.mytaskDraft = null;
+    g.screenMyTasks(); await tick();
+    const ttl0 = doc.getElementById("tttl"), goal0 = doc.getElementById("tgoal");
+    if (!ttl0 || !goal0) bad("[двери-моё] на экране задания нет полей названия и условия");
+    else {
+      ttl0.value = "Черновик двери"; goal0.value = "Условие, которое нельзя потерять при уходе.";
+      g.screenWorlds(); await tick();
+      if (!g.state.mytaskDraft || g.state.mytaskDraft.title !== "Черновик двери")
+        bad("[двери-моё] начатое задание не сохранилось черновиком при уходе с экрана");
+      g.screenMyTasks(); await tick();
+      if ((doc.getElementById("tttl") || {}).value !== "Черновик двери")
+        bad("[двери-моё] вернулся на экран задания — название черновика пропало");
+    }
+    g.state.mytasks = mtWas; g.state.mytaskDraft = draftWas;
+
     g.state.works = worksWas; g.state.sandbox = sandWas; g.state.gallery = galWas;
     if (problems.length === p0) foldoorsChecked++;
     viewReset(g);

@@ -24551,6 +24551,323 @@ return { screenFolio: screenFolio };
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.mytasks = function(A){
+
+function screenSolved(r){
+A.enterScreen("mine", "solved");
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+A.solvedAdd(r);
+var mine = A.myTasksList().filter(function(t){ return A.taskKey(t) === r.key; })[0];
+var title = (mine && mine.title) || r.title || "твоя задача";
+var n = r.tries;
+
+A.app.innerHTML =
+'<div class="lvlhead"><div><div class="idx">ответ на твою задачу</div>' +
+'<h1>🎉 Твою задачу решили</h1></div>' +
+'<div class="right"><span class="tag">роль автора</span></div></div>' +
+'<p class="lede">Задачу «<b>' + A.esc(title) + '</b>» прошли' +
+(n === 1 ? ' <b>с первой попытки</b>' : ' с <b>' + n + '-й</b> попытки') + '. ' +
+'Сверял вывод тренажёр, а не человек, — значит условие ты написал понятно.</p>' +
+'<div class="card"><h3>' + (n === 1
+? "С первой попытки — условие было понятным"
+: "Не с первой попытки — и это нормально") + '</h3>' +
+'<p>' + (n === 1
+? "Написать условие так, чтобы по нему получилось решить с первого раза, труднее, чем решить самому: " +
+"приходится объяснить задачу словами, ничего не пропустив."
+: "Попыток было " + n + ". Спроси, что оказалось непонятным в условии, — это и есть самая " +
+"полезная часть: так учатся писать условия, а не только программы.") + '</p>' +
+'<p class="dim">Ни имени, ни программы решавшего в ссылке нет — только какая задача ' +
+'и с какой попытки. Мы про людей ничего не собираем.</p></div>' +
+'<div class="pager"><button class="bigbtn" id="tomine">✍️ Задать ещё одну</button>' +
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+document.getElementById("tomine").onclick = function(){
+try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+screenMyTasks();
+};
+document.getElementById("tomap").onclick = function(){
+try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+A.screenWorlds();
+};
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function screenMyTasks(edit){
+A.enterScreen("mine", "mytasks");
+var list = A.myTasksList();
+var draft = (A.S().mytaskDraft && typeof A.S().mytaskDraft === "object") ? A.S().mytaskDraft : null;
+var start = edit || draft || { title:"", goal:"", code:"" };
+
+var got = A.solvedCount();
+var h = '<div class="lvlhead"><div><div class="idx">без звёзд, по желанию</div>' +
+'<h1>✍️ Задай задачу взрослому</h1></div>' +
+'<div class="right"><span class="tag">взрослому или другу</span></div></div>' +
+'<p class="lede">Обычно задания раздают тебе. Здесь наоборот: задачу придумываешь ты, ' +
+'а решает мама, папа, брат или друг — прямо в браузере, за пару минут. ' +
+'Ты пишешь программу, тренажёр сам считает, что она печатает, и это становится правильным ответом. ' +
+'Твоего кода в ссылке нет: решать придётся своей головой, сойтись должен вывод.</p>' +
+(got ? '<p class="lede">🎉 Твои задачи уже решали: <b>' + got + '</b> ' +
+A.plural(got, "раз", "раза", "раз") + '.</p>' : '');
+
+h += '<div class="card"><h3>Как это работает</h3>' +
+'<ol class="tsteps"><li>Пишешь программу — такую, какой сам решил бы задачу.</li>' +
+'<li>Пишешь условие словами: решающий не увидит кода, только эти слова.</li>' +
+'<li>Жмёшь «Собрать задание» — движок прогоняет программу и запоминает ответ.</li>' +
+'<li>Копируешь ссылку и отправляешь. Открывший будет решать.</li>' +
+'<li>Когда решат, тебе пришлют ссылку обратно — и ты увидишь, с какой попытки.</li></ol>' +
+'<p class="dim">Правило одно: без случайных чисел и без input(). У решающего случайное выпало бы другое, ' +
+'и проверить было бы нечего.</p>' +
+'<p class="dim">⚠️ Взрослому не нужно ничего устанавливать и уметь: он открывает ссылку, ' +
+'пишет программу и жмёт «Проверить». Судит тренажёр, а не ты, — спорить не о чем.</p></div>';
+
+h += '<div class="card"><h3>Задание</h3>' +
+
+'<label class="reglbl">Название' +
+'<input type="text" id="tttl" maxlength="60" autocomplete="off" placeholder="Например, Считалка до десяти"></label>' +
+'<label class="reglbl">Условие — что должна делать программа' +
+'<textarea id="tgoal" rows="3" maxlength="600" spellcheck="false" placeholder="Напечатай числа от 1 до 10, каждое с новой строки, а в конце их сумму."></textarea></label>' +
+'</div>' +
+
+'<div id="studio"></div><div id="tout"></div>';
+
+h += '<div class="sect"><h2>Мои задания</h2><div class="line"></div>' +
+'<span class="cnt">' + list.length + '</span></div>';
+if (!list.length){
+h += '<div class="note"><b>Пока ни одного</b>Собери первое — оно появится здесь, и ссылку можно будет выдать снова в любой момент.</div>';
+}
+list.forEach(function(t){
+var n = t.lines.length;
+var got = A.solvedFor(A.taskKey(t));
+h += '<div class="fproj done"><div class="fptop"><span class="pjemoji">✍️</span>' +
+'<div class="fpttl"><span class="pjkicker">' + A.fmtDay(t.at) + '</span>' +
+'<b>' + A.esc(t.title) + '</b>' +
+'<span class="fpsub">' + A.esc(t.goal) + '</span>' +
+(got.length
+? '<span class="fpsub solvedline">🎉 Решили: ' + got.length + ' ' +
+A.plural(got.length, "раз", "раза", "раз") + ' · лучшая попытка — ' +
+Math.min.apply(null, got.map(function(x){ return x.n; })) + '-я</span>'
+: '') +
+'</div>' +
+'<span class="fpstat ok">' + n + " " + A.plural(n, "строка", "строки", "строк") + ' ответа</span></div>' +
+'<div class="fpbtns"><button class="rbtn" data-tlink="' + t.id + '">Скопировать ссылку</button>' +
+'<button class="rbtn sec" data-topen="' + t.id + '">Открыть как друг</button>' +
+'<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
+'<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
+});
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+A.app.innerHTML = h;
+
+var studio = A.makeStudio({
+engine: "mini",
+code: start.code || '# программа-ответ: как ты сам решил бы свою задачу\nprint("привет")\n',
+label: "твоя программа — с неё считается правильный ответ",
+checkLabel: "📦 Собрать задание",
+check: function(ed, showMsg){ taskPublish(ed, showMsg); }
+});
+document.getElementById("studio").appendChild(studio);
+
+var ttl = document.getElementById("tttl"), tgoal = document.getElementById("tgoal");
+ttl.value = start.title || "";
+tgoal.value = start.goal || "";
+function read(){
+return { title: ttl.value, goal: tgoal.value, code: studio.editor.getCode() };
+}
+
+A.newSession({ id:null, attempts:0, hints:0, shown:false, mytask:true, studio:studio,
+mytaskStash: function(){
+var v = read();
+A.S().mytaskDraft = (v.title.trim() || v.goal.trim()) ? v : null;
+} });
+studio.editor.onEdit = A.draftSchedule;
+ttl.addEventListener("input", A.draftSchedule);
+tgoal.addEventListener("input", A.draftSchedule);
+
+function taskPublish(ed, showMsg){
+var v = read();
+var built = A.taskBuild(v.title, v.goal, v.code);
+if (built.problem){ showMsg("warn", "<b>Пока не задание</b>" + built.problem); return; }
+if (built.error){
+ed.setError(built.error.line);
+showMsg("bad", "<b>Программа падает</b>Задание не может падать: сначала починим её.<br>" + A.errHTML(built.error));
+return;
+}
+var id = A.myTaskSave(built.task);
+A.S().mytaskDraft = null;
+A.award("author");
+A.markActiveToday();        
+A.save();
+showMsg("ok", "<b>Задание готово</b>Правильный ответ посчитан движком — вот он. " +
+"Ссылка ниже: отправь её тому, кого хочешь озадачить.");
+var link = A.taskLink(built.task);
+document.getElementById("tout").innerHTML =
+'<div class="card"><h3>Правильный ответ (его посчитал движок)</h3>' +
+'<pre class="fpcode">' + A.esc(built.task.lines.join("\n")) + '</pre>' +
+'<h3>Ссылка для друга</h3><div class="codebox"><code id="tlink">' + A.esc(link) + '</code>' +
+'<button class="rbtn sec" id="tcopy">Скопировать</button></div>' +
+'<p class="dim">Ссылка длинная, потому что задание целиком лежит внутри неё — ни сервера, ни интернета для этого не нужно. ' +
+'Твоей программы в ссылке нет.</p>' +
+'<div class="fpbtns"><button class="rbtn" id="tselfcheck">Открыть как друг</button></div></div>';
+document.getElementById("tcopy").onclick = function(){ A.copyText(link, this); };
+document.getElementById("tselfcheck").onclick = function(){
+openFriendTask(built.task, { own:true, id:id });
+};
+A.refreshTop();
+}
+
+A.app.querySelectorAll("[data-tlink]").forEach(function(b){
+b.onclick = function(){
+var t = A.myTasksAll()[b.getAttribute("data-tlink")];
+if (t) A.copyText(A.taskLink(t), b);
+};
+});
+A.app.querySelectorAll("[data-topen]").forEach(function(b){
+b.onclick = function(){
+var id = b.getAttribute("data-topen"), t = A.myTasksAll()[id];
+if (t) openFriendTask(t, { own:true, id:id });
+};
+});
+A.app.querySelectorAll("[data-tedit]").forEach(function(b){
+b.onclick = function(){
+var t = A.myTasksAll()[b.getAttribute("data-tedit")];
+if (t) screenMyTasks({ title:t.title, goal:t.goal, code:t.code });
+};
+});
+A.app.querySelectorAll("[data-tdel]").forEach(function(b){
+b.onclick = function(){
+A.myTaskDrop(b.getAttribute("data-tdel"));
+screenMyTasks();
+};
+});
+document.getElementById("tomap").onclick = A.goHome;
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openFriendTask(t, opts){
+A.enterScreen("mine", "friendtask");
+opts = opts || {};
+var key = A.taskKey(t);
+var already = !!(A.S().friendTasks && A.S().friendTasks[key]);
+
+var who = t.author ? "автор — " + A.esc(t.author) : "задание от друга";
+
+var h = '<div class="lvlhead"><div><div class="idx">' +
+(opts.own ? "твоё задание глазами друга" : who) + '</div>' +
+'<h1>✍️ ' + A.esc(t.title) + '</h1></div>' +
+'<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
+'<p class="lede">' + (opts.own
+? 'Так задание видит тот, кому ты отправил ссылку: условие есть, а твоей программы нет. Попробуй решить сам — заодно проверишь, всё ли понятно из условия.'
+: 'Это задание придумал человек, а не тренажёр. Твоя задача — написать программу, которая печатает то же самое. ' +
+'Правильный ответ уже посчитан у автора: сойтись должен вывод, а не буквы кода.') + '</p>';
+
+h += '<div class="goal"><h3>🎯 Условие</h3><p>' + A.esc(t.goal) + '</p>' +
+'<ul><li>Проверяется напечатанное: строк должно быть столько же и слово в слово.</li>' +
+'<li>Как ты это сделаешь — твоё дело: у автора своя программа, у тебя может быть другая.</li></ul></div>';
+
+if (!opts.own)
+h += '<div class="card"><h3>Если вы взрослый и открыли это впервые</h3>' +
+'<p>Устанавливать ничего не нужно: пишете программу прямо здесь и жмёте «Проверить». ' +
+'Совпадение вывода сверяет тренажёр, а не автор задачи, — спорить не о чем.</p>' +
+'<p class="dim">Задачу придумал ребёнок, и это сложнее, чем решить: ему пришлось объяснить её ' +
+'словами так, чтобы вы поняли без его программы. Объяснить может только тот, кто понял, — ' +
+'поэтому пара минут здесь говорит о его понимании больше любого отчёта.</p></div>';
+
+h += '<div id="studio"></div>' +
+'<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+A.app.innerHTML = h;
+
+var draftId = "task-" + key;
+var starter = "# твоя программа\n";
+var studio = A.makeStudio({
+engine: "mini", code: starter, label: "твоя программа",
+check: function(ed, showMsg){ friendCheck(ed, showMsg); }
+});
+document.getElementById("studio").appendChild(studio);
+A.newSession({ id:null, attempts:0, hints:0, shown:false, studio:studio,
+lesson:draftId, starter:[{ name:"main.py", code:starter }] });
+var d = A.draftGet(draftId);
+if (d) A.draftApply(studio.editor, d.files);
+studio.editor.onEdit = A.draftSchedule;
+
+function friendCheck(ed, showMsg){
+A.session().attempts++;
+var res = Runtime.get("mini").run(ed.getCode(), {});
+if (res.error){ ed.setError(res.error.line); showMsg("bad", A.errHTML(res.error)); return; }
+var got = res.lines, exp = t.lines;
+if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; }))){
+showMsg("bad", "<b>Ещё не то</b>" + A.diffBlock(exp, got));
+return;
+}
+winFriendTask(t, key, already, opts);
+}
+
+document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
+document.getElementById("tomap").onclick = A.goHome;
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function winFriendTask(t, key, already, opts){
+var gained = (!opts.own && !already) ? A.friendTaskWin(key) : 0;
+A.markActiveToday();
+A.save(); A.refreshTop();
+
+var first = A.session().attempts === 1;
+document.getElementById("wincard").innerHTML =
+'<div class="big">' + (first ? "🎯" : "🤝") + '</div>' +
+'<h2>' + (opts.own ? "Своё задание проходится" : "Задание пройдено") + '</h2>' +
+'<p>' + (opts.own
+? "Вывод сошёлся — значит условие понятное и задание решаемо. Можно отправлять."
+: "Вывод сошёлся с ответом автора" + (t.author ? " (" + A.esc(t.author) + ")" : "") +
+". Программа у тебя своя, а результат тот же — так и работают настоящие задачи.") + '</p>' +
+(gained ? '<div class="winxp">+' + gained + ' XP</div>' : '') +
+
+(opts.own ? '' : '<div class="winrow"><button class="bigbtn" id="fback">🔗 Отправить результат автору</button></div>' +
+'<div class="msg" id="fbackmsg"></div>') +
+'<div class="winrow"><button class="bigbtn' + (opts.own ? '' : ' ghost') + '" id="fmine">✍️ Составить своё</button>' +
+'<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+document.getElementById("win").classList.add("show");
+A.confetti(first ? 3 : 1);
+var fb = document.getElementById("fback");
+if (fb) fb.onclick = function(){
+var link = A.solvedLink({ key: key, tries: A.session().attempts, title: t.title });
+var box = document.getElementById("fbackmsg");
+box.className = "msg show ok";
+box.innerHTML = '<b>Ссылка с результатом</b>Отправьте её автору тем же мессенджером. ' +
+'Ни имени, ни программы в ней нет — только какая задача и с какой попытки.' +
+'<div class="admrow"><button class="rbtn check" id="fbackcopy">Скопировать</button></div>' +
+'<p class="dim brk">' + A.esc(link) + '</p>';
+var cb = document.getElementById("fbackcopy");
+if (cb) cb.onclick = function(){ A.copyText(link, cb); };
+};
+document.getElementById("fmine").onclick = function(){ A.closeWin(); screenMyTasks(); };
+document.getElementById("wstay").onclick = A.closeWin;
+}
+
+function screenTaskBroken(){
+A.enterScreen("mine", "friendtask");
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+A.app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
+'<h1>✍️ Задание не прочиталось</h1></div></div>' +
+'<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
+'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
+'<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
+'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
+document.getElementById("tomap").onclick = A.goHome;
+A.refreshTop();
+}
+
+return { screenMyTasks: screenMyTasks, openFriendTask: openFriendTask,
+screenSolved: screenSolved, screenTaskBroken: screenTaskBroken };
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.variant = function(A){
 
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -34152,7 +34469,8 @@ screenWorld: screenWorld, screenTrain: screenTrain,
 
 screenFolio: function(){ screenFolio(); },
 screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
-screenMyTasks: screenMyTasks,
+
+screenMyTasks: function(e){ screenMyTasks(e); },
 
 screenWarmups: function(){ screenWarmups(); },
 screenShowcase: function(){ return screenShowcase(); }, screenShop: function(){ screenShop(); },
@@ -37419,7 +37737,8 @@ myWorksList: myWorksList, myWorkById: myWorkById, myWorkLink: myWorkLink, myWork
 galleryList: galleryList, galleryAll: galleryAll, galleryDrawing: galleryDrawing,
 galleryDrop: galleryDrop, drawTurtle: drawTurtle,
 myTasksList: myTasksList, myTasksAll: myTasksAll, taskLink: taskLink,
-openFriendTask: openFriendTask, screenMyTasks: screenMyTasks,
+
+openFriendTask: function(t, o){ openFriendTask(t, o); }, screenMyTasks: function(e){ screenMyTasks(e); },
 downloadDataURL: downloadDataURL, downloadText: downloadText,
 pyFileName: pyFileName, pyFileText: pyFileText, copyText: copyText,
 screenSandbox: screenSandbox,
@@ -39223,45 +39542,6 @@ return Object.keys(d).map(function(k){ return d[k]; })
 }
 function solvedCount(){ return Object.keys(solvedAll()).length; }
 
-function screenSolved(r){
-enterScreen("mine", "solved");
-session = { id:null, attempts:0, hints:0, shown:false };
-solvedAdd(r);
-var mine = myTasksList().filter(function(t){ return taskKey(t) === r.key; })[0];
-var title = (mine && mine.title) || r.title || "твоя задача";
-var n = r.tries;
-
-app.innerHTML =
-'<div class="lvlhead"><div><div class="idx">ответ на твою задачу</div>' +
-'<h1>🎉 Твою задачу решили</h1></div>' +
-'<div class="right"><span class="tag">роль автора</span></div></div>' +
-'<p class="lede">Задачу «<b>' + esc(title) + '</b>» прошли' +
-(n === 1 ? ' <b>с первой попытки</b>' : ' с <b>' + n + '-й</b> попытки') + '. ' +
-'Сверял вывод тренажёр, а не человек, — значит условие ты написал понятно.</p>' +
-'<div class="card"><h3>' + (n === 1
-? "С первой попытки — условие было понятным"
-: "Не с первой попытки — и это нормально") + '</h3>' +
-'<p>' + (n === 1
-? "Написать условие так, чтобы по нему получилось решить с первого раза, труднее, чем решить самому: " +
-"приходится объяснить задачу словами, ничего не пропустив."
-: "Попыток было " + n + ". Спроси, что оказалось непонятным в условии, — это и есть самая " +
-"полезная часть: так учатся писать условия, а не только программы.") + '</p>' +
-'<p class="dim">Ни имени, ни программы решавшего в ссылке нет — только какая задача ' +
-'и с какой попытки. Мы про людей ничего не собираем.</p></div>' +
-'<div class="pager"><button class="bigbtn" id="tomine">✍️ Задать ещё одну</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-document.getElementById("tomine").onclick = function(){
-try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
-screenMyTasks();
-};
-document.getElementById("tomap").onclick = function(){
-try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
-screenWorlds();
-};
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
 function myTasksAll(){ S.mytasks = S.mytasks || {}; return S.mytasks; }
 
 function myTasksList(){
@@ -39321,279 +39601,32 @@ return { task: { title: String(title).trim(), goal: String(goal).trim(),
 code: String(code), lines: lines, author: myName() || "" } };
 }
 
-function screenMyTasks(edit){
-enterScreen("mine", "mytasks");
-var list = myTasksList();
-var draft = (S.mytaskDraft && typeof S.mytaskDraft === "object") ? S.mytaskDraft : null;
-var start = edit || draft || { title:"", goal:"", code:"" };
-
-var got = solvedCount();
-var h = '<div class="lvlhead"><div><div class="idx">без звёзд, по желанию</div>' +
-'<h1>✍️ Задай задачу взрослому</h1></div>' +
-'<div class="right"><span class="tag">взрослому или другу</span></div></div>' +
-'<p class="lede">Обычно задания раздают тебе. Здесь наоборот: задачу придумываешь ты, ' +
-'а решает мама, папа, брат или друг — прямо в браузере, за пару минут. ' +
-'Ты пишешь программу, тренажёр сам считает, что она печатает, и это становится правильным ответом. ' +
-'Твоего кода в ссылке нет: решать придётся своей головой, сойтись должен вывод.</p>' +
-(got ? '<p class="lede">🎉 Твои задачи уже решали: <b>' + got + '</b> ' +
-plural(got, "раз", "раза", "раз") + '.</p>' : '');
-
-h += '<div class="card"><h3>Как это работает</h3>' +
-'<ol class="tsteps"><li>Пишешь программу — такую, какой сам решил бы задачу.</li>' +
-'<li>Пишешь условие словами: решающий не увидит кода, только эти слова.</li>' +
-'<li>Жмёшь «Собрать задание» — движок прогоняет программу и запоминает ответ.</li>' +
-'<li>Копируешь ссылку и отправляешь. Открывший будет решать.</li>' +
-'<li>Когда решат, тебе пришлют ссылку обратно — и ты увидишь, с какой попытки.</li></ol>' +
-'<p class="dim">Правило одно: без случайных чисел и без input(). У решающего случайное выпало бы другое, ' +
-'и проверить было бы нечего.</p>' +
-'<p class="dim">⚠️ Взрослому не нужно ничего устанавливать и уметь: он открывает ссылку, ' +
-'пишет программу и жмёт «Проверить». Судит тренажёр, а не ты, — спорить не о чем.</p></div>';
-
-h += '<div class="card"><h3>Задание</h3>' +
-
-'<label class="reglbl">Название' +
-'<input type="text" id="tttl" maxlength="60" autocomplete="off" placeholder="Например, Считалка до десяти"></label>' +
-'<label class="reglbl">Условие — что должна делать программа' +
-'<textarea id="tgoal" rows="3" maxlength="600" spellcheck="false" placeholder="Напечатай числа от 1 до 10, каждое с новой строки, а в конце их сумму."></textarea></label>' +
-'</div>' +
-
-'<div id="studio"></div><div id="tout"></div>';
-
-h += '<div class="sect"><h2>Мои задания</h2><div class="line"></div>' +
-'<span class="cnt">' + list.length + '</span></div>';
-if (!list.length){
-h += '<div class="note"><b>Пока ни одного</b>Собери первое — оно появится здесь, и ссылку можно будет выдать снова в любой момент.</div>';
-}
-list.forEach(function(t){
-var n = t.lines.length;
-var got = solvedFor(taskKey(t));
-h += '<div class="fproj done"><div class="fptop"><span class="pjemoji">✍️</span>' +
-'<div class="fpttl"><span class="pjkicker">' + fmtDay(t.at) + '</span>' +
-'<b>' + esc(t.title) + '</b>' +
-'<span class="fpsub">' + esc(t.goal) + '</span>' +
-(got.length
-? '<span class="fpsub solvedline">🎉 Решили: ' + got.length + ' ' +
-plural(got.length, "раз", "раза", "раз") + ' · лучшая попытка — ' +
-Math.min.apply(null, got.map(function(x){ return x.n; })) + '-я</span>'
-: '') +
-'</div>' +
-'<span class="fpstat ok">' + n + " " + plural(n, "строка", "строки", "строк") + ' ответа</span></div>' +
-'<div class="fpbtns"><button class="rbtn" data-tlink="' + t.id + '">Скопировать ссылку</button>' +
-'<button class="rbtn sec" data-topen="' + t.id + '">Открыть как друг</button>' +
-'<button class="rbtn sec" data-tedit="' + t.id + '">Переделать</button>' +
-'<button class="rbtn sec" data-tdel="' + t.id + '">Удалить</button></div></div>';
-});
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-app.innerHTML = h;
-
-var studio = makeStudio({
-engine: "mini",
-code: start.code || '# программа-ответ: как ты сам решил бы свою задачу\nprint("привет")\n',
-label: "твоя программа — с неё считается правильный ответ",
-checkLabel: "📦 Собрать задание",
-check: function(ed, showMsg){ taskPublish(ed, showMsg); }
-});
-document.getElementById("studio").appendChild(studio);
-
-var ttl = document.getElementById("tttl"), tgoal = document.getElementById("tgoal");
-ttl.value = start.title || "";
-tgoal.value = start.goal || "";
-function read(){
-return { title: ttl.value, goal: tgoal.value, code: studio.editor.getCode() };
-}
-
-session = { id:null, attempts:0, hints:0, shown:false, mytask:true, studio:studio,
-mytaskStash: function(){
-var v = read();
-S.mytaskDraft = (v.title.trim() || v.goal.trim()) ? v : null;
-} };
-studio.editor.onEdit = draftSchedule;
-ttl.addEventListener("input", draftSchedule);
-tgoal.addEventListener("input", draftSchedule);
-
-function taskPublish(ed, showMsg){
-var v = read();
-var built = taskBuild(v.title, v.goal, v.code);
-if (built.problem){ showMsg("warn", "<b>Пока не задание</b>" + built.problem); return; }
-if (built.error){
-ed.setError(built.error.line);
-showMsg("bad", "<b>Программа падает</b>Задание не может падать: сначала починим её.<br>" + errHTML(built.error));
-return;
-}
-var id = myTaskSave(built.task);
-S.mytaskDraft = null;
-award("author");
-markActiveToday();        
-save();
-showMsg("ok", "<b>Задание готово</b>Правильный ответ посчитан движком — вот он. " +
-"Ссылка ниже: отправь её тому, кого хочешь озадачить.");
-var link = taskLink(built.task);
-document.getElementById("tout").innerHTML =
-'<div class="card"><h3>Правильный ответ (его посчитал движок)</h3>' +
-'<pre class="fpcode">' + esc(built.task.lines.join("\n")) + '</pre>' +
-'<h3>Ссылка для друга</h3><div class="codebox"><code id="tlink">' + esc(link) + '</code>' +
-'<button class="rbtn sec" id="tcopy">Скопировать</button></div>' +
-'<p class="dim">Ссылка длинная, потому что задание целиком лежит внутри неё — ни сервера, ни интернета для этого не нужно. ' +
-'Твоей программы в ссылке нет.</p>' +
-'<div class="fpbtns"><button class="rbtn" id="tselfcheck">Открыть как друг</button></div></div>';
-document.getElementById("tcopy").onclick = function(){ copyText(link, this); };
-document.getElementById("tselfcheck").onclick = function(){
-openFriendTask(built.task, { own:true, id:id });
-};
-refreshTop();
-}
-
-app.querySelectorAll("[data-tlink]").forEach(function(b){
-b.onclick = function(){
-var t = myTasksAll()[b.getAttribute("data-tlink")];
-if (t) copyText(taskLink(t), b);
-};
-});
-app.querySelectorAll("[data-topen]").forEach(function(b){
-b.onclick = function(){
-var id = b.getAttribute("data-topen"), t = myTasksAll()[id];
-if (t) openFriendTask(t, { own:true, id:id });
-};
-});
-app.querySelectorAll("[data-tedit]").forEach(function(b){
-b.onclick = function(){
-var t = myTasksAll()[b.getAttribute("data-tedit")];
-if (t) screenMyTasks({ title:t.title, goal:t.goal, code:t.code });
-};
-});
-app.querySelectorAll("[data-tdel]").forEach(function(b){
-b.onclick = function(){
-myTaskDrop(b.getAttribute("data-tdel"));
-screenMyTasks();
-};
-});
-document.getElementById("tomap").onclick = goHome;
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function openFriendTask(t, opts){
-enterScreen("mine", "friendtask");
-opts = opts || {};
-var key = taskKey(t);
-var already = !!(S.friendTasks && S.friendTasks[key]);
-
-var who = t.author ? "автор — " + esc(t.author) : "задание от друга";
-
-var h = '<div class="lvlhead"><div><div class="idx">' +
-(opts.own ? "твоё задание глазами друга" : who) + '</div>' +
-'<h1>✍️ ' + esc(t.title) + '</h1></div>' +
-'<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
-'<p class="lede">' + (opts.own
-? 'Так задание видит тот, кому ты отправил ссылку: условие есть, а твоей программы нет. Попробуй решить сам — заодно проверишь, всё ли понятно из условия.'
-: 'Это задание придумал человек, а не тренажёр. Твоя задача — написать программу, которая печатает то же самое. ' +
-'Правильный ответ уже посчитан у автора: сойтись должен вывод, а не буквы кода.') + '</p>';
-
-h += '<div class="goal"><h3>🎯 Условие</h3><p>' + esc(t.goal) + '</p>' +
-'<ul><li>Проверяется напечатанное: строк должно быть столько же и слово в слово.</li>' +
-'<li>Как ты это сделаешь — твоё дело: у автора своя программа, у тебя может быть другая.</li></ul></div>';
-
-if (!opts.own)
-h += '<div class="card"><h3>Если вы взрослый и открыли это впервые</h3>' +
-'<p>Устанавливать ничего не нужно: пишете программу прямо здесь и жмёте «Проверить». ' +
-'Совпадение вывода сверяет тренажёр, а не автор задачи, — спорить не о чем.</p>' +
-'<p class="dim">Задачу придумал ребёнок, и это сложнее, чем решить: ему пришлось объяснить её ' +
-'словами так, чтобы вы поняли без его программы. Объяснить может только тот, кто понял, — ' +
-'поэтому пара минут здесь говорит о его понимании больше любого отчёта.</p></div>';
-
-h += '<div id="studio"></div>' +
-'<div class="pager"><button class="bigbtn ghost" id="tomine">✍️ Составить своё</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-app.innerHTML = h;
-
-var draftId = "task-" + key;
-var starter = "# твоя программа\n";
-var studio = makeStudio({
-engine: "mini", code: starter, label: "твоя программа",
-check: function(ed, showMsg){ friendCheck(ed, showMsg); }
-});
-document.getElementById("studio").appendChild(studio);
-session = { id:null, attempts:0, hints:0, shown:false, studio:studio,
-lesson:draftId, starter:[{ name:"main.py", code:starter }] };
-var d = draftGet(draftId);
-if (d) draftApply(studio.editor, d.files);
-studio.editor.onEdit = draftSchedule;
-
-function friendCheck(ed, showMsg){
-session.attempts++;
-var res = Runtime.get("mini").run(ed.getCode(), {});
-if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
-var got = res.lines, exp = t.lines;
-if (!(exp.length === got.length && exp.every(function(x, i){ return x === got[i]; }))){
-showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
-return;
-}
-winFriendTask(t, key, already, opts);
-}
-
-document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
-document.getElementById("tomap").onclick = goHome;
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
 var FRIEND_XP = 20;    
-function winFriendTask(t, key, already, opts){
-var gained = 0;
-if (!opts.own && !already){
+
+function friendTaskWin(key){
 S.friendTasks = S.friendTasks || {};
 S.friendTasks[key] = 1;
-S.xp += FRIEND_XP; gained = FRIEND_XP;
+S.xp += FRIEND_XP;
 award("guest");
+return FRIEND_XP;
 }
-markActiveToday();
-save(); refreshTop();
-
-var first = session.attempts === 1;
-document.getElementById("wincard").innerHTML =
-'<div class="big">' + (first ? "🎯" : "🤝") + '</div>' +
-'<h2>' + (opts.own ? "Своё задание проходится" : "Задание пройдено") + '</h2>' +
-'<p>' + (opts.own
-? "Вывод сошёлся — значит условие понятное и задание решаемо. Можно отправлять."
-: "Вывод сошёлся с ответом автора" + (t.author ? " (" + esc(t.author) + ")" : "") +
-". Программа у тебя своя, а результат тот же — так и работают настоящие задачи.") + '</p>' +
-(gained ? '<div class="winxp">+' + gained + ' XP</div>' : '') +
-
-(opts.own ? '' : '<div class="winrow"><button class="bigbtn" id="fback">🔗 Отправить результат автору</button></div>' +
-'<div class="msg" id="fbackmsg"></div>') +
-'<div class="winrow"><button class="bigbtn' + (opts.own ? '' : ' ghost') + '" id="fmine">✍️ Составить своё</button>' +
-'<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
-document.getElementById("win").classList.add("show");
-confetti(first ? 3 : 1);
-var fb = document.getElementById("fback");
-if (fb) fb.onclick = function(){
-var link = solvedLink({ key: key, tries: session.attempts, title: t.title });
-var box = document.getElementById("fbackmsg");
-box.className = "msg show ok";
-box.innerHTML = '<b>Ссылка с результатом</b>Отправьте её автору тем же мессенджером. ' +
-'Ни имени, ни программы в ней нет — только какая задача и с какой попытки.' +
-'<div class="admrow"><button class="rbtn check" id="fbackcopy">Скопировать</button></div>' +
-'<p class="dim brk">' + esc(link) + '</p>';
-var cb = document.getElementById("fbackcopy");
-if (cb) cb.onclick = function(){ copyText(link, cb); };
-};
-document.getElementById("fmine").onclick = function(){ closeWin(); screenMyTasks(); };
-document.getElementById("wstay").onclick = closeWin;
-}
-
-function screenTaskBroken(){
-enterScreen("mine", "friendtask");
-session = { id:null, attempts:0, hints:0, shown:false };
-app.innerHTML = '<div class="lvlhead"><div><div class="idx">ссылка не открылась</div>' +
-'<h1>✍️ Задание не прочиталось</h1></div></div>' +
-'<div class="note"><b>Скорее всего, ссылку обрезали</b>Мессенджеры иногда режут длинные адреса. ' +
-'Попроси прислать её ещё раз — целиком, лучше файлом или обычным текстом.</div>' +
-'<div class="pager"><button class="bigbtn" id="tomine">✍️ Составить своё задание</button>' +
-'<span class="sp"></span><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-document.getElementById("tomine").onclick = function(){ screenMyTasks(); };
-document.getElementById("tomap").onclick = goHome;
-refreshTop();
-}
+var MYTASKS = KVSCREENS.mytasks({
+app: app, esc: esc, plural: plural, fmtDay: fmtDay, enterScreen: enterScreen,
+refreshTop: refreshTop, goHome: goHome, screenWorlds: screenWorlds, save: save,
+makeStudio: makeStudio, errHTML: errHTML, diffBlock: diffBlock,
+draftGet: draftGet, draftApply: draftApply, draftSchedule: draftSchedule,
+markActiveToday: markActiveToday, award: award, confetti: confetti, closeWin: closeWin,
+copyText: function(t, btn){ return copyText(t, btn); },
+myTasksAll: myTasksAll, myTasksList: myTasksList, myTaskSave: myTaskSave, myTaskDrop: myTaskDrop,
+taskBuild: taskBuild, taskLink: taskLink, taskKey: taskKey,
+solvedAdd: solvedAdd, solvedFor: solvedFor, solvedCount: solvedCount, solvedLink: solvedLink,
+friendTaskWin: friendTaskWin,
+S: function(){ return S; },
+session: function(){ return session; },
+newSession: function(v){ session = v; return v; }
+});
+var screenMyTasks = MYTASKS.screenMyTasks, openFriendTask = MYTASKS.openFriendTask,
+screenSolved = MYTASKS.screenSolved, screenTaskBroken = MYTASKS.screenTaskBroken;
 
 var STORY = KVSCREENS.story({
 esc: esc, plural: plural, astWalk: astWalk, stepFacts: stepFacts,
