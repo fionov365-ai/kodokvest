@@ -2851,6 +2851,9 @@ button.lktile.go{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .prvladder span{text-align:center;font-size:13px;font-weight:600;padding:6px 0;border-radius:8px;
   border:1px solid var(--line);background:var(--panel2);color:var(--faint)}
 .prvladder .now{border-color:var(--acc);color:var(--acc);background:var(--panel)}
+/* Вторая лестница: первая ступень дорожки HTML помечена толстым левым краем —
+   две дорожки видны как две, а сетка из десяти клеток остаётся одной. */
+.prvladder .trk{border-left:3px solid var(--line2)}
 .prvladder .ok{border-color:var(--ok);color:var(--ok)}
 .prvladder .miss{border-color:var(--line2);color:var(--soft);text-decoration:line-through}
 .exrow.prv-yes{border-left-color:var(--ok)}

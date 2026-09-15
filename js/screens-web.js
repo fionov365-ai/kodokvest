@@ -51,6 +51,18 @@ function insertKey(ta, key){
   ta.focus();
   ta.dispatchEvent(new Event("input"));
 }
+/* Панель одной парой функций: ею пользуется и этот экран, и HTML-ступень
+   проверки «что умеет сам» (js/proverka.js). Второй список клавиш там был бы
+   копией, которая разъедется с первой правки. */
+function keybarHTML(){
+  return '<div class="keybar wbkeys">' + WEB_KEYS.map(function(k, i){
+    return '<button class="kbk" data-wk="' + i + '">' + A.esc(k) + '</button>'; }).join("") + '</div>';
+}
+function keybarWire(root, ta){
+  root.querySelectorAll("[data-wk]").forEach(function(b){
+    b.onclick = function(){ insertKey(ta, WEB_KEYS[+b.getAttribute("data-wk")]); };
+  });
+}
 
 /* Список требований — это и есть тексты проверок. Один источник: требование,
    которого нет среди проверок, обещало бы то, чего судья не смотрит. */
@@ -92,8 +104,7 @@ function openWeb(id){
       '<div class="wbleft"><div class="rbhead">Код страницы</div>' +
         '<textarea id="wbcode" class="rbcode wbcode" spellcheck="false" rows="14" ' +
           'aria-label="код страницы">' + A.esc(codes[id]) + '</textarea>' +
-        '<div class="keybar wbkeys">' + WEB_KEYS.map(function(k, i){
-          return '<button class="kbk" data-wk="' + i + '">' + A.esc(k) + '</button>'; }).join("") + '</div>' +
+        keybarHTML() +
         '<div class="admrow"><button class="rbtn check" id="wbcheck">✓ Проверить</button>' +
         '<button class="rbtn sec" id="wbreset">Сначала</button></div></div>' +
       '<div class="wbright"><div class="rbhead">Страница</div>' +
@@ -123,9 +134,7 @@ function openWeb(id){
     clearTimeout(previewTimer);
     previewTimer = setTimeout(preview, 250);
   });
-  A.app.querySelectorAll("[data-wk]").forEach(function(b){
-    b.onclick = function(){ insertKey(ta, WEB_KEYS[+b.getAttribute("data-wk")]); };
-  });
+  keybarWire(A.app, ta);
   document.getElementById("wbcheck").onclick = function(){
     codes[id] = ta.value;
     var r = window.WEB.judge(t, ta.value);
@@ -187,5 +196,5 @@ function screenWeb(){
   A.refreshTop();
 }
 
-return { screenWeb: screenWeb, openWeb: openWeb };
+return { screenWeb: screenWeb, openWeb: openWeb, keybarHTML: keybarHTML, keybarWire: keybarWire };
 };

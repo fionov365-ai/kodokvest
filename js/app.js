@@ -90,6 +90,10 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                         живая или последняя закрытая. Итог по построению живёт
                         в коде результата; здесь только ход проверки. */
                      "proverka",
+                     /* Проверка 2 — вторая лестница (экзамен и HTML,
+                        15.09.2026) в СВОЁМ слоте: начатая проверка 2 не
+                        должна затирать итог первой — кабинет показывает обе. */
+                     "proverka2",
                      /* «Я застрял» (13.09.2026): { at, lesson, why, off }.
                         Один сигнал на ученика, три готовые фразы — без
                         свободного текста, см. HELP_WHY. */
@@ -2309,6 +2313,12 @@ function mergeProgress(a, b){
   else if (!pb.at) out.proverka = pa;
   else if (pa.seed !== pb.seed) out.proverka = (pb.at || 0) > (pa.at || 0) ? pb : pa;
   else out.proverka = ((pb.closed || 0) * 100 + (pb.i || 0)) > ((pa.closed || 0) * 100 + (pa.i || 0)) ? pb : pa;
+  /* Проверка 2 — то же правило в своём слоте. */
+  var qa = a.proverka2 || {}, qb = b.proverka2 || {};
+  if (!qa.at) out.proverka2 = qb.at ? qb : {};
+  else if (!qb.at) out.proverka2 = qa;
+  else if (qa.seed !== qb.seed) out.proverka2 = (qb.at || 0) > (qa.at || 0) ? qb : qa;
+  else out.proverka2 = ((qb.closed || 0) * 100 + (qb.i || 0)) > ((qa.closed || 0) * 100 + (qa.i || 0)) ? qb : qa;
 
   /* Назначенный репетитором вариант: по ключу на экзамен. Складывать тут
      нечего — назначение это факт от взрослого, и свежее отменяет прежнее.
@@ -10264,6 +10274,19 @@ var PROVERKA = KVSCREENS.proverka({
   screenTrain: function(){ screenTrain(); },
   proverkaGet: function(){ return S.proverka || {}; },
   proverkaSet: function(v){ S.proverka = v || {}; save(); },
+  /* Проверка 2 (лестница «экзамен и HTML», 15.09.2026): свой слот состояния
+     и свои судьи. runMini — прогон со stdin (задачи экзамена сверяются с
+     эталоном на вводе и скрытых наборах); pageDoc и pageFrameWire — тот же
+     замок окна «Страница», что у студии и раздела HTML (§ 4.18: замок один);
+     webKeybar* — панель символов раздела HTML, одним источником оттуда же. */
+  proverka2Get: function(){ return S.proverka2 || {}; },
+  proverka2Set: function(v){ S.proverka2 = v || {}; save(); },
+  runMini: function(code, stdin){ return Runtime.get("mini").run(code, { stdin: stdin }); },
+  pageDoc: pageDoc, pageFrameWire: pageFrameWire,
+  webKeybarHTML: function(){ return WEBS.keybarHTML(); },
+  webKeybarWire: function(root, ta){ return WEBS.keybarWire(root, ta); },
+  screenWeb: function(){ screenWeb(); },
+  screenAlgo: function(){ screenAlgo(); },
   session: function(){ return session; },
   newSession: function(v){ session = v; return v; }
 });
@@ -19005,9 +19028,11 @@ var HELP = {
     'ошибка, файл с данными или запись, которую движок не знает.</p>' },
   proverka: { t:"🔎 Проверка — что ребёнок умеет сам", h:
     '<h4>Что это</h4>' +
-    '<p>Десять ступеней по нарастающей: счёт, текст, условие, циклы, списки, функции, словари, ' +
-    'ошибки, классы. На каждой одна задача — написать программу. Подсказок нет, попыток три, ' +
-    'и после двух нерешённых ступеней подряд проверка кончается сама.</p>' +
+    '<p>Проверок две, по десять ступеней. Первая — основы Python по нарастающей: счёт, текст, условие, ' +
+    'циклы, списки, функции, словари, ошибки, классы. Вторая — для того, кто прошёл первую или готовится ' +
+    'к экзамену: шесть задач в формате ОГЭ и ЕГЭ и четыре страницы на HTML, двумя независимыми дорожками. ' +
+    'На каждой ступени одна задача. Подсказок нет, попыток три, и после двух нерешённых ступеней подряд ' +
+    'проверка (а во второй — дорожка) кончается сама.</p>' +
     '<h4>Код результата</h4>' +
     '<p>В конце появляется код из шестнадцати знаков. В нём записан весь итог, поэтому он ' +
     'открывается на любом устройстве без регистрации и без сервера. Код с опечаткой не ' +

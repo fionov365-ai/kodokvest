@@ -5442,6 +5442,7 @@ function checkEncoding(){
   let groupChecked = 0, specChecked = 0, aiPackChecked = 0, algoChecked = 0, engineChecked = 0;
   let variantChecked = 0;
   let proverkaChecked = 0;
+  let proverka2Checked = 0;
   let zqChecked = 0;
   let ladderChecked = 0, noteChecked = 0;
   let breakChecked = 0;
@@ -11843,6 +11844,230 @@ function checkEncoding(){
     if (problems.length === p0) proverkaChecked++;
   }
 
+  /* --- 13г2. [проверка-2] вторая лестница: экзамен и HTML (js/proverka.js) ---
+     Стережётся то, что отличает её от первой:
+       1) лестница версии 2 заморожена слепком, ступеней ровно десять
+          (раскладка кода рассчитана на десять);
+       2) пулы годные: у задач экзамена — сверка вывода, ввод и скрытые наборы,
+          БЕЗ запретов конструкций и бюджета шагов (их правила живут в судье
+          раздела, а судья проверки — свой: пул с запретом молча перестал бы
+          его проверять); заготовка ступень не решает, эталон решает;
+       3) код версии 2 ходит туда и обратно, ловит опечатку и НЕ открывается
+          как код первой лестницы (и наоборот);
+       4) дорожки независимы: два «не решил» подряд закрывают дорожку, а не
+          проверку — после проваленного экзамена HTML всё равно предлагается;
+       5) вставленная страница HTML не выдаётся за «сам»;
+       6) слияние устройств: побеждает ушедшая дальше; итог первой проверки
+          проверкой 2 не затирается;
+       7) карточка кабинета называет обе проверки, вход предлагает обе. */
+  if (g.proverka && w.HW && w.ALGO && w.WEB_TASKS){
+    const p0 = problems.length;
+    const P = g.proverka;
+
+    /* 13г2.1. Слепок и строение. */
+    const SNAP2 = "oge-range,oge-digit-even|oge-min-even-three-digit,ege-max-remainder|" +
+      "oge-pairs,ege-pairs-even,ege-grow|ege-longest-up-run,ege-max-triple-sum|" +
+      "text-count,text-longest,text-after|data-avg,data-sum-col,oge-avg-round|" +
+      "web-first,web-levels,web-strong|web-ul,web-ol,web-table|" +
+      "web-color,web-bg,web-font|web-nav,web-flex,web-center";
+    const now2 = P.RUNGS2.map(r => r.pool.join(",")).join("|");
+    if (now2 !== SNAP2) bad("[проверка-2] лестница версии 2 изменена — старые коды откроют чужие задачи: " + now2);
+    if (P.RUNGS2.length !== 10) bad("[проверка-2] ступеней не десять — раскладка кода рассчитана на десять");
+    P.RUNGS2.forEach((r, i) => {
+      if (r.kind !== (i <= 5 ? "algo" : "web"))
+        bad(`[проверка-2] ступень ${i + 1}: дорожки съехали (kind=${r.kind})`);
+    });
+
+    /* 13г2.2. Пулы годные; ступень собирается на любом семени. */
+    const R2 = w.Runtime.get("mini");
+    const outOf = (code, stdin) => {
+      const res = R2.run(code, { stdin: (stdin || []).slice() });
+      return res.error ? null : (res.lines || []).join("\n");
+    };
+    P.RUNGS2.forEach((r, i) => r.pool.forEach(id => {
+      if (r.kind === "algo"){
+        const x = w.ALGO.find(t => t.id === id);
+        if (!x) return bad(`[проверка-2] задачи «${id}» нет в банке экзамена`);
+        if (x.check.kind !== "output") bad(`[проверка-2] «${id}»: судья проверки сверяет вывод, а тут ${x.check.kind}`);
+        if ((x.ban || []).length || (x.need || []).length || x.budget)
+          bad(`[проверка-2] у «${id}» запрет конструкции или бюджет — судья проверки их не проверяет`);
+        if (!(x.sets || []).length) bad(`[проверка-2] у «${id}» нет скрытых наборов — print с готовым ответом пройдёт`);
+        const exp = outOf(x.solution, x.stdin);
+        if (exp === null) bad(`[проверка-2] эталон «${id}» не работает в движке`);
+        if (outOf(x.starter, x.stdin) === exp) bad(`[проверка-2] заготовка «${id}» решает ступень сама`);
+      } else {
+        const x = w.WEB_TASKS.find(t => t.id === id);
+        if (!x) return bad(`[проверка-2] задания «${id}» нет в разделе HTML`);
+        if (!w.WEB.passed(w.WEB.judge(x, x.solution))) bad(`[проверка-2] эталон «${id}» не проходит судью`);
+        if (w.WEB.passed(w.WEB.judge(x, x.starter))) bad(`[проверка-2] заготовка «${id}» проходит сама`);
+      }
+    }));
+    for (let s = 0; s < 40; s++){
+      const seed = (s * 26189 + 7) % 1048576;
+      P.RUNGS2.forEach((r, i) => {
+        if (!P.taskOf2(seed, i)) bad(`[проверка-2] ступень ${i + 1} не собралась на семени ${seed}`);
+      });
+    }
+
+    /* 13г2.3. Код: круговорот, опечатка, версии не путаются. */
+    let rnd2 = 54321;
+    const next2 = () => (rnd2 = (rnd2 * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const ABC2 = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let lost2 = 0, cross = 0, typos2 = 0, slipped2 = 0;
+    for (let k = 0; k < 150; k++){
+      const res = { day: Math.floor(next2() * 4096), seed: Math.floor(next2() * 1048576),
+                    mins: Math.floor(next2() * 64),
+                    rungs: P.RUNGS2.map(() => ({ st: Math.floor(next2() * 4), paste: next2() < .3 ? 1 : 0 })) };
+      const code = P.pack2(res);
+      if (!/^[2-9A-HJ-NP-Z]{4}(-[2-9A-HJ-NP-Z]{4}){3}$/.test(code)) bad("[проверка-2] код не того вида: " + code);
+      if (JSON.stringify(P.unpack2(code)) !== JSON.stringify(res)) lost2++;
+      if (P.unpack(code)) cross++;
+      const flat = code.replace(/-/g, "");
+      for (let pos = 0; pos < 16; pos += 5){
+        const ch = flat[pos], other = ABC2[(ABC2.indexOf(ch) + 1 + Math.floor(next2() * 31)) % 32];
+        typos2++;
+        if (P.unpack2(flat.slice(0, pos) + other + flat.slice(pos + 1))) slipped2++;
+      }
+    }
+    if (lost2) bad(`[проверка-2] ${lost2} кодов из 150 после разбора дали не тот итог`);
+    if (cross) bad(`[проверка-2] код второй лестницы ${cross} раз открылся как код первой`);
+    if (slipped2 > typos2 * 0.01)
+      bad(`[проверка-2] код с опечаткой открылся ${slipped2} раз из ${typos2}`);
+    const v1code = P.pack({ day: 9, seed: 9, mins: 9, rungs: P.RUNGS.map(() => ({ st: 1, paste: 0 })) });
+    if (P.unpack2(v1code)) bad("[проверка-2] код ПЕРВОЙ лестницы открылся как код второй");
+
+    /* 13г2.4. Проход нажатиями: экзаменная дорожка проваливается после двух
+       нерешённых подряд, но проверка НЕ кончается — открывается дорожка HTML;
+       вставленная страница отмечается; конец лестницы даёт код и отчёт по
+       двум дорожкам. */
+    g.state.proverka = {}; g.state.proverka2 = {};
+    g.screenProverka(); await tick();
+    const go2 = doc.getElementById("prvgo2");
+    if (!doc.getElementById("prvgo")) bad("[проверка-2] с входа пропала кнопка первой проверки");
+    if (!go2) bad("[проверка-2] на входе нет кнопки «Начать проверку 2»");
+    else {
+      go2.click(); await tick();
+      const p = g.state.proverka2;
+      if (!p || p.i !== 0 || p.closed) bad("[проверка-2] проверка 2 не началась");
+      const submitAlgo = async (code) => {
+        const st = studioOf();
+        if (!st) return bad("[проверка-2] на ступени экзамена нет редактора");
+        st.editor.setCode(code);
+        st.querySelector('[data-role="check"]').click();
+        await tick();
+      };
+      const x0 = P.taskOf2(p.seed, 0);
+      /* Жульничество: печать готового ответа открытого примера. Открытый
+         прогон совпадает — завалить его обязаны СКРЫТЫЕ наборы. */
+      const exp0 = R2.run(x0.solution, { stdin: (x0.stdin || []).slice() }).lines;
+      await submitAlgo(exp0.map(l => "print(" + JSON.stringify(String(l)) + ")").join("\n"));
+      if (g.state.proverka2.rungs[0].st) bad("[проверка-2] печать готового ответа засчитана — скрытые наборы не гоняются");
+      if (!/скрытых данных/i.test(msgText())) bad("[проверка-2] про скрытые наборы не сказано: " + msgText());
+      await submitAlgo(x0.solution);
+      if (g.state.proverka2.i !== 1 || g.state.proverka2.rungs[0].st !== 2)
+        bad("[проверка-2] эталон со второй попытки не записан как «со второй»: " + JSON.stringify(g.state.proverka2.rungs[0]));
+      doc.getElementById("prvskip").click(); await tick();
+      if (g.state.proverka2.closed) bad("[проверка-2] проверка кончилась после ОДНОЙ нерешённой");
+      doc.getElementById("prvskip").click(); await tick();
+      if (g.state.proverka2.closed) bad("[проверка-2] две нерешённые в дорожке закончили ВСЮ проверку, а не дорожку");
+      if (g.state.proverka2.i !== 6)
+        bad("[проверка-2] после двух нерешённых подряд дорожка экзамена не закрылась: i=" + g.state.proverka2.i);
+      if (!doc.getElementById("prvweb")) bad("[проверка-2] дорожка HTML не открылась после экзаменационной");
+      else {
+        const x6 = P.taskOf2(p.seed, 6);
+        const ta6 = doc.getElementById("prvweb");
+        ta6.value = x6.solution; ta6._pasted = 500;
+        doc.getElementById("prvwebcheck").click(); await tick();
+        if (g.state.proverka2.rungs[6].st !== 3) bad("[проверка-2] решённая страница не записана «с первой»");
+        if (g.state.proverka2.rungs[6].paste !== 1) bad("[проверка-2] ВСТАВЛЕННАЯ страница не отмечена вставкой");
+        const x7 = P.taskOf2(p.seed, 7);
+        const ta7 = doc.getElementById("prvweb");
+        ta7.value = x7.starter;
+        doc.getElementById("prvwebcheck").click(); await tick();
+        if (!doc.querySelector("#prvchecks li.bad"))
+          bad("[проверка-2] после неудачной сдачи страницы не отмечено, чего не хватает");
+        const ta7b = doc.getElementById("prvweb");
+        ta7b.value = x7.solution;
+        doc.getElementById("prvwebcheck").click(); await tick();
+        if (g.state.proverka2.rungs[7].st !== 2 || g.state.proverka2.rungs[7].paste)
+          bad("[проверка-2] набранная страница записана неверно: " + JSON.stringify(g.state.proverka2.rungs[7]));
+        doc.getElementById("prvskip").click(); await tick();
+        doc.getElementById("prvskip").click(); await tick();
+      }
+      const done = g.state.proverka2;
+      if (!done.closed) bad("[проверка-2] лестница кончилась, а проверка не закрылась");
+      const back = P.unpack2(done.code);
+      if (!back || back.rungs.map(r => r.st).join("") !== "2110003211")
+        bad("[проверка-2] код итога несёт не то: " + (back ? back.rungs.map(r => r.st).join("") : "не разобрался"));
+      if (back){
+        if (back.rungs[6].paste !== 1) bad("[проверка-2] вставка потерялась в коде итога");
+        if (w.location.hash !== "#proverka=" + done.code) bad("[проверка-2] адрес итога не несёт код");
+        const txt = doc.getElementById("app").textContent;
+        if (!/Задачи экзамена: уверенно сам 1 ступень из 6/.test(txt))
+          bad("[проверка-2] итог не назвал твёрдые ступени дорожки экзамена");
+        if (!/HTML: твёрдых ступеней пока нет/.test(txt))
+          bad("[проверка-2] вставленная страница вошла в «уверенно сам» дорожки HTML");
+        if (!/решение пришло вставкой/.test(txt)) bad("[проверка-2] итог молчит о вставке");
+        if (/\d+\s*балл/i.test(txt)) bad("[проверка-2] итог обещает баллы");
+        if (!/С чего продолжать/.test(txt)) bad("[проверка-2] итог не сказал, с чего продолжать");
+
+        /* 13г2.5. Тот же код на чужом устройстве — тот же итог. */
+        g.state.proverka2 = {};
+        w.location.hash = "#proverka=" + done.code.toLowerCase(); await tick(40);
+        if (!/Задачи экзамена: уверенно сам 1 ступень из 6/.test(doc.getElementById("app").textContent))
+          bad("[проверка-2] по ссылке с кодом на пустом устройстве итог не открылся");
+
+        /* 13г2.6. Сравнение: два кода проверки 2 дают «было → стало», а код
+           первой проверки в этом поле честно отвергается. */
+        const later2 = P.pack2({ day: back.day + 30, seed: 99, mins: 20,
+          rungs: P.RUNGS2.map(() => ({ st: 3, paste: 0 })) });
+        P.screenReport(later2, done.code); await tick();
+        const txt3 = doc.getElementById("app").textContent;
+        if (!/не решил → сам, с первой попытки/.test(txt3)) bad("[проверка-2] сравнение не показало «было → стало»");
+        if (!/Сейчас: 6 из 6/.test(txt3)) bad("[проверка-2] сравнение не назвало оба числа дорожки");
+        const pf = doc.getElementById("prvprev");
+        pf.value = v1code;
+        doc.getElementById("prvcmp").click(); await tick();
+        if (!/код первой проверки/.test(doc.getElementById("prvcmpmsg").textContent))
+          bad("[проверка-2] код первой лестницы в сравнении не отвергнут словами");
+      }
+    }
+
+    /* 13г2.7. Слияние: побеждает ушедшая дальше; итог первой не затирается. */
+    const m2 = g.mergeProgress({ savedAt:2, proverka2:{ v:2, seed:5, at:10, i:3, closed:0, rungs:[] } },
+                               { savedAt:1, proverka2:{ v:2, seed:5, at:10, i:1, closed:1, rungs:[] } });
+    if (!m2.proverka2 || m2.proverka2.closed !== 1)
+      bad("[проверка-2] слияние вернуло незакрытую проверку 2 поверх закрытой");
+    const m3 = g.mergeProgress(
+      { savedAt:2, proverka:{ v:1, seed:7, at:9, i:10, closed:1, rungs:[] },
+        proverka2:{ v:2, seed:5, at:10, i:3, closed:0, rungs:[] } },
+      { savedAt:1 });
+    if (!m3.proverka || m3.proverka.closed !== 1) bad("[проверка-2] проверка 2 затёрла итог первой при слиянии");
+
+    /* 13г2.8. Карточка кабинета называет ОБЕ проверки по снимку. */
+    {
+      const code1 = P.pack({ day: 254, seed: 4242, mins: 12,
+        rungs: P.RUNGS.map((r, i) => ({ st: i < 3 ? 3 : (i === 3 ? 1 : 0), paste: 0 })) });
+      const code2 = P.pack2({ day: 256, seed: 777, mins: 15,
+        rungs: P.RUNGS2.map((r, i) => ({ st: i < 2 ? 3 : (i === 2 ? 1 : 0), paste: 0 })) });
+      const snap = {
+        proverka:  { v:1, seed:4242, at: Date.UTC(2026, 8, 12), i:10, closed:1, code: code1,
+                     rungs: P.RUNGS.map(() => ({ st:0, paste:0 })) },
+        proverka2: { v:2, seed:777, at: Date.UTC(2026, 8, 14), i:10, closed:1, code: code2,
+                     rungs: P.RUNGS2.map(() => ({ st:0, paste:0 })) } };
+      const html = P.cardHTML(snap);
+      if (!/уверенно сам 3 из 10/.test(html)) bad("[проверка-2] карточка кабинета потеряла итог первой проверки");
+      if (!/Проверка 2/.test(html) || html.indexOf(code2) < 0)
+        bad("[проверка-2] карточка кабинета молчит о проверке 2");
+      if (!/Задачи экзамена — 2 из 6/.test(html) || !/HTML — 0 из 4/.test(html))
+        bad("[проверка-2] карточка кабинета не назвала итог по дорожкам: " + html.replace(/<[^>]+>/g, " ").slice(0, 300));
+    }
+
+    g.state.proverka = {}; g.state.proverka2 = {};
+    viewReset(g);
+    if (problems.length === p0) proverka2Checked++;
+  }
+
   /* --- 13д. [защита-кода] вопросы по своей программе (js/screens-zashchita.js) ---
      Обещания, на которых стоит экран:
        1) у эталонов всех 11 проектов и 20 уроков, взятых вслепую, хоть один
@@ -12178,6 +12403,7 @@ function checkEncoding(){
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
   console.log(`проверка «что умеет сам»: ${proverkaChecked ? "да" : "нет"}`);
+  console.log(`проверка 2 (экзамен и HTML): ${proverka2Checked ? "да" : "нет"}`);
   console.log(`защита своего кода: ${zqChecked ? "да" : "нет"}`);
   console.log(`возможности движка на месте: ${engineChecked ? "да" : "нет"}`);
   console.log(`адрес следует за экраном (кругооборот): ${routeChecked ? "да" : "нет"}`);
