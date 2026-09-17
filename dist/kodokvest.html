@@ -19,7 +19,7 @@
      мессенджера со своей машины, относительный путь ему разрешать не от чего.
      ⚠️ og/og.png не рисуется руками — его собирает "node og/make.js" из
      настоящих чисел курса. Поменялся курс — пересобрать и закоммитить.
-     Слова совпадают с вывеской (screenAbout в js/app.js) намеренно: обещание
+     Слова совпадают с вывеской (screenAbout в js/screens-about.js) намеренно: обещание
      в превью и обещание на странице обязаны быть одним обещанием.
      Однофайловая сборка эти строки не вырезает, в отличие от манифеста: они
      ничего не грузят, их вообще не читает браузер — только робот.
@@ -24868,6 +24868,926 @@ screenSolved: screenSolved, screenTaskBroken: screenTaskBroken };
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.about = function(A){
+
+function aboutCounts(){
+var cheat = 0;
+(window.CHEATSHEET || []).forEach(function(s){ cheat += (s.items || []).length; });
+return {
+lessons:  CURRICULUM.total,
+worlds:   CURRICULUM.length,
+warm:     (window.WARMUPS  || []).length,
+games:    (window.GAMES    || []).length,
+ai:       (window.AILAB    || []).length,
+specs:    (window.SPECS    || []).length,
+algo:     (window.ALGO     || []).length,
+projects: (window.PROJECTS || []).length,
+
+oge:      (window.ALGO || []).filter(function(a){ return a.group === "oge"; }).length,
+ege:      (window.ALGO || []).filter(function(a){ return a.group === "ege"; }).length,
+cheat:    cheat,
+certs:    (typeof A.certList === "function") ? A.certList().length : 0
+};
+}
+
+var LAND_DEMO_OK =
+'# поменяй это число ↓\n' +
+'лучей = 24\n' +
+'\n' +
+'color("#7c5cff")\n' +
+'for i in range(лучей):\n' +
+'    circle(90)\n' +
+'    right(360 / лучей)';
+
+var LAND_DEMO_BAD = LAND_DEMO_OK.replace("range(лучей):", "range(лучей)");
+
+function landCodeHTML(code){
+var lines = code.split("\n"), nums = "";
+for (var i = 0; i < lines.length; i++) nums += (i + 1) + (i < lines.length - 1 ? "\n" : "");
+return '<div class="dwnums">' + nums + '</div><pre><code>' + A.hl(code) + '</code></pre>';
+}
+
+function landDemoRun(code, out){
+if (!out) return;
+if (out._landT){ clearInterval(out._landT); out._landT = null; }
+var eng = Runtime.get("mini");
+var t = eng.newTurtle ? eng.newTurtle() : null;
+var r = eng.run(code, { turtle: t });
+if (r.error){
+out.innerHTML = '<div class="dwerr">' + A.errHTML(r.error) + '</div>';
+return;
+}
+var txt = (r.output || "").replace(/\n+$/, "");
+var drew = !!(t && t.segs && t.segs.length);
+if (!drew && !txt){
+out.innerHTML = '<span class="dwwait">Программа ничего не нарисовала и ничего не напечатала. ' +
+'Верни рабочий код кнопкой рядом.</span>';
+return;
+}
+out.innerHTML = (drew ? '<canvas class="dwcanvas"></canvas>' : '') +
+(txt ? '<pre class="dwtext"></pre>' : '');
+if (txt) out.querySelector(".dwtext").textContent = txt;
+if (drew) A.animateTurtle(out.querySelector(".dwcanvas"), t);
+}
+function landRun(code, out, instant){
+
+if (out && out._landT){ clearInterval(out._landT); out._landT = null; }
+var r = Runtime.get("mini").run(code, {});
+if (r.error){
+out.innerHTML = '<div class="dwerr">' + A.errHTML(r.error) + '</div>';
+return;
+}
+var lines = (r.output || "").replace(/\n+$/, "").split("\n");
+var calm = false;
+try { calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){}
+
+if (instant || lines.length > 16 || calm || typeof setInterval !== "function"){
+out.textContent = lines.join("\n");
+return;
+}
+var i = 0;
+out.innerHTML = '<span class="dwcaret"></span>';
+var t = out._landT = setInterval(function(){
+
+if (!out.isConnected && !(document.body && document.body.contains(out))) return clearInterval(t);
+i++;
+out.innerHTML = A.esc(lines.slice(0, i).join("\n")) +
+(i < lines.length ? '<span class="dwcaret"></span>' : "");
+if (i >= lines.length){ clearInterval(t); if (out._landT === t) out._landT = null; }
+}, 160);
+}
+function landDemoHTML(){
+return '<figure class="demowin" id="landdemo">' +
+'<figcaption class="dwhead"><span class="dwdots"><i></i><i></i><i></i></span>' +
+'<b>Урок 11 · Цикл for</b>' +
+'<span class="dwtag">это не картинка — код можно править прямо здесь</span></figcaption>' +
+'<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
+'<div class="dwbar">' +
+
+'<button class="dwbtn go" data-dw="run">▶ Нарисовать заново</button>' +
+'<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
+'<span class="dwhint">поменяйте число в первой строке — рисунок станет другим</span>' +
+'</div>' +
+'<div class="dwout" aria-live="polite"><span class="dwwait">Рисунок появится прямо здесь.</span></div>' +
+'</figure>' +
+'<p class="dwnote">Это настоящий редактор — тот же, что откроется ребёнку на уроке. ' +
+'Поменяйте число лучей, сломайте строку — рисунок перерисуется сам: ни установки Python, ' +
+'ни командной строки для этого не нужно.</p>';
+}
+function wireLandDemo(){
+var win = document.getElementById("landdemo");
+if (!win) return;
+var codeBox = win.querySelector(".dwcode"),
+out     = win.querySelector(".dwout"),
+runBtn  = win.querySelector('[data-dw="run"]'),
+brkBtn  = win.querySelector('[data-dw="break"]'),
+hint    = win.querySelector(".dwhint");
+
+var ed = A.makeEditor(LAND_DEMO_OK, "попробуй поменять число лучей");
+ed.classList.add("dwed");
+if (codeBox && codeBox.parentNode) codeBox.parentNode.replaceChild(ed, codeBox);
+
+ed.setCode(LAND_DEMO_OK);
+
+function прогон(){ landDemoRun(ed.getCode(), out); }
+var ждём = null;
+
+ed.onEdit = function(){
+hint.textContent = "это твой код — он рисует по-настоящему";
+brkBtn.textContent = "↩ Вернуть рабочий код";
+if (ждём) clearTimeout(ждём);
+ждём = setTimeout(прогон, 400);
+};
+runBtn.onclick = прогон;
+brkBtn.onclick = function(){
+
+var сейчас = ed.getCode();
+var сломать = сейчас === LAND_DEMO_OK;
+ed.setCode(сломать ? LAND_DEMO_BAD : LAND_DEMO_OK);
+brkBtn.textContent = сломать ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
+hint.textContent = сломать
+? "убрали двоеточие в строке с for"
+: "поменяйте число в первой строке — рисунок станет другим";
+прогон();
+};
+
+landDemoRun(LAND_DEMO_OK, out);
+}
+
+var SWIPE_ROWS = ".bigs, .landgrid, .landnums";
+function landSwipeInit(root){
+(root || document).querySelectorAll(SWIPE_ROWS).forEach(function(row){
+if (row._swipe || row.children.length < 2) return;
+row._swipe = true;
+row.classList.add("swipe");
+
+var dots = document.createElement("div");
+dots.className = "swdots";
+for (var i = 0; i < row.children.length; i++) dots.appendChild(document.createElement("i"));
+row.parentNode.insertBefore(dots, row.nextSibling);
+var marks = dots.querySelectorAll("i");
+
+var mq = window.matchMedia ? window.matchMedia("(max-width:640px)") : null;
+
+var доля = row.classList.contains("landnums") ? "46%" : "86%";
+
+function paint(){
+var mid = row.scrollLeft + row.clientWidth / 2, best = 0, dist = 1e9;
+for (var k = 0; k < row.children.length; k++){
+var c = row.children[k], d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+if (d < dist){ dist = d; best = k; }
+}
+marks.forEach(function(m, k){ m.classList.toggle("on", k === best); });
+}
+
+function apply(){
+var on = mq ? mq.matches : false;
+row.style.display        = on ? "flex" : "";
+row.style.overflowX      = on ? "auto" : "";
+row.style.scrollSnapType = on ? "x mandatory" : "";
+for (var k = 0; k < row.children.length; k++){
+var c = row.children[k];
+c.style.flex            = on ? "0 0 auto" : "";
+c.style.width           = on ? доля : "";
+c.style.scrollSnapAlign = on ? "center" : "";
+c.style.margin          = on ? "0" : "";
+}
+dots.hidden = !on;
+if (!on) row.scrollLeft = 0;
+paint();
+}
+
+row.addEventListener("scroll", function(){
+if (row._swT) return;
+row._swT = setTimeout(function(){ row._swT = null; paint(); }, 90);
+});
+
+marks.forEach(function(m, k){
+m.onclick = function(){
+var c = row.children[k];
+if (c) row.scrollTo({ left: c.offsetLeft - (row.clientWidth - c.offsetWidth) / 2 });
+};
+});
+apply();
+if (mq && mq.addEventListener) mq.addEventListener("change", apply);
+});
+}
+
+function wireReveal(root){
+var els = (root || document).querySelectorAll(".rv");
+if (typeof IntersectionObserver !== "function"){
+els.forEach(function(e){ e.classList.add("in"); });
+return;
+}
+var io = new IntersectionObserver(function(list){
+list.forEach(function(e){
+if (!e.isIntersecting) return;
+e.target.classList.add("in");
+io.unobserve(e.target);
+});
+}, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 });
+els.forEach(function(e){ io.observe(e); });
+}
+
+function landTabsHTML(items, cls, label){
+var h = '<div class="ltabs' + (cls ? " " + cls : "") + '" role="tablist">' +
+(label ? '<span class="ltlbl">' + label + '</span>' : "");
+items.forEach(function(t, i){
+h += '<button class="ltab' + (i ? "" : " on") + '" role="tab" data-lt="' + i + '"' +
+(t.vars ? ' style="' + t.vars + '"' : "") +
+' aria-selected="' + (i ? "false" : "true") + '">' + t.label + '</button>';
+});
+return h + '</div>';
+}
+
+function wireLandTabs(box, render){
+if (!box) return;
+var tabs = box.querySelectorAll(".ltab");
+tabs.forEach(function(b){
+b.onclick = function(){
+tabs.forEach(function(x){
+x.classList.remove("on");
+x.setAttribute("aria-selected", "false");
+});
+b.classList.add("on");
+b.setAttribute("aria-selected", "true");
+render(+b.getAttribute("data-lt"));
+};
+});
+render(0);
+}
+
+function landShowcase(){
+return (window.PROJECTS || []).filter(function(p){
+return p.kind !== "game" && p.world >= 1 && p.world <= 5 && p.steps && p.steps.length;
+}).sort(function(a, b){ return a.world - b.world; });
+}
+function landShowcaseHTML(){
+var list = landShowcase();
+if (!list.length) return "";
+
+return '<div class="showcase" id="showcase">' +
+landTabsHTML(list.map(function(p){
+var w = CURRICULUM.world(p.world);
+return { vars: landWorldVars(p.world),
+label: '<span class="lte">' + (w ? w.icon : p.emoji) + '</span>' +
+'<span class="ltt"><i>Мир ' + p.world + '</i><b>' +
+A.esc(w ? w.title : p.title) + '</b></span>' };
+}), "wld") +
+'<div id="worldinfo"></div>' +
+'<div class="showwin" id="showwin"></div></div>';
+}
+
+function landNums(code){
+var re = new RegExp(A.HLRE.source, "g"), m, out = [];
+while ((m = re.exec(code))){
+if (m[3] !== undefined && m[3] !== "")
+out.push({ start: m.index, end: m.index + m[0].length, val: m[0] });
+}
+return out;
+}
+function landLiveCode(code, nums){
+var html = "", last = 0;
+nums.forEach(function(n, i){
+html += A.hl(code.slice(last, n.start));
+var len = Math.max(3, n.val.length);
+html += '<input class="numin" type="text" inputmode="numeric" data-n="' + i +
+'" value="' + A.esc(n.val) + '" size="' + n.val.length + '" maxlength="' + len +
+'" aria-label="число в программе, можно поменять">';
+last = n.end;
+});
+return html + A.hl(code.slice(last));
+}
+
+function landShowcaseRender(i){
+var p = landShowcase()[i], box = document.getElementById("showwin");
+if (!p || !box) return;
+
+var info = document.getElementById("worldinfo");
+var w = CURRICULUM.world(p.world);
+if (info && w){
+var shown = w.lessons.slice(0, 4),
+rest  = w.lessons.length - shown.length,
+boss  = w.lessons.filter(function(l){ return l.boss; })[0];
+info.innerHTML = '<div class="landworld" style="' + landWorldVars(w.n) + '">' +
+'<span class="lwno">' + w.n + '</span>' +
+'<span class="lwico">' + w.icon + '</span>' +
+'<div class="lwbody"><div class="lwkick">Мир ' + w.n + ' · ' + w.lessons.length + ' ' +
+A.plural(w.lessons.length, "урок", "урока", "уроков") +
+(boss ? ' · босс: ' + A.esc(boss.title) : "") + '</div>' +
+'<b>' + A.esc(w.title) + '</b>' +
+'<p>' + A.esc(w.desc) + '</p>' +
+'<div class="lwlist">' +
+shown.map(function(l){ return '<span>' + A.esc(l.title) + '</span>'; }).join("") +
+(rest > 0 ? '<span class="more">и ещё ' + rest + '</span>' : "") +
+'</div></div></div>';
+}
+var code = p.steps[p.steps.length - 1].solution || "";
+var rows = code.split("\n").length;
+var nums = landNums(code);
+box.setAttribute("style", landWorldVars(p.world));
+
+box.innerHTML =
+'<div class="shhead"><span class="shico">' + p.emoji + '</span>' +
+'<div class="shttl"><div class="shkick">Мир ' + p.world + ' · проект в конце мира</div>' +
+'<b>' + A.esc(p.title) + '</b><p>' + A.esc(p.tagline || "") + '</p></div></div>' +
+
+'<div class="shbody">' +
+'<div class="shcol"><div class="shlbl">Код, который собрал ребёнок · ' + rows + ' ' +
+A.plural(rows, "строка", "строки", "строк") + '</div>' +
+
+'<div class="ldcode flow"><div class="dwcode"><pre><code>' + landLiveCode(code, nums) +
+'</code></pre></div></div></div>' +
+'<div class="shcol"><div class="shlbl">Что печатает программа</div>' +
+'<div class="ldout" id="shout" aria-live="polite"></div></div>' +
+'</div>' +
+
+'<div class="dwbar"><button class="dwbtn" id="shback" hidden>↺ Вернуть числа как были</button>' +
+'<span class="dwhint own">числа в коде можно менять прямо здесь — ' +
+'программа напечатает другое. Переключите мир наверху, и выполнится ' +
+'программа того проекта: это настоящий движок, а не записанный результат</span></div>';
+var out = box.querySelector(".ldout");
+var поля = [].slice.call(box.querySelectorAll(".numin"));
+var назад = box.querySelector("#shback");
+
+function собрать(){
+var res = "", last = 0;
+nums.forEach(function(n, k){
+var v = (поля[k] && поля[k].value || "").replace(/[^0-9]/g, "");
+res += code.slice(last, n.start) + (v === "" ? n.val : v);
+last = n.end;
+});
+return res + code.slice(last);
+}
+function тронуто(){ return поля.some(function(f, k){ return f.value !== nums[k].val; }); }
+var ждём = null;
+поля.forEach(function(f){
+f.oninput = function(){
+f.value = f.value.replace(/[^0-9]/g, "");
+f.size = Math.max(1, f.value.length);
+if (назад) назад.hidden = !тронуто();
+if (ждём) clearTimeout(ждём);
+ждём = setTimeout(function(){
+landRun(собрать(), out, true);
+
+out.classList.remove("ranew");
+void out.offsetWidth;               
+out.classList.add("ranew");
+}, 350);
+};
+});
+if (назад) назад.onclick = function(){
+поля.forEach(function(f, k){ f.value = nums[k].val; f.size = nums[k].val.length; });
+назад.hidden = true;
+landRun(code, out, true);
+};
+landRun(code, out, true);
+}
+
+var LAND_ROLES = [
+{ em:"👨‍👩‍👦", tab:"Родителю", how:"вход по коду ребёнка или по ссылке от учителя",
+win:"Кабинет · родитель",
+lede:"Ребёнок в кабинет не заходит и ничего в нём не меняет.",
+
+tiles:[
+["🟢","Сейчас","на каком уроке в эту минуту"],
+["📺","Его экран","только с его согласия"],
+["📅","Неделя","минуты, уроки, затыки"],
+["💬","Вопрос за ужином","по тому, что он делал"],
+["⏱","Занятие","20 / 30 / 45 минут"],
+["🗓","Расписание","дни и потолок дня"],
+["📝","Задание","выдать свои задачи"]
+] },
+{ em:"👨‍🏫", tab:"Репетитору и школе", how:"вход по паролю, «Кабинет репетитора»",
+win:"Кабинет · репетитор",
+demo:"Домашка, которую не спишешь: одна задача — у каждого свои числа. " +
+"Нажмите «другой ученик».",
+lede:"Всё, что у родителя, плюс группа и настройки обучения.",
+tiles:[
+["👥","Группа","у каждого свой код"],
+["📺","Живое занятие","с согласия ученика"],
+["📝","Домашка","у каждого свои числа"],
+["📊","Отчёты","по всем сразу"],
+["⚖️","Это не табель","кому позвонить, а не кто хуже"],
+["🔐","Имён на сервере нет","только код и результат"],
+
+["🔓","Снять замки","открыть все уроки"],
+["💾","Перенос файлом","когда сервера нет"],
+["☁️","Свой сервер","полчаса, одна функция"]
+] }
+];
+
+function lkTileHTML(t){
+return '<div class="lktile"><span class="lke">' + t[0] + '</span>' +
+'<b>' + A.esc(t[1]) + '</b><span>' + A.esc(t[2]) + '</span></div>';
+}
+function lkMockHTML(title, tiles){
+return '<div class="lkmock"><div class="lkbar">' +
+'<span class="lkdots"><i></i><i></i><i></i></span><b>' + A.esc(title) + '</b>' +
+'<span class="tag">так это выглядит</span></div>' +
+'<div class="lkgrid">' + tiles.map(lkTileHTML).join("") + '</div></div>';
+}
+function landRolesHTML(){
+return '<div class="roles" id="roles">' +
+landTabsHTML(LAND_ROLES.map(function(r){
+return { label: '<span class="lte">' + r.em + '</span>' + r.tab };
+})) +
+'<div class="rolepane" id="rolepane"></div></div>';
+}
+function landRolesRender(i){
+var r = LAND_ROLES[i], box = document.getElementById("rolepane");
+if (!r || !box) return;
+box.innerHTML =
+'<div class="rolein' + (r.demo ? "" : " one") + '"><div class="roleleft">' +
+'<div class="rolehow">🔑 ' + A.esc(r.how) + '</div>' +
+'<p class="rolelede">' + r.lede + '</p>' +
+lkMockHTML(r.win, r.tiles) + '</div>' +
+
+(r.demo ? '<div class="roledemo"><div class="rdhead">' + r.demo + '</div>' +
+'<div id="hwdemo"></div></div>' : "") +
+'</div>';
+if (r.demo) landHwRender();
+}
+
+function landWorldVars(n){
+var i = ((n - 1) % 5) + 1;
+return '--wc:var(--w' + i + ');--wcbg:var(--w' + i + 'bg)';
+}
+
+var LAND_DRAW = [
+{ em:"⭐", name:"Звезда",
+code:'color("yellow")\nwidth(4)\nfor i in range(5):\n    forward(190)\n    right(144)\n' },
+{ em:"🌸", name:"Цветок",
+code:'color("pink")\nwidth(2)\nfor i in range(36):\n    for j in range(4):\n        forward(80)\n        right(90)\n    right(10)\n' },
+{ em:"🌈", name:"Радуга",
+code:'width(3)\ncvet = ["red", "orange", "yellow", "green", "cyan", "blue", "purple"]\nfor i in range(80):\n    color(cvet[i % 7])\n    forward(i * 2.6)\n    right(59)\n' }
+];
+function landDrawHTML(){
+return '<div class="ldlive" id="draw">' +
+landTabsHTML(LAND_DRAW.map(function(d){
+return { label: '<span class="lte">' + d.em + '</span>' + d.name };
+}), "ltsm", "Что рисуем:") +
+'<div class="drawwin"><canvas id="drawc" class="drawc"></canvas>' +
+'<div class="drawside"><div class="dwcode" id="drawcode"></div>' +
+'<button class="dwbtn go" id="drawgo">▶ Нарисовать заново</button>' +
+'<p class="livenote">Столько строк — и весь рисунок. Это одиннадцатый урок первого мира.</p>' +
+'</div></div></div>';
+}
+function landDrawRender(i){
+var d = LAND_DRAW[i], c = document.getElementById("drawc"),
+box = document.getElementById("drawcode"), go = document.getElementById("drawgo");
+if (!d || !c || !box) return;
+box.innerHTML = landCodeHTML(d.code.replace(/\n$/, ""));
+function run(){
+var eng = Runtime.get("mini"), t = eng.newTurtle ? eng.newTurtle() : null;
+if (!t) return;
+eng.run(d.code, { turtle:t });
+A.animateTurtle(c, t);
+}
+if (go) go.onclick = run;
+run();
+}
+
+var LAND_WARM_IDS = ["predict-strings", "predict-loop", "predict-order"];
+function landWarms(){
+var by = {};
+(window.WARMUPS || []).forEach(function(w){ by[w.id] = w; });
+return LAND_WARM_IDS.map(function(id){ return by[id]; }).filter(Boolean);
+}
+function landWarmHTML(){
+var list = landWarms();
+if (!list.length) return "";
+return '<div class="ldlive" id="warm">' +
+landTabsHTML(list.map(function(w, i){
+return { label: '<span class="lte">' + w.emoji + '</span>' + "Задача " + (i + 1) };
+}), "ltsm", "Разминка:") +
+'<div class="warmwin" id="warmwin"></div></div>';
+}
+function landWarmRender(i){
+var w = landWarms()[i], box = document.getElementById("warmwin");
+if (!w || !box) return;
+var want = ((Runtime.get("mini").run(w.code, {}) || {}).output || "").replace(/\n+$/, "");
+
+box.innerHTML =
+'<div class="warmask">' +
+'<div class="warmcode"><div class="warmlbl">Программа</div>' +
+'<div class="dwcode">' + landCodeHTML(w.code.replace(/\n$/, "")) + '</div></div>' +
+'<div class="warmans"><label for="warmin">Что напечатает программа?</label>' +
+'<textarea id="warmin" rows="' + Math.max(2, want.split("\n").length) + '" spellcheck="false" ' +
+'placeholder="по строке на каждый print"></textarea>' +
+'<div class="dwbar"><button class="dwbtn go" id="warmgo">✓ Проверить</button>' +
+'<button class="dwbtn" id="warmshow">Показать ответ</button></div>' +
+'<div class="warmres" id="warmres" aria-live="polite"></div></div></div>';
+var ta = box.querySelector("#warmin"), res = box.querySelector("#warmres");
+function norm(s){
+return String(s || "").replace(/\r/g, "").split("\n")
+.map(function(l){ return l.trim(); }).join("\n").replace(/\n+$/, "");
+}
+box.querySelector("#warmgo").onclick = function(){
+var mine = norm(ta.value);
+if (!mine){ res.className = "warmres show warn"; res.textContent = "Сначала напиши ответ — хоть одну строку."; return; }
+if (mine === norm(want)){
+res.className = "warmres show ok";
+res.innerHTML = '<b>Сошлось ✓</b>' + A.esc(w.note || "");
+return;
+}
+
+res.className = "warmres show bad";
+res.innerHTML = '<b>Не сошлось</b>' +
+'<div class="warmdiff"><div><i>у тебя</i><pre>' + A.esc(mine) + '</pre></div>' +
+'<div><i>а печатает</i><pre>' + A.esc(want) + '</pre></div></div>' +
+'<span class="warmwhy">' + A.esc(w.note || "") + '</span>';
+};
+box.querySelector("#warmshow").onclick = function(){
+ta.value = want;
+res.className = "warmres show ok";
+res.innerHTML = '<b>Вот что печатает программа</b>' + A.esc(w.note || "");
+};
+}
+
+var landHwSeed = 1;
+function landHwRender(){
+var box = document.getElementById("hwdemo");
+if (!box || !window.HW) return;
+var item = HW.byId("hw-konfety") || (window.HOMEWORK || [])[0];
+if (!item) return;
+var b = HW.build(item, landHwSeed, function(code){ return Runtime.get("mini").run(code, {}); });
+if (!b || b.error) return;
+box.innerHTML =
+'<div class="hwtop"><span class="hwem">' + item.emoji + '</span>' +
+'<div><b>' + A.esc(b.title) + '</b><i>ученик №' + landHwSeed + '</i></div>' +
+'<button class="dwbtn" id="hwnext">🎲 Другой ученик</button></div>' +
+'<p class="hwgoal">' + A.esc(b.goal) + '</p>' +
+'<div class="hwans"><i>правильный ответ движок уже посчитал</i><pre>' +
+A.esc(b.lines.join("\n")) + '</pre></div>';
+box.querySelector("#hwnext").onclick = function(){ landHwSeed++; landHwRender(); };
+}
+
+var landAuthMode = "start";
+function landAuthHTML(){
+if (landAuthMode !== "code")
+return '<div class="landcta"><button class="bigbtn" data-auth="try">Начать первый урок →</button></div>' +
+
+'<p class="ldalt">Имя спросим после первой задачи' +
+
+(A.serverOn() ? ' · Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>' : '') +
+'</p>';
+return '<div class="ldauthrow">' +
+'<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
+' aria-label="Код ученика" placeholder="например, sova-3f7a2">' +
+'<button class="bigbtn" data-auth="go">Войти →</button>' +
+'</div><div class="msg" id="ldmsg"></div>' +
+'<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
+}
+function landAuthRender(focus){
+var box = document.getElementById("ldauth");
+if (!box) return;
+box.innerHTML = landAuthHTML();
+var inp = document.getElementById("ldcode");
+function fail(err){
+var m = document.getElementById("ldmsg");
+if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + A.esc(err) + "</b>"; }
+if (inp && inp.focus) inp.focus();
+}
+function go(){
+
+A.becomeKid();
+A.doLogin(inp.value, fail);
+}
+box.querySelectorAll("[data-auth]").forEach(function(b){
+b.onclick = function(){
+var k = b.getAttribute("data-auth");
+if (k === "go") return go();
+if (k === "try") return A.openLesson(CURRICULUM[0].lessons[0].id);
+landAuthMode = k;
+landAuthRender(true);
+};
+});
+if (inp){
+inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
+if (focus && inp.focus) inp.focus();
+}
+}
+function secHead(kick, title, lede){
+return '<div class="secthead"><div class="sechl"><span class="seckick">' + kick + '</span>' +
+'<h2>' + title + '</h2></div><p class="lede">' + lede + '</p></div>';
+}
+
+function screenAbout(){
+A.enterScreen("home", "about");
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+var c = aboutCounts();
+
+var started = Object.keys(A.S().stars).length;
+
+var known = !!(A.myCode() || A.S().name || A.isAdminDevice() || A.isParentDevice());
+
+var h = '<div class="land">';
+
+var nums = [
+[c.lessons,  A.plural(c.lessons,  "урок", "урока", "уроков"),            "по порядку"],
+[c.worlds,   A.plural(c.worlds,   "мир", "мира", "миров"),               "по 20 уроков"],
+[c.projects, A.plural(c.projects, "проект", "проекта", "проектов"),      "большая программа"],
+[c.algo,     A.plural(c.algo,     "задача", "задачи", "задач"),
+"алгоритмы · ОГЭ " + c.oge + " · ЕГЭ " + c.ege],
+[c.warm,     A.plural(c.warm,     "разминка", "разминки", "разминок"),   "на пять минут"],
+[c.ai,       A.plural(c.ai,       "упражнение", "упражнения", "упражнений"), "принять работу ИИ"],
+[c.games,    A.plural(c.games,    "игра", "игры", "игр"),                "и у каждой виден код"],
+[c.cheat,    A.plural(c.cheat,    "команда", "команды", "команд"),       "шпаргалка поверх урока"]
+];
+var numsHTML = '<div class="landnums">' + nums.map(function(n){
+return '<div class="landnum"><b>' + n[0] + '</b><span>' + n[1] + '</span>' +
+'<i>' + A.esc(n[2]) + '</i></div>';
+}).join("") + '</div>';
+
+h += '<section class="landhero rv">' +
+'<div class="lhaur" aria-hidden="true"></div>' +
+'<div class="lhin"><div class="lhtext">' +
+'<div class="landkick"><i></i>информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
+
+'<h1>Информатика, <span class="hlite">которую видно</span></h1>' +
+
+'<p class="landlede">Ребёнок пишет код сам — а вы видите это без аккаунтов, звонков и рассрочек.</p>' +
+(started || known
+? '<div class="landcta">' +
+'<button class="bigbtn" data-land="on">' +
+(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+'<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
+'</div>'
+: '<div class="ldauth" id="ldauth"></div>') +
+
+'<ul class="landtrust">' +
+'<li>🆓 Сейчас бесплатно</li>' +
+'<li>⚡ Ничего не устанавливать</li>' +
+'<li>✈️ Работает без интернета</li>' +
+'<li>🔐 Ни почты, ни телефона</li>' +
+'</ul>' +
+
+'<div class="landroles"><span>Кто вы:</span>' +
+'<button class="rolepill" data-land="' + (started || known ? "on" : "try") + '">Я ученик</button>' +
+'<button class="rolepill" data-land="parent">Я родитель</button>' +
+'<a class="rolepill" href="repetitoru/">Я репетитор или учитель</a>' +
+'</div>' +
+numsHTML +
+'</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
+'</section>';
+
+var exE = A.examTally("ege"), exO = A.examTally("oge");
+if (exE && exO){
+h += '<div class="landsect rv" id="exams">' +
+secHead("ЕГЭ и ОГЭ", "Экзамен целиком, а не «немного алгоритмов»",
+"Все задания обоих экзаменов по номерам. Против каждого честно написано, " +
+"что у нас есть, а чего нет и почему.") +
+'<div class="exlanding">' +
+'<div class="exlbig"><span class="exlnum">' + exE.есть + ' / ' + exE.total + '</span>' +
+'<b>заданий ЕГЭ закрыто задачами</b>' +
+'<span class="dim">нумерация демоверсии ' + exE.year + ' года</span></div>' +
+'<div class="exlbig"><span class="exlnum">' + exO.есть + ' / ' + exO.total + '</span>' +
+'<b>заданий ОГЭ закрыто задачами</b>' +
+'<span class="dim">включая «Робота» с русскими командами</span></div>' +
+'</div>' +
+'<ul class="exllist">' +
+'<li><b>Карта экзамена по номерам.</b> Не «темы вообще», а список всех ' +
+exE.total + ' заданий ЕГЭ и ' + exO.total + ' ОГЭ: где у нас есть задачи, ' +
+'где ещё нет, а где не будет никогда — и почему.</li>' +
+'<li><b>Пробный вариант целиком.</b> Весь экзамен подряд, по одной задаче на ' +
+'номер, как в мае. В конце — сколько номеров закрыто и на каких просело.</li>' +
+
+'<li><b>И режим экзамена.</b> То же самое, но со временем, без подсказок и ' +
+'без ответа проверки: она записывает ответ, а верно или нет — видно только ' +
+'в итоге. Как в мае, где тоже никто не говорит «неверно, попробуй ещё».</li>' +
+'<li><b>Исполнитель «Робот» с русскими командами.</b> Это второе задание ОГЭ ' +
+'по выбору — то самое, где в школе дают КуМир и где Python не примут.</li>' +
+
+'<li><b>Баллов мы не считаем.</b> Шкала перевода меняется каждый год и ' +
+'объявляется не нами. Показываем проверяемое: какие номера закрыты, а какие нет.</li>' +
+'</ul>' +
+'<div class="landcta"><button class="bigbtn" data-land="exams">Открыть карту экзамена →</button></div>' +
+'</div>';
+}
+
+h += '<div class="landsect rv">' +
+secHead("Весь сайт", "Подробнее — на сайте Фионики",
+"Три двери — репетитору, семейному обучению, индивидуальному проекту: " +
+"чем отличается от соседей, где границы и сколько стоит.") +
+'<div class="landcta"><a class="bigbtn" href="vitrina/">Открыть сайт Фионики →</a></div>' +
+'</div>';
+
+h += '<div class="landsect rv">' +
+secHead("Изнутри", "Как это работает",
+"Урок — 15–20 минут на одной странице. Две средние вкладки можно потрогать прямо сейчас.") +
+landTabsHTML([
+{ label:'<span class="lte">📘</span>Как проходит урок' },
+{ label:'<span class="lte">🐢</span>Код рисует' },
+{ label:'<span class="lte">🔮</span>Угадай вывод' },
+{ label:'<span class="lte">🧭</span>Не только Python' }
+], "how") +
+'<div class="ldpane" id="howpane"></div></div>';
+
+h += '<div class="landsect rv" id="adults">' +
+secHead("Кабинет взрослого", "Вот ваш кабинет",
+"Выберите, кто вы, — покажем только ваши плитки.") +
+landRolesHTML() + '</div>';
+
+var showc = landShowcaseHTML();
+if (showc){
+h += '<div class="landsect rv">' +
+secHead("Курс целиком", "Программа: " + c.worlds + " " +
+A.plural(c.worlds, "мир", "мира", "миров") + ", " + c.lessons + " " +
+A.plural(c.lessons, "урок", "урока", "уроков"),
+"В конце каждого мира — босс, проект и сертификат. Выберите мир: программа " +
+"под ним выполняется прямо здесь.") +
+showc + '</div>';
+}
+
+h += '<div class="landsect rv">' +
+secHead("Кроме уроков", "Между делом и на память",
+"Слева — куда заходят по настроению. Справа — что остаётся на руках.") +
+landTabsHTML([
+{ label:'<span class="lte">🎯</span>Когда на урок нет сил' },
+{ label:'<span class="lte">🎒</span>Что остаётся на руках' }
+], "how") +
+'<div class="ldpane" id="elsepane"></div></div>';
+
+h += '<section class="landend rv"><div class="lhaur" aria-hidden="true"></div>' +
+'<div class="endin"><div class="endleft">' +
+'<span class="seckick">Чего здесь нет</span><h2>Честно про границы</h2>' +
+
+'<ul class="landhonest">' +
+'<li><b>Язык один — Python.</b> Ни Scratch, ни JavaScript.</li>' +
+'<li><b>Из экзамена — то, что решается программой.</b> ' +
+c.oge + ' в формате ОГЭ, ' + c.ege + ' в формате ЕГЭ, плюс кодирование, ' +
+'логика и графы. Электронные таблицы не проверить: наш судья запускает ' +
+'Python, а не считает формулы.</li>' +
+'<li><b>Оценок и живого учителя тут нет.</b> Проверяет программа. ' +
+'Если учитель или репетитор у ребёнка есть — здесь у него своё рабочее место.</li>' +
+
+'<li><b>Аккаунта нет — есть код ученика.</b> По нему прогресс открывается ' +
+'на любом устройстве, но и восстановить его нечем: ни почты, ни телефона ' +
+'мы не спрашиваем — и не будем. Поэтому тренажёр сам напоминает записать код ' +
+'после первого урока и печатает карточку доступа; у репетитора и родителя ' +
+'код тоже есть.</li>' +
+'</ul></div>' +
+'<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
+'<p class="lede">Сначала урок, имя — после первой задачи. Ни почты, ни телефона.</p>' +
+
+'<div class="landcta">' +
+(started || known
+? '<button class="bigbtn" data-land="on">' +
+(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+'<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
+: '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
+'</div>' +
+'<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
+'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
+
+h += '</div>';
+A.app.innerHTML = h;
+
+A.app.querySelectorAll("[data-land]").forEach(function(b){
+b.onclick = function(){
+var k = b.getAttribute("data-land");
+if (k === "on") return A.screenWorlds();
+if (k === "try") return A.openLesson(CURRICULUM[0].lessons[0].id);
+if (k === "parent") return A.screenProverka();
+
+if (k === "exams") return A.openExamMap("ege");
+A.screenRoles();
+};
+});
+landAuthRender();
+wireLandDemo();
+wireLandTabs(A.app.querySelector(".ltabs.how"), landHowRender);
+wireLandTabs(A.app.querySelectorAll(".ltabs.how")[1], landElseRender);
+wireLandTabs(document.getElementById("showcase"), landShowcaseRender);
+wireLandTabs(document.getElementById("roles"), landRolesRender);
+
+landSwipeInit(A.app);
+wireReveal(A.app);
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function landHowRender(i){
+var box = document.getElementById("howpane");
+if (!box) return;
+var c = aboutCounts();
+if (i === 0){
+box.innerHTML =
+
+'<ol class="landsteps">' +
+'<li><b>Читаешь объяснение</b><span>У каждого примера — кнопка «▶ Запустить».</span></li>' +
+'<li><b>Решаешь задачу</b><span>Задача — список требований, а не одна фраза.</span></li>' +
+'<li><b>Запускаешь свой код</b><span>Сколько угодно раз. Видно, что сделала каждая строка.</span></li>' +
+'<li><b>Жмёшь «✓ Проверить»</b><span>Не сошлось — покажет, чем отличается. Подсказки по шагам.</span></li>' +
+'</ol>' +
+
+'<div class="instep"><div class="instepl">И ещё две кнопки прямо в уроке</div>' +
+'<ul class="rolelist">' +
+'<li><span class="rlem">💬</span><span class="rltx"><b>Спроси</b> — «Что тут нового?», ' +
+'«Что надо сделать?», «Почему ошибка?», «Покажи пример». Отвечает про этот урок ' +
+'и решить за ребёнка не может.</span></li>' +
+'<li><span class="rlem">🧹</span><span class="rltx"><b>Ревью кода</b> — программа уже ' +
+'работает, а тренажёр говорит, как написать чище. Звёзд за это не отнимает.</span></li>' +
+'</ul></div>' +
+'<div class="note"><b>Ошибка здесь — не ругань</b>Красный текст Python переведён на ' +
+'русский: в какой строке и что не сошлось. А визуализатор пройдёт программу по шагам ' +
+'и покажет, что лежит в памяти.</div>';
+return;
+}
+if (i === 1){
+box.innerHTML = landDrawHTML();
+wireLandTabs(document.getElementById("draw"), landDrawRender);
+return;
+}
+if (i === 2){
+box.innerHTML = landWarmHTML() ||
+'<p class="dim">Разминки не загрузились.</p>';
+wireLandTabs(document.getElementById("warm"), landWarmRender);
+return;
+}
+box.innerHTML =
+'<div class="landgrid g3">' +
+'<div class="landcard dir" style="' + landWorldVars(3) + '">' +
+'<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
+'<p>Поиск, сортировка, системы счисления, логика, графы. <b>' + c.oge +
+'</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Есть и <b>пробный вариант ' +
+'целиком</b>: по одной задаче на каждый номер, по порядку — как в мае. Цену алгоритма ' +
+'тут не рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
+'<div class="landcard dir" style="' + landWorldVars(4) + '">' +
+'<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
+'<p><b>' + c.ai + '</b> ' + A.plural(c.ai, "упражнение", "упражнения", "упражнений") +
+' не про то, как попросить нейросеть, а про то, как принять её работу: найти, где она ' +
+'уверенно врёт.</p></div>' +
+'<div class="landcard dir" style="' + landWorldVars(5) + '">' +
+'<span class="lcem">🏗</span><b>Проекты</b>' +
+'<p><b>' + c.projects + '</b> больших ' + A.plural(c.projects, "программы", "программы", "программ") +
+': карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. Собранное ' +
+'остаётся у ребёнка.</p></div>' +
+'</div>' +
+
+'<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
+'Закрываем то, что решается программой. Электронные таблицы — нет, их нечем проверить. ' +
+'Номера заданий стоят только на картах экзаменов и в пробном варианте, и рядом с ними — ' +
+'год, с которого нумерация снята: между годами она меняется. Баллы не считаем вовсе: ' +
+'шкала перевода меняется каждый год и объявляется не нами.</div>';
+}
+
+function landElseRender(i){
+var box = document.getElementById("elsepane"), c = aboutCounts();
+if (!box) return;
+
+setTimeout(function(){ landSwipeInit(box); }, 0);
+if (i === 0){
+var h = '<div class="landgrid g4">';
+
+A.trainCards().filter(function(t){ return t.id !== "ai" && t.id !== "algo"; }).forEach(function(t){
+h += '<div class="landcard"><span class="lcem">' + t.em + '</span>' +
+'<b>' + A.esc(t.title) + '</b><p>' + A.esc(t.why) + '</p></div>';
+});
+
+box.innerHTML = h + '</div>' +
+'<p class="ldpanefoot">Каждый день — одна маленькая разминка из уже пройденного. ' +
+'Звёзд не дают, но день занятий засчитывается.</p>';
+return;
+}
+box.innerHTML = '<div class="landgrid g3">' +
+'<div class="landcard"><span class="lcem">🎒</span><b>Портфолио и сертификаты</b>' +
+'<p>Все собранные программы в одном месте и <b>' + c.certs + '</b> ' +
+A.plural(c.certs, "сертификат", "сертификата", "сертификатов") +
+'. Печатаются на бумагу или в PDF.</p></div>' +
+'<div class="landcard"><span class="lcem">🖼</span><b>Рисунки и файлы .py</b>' +
+'<p>Рисунки черепашки уезжают в галерею. Любую программу можно выгрузить настоящим ' +
+'файлом .py.</p></div>' +
+'<div class="landcard"><span class="lcem">✍️</span><b>Своё задание</b>' +
+'<p>Ребёнок придумывает задачу, движок считает ответ, задание уезжает ссылкой другу ' +
+'или взрослому.</p></div>' +
+'<div class="landcard"><span class="lcem">🎮</span><b>Своя игра по ссылке</b>' +
+'<p>Собранную игру отправляют одной ссылкой. Играется сразу в браузере, код видно.</p></div>' +
+'<div class="landcard"><span class="lcem">🧰</span><b>Мастерская</b>' +
+'<p>Куски своих программ ложатся на полку деталей, а на верстаке из них собирается ' +
+'новая.</p></div>' +
+'<div class="landcard"><span class="lcem">🔁</span><b>Повторить</b>' +
+'<p>Тяжёлые уроки возвращаются сами через несколько дней. Рядом — бестиарий ' +
+'побеждённых ошибок.</p></div>' +
+'</div>';
+}
+return {
+screenAbout: screenAbout, aboutCounts: aboutCounts,
+
+landNums: landNums, landLiveCode: landLiveCode,
+landSwipeInit: landSwipeInit, SWIPE_ROWS: SWIPE_ROWS,
+LAND_DEMO_OK: LAND_DEMO_OK, LAND_DEMO_BAD: LAND_DEMO_BAD,
+landDemoHTML: landDemoHTML, landDemoRun: landDemoRun,
+landWarmRender: landWarmRender, landWarms: landWarms
+};
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.variant = function(A){
 
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -36158,8 +37078,8 @@ var ACCOUNT = KVSCREENS.account({
 app: app, esc: esc, enterScreen: enterScreen, refreshTop: refreshTop,
 myCode: myCode, myName: myName, serverOn: serverOn, doLogout: doLogout,
 openAccessCard: openAccessCard, codeSaved: codeSaved, markCodeSaved: markCodeSaved,
-goHome: goHome, screenAbout: screenAbout,
 
+goHome: goHome, screenAbout: function(){ screenAbout(); },
 screenFolio: function(){ screenFolio(); },
 screenGuide: screenGuide, screenRoles: screenRoles,
 themeGet: themeGet, themeSet: themeSet, sfxOn: sfxOn, sfxSet: sfxSet, sfx: sfx,
@@ -40224,26 +41144,6 @@ becomeAdmin();
 return screenKids();
 }
 
-function aboutCounts(){
-var cheat = 0;
-(window.CHEATSHEET || []).forEach(function(s){ cheat += (s.items || []).length; });
-return {
-lessons:  CURRICULUM.total,
-worlds:   CURRICULUM.length,
-warm:     (window.WARMUPS  || []).length,
-games:    (window.GAMES    || []).length,
-ai:       (window.AILAB    || []).length,
-specs:    (window.SPECS    || []).length,
-algo:     (window.ALGO     || []).length,
-projects: (window.PROJECTS || []).length,
-
-oge:      (window.ALGO || []).filter(function(a){ return a.group === "oge"; }).length,
-ege:      (window.ALGO || []).filter(function(a){ return a.group === "ege"; }).length,
-cheat:    cheat,
-certs:    (typeof certList === "function") ? certList().length : 0
-};
-}
-
 function examTally(id){
 var ex = (window.EXAMS || {})[id];
 if (!ex) return null;
@@ -40273,397 +41173,23 @@ b.onclick = screenAbout;
 });
 }
 
-var LAND_DEMO_OK =
-'# поменяй это число ↓\n' +
-'лучей = 24\n' +
-'\n' +
-'color("#7c5cff")\n' +
-'for i in range(лучей):\n' +
-'    circle(90)\n' +
-'    right(360 / лучей)';
-
-var LAND_DEMO_BAD = LAND_DEMO_OK.replace("range(лучей):", "range(лучей)");
-
-function landCodeHTML(code){
-var lines = code.split("\n"), nums = "";
-for (var i = 0; i < lines.length; i++) nums += (i + 1) + (i < lines.length - 1 ? "\n" : "");
-return '<div class="dwnums">' + nums + '</div><pre><code>' + hl(code) + '</code></pre>';
-}
-
-function landDemoRun(code, out){
-if (!out) return;
-if (out._landT){ clearInterval(out._landT); out._landT = null; }
-var eng = Runtime.get("mini");
-var t = eng.newTurtle ? eng.newTurtle() : null;
-var r = eng.run(code, { turtle: t });
-if (r.error){
-out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
-return;
-}
-var txt = (r.output || "").replace(/\n+$/, "");
-var drew = !!(t && t.segs && t.segs.length);
-if (!drew && !txt){
-out.innerHTML = '<span class="dwwait">Программа ничего не нарисовала и ничего не напечатала. ' +
-'Верни рабочий код кнопкой рядом.</span>';
-return;
-}
-out.innerHTML = (drew ? '<canvas class="dwcanvas"></canvas>' : '') +
-(txt ? '<pre class="dwtext"></pre>' : '');
-if (txt) out.querySelector(".dwtext").textContent = txt;
-if (drew) animateTurtle(out.querySelector(".dwcanvas"), t);
-}
-function landRun(code, out, instant){
-
-if (out && out._landT){ clearInterval(out._landT); out._landT = null; }
-var r = Runtime.get("mini").run(code, {});
-if (r.error){
-out.innerHTML = '<div class="dwerr">' + errHTML(r.error) + '</div>';
-return;
-}
-var lines = (r.output || "").replace(/\n+$/, "").split("\n");
-var calm = false;
-try { calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){}
-
-if (instant || lines.length > 16 || calm || typeof setInterval !== "function"){
-out.textContent = lines.join("\n");
-return;
-}
-var i = 0;
-out.innerHTML = '<span class="dwcaret"></span>';
-var t = out._landT = setInterval(function(){
-
-if (!out.isConnected && !(document.body && document.body.contains(out))) return clearInterval(t);
-i++;
-out.innerHTML = esc(lines.slice(0, i).join("\n")) +
-(i < lines.length ? '<span class="dwcaret"></span>' : "");
-if (i >= lines.length){ clearInterval(t); if (out._landT === t) out._landT = null; }
-}, 160);
-}
-function landDemoHTML(){
-return '<figure class="demowin" id="landdemo">' +
-'<figcaption class="dwhead"><span class="dwdots"><i></i><i></i><i></i></span>' +
-'<b>Урок 11 · Цикл for</b>' +
-'<span class="dwtag">это не картинка — код можно править прямо здесь</span></figcaption>' +
-'<div class="dwcode">' + landCodeHTML(LAND_DEMO_OK) + '</div>' +
-'<div class="dwbar">' +
-
-'<button class="dwbtn go" data-dw="run">▶ Нарисовать заново</button>' +
-'<button class="dwbtn" data-dw="break">💥 А если ошибиться</button>' +
-'<span class="dwhint">поменяйте число в первой строке — рисунок станет другим</span>' +
-'</div>' +
-'<div class="dwout" aria-live="polite"><span class="dwwait">Рисунок появится прямо здесь.</span></div>' +
-'</figure>' +
-'<p class="dwnote">Это настоящий редактор — тот же, что откроется ребёнку на уроке. ' +
-'Поменяйте число лучей, сломайте строку — рисунок перерисуется сам: ни установки Python, ' +
-'ни командной строки для этого не нужно.</p>';
-}
-function wireLandDemo(){
-var win = document.getElementById("landdemo");
-if (!win) return;
-var codeBox = win.querySelector(".dwcode"),
-out     = win.querySelector(".dwout"),
-runBtn  = win.querySelector('[data-dw="run"]'),
-brkBtn  = win.querySelector('[data-dw="break"]'),
-hint    = win.querySelector(".dwhint");
-
-var ed = makeEditor(LAND_DEMO_OK, "попробуй поменять число лучей");
-ed.classList.add("dwed");
-if (codeBox && codeBox.parentNode) codeBox.parentNode.replaceChild(ed, codeBox);
-
-ed.setCode(LAND_DEMO_OK);
-
-function прогон(){ landDemoRun(ed.getCode(), out); }
-var ждём = null;
-
-ed.onEdit = function(){
-hint.textContent = "это твой код — он рисует по-настоящему";
-brkBtn.textContent = "↩ Вернуть рабочий код";
-if (ждём) clearTimeout(ждём);
-ждём = setTimeout(прогон, 400);
-};
-runBtn.onclick = прогон;
-brkBtn.onclick = function(){
-
-var сейчас = ed.getCode();
-var сломать = сейчас === LAND_DEMO_OK;
-ed.setCode(сломать ? LAND_DEMO_BAD : LAND_DEMO_OK);
-brkBtn.textContent = сломать ? "↩ Вернуть рабочий код" : "💥 А если ошибиться";
-hint.textContent = сломать
-? "убрали двоеточие в строке с for"
-: "поменяйте число в первой строке — рисунок станет другим";
-прогон();
-};
-
-landDemoRun(LAND_DEMO_OK, out);
-}
-
-var SWIPE_ROWS = ".bigs, .landgrid, .landnums";
-function landSwipeInit(root){
-(root || document).querySelectorAll(SWIPE_ROWS).forEach(function(row){
-if (row._swipe || row.children.length < 2) return;
-row._swipe = true;
-row.classList.add("swipe");
-
-var dots = document.createElement("div");
-dots.className = "swdots";
-for (var i = 0; i < row.children.length; i++) dots.appendChild(document.createElement("i"));
-row.parentNode.insertBefore(dots, row.nextSibling);
-var marks = dots.querySelectorAll("i");
-
-var mq = window.matchMedia ? window.matchMedia("(max-width:640px)") : null;
-
-var доля = row.classList.contains("landnums") ? "46%" : "86%";
-
-function paint(){
-var mid = row.scrollLeft + row.clientWidth / 2, best = 0, dist = 1e9;
-for (var k = 0; k < row.children.length; k++){
-var c = row.children[k], d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
-if (d < dist){ dist = d; best = k; }
-}
-marks.forEach(function(m, k){ m.classList.toggle("on", k === best); });
-}
-
-function apply(){
-var on = mq ? mq.matches : false;
-row.style.display        = on ? "flex" : "";
-row.style.overflowX      = on ? "auto" : "";
-row.style.scrollSnapType = on ? "x mandatory" : "";
-for (var k = 0; k < row.children.length; k++){
-var c = row.children[k];
-c.style.flex            = on ? "0 0 auto" : "";
-c.style.width           = on ? доля : "";
-c.style.scrollSnapAlign = on ? "center" : "";
-c.style.margin          = on ? "0" : "";
-}
-dots.hidden = !on;
-if (!on) row.scrollLeft = 0;
-paint();
-}
-
-row.addEventListener("scroll", function(){
-if (row._swT) return;
-row._swT = setTimeout(function(){ row._swT = null; paint(); }, 90);
+var ABOUT = KVSCREENS.about({
+app: app, esc: esc, plural: plural, hl: hl, HLRE: HLRE, errHTML: errHTML,
+animateTurtle: animateTurtle, makeEditor: makeEditor, certList: certList,
+enterScreen: enterScreen, refreshTop: refreshTop, trainCards: trainCards,
+screenWorlds: screenWorlds, screenRoles: screenRoles, screenProverka: screenProverka,
+openLesson: openLesson, openExamMap: openExamMap, examTally: examTally,
+serverOn: serverOn, myCode: myCode, doLogin: doLogin, becomeKid: becomeKid,
+isAdminDevice: isAdminDevice, isParentDevice: isParentDevice,
+S: function(){ return S; },
+newSession: function(v){ session = v; return v; }
 });
-
-marks.forEach(function(m, k){
-m.onclick = function(){
-var c = row.children[k];
-if (c) row.scrollTo({ left: c.offsetLeft - (row.clientWidth - c.offsetWidth) / 2 });
-};
-});
-apply();
-if (mq && mq.addEventListener) mq.addEventListener("change", apply);
-});
-}
-
-function wireReveal(root){
-var els = (root || document).querySelectorAll(".rv");
-if (typeof IntersectionObserver !== "function"){
-els.forEach(function(e){ e.classList.add("in"); });
-return;
-}
-var io = new IntersectionObserver(function(list){
-list.forEach(function(e){
-if (!e.isIntersecting) return;
-e.target.classList.add("in");
-io.unobserve(e.target);
-});
-}, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 });
-els.forEach(function(e){ io.observe(e); });
-}
-
-function landTabsHTML(items, cls, label){
-var h = '<div class="ltabs' + (cls ? " " + cls : "") + '" role="tablist">' +
-(label ? '<span class="ltlbl">' + label + '</span>' : "");
-items.forEach(function(t, i){
-h += '<button class="ltab' + (i ? "" : " on") + '" role="tab" data-lt="' + i + '"' +
-(t.vars ? ' style="' + t.vars + '"' : "") +
-' aria-selected="' + (i ? "false" : "true") + '">' + t.label + '</button>';
-});
-return h + '</div>';
-}
-
-function wireLandTabs(box, render){
-if (!box) return;
-var tabs = box.querySelectorAll(".ltab");
-tabs.forEach(function(b){
-b.onclick = function(){
-tabs.forEach(function(x){
-x.classList.remove("on");
-x.setAttribute("aria-selected", "false");
-});
-b.classList.add("on");
-b.setAttribute("aria-selected", "true");
-render(+b.getAttribute("data-lt"));
-};
-});
-render(0);
-}
-
-function landShowcase(){
-return (window.PROJECTS || []).filter(function(p){
-return p.kind !== "game" && p.world >= 1 && p.world <= 5 && p.steps && p.steps.length;
-}).sort(function(a, b){ return a.world - b.world; });
-}
-function landShowcaseHTML(){
-var list = landShowcase();
-if (!list.length) return "";
-
-return '<div class="showcase" id="showcase">' +
-landTabsHTML(list.map(function(p){
-var w = CURRICULUM.world(p.world);
-return { vars: landWorldVars(p.world),
-label: '<span class="lte">' + (w ? w.icon : p.emoji) + '</span>' +
-'<span class="ltt"><i>Мир ' + p.world + '</i><b>' +
-esc(w ? w.title : p.title) + '</b></span>' };
-}), "wld") +
-'<div id="worldinfo"></div>' +
-'<div class="showwin" id="showwin"></div></div>';
-}
-
-function landNums(code){
-var re = new RegExp(HLRE.source, "g"), m, out = [];
-while ((m = re.exec(code))){
-if (m[3] !== undefined && m[3] !== "")
-out.push({ start: m.index, end: m.index + m[0].length, val: m[0] });
-}
-return out;
-}
-function landLiveCode(code, nums){
-var html = "", last = 0;
-nums.forEach(function(n, i){
-html += hl(code.slice(last, n.start));
-var len = Math.max(3, n.val.length);
-html += '<input class="numin" type="text" inputmode="numeric" data-n="' + i +
-'" value="' + esc(n.val) + '" size="' + n.val.length + '" maxlength="' + len +
-'" aria-label="число в программе, можно поменять">';
-last = n.end;
-});
-return html + hl(code.slice(last));
-}
-
-function landShowcaseRender(i){
-var p = landShowcase()[i], box = document.getElementById("showwin");
-if (!p || !box) return;
-
-var info = document.getElementById("worldinfo");
-var w = CURRICULUM.world(p.world);
-if (info && w){
-var shown = w.lessons.slice(0, 4),
-rest  = w.lessons.length - shown.length,
-boss  = w.lessons.filter(function(l){ return l.boss; })[0];
-info.innerHTML = '<div class="landworld" style="' + landWorldVars(w.n) + '">' +
-'<span class="lwno">' + w.n + '</span>' +
-'<span class="lwico">' + w.icon + '</span>' +
-'<div class="lwbody"><div class="lwkick">Мир ' + w.n + ' · ' + w.lessons.length + ' ' +
-plural(w.lessons.length, "урок", "урока", "уроков") +
-(boss ? ' · босс: ' + esc(boss.title) : "") + '</div>' +
-'<b>' + esc(w.title) + '</b>' +
-'<p>' + esc(w.desc) + '</p>' +
-'<div class="lwlist">' +
-shown.map(function(l){ return '<span>' + esc(l.title) + '</span>'; }).join("") +
-(rest > 0 ? '<span class="more">и ещё ' + rest + '</span>' : "") +
-'</div></div></div>';
-}
-var code = p.steps[p.steps.length - 1].solution || "";
-var rows = code.split("\n").length;
-var nums = landNums(code);
-box.setAttribute("style", landWorldVars(p.world));
-
-box.innerHTML =
-'<div class="shhead"><span class="shico">' + p.emoji + '</span>' +
-'<div class="shttl"><div class="shkick">Мир ' + p.world + ' · проект в конце мира</div>' +
-'<b>' + esc(p.title) + '</b><p>' + esc(p.tagline || "") + '</p></div></div>' +
-
-'<div class="shbody">' +
-'<div class="shcol"><div class="shlbl">Код, который собрал ребёнок · ' + rows + ' ' +
-plural(rows, "строка", "строки", "строк") + '</div>' +
-
-'<div class="ldcode flow"><div class="dwcode"><pre><code>' + landLiveCode(code, nums) +
-'</code></pre></div></div></div>' +
-'<div class="shcol"><div class="shlbl">Что печатает программа</div>' +
-'<div class="ldout" id="shout" aria-live="polite"></div></div>' +
-'</div>' +
-
-'<div class="dwbar"><button class="dwbtn" id="shback" hidden>↺ Вернуть числа как были</button>' +
-'<span class="dwhint own">числа в коде можно менять прямо здесь — ' +
-'программа напечатает другое. Переключите мир наверху, и выполнится ' +
-'программа того проекта: это настоящий движок, а не записанный результат</span></div>';
-var out = box.querySelector(".ldout");
-var поля = [].slice.call(box.querySelectorAll(".numin"));
-var назад = box.querySelector("#shback");
-
-function собрать(){
-var res = "", last = 0;
-nums.forEach(function(n, k){
-var v = (поля[k] && поля[k].value || "").replace(/[^0-9]/g, "");
-res += code.slice(last, n.start) + (v === "" ? n.val : v);
-last = n.end;
-});
-return res + code.slice(last);
-}
-function тронуто(){ return поля.some(function(f, k){ return f.value !== nums[k].val; }); }
-var ждём = null;
-поля.forEach(function(f){
-f.oninput = function(){
-f.value = f.value.replace(/[^0-9]/g, "");
-f.size = Math.max(1, f.value.length);
-if (назад) назад.hidden = !тронуто();
-if (ждём) clearTimeout(ждём);
-ждём = setTimeout(function(){
-landRun(собрать(), out, true);
-
-out.classList.remove("ranew");
-void out.offsetWidth;               
-out.classList.add("ranew");
-}, 350);
-};
-});
-if (назад) назад.onclick = function(){
-поля.forEach(function(f, k){ f.value = nums[k].val; f.size = nums[k].val.length; });
-назад.hidden = true;
-landRun(code, out, true);
-};
-landRun(code, out, true);
-}
-
-var LAND_ROLES = [
-{ em:"👨‍👩‍👦", tab:"Родителю", how:"вход по коду ребёнка или по ссылке от учителя",
-win:"Кабинет · родитель",
-lede:"Ребёнок в кабинет не заходит и ничего в нём не меняет.",
-
-tiles:[
-["🟢","Сейчас","на каком уроке в эту минуту"],
-["📺","Его экран","только с его согласия"],
-["📅","Неделя","минуты, уроки, затыки"],
-["💬","Вопрос за ужином","по тому, что он делал"],
-["⏱","Занятие","20 / 30 / 45 минут"],
-["🗓","Расписание","дни и потолок дня"],
-["📝","Задание","выдать свои задачи"]
-] },
-{ em:"👨‍🏫", tab:"Репетитору и школе", how:"вход по паролю, «Кабинет репетитора»",
-win:"Кабинет · репетитор",
-demo:"Домашка, которую не спишешь: одна задача — у каждого свои числа. " +
-"Нажмите «другой ученик».",
-lede:"Всё, что у родителя, плюс группа и настройки обучения.",
-tiles:[
-["👥","Группа","у каждого свой код"],
-["📺","Живое занятие","с согласия ученика"],
-["📝","Домашка","у каждого свои числа"],
-["📊","Отчёты","по всем сразу"],
-["⚖️","Это не табель","кому позвонить, а не кто хуже"],
-["🔐","Имён на сервере нет","только код и результат"],
-
-["🔓","Снять замки","открыть все уроки"],
-["💾","Перенос файлом","когда сервера нет"],
-["☁️","Свой сервер","полчаса, одна функция"]
-] }
-];
-
-function lkTileHTML(t){
-return '<div class="lktile"><span class="lke">' + t[0] + '</span>' +
-'<b>' + esc(t[1]) + '</b><span>' + esc(t[2]) + '</span></div>';
-}
+var screenAbout = ABOUT.screenAbout, aboutCounts = ABOUT.aboutCounts,
+landNums = ABOUT.landNums, landLiveCode = ABOUT.landLiveCode,
+landSwipeInit = ABOUT.landSwipeInit, SWIPE_ROWS = ABOUT.SWIPE_ROWS,
+LAND_DEMO_OK = ABOUT.LAND_DEMO_OK, LAND_DEMO_BAD = ABOUT.LAND_DEMO_BAD,
+landDemoHTML = ABOUT.landDemoHTML, landDemoRun = ABOUT.landDemoRun,
+landWarmRender = ABOUT.landWarmRender, landWarms = ABOUT.landWarms;
 
 var ROOM_TABS = [["kids","👥 Ученики"], ["group","👨‍🏫 Группа"], ["admin","🔐 Панель"]];
 function roomNavHTML(cur){
@@ -40688,497 +41214,6 @@ if (k === "admin") return screenAdmin();
 return screenKids();
 };
 });
-}
-function lkMockHTML(title, tiles){
-return '<div class="lkmock"><div class="lkbar">' +
-'<span class="lkdots"><i></i><i></i><i></i></span><b>' + esc(title) + '</b>' +
-'<span class="tag">так это выглядит</span></div>' +
-'<div class="lkgrid">' + tiles.map(lkTileHTML).join("") + '</div></div>';
-}
-function landRolesHTML(){
-return '<div class="roles" id="roles">' +
-landTabsHTML(LAND_ROLES.map(function(r){
-return { label: '<span class="lte">' + r.em + '</span>' + r.tab };
-})) +
-'<div class="rolepane" id="rolepane"></div></div>';
-}
-function landRolesRender(i){
-var r = LAND_ROLES[i], box = document.getElementById("rolepane");
-if (!r || !box) return;
-box.innerHTML =
-'<div class="rolein' + (r.demo ? "" : " one") + '"><div class="roleleft">' +
-'<div class="rolehow">🔑 ' + esc(r.how) + '</div>' +
-'<p class="rolelede">' + r.lede + '</p>' +
-lkMockHTML(r.win, r.tiles) + '</div>' +
-
-(r.demo ? '<div class="roledemo"><div class="rdhead">' + r.demo + '</div>' +
-'<div id="hwdemo"></div></div>' : "") +
-'</div>';
-if (r.demo) landHwRender();
-}
-
-function landWorldVars(n){
-var i = ((n - 1) % 5) + 1;
-return '--wc:var(--w' + i + ');--wcbg:var(--w' + i + 'bg)';
-}
-
-var LAND_DRAW = [
-{ em:"⭐", name:"Звезда",
-code:'color("yellow")\nwidth(4)\nfor i in range(5):\n    forward(190)\n    right(144)\n' },
-{ em:"🌸", name:"Цветок",
-code:'color("pink")\nwidth(2)\nfor i in range(36):\n    for j in range(4):\n        forward(80)\n        right(90)\n    right(10)\n' },
-{ em:"🌈", name:"Радуга",
-code:'width(3)\ncvet = ["red", "orange", "yellow", "green", "cyan", "blue", "purple"]\nfor i in range(80):\n    color(cvet[i % 7])\n    forward(i * 2.6)\n    right(59)\n' }
-];
-function landDrawHTML(){
-return '<div class="ldlive" id="draw">' +
-landTabsHTML(LAND_DRAW.map(function(d){
-return { label: '<span class="lte">' + d.em + '</span>' + d.name };
-}), "ltsm", "Что рисуем:") +
-'<div class="drawwin"><canvas id="drawc" class="drawc"></canvas>' +
-'<div class="drawside"><div class="dwcode" id="drawcode"></div>' +
-'<button class="dwbtn go" id="drawgo">▶ Нарисовать заново</button>' +
-'<p class="livenote">Столько строк — и весь рисунок. Это одиннадцатый урок первого мира.</p>' +
-'</div></div></div>';
-}
-function landDrawRender(i){
-var d = LAND_DRAW[i], c = document.getElementById("drawc"),
-box = document.getElementById("drawcode"), go = document.getElementById("drawgo");
-if (!d || !c || !box) return;
-box.innerHTML = landCodeHTML(d.code.replace(/\n$/, ""));
-function run(){
-var eng = Runtime.get("mini"), t = eng.newTurtle ? eng.newTurtle() : null;
-if (!t) return;
-eng.run(d.code, { turtle:t });
-animateTurtle(c, t);
-}
-if (go) go.onclick = run;
-run();
-}
-
-var LAND_WARM_IDS = ["predict-strings", "predict-loop", "predict-order"];
-function landWarms(){
-var by = {};
-(window.WARMUPS || []).forEach(function(w){ by[w.id] = w; });
-return LAND_WARM_IDS.map(function(id){ return by[id]; }).filter(Boolean);
-}
-function landWarmHTML(){
-var list = landWarms();
-if (!list.length) return "";
-return '<div class="ldlive" id="warm">' +
-landTabsHTML(list.map(function(w, i){
-return { label: '<span class="lte">' + w.emoji + '</span>' + "Задача " + (i + 1) };
-}), "ltsm", "Разминка:") +
-'<div class="warmwin" id="warmwin"></div></div>';
-}
-function landWarmRender(i){
-var w = landWarms()[i], box = document.getElementById("warmwin");
-if (!w || !box) return;
-var want = ((Runtime.get("mini").run(w.code, {}) || {}).output || "").replace(/\n+$/, "");
-
-box.innerHTML =
-'<div class="warmask">' +
-'<div class="warmcode"><div class="warmlbl">Программа</div>' +
-'<div class="dwcode">' + landCodeHTML(w.code.replace(/\n$/, "")) + '</div></div>' +
-'<div class="warmans"><label for="warmin">Что напечатает программа?</label>' +
-'<textarea id="warmin" rows="' + Math.max(2, want.split("\n").length) + '" spellcheck="false" ' +
-'placeholder="по строке на каждый print"></textarea>' +
-'<div class="dwbar"><button class="dwbtn go" id="warmgo">✓ Проверить</button>' +
-'<button class="dwbtn" id="warmshow">Показать ответ</button></div>' +
-'<div class="warmres" id="warmres" aria-live="polite"></div></div></div>';
-var ta = box.querySelector("#warmin"), res = box.querySelector("#warmres");
-function norm(s){
-return String(s || "").replace(/\r/g, "").split("\n")
-.map(function(l){ return l.trim(); }).join("\n").replace(/\n+$/, "");
-}
-box.querySelector("#warmgo").onclick = function(){
-var mine = norm(ta.value);
-if (!mine){ res.className = "warmres show warn"; res.textContent = "Сначала напиши ответ — хоть одну строку."; return; }
-if (mine === norm(want)){
-res.className = "warmres show ok";
-res.innerHTML = '<b>Сошлось ✓</b>' + esc(w.note || "");
-return;
-}
-
-res.className = "warmres show bad";
-res.innerHTML = '<b>Не сошлось</b>' +
-'<div class="warmdiff"><div><i>у тебя</i><pre>' + esc(mine) + '</pre></div>' +
-'<div><i>а печатает</i><pre>' + esc(want) + '</pre></div></div>' +
-'<span class="warmwhy">' + esc(w.note || "") + '</span>';
-};
-box.querySelector("#warmshow").onclick = function(){
-ta.value = want;
-res.className = "warmres show ok";
-res.innerHTML = '<b>Вот что печатает программа</b>' + esc(w.note || "");
-};
-}
-
-var landHwSeed = 1;
-function landHwRender(){
-var box = document.getElementById("hwdemo");
-if (!box || !window.HW) return;
-var item = HW.byId("hw-konfety") || (window.HOMEWORK || [])[0];
-if (!item) return;
-var b = HW.build(item, landHwSeed, function(code){ return Runtime.get("mini").run(code, {}); });
-if (!b || b.error) return;
-box.innerHTML =
-'<div class="hwtop"><span class="hwem">' + item.emoji + '</span>' +
-'<div><b>' + esc(b.title) + '</b><i>ученик №' + landHwSeed + '</i></div>' +
-'<button class="dwbtn" id="hwnext">🎲 Другой ученик</button></div>' +
-'<p class="hwgoal">' + esc(b.goal) + '</p>' +
-'<div class="hwans"><i>правильный ответ движок уже посчитал</i><pre>' +
-esc(b.lines.join("\n")) + '</pre></div>';
-box.querySelector("#hwnext").onclick = function(){ landHwSeed++; landHwRender(); };
-}
-
-var landAuthMode = "start";
-function landAuthHTML(){
-if (landAuthMode !== "code")
-return '<div class="landcta"><button class="bigbtn" data-auth="try">Начать первый урок →</button></div>' +
-
-'<p class="ldalt">Имя спросим после первой задачи' +
-
-(serverOn() ? ' · Уже занимались? <button class="linkjump" data-auth="code">Войти по коду</button>' : '') +
-'</p>';
-return '<div class="ldauthrow">' +
-'<input type="text" id="ldcode" autocomplete="off" spellcheck="false" maxlength="32"' +
-' aria-label="Код ученика" placeholder="например, sova-3f7a2">' +
-'<button class="bigbtn" data-auth="go">Войти →</button>' +
-'</div><div class="msg" id="ldmsg"></div>' +
-'<p class="ldalt">Кода нет? <button class="linkjump" data-auth="start">Начать первый урок без него</button></p>';
-}
-function landAuthRender(focus){
-var box = document.getElementById("ldauth");
-if (!box) return;
-box.innerHTML = landAuthHTML();
-var inp = document.getElementById("ldcode");
-function fail(err){
-var m = document.getElementById("ldmsg");
-if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
-if (inp && inp.focus) inp.focus();
-}
-function go(){
-
-becomeKid();
-doLogin(inp.value, fail);
-}
-box.querySelectorAll("[data-auth]").forEach(function(b){
-b.onclick = function(){
-var k = b.getAttribute("data-auth");
-if (k === "go") return go();
-if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-landAuthMode = k;
-landAuthRender(true);
-};
-});
-if (inp){
-inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
-if (focus && inp.focus) inp.focus();
-}
-}
-function secHead(kick, title, lede){
-return '<div class="secthead"><div class="sechl"><span class="seckick">' + kick + '</span>' +
-'<h2>' + title + '</h2></div><p class="lede">' + lede + '</p></div>';
-}
-
-function screenAbout(){
-enterScreen("home", "about");
-session = { id:null, attempts:0, hints:0, shown:false };
-var c = aboutCounts();
-
-var started = Object.keys(S.stars).length;
-
-var known = !!(myCode() || S.name || isAdminDevice() || isParentDevice());
-
-var h = '<div class="land">';
-
-var nums = [
-[c.lessons,  plural(c.lessons,  "урок", "урока", "уроков"),            "по порядку"],
-[c.worlds,   plural(c.worlds,   "мир", "мира", "миров"),               "по 20 уроков"],
-[c.projects, plural(c.projects, "проект", "проекта", "проектов"),      "большая программа"],
-[c.algo,     plural(c.algo,     "задача", "задачи", "задач"),
-"алгоритмы · ОГЭ " + c.oge + " · ЕГЭ " + c.ege],
-[c.warm,     plural(c.warm,     "разминка", "разминки", "разминок"),   "на пять минут"],
-[c.ai,       plural(c.ai,       "упражнение", "упражнения", "упражнений"), "принять работу ИИ"],
-[c.games,    plural(c.games,    "игра", "игры", "игр"),                "и у каждой виден код"],
-[c.cheat,    plural(c.cheat,    "команда", "команды", "команд"),       "шпаргалка поверх урока"]
-];
-var numsHTML = '<div class="landnums">' + nums.map(function(n){
-return '<div class="landnum"><b>' + n[0] + '</b><span>' + n[1] + '</span>' +
-'<i>' + esc(n[2]) + '</i></div>';
-}).join("") + '</div>';
-
-h += '<section class="landhero rv">' +
-'<div class="lhaur" aria-hidden="true"></div>' +
-'<div class="lhin"><div class="lhtext">' +
-'<div class="landkick"><i></i>информатика · 5–11 класс · ОГЭ и ЕГЭ</div>' +
-
-'<h1>Информатика, <span class="hlite">которую видно</span></h1>' +
-
-'<p class="landlede">Ребёнок пишет код сам — а вы видите это без аккаунтов, звонков и рассрочек.</p>' +
-(started || known
-? '<div class="landcta">' +
-'<button class="bigbtn" data-land="on">' +
-(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
-'<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
-'</div>'
-: '<div class="ldauth" id="ldauth"></div>') +
-
-'<ul class="landtrust">' +
-'<li>🆓 Сейчас бесплатно</li>' +
-'<li>⚡ Ничего не устанавливать</li>' +
-'<li>✈️ Работает без интернета</li>' +
-'<li>🔐 Ни почты, ни телефона</li>' +
-'</ul>' +
-
-'<div class="landroles"><span>Кто вы:</span>' +
-'<button class="rolepill" data-land="' + (started || known ? "on" : "try") + '">Я ученик</button>' +
-'<button class="rolepill" data-land="parent">Я родитель</button>' +
-'<a class="rolepill" href="repetitoru/">Я репетитор или учитель</a>' +
-'</div>' +
-numsHTML +
-'</div><div class="lhdemo">' + landDemoHTML() + '</div></div>' +
-'</section>';
-
-var exE = examTally("ege"), exO = examTally("oge");
-if (exE && exO){
-h += '<div class="landsect rv" id="exams">' +
-secHead("ЕГЭ и ОГЭ", "Экзамен целиком, а не «немного алгоритмов»",
-"Все задания обоих экзаменов по номерам. Против каждого честно написано, " +
-"что у нас есть, а чего нет и почему.") +
-'<div class="exlanding">' +
-'<div class="exlbig"><span class="exlnum">' + exE.есть + ' / ' + exE.total + '</span>' +
-'<b>заданий ЕГЭ закрыто задачами</b>' +
-'<span class="dim">нумерация демоверсии ' + exE.year + ' года</span></div>' +
-'<div class="exlbig"><span class="exlnum">' + exO.есть + ' / ' + exO.total + '</span>' +
-'<b>заданий ОГЭ закрыто задачами</b>' +
-'<span class="dim">включая «Робота» с русскими командами</span></div>' +
-'</div>' +
-'<ul class="exllist">' +
-'<li><b>Карта экзамена по номерам.</b> Не «темы вообще», а список всех ' +
-exE.total + ' заданий ЕГЭ и ' + exO.total + ' ОГЭ: где у нас есть задачи, ' +
-'где ещё нет, а где не будет никогда — и почему.</li>' +
-'<li><b>Пробный вариант целиком.</b> Весь экзамен подряд, по одной задаче на ' +
-'номер, как в мае. В конце — сколько номеров закрыто и на каких просело.</li>' +
-
-'<li><b>И режим экзамена.</b> То же самое, но со временем, без подсказок и ' +
-'без ответа проверки: она записывает ответ, а верно или нет — видно только ' +
-'в итоге. Как в мае, где тоже никто не говорит «неверно, попробуй ещё».</li>' +
-'<li><b>Исполнитель «Робот» с русскими командами.</b> Это второе задание ОГЭ ' +
-'по выбору — то самое, где в школе дают КуМир и где Python не примут.</li>' +
-
-'<li><b>Баллов мы не считаем.</b> Шкала перевода меняется каждый год и ' +
-'объявляется не нами. Показываем проверяемое: какие номера закрыты, а какие нет.</li>' +
-'</ul>' +
-'<div class="landcta"><button class="bigbtn" data-land="exams">Открыть карту экзамена →</button></div>' +
-'</div>';
-}
-
-h += '<div class="landsect rv">' +
-secHead("Весь сайт", "Подробнее — на сайте Фионики",
-"Три двери — репетитору, семейному обучению, индивидуальному проекту: " +
-"чем отличается от соседей, где границы и сколько стоит.") +
-'<div class="landcta"><a class="bigbtn" href="vitrina/">Открыть сайт Фионики →</a></div>' +
-'</div>';
-
-h += '<div class="landsect rv">' +
-secHead("Изнутри", "Как это работает",
-"Урок — 15–20 минут на одной странице. Две средние вкладки можно потрогать прямо сейчас.") +
-landTabsHTML([
-{ label:'<span class="lte">📘</span>Как проходит урок' },
-{ label:'<span class="lte">🐢</span>Код рисует' },
-{ label:'<span class="lte">🔮</span>Угадай вывод' },
-{ label:'<span class="lte">🧭</span>Не только Python' }
-], "how") +
-'<div class="ldpane" id="howpane"></div></div>';
-
-h += '<div class="landsect rv" id="adults">' +
-secHead("Кабинет взрослого", "Вот ваш кабинет",
-"Выберите, кто вы, — покажем только ваши плитки.") +
-landRolesHTML() + '</div>';
-
-var showc = landShowcaseHTML();
-if (showc){
-h += '<div class="landsect rv">' +
-secHead("Курс целиком", "Программа: " + c.worlds + " " +
-plural(c.worlds, "мир", "мира", "миров") + ", " + c.lessons + " " +
-plural(c.lessons, "урок", "урока", "уроков"),
-"В конце каждого мира — босс, проект и сертификат. Выберите мир: программа " +
-"под ним выполняется прямо здесь.") +
-showc + '</div>';
-}
-
-h += '<div class="landsect rv">' +
-secHead("Кроме уроков", "Между делом и на память",
-"Слева — куда заходят по настроению. Справа — что остаётся на руках.") +
-landTabsHTML([
-{ label:'<span class="lte">🎯</span>Когда на урок нет сил' },
-{ label:'<span class="lte">🎒</span>Что остаётся на руках' }
-], "how") +
-'<div class="ldpane" id="elsepane"></div></div>';
-
-h += '<section class="landend rv"><div class="lhaur" aria-hidden="true"></div>' +
-'<div class="endin"><div class="endleft">' +
-'<span class="seckick">Чего здесь нет</span><h2>Честно про границы</h2>' +
-
-'<ul class="landhonest">' +
-'<li><b>Язык один — Python.</b> Ни Scratch, ни JavaScript.</li>' +
-'<li><b>Из экзамена — то, что решается программой.</b> ' +
-c.oge + ' в формате ОГЭ, ' + c.ege + ' в формате ЕГЭ, плюс кодирование, ' +
-'логика и графы. Электронные таблицы не проверить: наш судья запускает ' +
-'Python, а не считает формулы.</li>' +
-'<li><b>Оценок и живого учителя тут нет.</b> Проверяет программа. ' +
-'Если учитель или репетитор у ребёнка есть — здесь у него своё рабочее место.</li>' +
-
-'<li><b>Аккаунта нет — есть код ученика.</b> По нему прогресс открывается ' +
-'на любом устройстве, но и восстановить его нечем: ни почты, ни телефона ' +
-'мы не спрашиваем — и не будем. Поэтому тренажёр сам напоминает записать код ' +
-'после первого урока и печатает карточку доступа; у репетитора и родителя ' +
-'код тоже есть.</li>' +
-'</ul></div>' +
-'<div class="endright"><span class="seckick">Вход</span><h2>С чего начать</h2>' +
-'<p class="lede">Сначала урок, имя — после первой задачи. Ни почты, ни телефона.</p>' +
-
-'<div class="landcta">' +
-(started || known
-? '<button class="bigbtn" data-land="on">' +
-(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
-'<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
-: '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
-'</div>' +
-'<p class="landsub"><b>Сегодня доступ бесплатный.</b> Не акция и не пробный период: ' +
-'оплаты в продукте нет вовсе. Появится — будет написано здесь же.</p></div></div></section>';
-
-h += '</div>';
-app.innerHTML = h;
-
-app.querySelectorAll("[data-land]").forEach(function(b){
-b.onclick = function(){
-var k = b.getAttribute("data-land");
-if (k === "on") return screenWorlds();
-if (k === "try") return openLesson(CURRICULUM[0].lessons[0].id);
-if (k === "parent") return screenProverka();
-
-if (k === "exams") return openExamMap("ege");
-screenRoles();
-};
-});
-landAuthRender();
-wireLandDemo();
-wireLandTabs(app.querySelector(".ltabs.how"), landHowRender);
-wireLandTabs(app.querySelectorAll(".ltabs.how")[1], landElseRender);
-wireLandTabs(document.getElementById("showcase"), landShowcaseRender);
-wireLandTabs(document.getElementById("roles"), landRolesRender);
-
-landSwipeInit(app);
-wireReveal(app);
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function landHowRender(i){
-var box = document.getElementById("howpane");
-if (!box) return;
-var c = aboutCounts();
-if (i === 0){
-box.innerHTML =
-
-'<ol class="landsteps">' +
-'<li><b>Читаешь объяснение</b><span>У каждого примера — кнопка «▶ Запустить».</span></li>' +
-'<li><b>Решаешь задачу</b><span>Задача — список требований, а не одна фраза.</span></li>' +
-'<li><b>Запускаешь свой код</b><span>Сколько угодно раз. Видно, что сделала каждая строка.</span></li>' +
-'<li><b>Жмёшь «✓ Проверить»</b><span>Не сошлось — покажет, чем отличается. Подсказки по шагам.</span></li>' +
-'</ol>' +
-
-'<div class="instep"><div class="instepl">И ещё две кнопки прямо в уроке</div>' +
-'<ul class="rolelist">' +
-'<li><span class="rlem">💬</span><span class="rltx"><b>Спроси</b> — «Что тут нового?», ' +
-'«Что надо сделать?», «Почему ошибка?», «Покажи пример». Отвечает про этот урок ' +
-'и решить за ребёнка не может.</span></li>' +
-'<li><span class="rlem">🧹</span><span class="rltx"><b>Ревью кода</b> — программа уже ' +
-'работает, а тренажёр говорит, как написать чище. Звёзд за это не отнимает.</span></li>' +
-'</ul></div>' +
-'<div class="note"><b>Ошибка здесь — не ругань</b>Красный текст Python переведён на ' +
-'русский: в какой строке и что не сошлось. А визуализатор пройдёт программу по шагам ' +
-'и покажет, что лежит в памяти.</div>';
-return;
-}
-if (i === 1){
-box.innerHTML = landDrawHTML();
-wireLandTabs(document.getElementById("draw"), landDrawRender);
-return;
-}
-if (i === 2){
-box.innerHTML = landWarmHTML() ||
-'<p class="dim">Разминки не загрузились.</p>';
-wireLandTabs(document.getElementById("warm"), landWarmRender);
-return;
-}
-box.innerHTML =
-'<div class="landgrid g3">' +
-'<div class="landcard dir" style="' + landWorldVars(3) + '">' +
-'<span class="lcem">🧮</span><b>Алгоритмы и экзамены</b>' +
-'<p>Поиск, сортировка, системы счисления, логика, графы. <b>' + c.oge +
-'</b> в формате ОГЭ и <b>' + c.ege + '</b> в формате ЕГЭ. Есть и <b>пробный вариант ' +
-'целиком</b>: по одной задаче на каждый номер, по порядку — как в мае. Цену алгоритма ' +
-'тут не рассказывают, а считают шагами: «837 против 11» видно числом.</p></div>' +
-'<div class="landcard dir" style="' + landWorldVars(4) + '">' +
-'<span class="lcem">🤖</span><b>Ты и ИИ</b>' +
-'<p><b>' + c.ai + '</b> ' + plural(c.ai, "упражнение", "упражнения", "упражнений") +
-' не про то, как попросить нейросеть, а про то, как принять её работу: найти, где она ' +
-'уверенно врёт.</p></div>' +
-'<div class="landcard dir" style="' + landWorldVars(5) + '">' +
-'<span class="lcem">🏗</span><b>Проекты</b>' +
-'<p><b>' + c.projects + '</b> больших ' + plural(c.projects, "программы", "программы", "программ") +
-': карточка героя, турнирная таблица, чёрный ящик, свой сайт, игра. Собранное ' +
-'остаётся у ребёнка.</p></div>' +
-'</div>' +
-
-'<div class="note"><b>Про экзамены — без обещаний, которых мы не сдержим</b>' +
-'Закрываем то, что решается программой. Электронные таблицы — нет, их нечем проверить. ' +
-'Номера заданий стоят только на картах экзаменов и в пробном варианте, и рядом с ними — ' +
-'год, с которого нумерация снята: между годами она меняется. Баллы не считаем вовсе: ' +
-'шкала перевода меняется каждый год и объявляется не нами.</div>';
-}
-
-function landElseRender(i){
-var box = document.getElementById("elsepane"), c = aboutCounts();
-if (!box) return;
-
-setTimeout(function(){ landSwipeInit(box); }, 0);
-if (i === 0){
-var h = '<div class="landgrid g4">';
-
-trainCards().filter(function(t){ return t.id !== "ai" && t.id !== "algo"; }).forEach(function(t){
-h += '<div class="landcard"><span class="lcem">' + t.em + '</span>' +
-'<b>' + esc(t.title) + '</b><p>' + esc(t.why) + '</p></div>';
-});
-
-box.innerHTML = h + '</div>' +
-'<p class="ldpanefoot">Каждый день — одна маленькая разминка из уже пройденного. ' +
-'Звёзд не дают, но день занятий засчитывается.</p>';
-return;
-}
-box.innerHTML = '<div class="landgrid g3">' +
-'<div class="landcard"><span class="lcem">🎒</span><b>Портфолио и сертификаты</b>' +
-'<p>Все собранные программы в одном месте и <b>' + c.certs + '</b> ' +
-plural(c.certs, "сертификат", "сертификата", "сертификатов") +
-'. Печатаются на бумагу или в PDF.</p></div>' +
-'<div class="landcard"><span class="lcem">🖼</span><b>Рисунки и файлы .py</b>' +
-'<p>Рисунки черепашки уезжают в галерею. Любую программу можно выгрузить настоящим ' +
-'файлом .py.</p></div>' +
-'<div class="landcard"><span class="lcem">✍️</span><b>Своё задание</b>' +
-'<p>Ребёнок придумывает задачу, движок считает ответ, задание уезжает ссылкой другу ' +
-'или взрослому.</p></div>' +
-'<div class="landcard"><span class="lcem">🎮</span><b>Своя игра по ссылке</b>' +
-'<p>Собранную игру отправляют одной ссылкой. Играется сразу в браузере, код видно.</p></div>' +
-'<div class="landcard"><span class="lcem">🧰</span><b>Мастерская</b>' +
-'<p>Куски своих программ ложатся на полку деталей, а на верстаке из них собирается ' +
-'новая.</p></div>' +
-'<div class="landcard"><span class="lcem">🔁</span><b>Повторить</b>' +
-'<p>Тяжёлые уроки возвращаются сами через несколько дней. Рядом — бестиарий ' +
-'побеждённых ошибок.</p></div>' +
-'</div>';
 }
 
 function screenRoles(){

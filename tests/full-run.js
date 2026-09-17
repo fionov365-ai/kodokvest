@@ -4795,6 +4795,24 @@ function checkEncoding(){
       if (sw.indexOf('"./' + u + '"') < 0)
         bad(`[PWA] файл ${u} страница грузит, а в кэше sw.js его нет — офлайн сломается`);
     });
+    /* ⚠️ И обратное: всё, что кладёт в однофайловую сборку build.js, обязана
+       грузить и сама страница, раньше app.js. Тест гоняет dist, поэтому
+       файл, забытый в index.html, давал зелёный прогон при мёртвом сайте
+       (нарочная поломка разреза вывески, 17.09.2026, 1.187.0). */
+    {
+      const bsrc = readRoot("build.js");
+      const bm = /const scripts = \[([\s\S]*?)\];/.exec(bsrc);
+      const inBuild = bm ? (bm[1].match(/"[^"]+"/g) || []).map(s => s.slice(1, -1)) : [];
+      if (inBuild.length < 20) bad("[PWA] не прочёл список файлов сборки в build.js: " + inBuild.length);
+      /* порядок модулей между собой не важен (они только регистрируются в
+         KVSCREENS), важно одно: все они грузятся РАНЬШЕ app.js */
+      const appAt = need.indexOf("js/app.js");
+      inBuild.forEach(u => {
+        const at = need.indexOf(u);
+        if (at < 0) bad(`[PWA] файл ${u} есть в сборке, а index.html его не грузит — сайт сломается`);
+        else if (appAt >= 0 && at > appAt) bad(`[PWA] файл ${u} index.html грузит ПОСЛЕ app.js — договор модуля не найдётся`);
+      });
+    }
     /* и наоборот: в кэше не должно быть того, чего нет на диске */
     const shell = [];
     sw.replace(/"\.\/([^"]*)"/g, (m, u) => { shell.push(u); return m; });
@@ -10365,6 +10383,69 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- [двери-вывеска] дороги на вывеску жмутся, а не только рисуются ---
+     ⚠️ Родилась из разреза вывески 17.09.2026 (1.187.0, § 4.55). screenAbout
+     уехал в js/screens-about.js и в app.js стал ПЕРЕМЕННОЙ, которая
+     присваивается при загрузке в середине файла. Профиль (js/account.js)
+     брал его значением раньше этого места — и получил бы undefined: кнопка
+     «О тренажёре» есть, а нажатие не делает ничего. Проверка «кнопка без
+     обработчика» такое не видит (§ 4.55, дополнение), поэтому здесь каждую
+     дверь жмут и смотрят, куда привела (g.place()). */
+  let aboutdoorsChecked = 0;
+  if (typeof g.screenAbout === "function" && typeof g.screenAccount === "function"){
+    const p0 = problems.length;
+    const onAbout = (where) => { if (g.place() !== "about") bad("[двери-вывеска] " + where + " не открыла вывеску: " + g.place()); };
+
+    /* 1) профиль → «О тренажёре» */
+    g.screenAccount(); await tick();
+    const ga = doc.getElementById("goabout");
+    if (!ga) bad("[двери-вывеска] в профиле нет кнопки «О тренажёре»");
+    else { ga.click(); await tick(); onAbout("кнопка «О тренажёре» в профиле"); }
+
+    /* 2) подвал Главного → «О тренажёре» */
+    g.screenWorlds(); await tick();
+    const fa = doc.querySelector("[data-goabout]");
+    if (!fa) bad("[двери-вывеска] на Главном нет подвала «О тренажёре»");
+    else { fa.click(); await tick(); onAbout("подвал Главного"); }
+
+    /* 3) окно помощи → «О тренажёре» */
+    g.screenWorlds(); await tick();
+    g.openHelp(); await tick();
+    const ha = doc.getElementById("help-about");
+    if (!ha) bad("[двери-вывеска] в окне помощи нет «О тренажёре»");
+    else { ha.click(); await tick(); onAbout("«О тренажёре» в окне помощи"); }
+    g.closeHelp();
+
+    /* 4) выбор ролей на ничьём устройстве → «Назад: О тренажёре».
+          Кнопка рисуется только гостю — без кода, имени и роли. */
+    const кодБыл = w.Cloud.myCode(), имяБыло = g.state.name;
+    const админБыл = g.state.admin.isAdmin, родительБыл = g.state.admin.parentOf;
+    w.Cloud.forgetCode(); g.state.name = "";
+    g.state.admin.isAdmin = false; g.state.admin.parentOf = null;
+    g.screenRoles(); await tick();
+    const bb = doc.getElementById("btn-back");
+    if (!bb || bb.hidden || !/О тренажёре/.test(bb.textContent)) bad("[двери-вывеска] на выборе ролей у гостя нет «Назад: О тренажёре»");
+    else { bb.click(); await tick(); onAbout("«Назад» с выбора ролей"); }
+    if (кодБыл) w.Cloud.setCode(кодБыл); else w.Cloud.forgetCode();
+    g.state.name = имяБыло;
+    g.state.admin.isAdmin = админБыл; g.state.admin.parentOf = родительБыл;
+
+    /* 5) вывеска гасит сессию урока: иначе трансляция взрослому и «Назад»
+          продолжали бы жить уроком, с которого ушли (нарочная поломка
+          newSession прошла зелёной, 17.09.2026) */
+    g.openLesson(CUR[0].lessons[0].id); await tick();
+    if (!g.getSession() || g.getSession().id !== CUR[0].lessons[0].id)
+      bad("[двери-вывеска] первый урок не открылся — сессию проверить не на чем");
+    else {
+      g.screenAbout(); await tick();
+      const ses = g.getSession();
+      if (!ses || ses.id !== null || ses.studio) bad("[двери-вывеска] вывеска не сбросила сессию урока, с которого ушли");
+    }
+
+    if (problems.length === p0) aboutdoorsChecked++;
+    viewReset(g);
+  }
+
   /* --- 12бис. одно имя — одна функция ---
      ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
      workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
@@ -11415,7 +11496,10 @@ function checkEncoding(){
     const pm = /вида <code>([^<]+)<\/code>/.exec(policy);
     if (!pm || !/^[a-z]+-[a-z0-9]{5}$/.test(pm[1]) || /anya/.test(pm[1]))
       bad("[лицензия] политика показывает код ученика не нынешнего вида (слово-5знаков, без имени): " + (pm && pm[1]));
-    const land = texts.find(([f]) => f === "js/app.js")[1];
+    /* ⚠️ С 1.187.0 вывеска живёт в js/screens-about.js — без неё сторож ослеп бы */
+    const landFile = texts.find(([f]) => f === "js/screens-about.js");
+    if (!landFile) bad("[38-фз] проверка текстов не прочла вывеску (js/screens-about.js)");
+    const land = texts.find(([f]) => f === "js/app.js")[1] + "\n" + (landFile ? landFile[1] : "");
     const freeLines = land.split("\n").filter(l => /бесплатн/i.test(l) && /['"]/.test(l) && /(Сейчас|Сегодня)/.test(l) === false && /доступ|🆓/.test(l));
     if (freeLines.length) bad("[38-фз] «бесплатно» на вывеске без «сейчас»/«сегодня»: " + freeLines[0].trim().slice(0, 120));
   }
@@ -12556,6 +12640,7 @@ function checkEncoding(){
   console.log(`выпускной мира: ${gradChecked ? "да" : "нет"}`);
   console.log(`свой проект с именем: ${workChecked ? "да" : "нет"}`);
   console.log(`двери в «Моё» и из него жмутся: ${foldoorsChecked ? "да" : "нет"}`);
+  console.log(`двери на вывеску жмутся: ${aboutdoorsChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
