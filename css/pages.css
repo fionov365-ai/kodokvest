@@ -252,6 +252,21 @@ html{scroll-behavior:smooth}
 .shot{margin:0; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px}
 .shot img{display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line)}
 .shot figcaption{color:var(--dim); font-size:15px; margin-top:8px}
+/* Снимок — дверь в этот самый экран (18.09.2026). Картинка, которую нельзя
+   открыть, остаётся украшением; со ссылкой она короткая дорога внутрь. */
+.shot a{display:block; text-decoration:none; color:inherit}
+.shot a:hover img{border-color:var(--accent)}
+.shot .open{color:var(--accent); white-space:nowrap}
+
+/* «Наверх» в подвале: на телефоне шапка не липкая (см. выше), и после
+   длинной страницы дорога к меню — одно нажатие, а не долгая прокрутка. */
+.up{margin:14px 0 0}
+.up a{color:var(--dim); text-decoration:none; font-size:15px}
+.up a:hover{color:var(--ink)}
+
+/* Где человек сейчас — видно в самом меню. Без этого все семь пунктов
+   выглядят одинаково, и открытая страница ничем не отличается от закрытой. */
+.top nav a[aria-current="page"]{color:var(--ink); background:var(--bg); font-weight:600}
 
 /* Надзаголовок первого экрана: класс и экзамен одной строкой, как на
    вывеске приложения, — родитель с порога видит, для кого это. */
