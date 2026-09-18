@@ -10446,6 +10446,86 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- [двери-экзамен] дороги в экраны экзамена и из них жмутся ---
+     ⚠️ Родилась из разреза экранов экзамена 17.09.2026 (1.188.0, § 4.55).
+     Из тринадцати нарочных поломок прогон поймал три. Зелёными прошли:
+     двери, взятые ЗНАЧЕНИЕМ до договора (Главное → карта, Робот, вариант и
+     визуализатор из карты и задачи), мёртвый адрес #myexam, дверь «К
+     экзаменам» на вывеске, «Защита своего кода» без источников из «Моих
+     программ» — и три экрана, переставшие сбрасывать сессию (задача,
+     список тем, своя программа). Здесь каждая дверь жмётся, а после
+     каждого экрана смотрится, куда привело и чья теперь сессия. */
+  let examdoorsChecked = 0;
+  if (typeof g.openExamMap === "function" && typeof g.openAlgo === "function"){
+    const p0 = problems.length;
+    const at = (want, where) => { if (g.place() !== want) bad("[двери-экзамен] " + where + " привела не туда: " + g.place() + " вместо " + want); };
+    const mapShown = (where) => { if (!doc.querySelector("[data-exvariant]")) bad("[двери-экзамен] " + where + " открыла не карту экзамена, а список тем"); };
+
+    /* 1) Главное → карточка ЕГЭ */
+    g.screenWorlds(); await tick();
+    const he = doc.querySelector('[data-exam="ege"]');
+    if (!he) bad("[двери-экзамен] на Главном нет карточки ЕГЭ");
+    else { he.click(); await tick(); at("algo", "карточка ЕГЭ на Главном"); mapShown("карточка ЕГЭ на Главном"); }
+
+    /* 2) вывеска → «К экзаменам» */
+    g.screenAbout(); await tick();
+    const le = doc.querySelector('[data-land="exams"]');
+    if (!le) bad("[двери-экзамен] на вывеске нет двери к экзаменам");
+    else { le.click(); await tick(); at("algo", "дверь к экзаменам на вывеске"); mapShown("дверь к экзаменам на вывеске"); }
+
+    /* 3) карта ОГЭ → Робот и → пробный вариант */
+    g.openExamMap("oge"); await tick();
+    const rb = doc.querySelector("[data-exrobot]");
+    if (!rb) bad("[двери-экзамен] на карте ОГЭ нет двери к Роботу");
+    else { rb.click(); await tick(); at("robot", "дверь к Роботу на карте ОГЭ"); }
+    g.openExamMap("oge"); await tick();
+    const variantWas = JSON.parse(JSON.stringify(g.state.variant || {}));
+    const vb = doc.querySelector("[data-exvariant]");
+    if (!vb) bad("[двери-экзамен] на карте ОГЭ нет двери к пробному варианту");
+    else { vb.click(); await tick(); at("variant", "дверь к варианту на карте ОГЭ"); }
+    /* вкладка варианта живёт в его модуле: вернуть ЕГЭ, как было до двери */
+    const vte = doc.querySelector('[data-vtab="ege"]');
+    if (vte) { vte.click(); await tick(); }
+    g.state.variant = variantWas;
+
+    /* 4) задача: своя сессия, «Разобрать» → визуализатор */
+    const x0 = g.algoList()[0];
+    g.openAlgo(x0.id); await tick();
+    const s1 = g.getSession();
+    if (!s1 || s1.id !== x0.id || !s1.algo || !s1.studio) bad("[двери-экзамен] задача не завела свою сессию: " + JSON.stringify(s1 && { id: s1.id, algo: s1.algo }));
+    const vz = doc.querySelector('#studio [data-role="viz"]');
+    if (!vz) bad("[двери-экзамен] в задаче нет «Разобрать»");
+    else { vz.click(); await tick(); at("viz", "«Разобрать» в задаче"); }
+
+    /* 5) список тем гасит сессию задачи */
+    g.openAlgo(x0.id); await tick();
+    g.openExamMap("all"); await tick();
+    const s2 = g.getSession();
+    if (!s2 || s2.id !== null || s2.algo) bad("[двери-экзамен] список тем не сбросил сессию задачи");
+
+    /* 6) адрес #myexam — своя программа, своя сессия */
+    g.openAlgo(x0.id); await tick();
+    const rm = g.ROUTE_BY_HASH["#myexam"];
+    if (!rm) bad("[двери-экзамен] нет адреса #myexam");
+    else {
+      rm.open(); await tick();
+      at("myexam", "адрес #myexam");
+      const s3 = g.getSession();
+      if (!s3 || !s3.myexam || s3.id !== null) bad("[двери-экзамен] «Задача по своей программе» не завела свою сессию");
+    }
+
+    /* 7) «Защита своего кода» берёт и «Мои программы» */
+    const worksWas = g.state.works;
+    g.state.works = {};
+    g.myWorkSave("Дверь экзамена", "", 'print("дверь экзамена")');
+    if (!g.zqSources().some(s => /дверь экзамена/.test(s.code)))
+      bad("[двери-экзамен] «Защита своего кода» не видит программу из «Моих программ»");
+    g.state.works = worksWas;
+
+    if (problems.length === p0) examdoorsChecked++;
+    viewReset(g);
+  }
+
   /* --- 12бис. одно имя — одна функция ---
      ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
      workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
@@ -12641,6 +12721,7 @@ function checkEncoding(){
   console.log(`свой проект с именем: ${workChecked ? "да" : "нет"}`);
   console.log(`двери в «Моё» и из него жмутся: ${foldoorsChecked ? "да" : "нет"}`);
   console.log(`двери на вывеску жмутся: ${aboutdoorsChecked ? "да" : "нет"}`);
+  console.log(`двери экзамена жмутся: ${examdoorsChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
@@ -12700,7 +12781,12 @@ function checkEncoding(){
   if (problems.length){
     console.log("\nПРОБЛЕМ: " + problems.length);
     problems.forEach(p => console.log("   " + p));
-  } else console.log("сквозная проверка пройдена");
+  }
+  /* ⚠️ Ошибка JavaScript — тоже провал, и слово «пройдена» при ней врёт:
+     17.09.2026 мёртвая дверь к Роботу печатала «Uncaught TypeError» и тут же
+     «сквозная проверка пройдена» (код выхода был верный, текст — нет). */
+  else if (jsErrors.length) console.log("\nсквозная проверка НЕ пройдена: ошибки JavaScript");
+  else console.log("сквозная проверка пройдена");
 
   process.exit(problems.length || jsErrors.length ? 1 : 0);
 })();

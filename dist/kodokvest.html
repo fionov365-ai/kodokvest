@@ -25788,6 +25788,606 @@ landWarmRender: landWarmRender, landWarms: landWarms
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.algo = function(A){
+
+var algoTab = "all";
+var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
+
+function examMapHTML(ex){
+var t = EXAMS.tally(ex, A.algoCountIn);
+var h = '<p class="lede">Все <b>' + ex.total + '</b> заданий ' + A.esc(ex.title) +
+' по номерам. Против каждого честно написано, что у нас есть, а чего нет.</p>' +
+'<p class="dim">Нумерация снята с демоверсии <b>' + ex.year + '</b> года и между ' +
+'годами меняется — сверяйтесь с демоверсией своего года. На экзамене принимают: ' +
+A.esc(ex.langs) + '.</p>' +
+'<div class="extally">' +
+'<span class="exok">✓ есть задачи: ' + t.yes + '</span>' +
+'<span class="expart">◐ наполовину: ' + t.part + '</span>' +
+'<span class="exsoon">◻ пока нет: ' + t.soon + '</span>' +
+'<span class="exno">— судить нечем: ' + t.no + '</span></div>' +
+'<div class="exmap">';
+ex.tasks.forEach(function(x){
+var st = EXAMS.state(x, A.algoCountIn);
+var right;
+if (st === "yes" && x.robot){
+var rxs = window.ROBOT_TASKS || [];
+right = '<span class="excnt">' + rxs.filter(function(r){ return A.algoDone(r.id); }).length +
+' из ' + rxs.length + '</span>' +
+'<button class="rbtn sec" data-exrobot="1">Решать</button>';
+} else if (st === "yes"){
+var n = A.algoCountIn(x.g), d = A.algoDoneIn(x.g);
+right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
+'<button class="rbtn sec" data-exgo="' + A.esc(x.g.join(",")) + '">Решать</button>';
+} else if (st === "part"){
+
+right = '<span class="excnt">' + A.algoDoneIn(x.g) + ' из ' + A.algoCountIn(x.g) + '</span>' +
+'<span class="exwhy">кроме: ' + A.esc(x.off) + '</span>' +
+'<button class="rbtn sec" data-exgo="' + A.esc(x.g.join(",")) + '">Решать</button>';
+} else if (st === "no"){
+
+right = '<span class="exwhy">судить нечем: ' + A.esc(x.off) + '</span>';
+} else {
+right = '<span class="exwhy">пока нет задач</span>';
+}
+h += '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
+'<span class="ext">' + A.esc(x.t) + '</span>' +
+'<span class="exact">' + right + '</span></div>';
+});
+h += '</div>' +
+
+'<div class="note"><b>Пройти весь экзамен подряд</b>' +
+'Карта показывает темы по номерам, а вариант собирает из них то, что бывает в мае: ' +
+'по одной задаче на каждый номер и по порядку. В конце видно, что закрыто, а что просело.' +
+'<div class="admrow"><button class="rbtn check" data-exvariant="' + A.esc(ex.id) + '">' +
+'📝 Собрать пробный вариант</button></div></div>' +
+(ex.id === "oge"
+? '<div class="note"><b>Задания 15 и 16 — оба обязательны</b>' +
+'15 — алгоритм для исполнителя «Робот», у него свой язык и свой раздел. 16 — обычная ' +
+'программа, она в темах выше. До 2025 года это было одно задание на выбор; теперь ' +
+'на экзамене есть оба, и за каждое до двух баллов.' +
+'<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
+: '') +
+'<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
+'Наш судья запускает программу и сверяет вывод. Создать презентацию, построить ' +
+'диаграмму, найти файл на диске или сходить в поисковик он не может, и обещать ' +
+'это мы не будем. Всё остальное решается программой — даже там, где на экзамене ' +
+'принято брать таблицу: мы даём те же данные текстом, а решение остаётся ' +
+'программой. Поэтому «пока нет задач» — это план работ, а не граница.</div>';
+return h;
+}
+function screenAlgo(){
+A.enterScreen("train", "algo");
+A.setAlgoBack(null);
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+var xs = A.algoList(), done = xs.filter(function(x){ return A.algoDone(x.id); }).length;
+
+var h = '<div class="lvlhead"><div><div class="idx">информатика: алгоритмы и экзамен</div>' +
+'<h1>🧮 Алгоритмы, ОГЭ и ЕГЭ</h1></div>' +
+'<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
+'<div class="roomnav extabs">' + ALGO_TABS.map(function(t){
+return '<button' + (t[0] === algoTab ? ' class="on"' : '') +
+' data-algotab="' + t[0] + '">' + t[1] + '</button>';
+}).join("") + '</div>';
+
+if (algoTab !== "all"){
+h += examMapHTML(EXAMS[algoTab]) +
+'<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+A.app.innerHTML = h;
+A.app.querySelectorAll("[data-algotab]").forEach(function(b){
+b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
+});
+
+A.app.querySelectorAll("[data-exrobot]").forEach(function(rb){
+rb.onclick = function(){ A.screenRobot(); };
+});
+var vb = A.app.querySelector("[data-exvariant]");
+if (vb) vb.onclick = function(){ A.variantOpenFor(vb.getAttribute("data-exvariant")); };
+A.app.querySelectorAll("[data-exgo]").forEach(function(b){
+b.onclick = function(){
+var t = A.algoNextIn(b.getAttribute("data-exgo").split(","));
+if (t) openAlgo(t.id);
+};
+});
+document.getElementById("tomap").onclick = A.screenTrain;
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+return;
+}
+
+h += '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
+'сортировка, цена алгоритма, кодирование информации, логика, графы, исполнители, ' +
+'рекурсия и перебор — и типовые задания экзамена. Заходить можно с любого места курса — ' +
+'всё, что нужно, объясняется прямо в задании.</p>';
+
+h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
+'<li><b>Закрываем ту часть, где надо написать программу</b> (в кодификаторе — КЭС 3.2) ' +
+'и алгоритмику. Каркас заданий снят с открытого банка ФИПИ: формулировки наши, структура их.</li>' +
+'<li><b>Не закрываем экзамен целиком.</b> Кодирование информации, логика и графы ' +
+'добавлены в 1.77.0, исполнители и перебор — в 1.81.0: их тут решают программой, и наш ' +
+'судья их проверяет. Чего по-прежнему нет: <b>электронные таблицы</b>. Их проверять нечем — ' +
+'движок умеет запускать Python, а не считать формулы Excel.</li>' +
+
+'<li><b>Номера заданий — только на вкладках экзаменов.</b> Нумерация между ' +
+'годами меняется, поэтому там написан год, с которого она снята, а сами номера ' +
+'лежат в одном месте и правятся одной таблицей. В названиях задач номеров нет: ' +
+'задача про графы остаётся задачей про графы, в каком бы году её ни спросили.</li>' +
+'<li><b>Типы ЕГЭ — свои формулировки по духу экзамена.</b> Мы берём те типы, ' +
+'где ответ считает программа; электронные таблицы — не наши. ' +
+'На настоящем экзамене — настоящий Python: то, что ты пишешь здесь, там работает так же.</li>' +
+'<li><b>Проверка гоняет программу и на скрытых данных.</b> Совпасть должен способ, ' +
+'а не один напечатанный ответ — ровно как на экзамене.</li>' +
+'<li><b>Цену алгоритма здесь считает движок.</b> Не «двоичный поиск быстрее», а ' +
+'«1000 шагов против 10» — числом на экране.</li>' +
+'</ul></div>';
+
+h += '<div class="card"><h3>🧾 Задача по твоей программе</h3>' +
+'<p>Все задачи ниже написаны нами и одинаковы для всех. Эта — нет: она ' +
+'собирается из программы, которую написал ты. В ней закрывается одно число, ' +
+'и по напечатанному нужно понять, какое. Запускать нельзя — как на экзамене.</p>' +
+(myExamHasSource()
+? '<div class="admrow"><button class="rbtn check" id="myexam">Собрать задачу</button>' +
+(A.algoDone("myexam") ? '<span class="dim">уже решал — задача будет другая</span>' : '') + '</div>'
+: '<p class="dim">Пока не из чего собрать: нужна твоя программа — сданный урок ' +
+'или сохранённая в «Моё» из песочницы.</p>') +
+'</div>';
+
+A.ALGO_GROUPS.forEach(function(g){
+var items = xs.filter(function(x){ return x.group === g.id; });
+if (!items.length) return;
+var d = items.filter(function(x){ return A.algoDone(x.id); }).length;
+h += '<div class="sect"><h2>' + g.em + ' ' + A.esc(g.title) + '</h2><div class="line"></div>' +
+'<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
+'<p class="dim">' + A.esc(g.why) + '</p><div class="gamegrid">';
+items.forEach(function(x){
+h += '<button class="gamecard" data-algo="' + A.esc(x.id) + '">' +
+'<span class="gemoji">' + x.emoji + '</span>' +
+'<b>' + A.esc(x.title) + (A.algoDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
+'<span>' + A.esc(x.intro) + '</span>' +
+'<span class="wtag">' + A.esc(x.tag) + '</span></button>';
+});
+h += '</div>';
+});
+
+h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
+A.app.innerHTML = h;
+A.app.querySelectorAll("[data-algo]").forEach(function(b){
+b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
+});
+A.app.querySelectorAll("[data-algotab]").forEach(function(b){
+b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
+});
+document.getElementById("tomap").onclick = A.screenTrain;
+var me = document.getElementById("myexam");
+if (me) me.onclick = function(){
+me.disabled = true;
+me.textContent = "Собираю…";
+
+setTimeout(function(){ myExamCur = myExamPick(); screenMyExam(); }, 30);
+};
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function openAlgo(id){
+var x = A.algoById(id);
+if (!x) return screenAlgo();
+
+if (A.capHard()) return A.screenCapReached();
+A.enterScreen("train", "algoone");
+A.newSession({ id:id, attempts:0, hints:0, shown:false, algo:true });
+
+var exam = !!(A.algoBack() && A.algoBack().exam);
+
+var h = '<div class="crumbs"><span data-go="back">' +
+A.esc(A.algoBack() ? A.algoBack().crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + A.esc(x.title) + '</div>' +
+'<div class="lvlhead"><div><div class="idx">' + A.esc(x.tag) + '</div>' +
+'<h1>' + x.emoji + ' ' + A.esc(x.title) + '</h1></div>' +
+(exam
+? '<div class="right"><span class="examclock" id="examclock">⏱</span></div></div>'
+: '<div class="right"><span class="tag">звёзд не даёт</span></div></div>') +
+'<p class="lede">' + A.esc(x.intro) + '</p>' +
+'<div class="goal"><h3>🎯 Задача</h3><p>' + A.esc(x.goal) + '</p><ul>' +
+x.list.map(function(t){ return "<li>" + A.esc(t) + "</li>"; }).join("") + '</ul>' +
+
+(x.sample
+? '<div class="ogesample"><div><b>Входные данные</b><pre>' +
+A.esc(x.sample.in.join("\n")) + '</pre></div>' +
+'<div><b>Выходные данные</b><pre>' + A.esc(x.sample.out) + '</pre></div></div>'
+: '') +
+
+(window.FIPI16 && FIPI16.applies(x)
+? '<p class="dim">📝 На ОГЭ такую программу проверяет эксперт: запускает её на ' +
+'тестах, которых ученик не видит, и ставит 2, 1 или 0 баллов. Программа без ' +
+'ввода данных получает 0. ' + (exam ? 'Сколько вышло бы — скажет итог варианта.'
+: 'После проверки здесь будет написано, сколько вышло бы.') + '</p>'
+: '') + '</div>';
+
+h += '<div id="studio"></div>' +
+
+(exam
+? '<div class="hintbox"><span class="tip">режим экзамена: подсказок нет, ' +
+'а верно ли решено — скажет итог варианта, а не эта страница</span></div>'
+: '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
+'<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>') +
+'<div class="hintout" id="hintout"></div>' +
+'<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
+A.esc(A.algoBack() ? A.algoBack().backLabel : "Ко всем задачам") + '</button></div>';
+A.app.innerHTML = h;
+
+var studio = A.makeStudio({
+engine: "mini", code: x.starter, lint: true,
+stdin: x.stdin || null,
+label: "твоя программа",
+viz: function(o){
+A.screenViz({ code: o.code, env: o.env,
+backTo: { label: "← Вернуться к задаче", go: function(){ openAlgo(id); } } });
+},
+check: function(ed, showMsg){ runAlgoCheck(x, ed, showMsg); }
+});
+document.getElementById("studio").appendChild(studio);
+A.session().studio = studio;
+A.session().lesson = "algo-" + id;
+A.session().starter = [{ name:"main.py", code: x.starter }];
+var d = A.draftGet(A.session().lesson);
+if (d) A.draftApply(studio.editor, d.files);
+studio.editor.onEdit = A.draftSchedule;
+
+if (!exam) A.wireHint(x.hints);
+
+var clk = document.getElementById("examclock");
+if (clk && A.algoBack() && A.algoBack().clock){
+var tickClock = function(){
+if (!document.body.contains(clk)) return clearInterval(clockId);
+var c = (A.algoBack() && A.algoBack().clock) ? A.algoBack().clock() : null;
+if (!c) return clearInterval(clockId);
+clk.textContent = "⏱ " + c.text;
+clk.classList.toggle("soon", !!c.soon);
+if (c.over){ clearInterval(clockId); A.algoBack().go(); }
+};
+var clockId = setInterval(tickClock, 1000);
+tickClock();
+}
+
+A.app.querySelectorAll("[data-go]").forEach(function(b){
+b.onclick = function(){ return A.algoBack() ? A.algoBack().go() : screenAlgo(); };
+});
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function examSend(ok, fg){
+
+if (A.algoBack() && A.algoBack().onSend) A.algoBack().onSend(!!ok, fg || null);
+A.markActiveToday(); A.save(); A.refreshTop();
+}
+var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
+"когда выйдет время или ты нажмёшь «Завершить». Здесь этого не говорят: " +
+"на экзамене тоже не говорят. Переписать и сдать заново, пока идёт время, можно — " +
+"считается последний ответ.";
+
+function runAlgoCheck(x, ed, showMsg){
+A.session().attempts++;
+var exam = !!(A.algoBack() && A.algoBack().exam);
+var eng = Runtime.get("mini"), code = ed.getCode();
+var stdin = (A.session().studio && A.session().studio.getStdin) ? A.session().studio.getStdin() : (x.stdin || []);
+
+if (x.check.kind === "tests" || x.check.kind === "output"){
+var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
+"find-binary":[".index("], "oge-max-base":["max("],
+"digit-sum":["str(", "list("],
+"base-convert":["bin(", "oct(", "hex("],
+"oge-min-even":["min(", "sorted("],
+"oge-two-even":["max(", "sorted(", ".sort("],
+"ege-sub":[".count("],
+"ege-maxsum":["max("],
+
+"sort-count":["sorted(", ".sort("],
+"cost-bubble":["sorted(", ".sort("],
+"cost-divisors":["sqrt", "**"],
+"cost-double":["/"] };
+var ban = banned[x.id] || [];
+for (var b = 0; b < ban.length; b++){
+if (code.indexOf(ban[b]) >= 0){
+showMsg("warn", "<b>Так нельзя</b>В этой задаче нельзя пользоваться <code>" +
+A.esc(ban[b]) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
+"Требование стоит в условии.");
+return;
+}
+}
+}
+
+var fipi = !!(window.FIPI16 && FIPI16.applies(x));
+var fg = fipi ? FIPI16.grade(eng, code, x) : null;
+var fgHTML = (fg && !exam) ? FIPI16.verdictHTML(fg) : "";
+var runOpts = function(din){ return { stdin: din, quietPrompt: fipi }; };
+
+var res = eng.run(code, runOpts(stdin.slice()));
+
+if (res.error){
+if (exam) examSend(false, fg);
+ed.setError(res.error.line); showMsg("bad", A.errHTML(res.error) + fgHTML); return;
+}
+
+if (fg && (fg.zero === "input" || fg.zero === "output")){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("bad", "<b>" + (fg.zero === "input" ? "Программа не читает входные данные"
+: "Программа ничего не печатает") + "</b>" + fgHTML);
+return;
+}
+
+var problem = null;
+if (x.check.kind === "tests"){
+problem = A.runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
+} else {
+var exp = eng.run(x.solution, runOpts(stdin.slice())).lines, got = res.lines;
+if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
+problem = A.diffBlock(exp, got);
+}
+if (problem){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("bad", "<b>Ещё не то</b>" + problem + fgHTML); return;
+}
+
+if (x.sets && x.sets.length){
+for (var si = 0; si < x.sets.length; si++){
+var din = x.sets[si].slice();
+var hres = eng.run(code, runOpts(din.slice()));
+if (hres.error){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+ed.setError(hres.error.line);
+showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
+"а на другом наборе упала. Вход был:<pre>" + A.esc(din.join("\n")) + "</pre>" +
+A.errHTML(hres.error) + fgHTML);
+return;
+}
+var hexp = eng.run(x.solution, runOpts(din.slice())).lines, hgot = hres.lines;
+if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
+"но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
+"Вход:<pre>" + A.esc(din.join("\n")) + "</pre>" + A.diffBlock(hexp, hgot) + fgHTML);
+return;
+}
+}
+}
+
+if (x.budget){
+var cost = res.steps || 0;
+if (cost > x.budget){
+if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
+showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
+"</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
+"дело не в скорости компьютера, а в плане работы." + fgHTML);
+return;
+}
+}
+if (exam){ examSend(true, fg); showMsg("info", EXAM_SENT_MSG); return; }
+winAlgo(x, res, fg);
+}
+
+function winAlgo(x, res, fg){
+var first = !A.algoDone(x.id);
+A.algoMark(x.id);
+A.markActiveToday();
+
+if (A.algoBack() && A.algoBack().onWin) A.algoBack().onWin(x);
+A.save(); A.refreshTop();
+document.getElementById("wincard").innerHTML =
+'<div class="big">' + (A.session().attempts === 1 ? "🎯" : "✅") + '</div>' +
+'<h2>' + (A.session().attempts === 1 ? "Решено с первой попытки" : "Задача решена") + '</h2>' +
+'<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
+'а не сверил буквы кода.</p>' +
+'<div class="stepnote"><b>Что тут было.</b> ' + A.esc(x.note) + '</div>' +
+(fg && window.FIPI16 ? FIPI16.verdictHTML(fg) : '') +
+(res && res.steps
+? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
+A.plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
+'и её всегда можно попробовать сбить.</div>'
+: '') +
+'<div class="winrow"><button class="bigbtn" id="walgo">' +
+A.esc(A.algoBack() ? A.algoBack().winLabel : "Ко всем задачам") + '</button>' +
+'<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
+document.getElementById("win").classList.add("show");
+A.confetti(first ? 2 : 1);
+document.getElementById("walgo").onclick = function(){
+var back = A.algoBack();
+A.closeWin();
+return back ? back.go() : screenAlgo();
+};
+document.getElementById("wstay").onclick = A.closeWin;
+}
+
+var MYEXAM_LO = 1;             
+var MYEXAM_HI = 30;
+var MYEXAM_SPOTS = 3;          
+var MYEXAM_SRC = 4;            
+var MYEXAM_BOX = "⬜";
+
+function myExamSources(){
+var out = [];
+A.myWorksList().forEach(function(x){
+out.push({ code: x.code, from: "твоя программа «" + x.title + "»" });
+});
+var d = A.draftsAll();
+var ids = Object.keys(d).filter(function(id){
+var g = (A.S().log || {})[id] || {};
+return A.solved(id) && !g.shown && !!CURRICULUM.byId(id);
+});
+ids.sort(function(a, b){
+return (((A.S().log || {})[b] || {}).solvedAt || 0) - (((A.S().log || {})[a] || {}).solvedAt || 0);
+});
+ids.forEach(function(id){
+var dr = A.draftGet(id);
+if (!dr || dr.files.length !== 1) return;    
+var l = CURRICULUM.byId(id);
+out.push({ code: dr.files[0].code, id: id,
+from: "твоя программа из урока " + l.num + " «" + l.title + "»" });
+});
+return out;
+}
+
+function myExamHasSource(){ return myExamSources().length > 0; }
+
+function myExamMake(code){
+if (!A.myPredSafe(code)) return null;
+if (!A.myPredRun(code)) return null;
+var k = A.codeSkeleton(code);
+var re = /(^|[^A-Za-z_0-9.А-Яа-яЁё])(\d+)(?![.\dA-Za-z_])/g, m, spots = [];
+while ((m = re.exec(k)) !== null && spots.length < MYEXAM_SPOTS)
+spots.push({ at: m.index + m[1].length, txt: m[2] });
+for (var i = 0; i < spots.length; i++){
+var at = spots[i].at, len = spots[i].txt.length;
+var was = parseInt(spots[i].txt, 10);
+var outs = {}, seen = {}, v, o;
+for (v = MYEXAM_LO; v <= MYEXAM_HI; v++){
+o = A.myPredRun(code.slice(0, at) + String(v) + code.slice(at + len));
+outs[v] = o;
+if (o) seen[o] = (seen[o] || 0) + 1;
+}
+
+var span = MYEXAM_HI - MYEXAM_LO + 1;
+var shift = 0;
+for (var c = 0; c < code.length; c++) shift = (shift * 31 + code.charCodeAt(c)) % span;
+for (var t = 0; t < span; t++){
+v = MYEXAM_LO + ((shift + t) % span);
+o = outs[v];
+if (!o || seen[o] !== 1) continue;       
+if (v === was) continue;                 
+return { code: code.slice(0, at) + MYEXAM_BOX + code.slice(at + len),
+out: o, ans: v, lo: MYEXAM_LO, hi: MYEXAM_HI };
+}
+}
+return null;
+}
+
+function myExamPick(){
+var src = myExamSources();
+for (var i = 0; i < src.length && i < MYEXAM_SRC; i++){
+var made = myExamMake(src[i].code);
+if (made){ made.from = src[i].from; return made; }
+}
+return null;
+}
+
+var myExamCur = null;          
+
+function screenMyExam(){
+if (A.capHard()) return A.screenCapReached();
+A.enterScreen("train", "myexam");
+A.newSession({ id:null, attempts:0, hints:0, shown:false, myexam:true });
+var made = myExamCur;
+
+var head = '<div class="crumbs"><button class="backbtn" data-go="algo">← К задачам</button>' +
+'<span data-go="algo">Алгоритмы, ОГЭ и ЕГЭ</span> › 🧾 Задача по твоей программе</div>' +
+'<div class="lvlhead"><div><div class="idx">экзамен по своему коду</div>' +
+'<h1>🧾 Какое число закрыто?</h1></div>' +
+'<div class="right"><span class="tag">твой код</span></div></div>';
+
+if (!made){
+A.app.innerHTML = head +
+'<div class="card"><h3>Пока не из чего собрать</h3>' +
+'<p>Задача собирается из программы, которую написал ты сам: из сданного урока ' +
+'или из того, что ты сохранил в «Моё» из песочницы. Нужна программа, которая ' +
+'что-то печатает и печатает это всегда одинаково — без ввода с клавиатуры, ' +
+'без случайных чисел и без черепашки.</p>' +
+'<p class="dim">Урок, где ты открывал решение, сюда не идёт: это не твой код.</p>' +
+'<div class="winrow"><button class="bigbtn ghost" data-go="algo">← К задачам</button>' +
+'<button class="bigbtn ghost" id="me-sand">Открыть песочницу</button></div></div>';
+A.app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+var sb = document.getElementById("me-sand");
+if (sb) sb.onclick = A.screenSandbox;
+A.refreshTop();
+return;
+}
+
+A.app.innerHTML = head +
+'<p class="lede">Это ' + A.esc(made.from) + '. Одно число в ней ' +
+'закрыто клеткой ' + MYEXAM_BOX + '. Известно только то, что она напечатала. ' +
+'Запускать нельзя: реши в голове, как на экзамене.</p>' +
+'<div class="goal"><h3>🎯 Твоя задача</h3>' +
+'<p>Программа напечатала:</p><pre><code>' + A.esc(made.out) + '</code></pre>' +
+'<p>Какое целое число от ' + made.lo + ' до ' + made.hi + ' стоит вместо ' + MYEXAM_BOX +
+'? Оно ровно одно: при любом другом программа напечатала бы не это.</p></div>' +
+'<div id="studio"></div>' +
+'<div class="pager"><button class="bigbtn ghost" data-go="algo">← К задачам</button></div>';
+
+var studio = A.makePredictStudio({
+code: made.code,
+ask: "какое число закрыто клеткой " + MYEXAM_BOX + "?",
+place: "число",
+hint: "Одно целое число от " + made.lo + " до " + made.hi + ". Потом нажми «Проверить».",
+rows: 2,
+outHead: "верное число",
+check: function(ed, showMsg){
+A.session().attempts++;
+var got = String(ed.getCode()).trim().replace(",", ".");
+if (!/^-?\d+$/.test(got))
+return showMsg("warn", "<b>Нужно число</b>Одно целое число от " + made.lo +
+" до " + made.hi + " — без слов и без пробелов.");
+if (parseInt(got, 10) === made.ans) return winMyExam(made);
+
+showMsg("bad", "<b>Не оно</b>При " + A.esc(got) + " программа напечатала бы другое. " +
+(parseInt(got, 10) < made.ans ? "Загаданное число больше." : "Загаданное число меньше.") +
+" Пройди программу по строчкам ещё раз.");
+}
+});
+document.getElementById("studio").appendChild(studio);
+A.session().studio = studio;
+A.app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+function winMyExam(made){
+var first = A.session().attempts === 1;
+A.algoMark("myexam");
+A.markActiveToday();
+A.save(); A.refreshTop();
+document.getElementById("wincard").innerHTML =
+'<div class="big">' + (first ? "🧾" : "✅") + '</div>' +
+'<h2>' + (first ? "Сошлось с первой попытки" : "Число найдено") + '</h2>' +
+'<p>Закрыто было <b>' + made.ans + '</b>. Ты решил это, не запуская программу, — ' +
+'а значит выполнил её в голове. Именно этого и просит экзамен.</p>' +
+'<div class="stepnote"><b>Что тут было.</b> Задача не написана нами: она собрана ' +
+'из твоего же кода. Другой ребёнок такой задачи не увидит — у него другая программа.</div>' +
+'<div class="winrow"><button class="bigbtn" id="me-more">Ещё одну</button>' +
+'<button class="bigbtn ghost" id="walgo">Ко всем задачам</button></div>';
+document.getElementById("win").classList.add("show");
+A.confetti(first ? 2 : 1);
+document.getElementById("walgo").onclick = function(){ A.closeWin(); screenAlgo(); };
+document.getElementById("me-more").onclick = function(){
+A.closeWin();
+myExamCur = myExamPick();
+screenMyExam();
+};
+}
+
+function openExamMap(id){
+algoTab = (id === "oge" || id === "ege") ? id : "all";
+screenAlgo();
+}
+
+function openMyExam(){
+myExamCur = myExamCur || myExamPick();
+screenMyExam();
+}
+
+return {
+screenAlgo: screenAlgo, openAlgo: openAlgo, openExamMap: openExamMap,
+openMyExam: openMyExam, screenMyExam: screenMyExam,
+
+myExamSources: myExamSources,
+
+myExamMake: myExamMake, myExamPick: myExamPick, myExamHasSource: myExamHasSource,
+MYEXAM_LO: MYEXAM_LO, MYEXAM_HI: MYEXAM_HI, MYEXAM_BOX: MYEXAM_BOX
+};
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.variant = function(A){
 
 var CODE_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -35397,7 +35997,7 @@ screenShowcase: function(){ return screenShowcase(); }, screenShop: function(){ 
 screenPath: screenPath, screenGuide: screenGuide,
 screenAdminHome: screenAdminHome,
 
-examTally: examTally, openExamMap: openExamMap,
+examTally: examTally, openExamMap: function(id){ openExamMap(id); },
 screenVariant: function(){ screenVariant(); },
 screenRobot: function(){ screenRobot(); },
 
@@ -37512,9 +38112,6 @@ return algoList().filter(function(x){ return x.id === id; })[0] || null;
 function algoDone(id){ return !!(S.algo && S.algo[id]); }
 function algoMark(id){ S.algo = S.algo || {}; S.algo[id] = 1; save(); }
 
-var algoTab = "all";
-var ALGO_TABS = [["all","🧮 Темы"], ["oge","📄 ОГЭ"], ["ege","🎓 ЕГЭ"]];
-
 var algoBack = null;
 function setAlgoBack(ctx){ algoBack = ctx || null; }
 
@@ -37531,574 +38128,36 @@ var xs = algoList().filter(function(x){ return groups.indexOf(x.group) >= 0; });
 var un = xs.filter(function(x){ return !algoDone(x.id); });
 return (un[0] || xs[0] || null);
 }
-function examMapHTML(ex){
-var t = EXAMS.tally(ex, algoCountIn);
-var h = '<p class="lede">Все <b>' + ex.total + '</b> заданий ' + esc(ex.title) +
-' по номерам. Против каждого честно написано, что у нас есть, а чего нет.</p>' +
-'<p class="dim">Нумерация снята с демоверсии <b>' + ex.year + '</b> года и между ' +
-'годами меняется — сверяйтесь с демоверсией своего года. На экзамене принимают: ' +
-esc(ex.langs) + '.</p>' +
-'<div class="extally">' +
-'<span class="exok">✓ есть задачи: ' + t.yes + '</span>' +
-'<span class="expart">◐ наполовину: ' + t.part + '</span>' +
-'<span class="exsoon">◻ пока нет: ' + t.soon + '</span>' +
-'<span class="exno">— судить нечем: ' + t.no + '</span></div>' +
-'<div class="exmap">';
-ex.tasks.forEach(function(x){
-var st = EXAMS.state(x, algoCountIn);
-var right;
-if (st === "yes" && x.robot){
-var rxs = window.ROBOT_TASKS || [];
-right = '<span class="excnt">' + rxs.filter(function(r){ return algoDone(r.id); }).length +
-' из ' + rxs.length + '</span>' +
-'<button class="rbtn sec" data-exrobot="1">Решать</button>';
-} else if (st === "yes"){
-var n = algoCountIn(x.g), d = algoDoneIn(x.g);
-right = '<span class="excnt">' + d + ' из ' + n + '</span>' +
-'<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
-} else if (st === "part"){
 
-right = '<span class="excnt">' + algoDoneIn(x.g) + ' из ' + algoCountIn(x.g) + '</span>' +
-'<span class="exwhy">кроме: ' + esc(x.off) + '</span>' +
-'<button class="rbtn sec" data-exgo="' + esc(x.g.join(",")) + '">Решать</button>';
-} else if (st === "no"){
-
-right = '<span class="exwhy">судить нечем: ' + esc(x.off) + '</span>';
-} else {
-right = '<span class="exwhy">пока нет задач</span>';
-}
-h += '<div class="exrow ' + st + '"><span class="exn">' + x.n + '</span>' +
-'<span class="ext">' + esc(x.t) + '</span>' +
-'<span class="exact">' + right + '</span></div>';
+var ALGO_SCREENS = KVSCREENS.algo({
+app: app, esc: esc, plural: plural, save: save, errHTML: errHTML,
+enterScreen: enterScreen, refreshTop: refreshTop, screenTrain: screenTrain,
+confetti: confetti, closeWin: closeWin, markActiveToday: markActiveToday,
+capHard: capHard, screenCapReached: screenCapReached,
+ALGO_GROUPS: ALGO_GROUPS, algoList: algoList, algoById: algoById,
+algoDone: algoDone, algoMark: algoMark, algoCountIn: algoCountIn,
+algoDoneIn: algoDoneIn, algoNextIn: algoNextIn, setAlgoBack: setAlgoBack,
+algoBack: function(){ return algoBack; },
+makeStudio: makeStudio, wireHint: wireHint, runHiddenTests: runHiddenTests,
+diffBlock: diffBlock, draftGet: draftGet, draftApply: draftApply,
+draftSchedule: draftSchedule, draftsAll: draftsAll, solved: solved,
+myWorksList: myWorksList, codeSkeleton: codeSkeleton, myPredSafe: myPredSafe,
+myPredRun: myPredRun, makePredictStudio: makePredictStudio,
+screenSandbox: screenSandbox,
+screenRobot: function(){ return screenRobot.apply(null, arguments); },
+variantOpenFor: function(){ return variantOpenFor.apply(null, arguments); },
+screenViz: function(){ return screenViz.apply(null, arguments); },
+S: function(){ return S; },
+session: function(){ return session; },
+newSession: function(v){ session = v; return v; }
 });
-h += '</div>' +
-
-'<div class="note"><b>Пройти весь экзамен подряд</b>' +
-'Карта показывает темы по номерам, а вариант собирает из них то, что бывает в мае: ' +
-'по одной задаче на каждый номер и по порядку. В конце видно, что закрыто, а что просело.' +
-'<div class="admrow"><button class="rbtn check" data-exvariant="' + esc(ex.id) + '">' +
-'📝 Собрать пробный вариант</button></div></div>' +
-(ex.id === "oge"
-? '<div class="note"><b>Задания 15 и 16 — оба обязательны</b>' +
-'15 — алгоритм для исполнителя «Робот», у него свой язык и свой раздел. 16 — обычная ' +
-'программа, она в темах выше. До 2025 года это было одно задание на выбор; теперь ' +
-'на экзамене есть оба, и за каждое до двух баллов.' +
-'<div class="admrow"><button class="rbtn sec" data-exrobot="1">🤖 Открыть Робота</button></div></div>'
-: '') +
-'<div class="note"><b>Почему «судить нечем» — это не отговорка</b>' +
-'Наш судья запускает программу и сверяет вывод. Создать презентацию, построить ' +
-'диаграмму, найти файл на диске или сходить в поисковик он не может, и обещать ' +
-'это мы не будем. Всё остальное решается программой — даже там, где на экзамене ' +
-'принято брать таблицу: мы даём те же данные текстом, а решение остаётся ' +
-'программой. Поэтому «пока нет задач» — это план работ, а не граница.</div>';
-return h;
-}
-function screenAlgo(){
-enterScreen("train", "algo");
-setAlgoBack(null);
-session = { id:null, attempts:0, hints:0, shown:false };
-var xs = algoList(), done = xs.filter(function(x){ return algoDone(x.id); }).length;
-
-var h = '<div class="lvlhead"><div><div class="idx">информатика: алгоритмы и экзамен</div>' +
-'<h1>🧮 Алгоритмы, ОГЭ и ЕГЭ</h1></div>' +
-'<div class="right"><span class="tag">' + done + ' из ' + xs.length + '</span></div></div>' +
-'<div class="roomnav extabs">' + ALGO_TABS.map(function(t){
-return '<button' + (t[0] === algoTab ? ' class="on"' : '') +
-' data-algotab="' + t[0] + '">' + t[1] + '</button>';
-}).join("") + '</div>';
-
-if (algoTab !== "all"){
-h += examMapHTML(EXAMS[algoTab]) +
-'<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
-app.innerHTML = h;
-app.querySelectorAll("[data-algotab]").forEach(function(b){
-b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
-});
-
-app.querySelectorAll("[data-exrobot]").forEach(function(rb){
-rb.onclick = function(){ screenRobot(); };
-});
-var vb = app.querySelector("[data-exvariant]");
-if (vb) vb.onclick = function(){ variantOpenFor(vb.getAttribute("data-exvariant")); };
-app.querySelectorAll("[data-exgo]").forEach(function(b){
-b.onclick = function(){
-var t = algoNextIn(b.getAttribute("data-exgo").split(","));
-if (t) openAlgo(t.id);
-};
-});
-document.getElementById("tomap").onclick = screenTrain;
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-return;
-}
-
-h += '<p class="lede">Тот же Python и тот же судья, но задачи здесь школьные: поиск, ' +
-'сортировка, цена алгоритма, кодирование информации, логика, графы, исполнители, ' +
-'рекурсия и перебор — и типовые задания экзамена. Заходить можно с любого места курса — ' +
-'всё, что нужно, объясняется прямо в задании.</p>';
-
-h += '<div class="card"><h3>⚖️ Что мы обещаем, а что нет</h3><ul class="trrules">' +
-'<li><b>Закрываем ту часть, где надо написать программу</b> (в кодификаторе — КЭС 3.2) ' +
-'и алгоритмику. Каркас заданий снят с открытого банка ФИПИ: формулировки наши, структура их.</li>' +
-'<li><b>Не закрываем экзамен целиком.</b> Кодирование информации, логика и графы ' +
-'добавлены в 1.77.0, исполнители и перебор — в 1.81.0: их тут решают программой, и наш ' +
-'судья их проверяет. Чего по-прежнему нет: <b>электронные таблицы</b>. Их проверять нечем — ' +
-'движок умеет запускать Python, а не считать формулы Excel.</li>' +
-
-'<li><b>Номера заданий — только на вкладках экзаменов.</b> Нумерация между ' +
-'годами меняется, поэтому там написан год, с которого она снята, а сами номера ' +
-'лежат в одном месте и правятся одной таблицей. В названиях задач номеров нет: ' +
-'задача про графы остаётся задачей про графы, в каком бы году её ни спросили.</li>' +
-'<li><b>Типы ЕГЭ — свои формулировки по духу экзамена.</b> Мы берём те типы, ' +
-'где ответ считает программа; электронные таблицы — не наши. ' +
-'На настоящем экзамене — настоящий Python: то, что ты пишешь здесь, там работает так же.</li>' +
-'<li><b>Проверка гоняет программу и на скрытых данных.</b> Совпасть должен способ, ' +
-'а не один напечатанный ответ — ровно как на экзамене.</li>' +
-'<li><b>Цену алгоритма здесь считает движок.</b> Не «двоичный поиск быстрее», а ' +
-'«1000 шагов против 10» — числом на экране.</li>' +
-'</ul></div>';
-
-h += '<div class="card"><h3>🧾 Задача по твоей программе</h3>' +
-'<p>Все задачи ниже написаны нами и одинаковы для всех. Эта — нет: она ' +
-'собирается из программы, которую написал ты. В ней закрывается одно число, ' +
-'и по напечатанному нужно понять, какое. Запускать нельзя — как на экзамене.</p>' +
-(myExamHasSource()
-? '<div class="admrow"><button class="rbtn check" id="myexam">Собрать задачу</button>' +
-(algoDone("myexam") ? '<span class="dim">уже решал — задача будет другая</span>' : '') + '</div>'
-: '<p class="dim">Пока не из чего собрать: нужна твоя программа — сданный урок ' +
-'или сохранённая в «Моё» из песочницы.</p>') +
-'</div>';
-
-ALGO_GROUPS.forEach(function(g){
-var items = xs.filter(function(x){ return x.group === g.id; });
-if (!items.length) return;
-var d = items.filter(function(x){ return algoDone(x.id); }).length;
-h += '<div class="sect"><h2>' + g.em + ' ' + esc(g.title) + '</h2><div class="line"></div>' +
-'<span class="cnt">' + d + ' из ' + items.length + '</span></div>' +
-'<p class="dim">' + esc(g.why) + '</p><div class="gamegrid">';
-items.forEach(function(x){
-h += '<button class="gamecard" data-algo="' + esc(x.id) + '">' +
-'<span class="gemoji">' + x.emoji + '</span>' +
-'<b>' + esc(x.title) + (algoDone(x.id) ? ' <span class="edittag done">пройдено ✓</span>' : '') + '</b>' +
-'<span>' + esc(x.intro) + '</span>' +
-'<span class="wtag">' + esc(x.tag) + '</span></button>';
-});
-h += '</div>';
-});
-
-h += '<div class="pager"><button class="bigbtn ghost" id="tomap">← К тренировкам</button></div>';
-app.innerHTML = h;
-app.querySelectorAll("[data-algo]").forEach(function(b){
-b.onclick = function(){ openAlgo(b.getAttribute("data-algo")); };
-});
-app.querySelectorAll("[data-algotab]").forEach(function(b){
-b.onclick = function(){ algoTab = b.getAttribute("data-algotab"); screenAlgo(); };
-});
-document.getElementById("tomap").onclick = screenTrain;
-var me = document.getElementById("myexam");
-if (me) me.onclick = function(){
-me.disabled = true;
-me.textContent = "Собираю…";
-
-setTimeout(function(){ myExamCur = myExamPick(); screenMyExam(); }, 30);
-};
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function openAlgo(id){
-var x = algoById(id);
-if (!x) return screenAlgo();
-
-if (capHard()) return screenCapReached();
-enterScreen("train", "algoone");
-session = { id:id, attempts:0, hints:0, shown:false, algo:true };
-
-var exam = !!(algoBack && algoBack.exam);
-
-var h = '<div class="crumbs"><span data-go="back">' +
-esc(algoBack ? algoBack.crumb : "Алгоритмы") + '</span> › ' + x.emoji + ' ' + esc(x.title) + '</div>' +
-'<div class="lvlhead"><div><div class="idx">' + esc(x.tag) + '</div>' +
-'<h1>' + x.emoji + ' ' + esc(x.title) + '</h1></div>' +
-(exam
-? '<div class="right"><span class="examclock" id="examclock">⏱</span></div></div>'
-: '<div class="right"><span class="tag">звёзд не даёт</span></div></div>') +
-'<p class="lede">' + esc(x.intro) + '</p>' +
-'<div class="goal"><h3>🎯 Задача</h3><p>' + esc(x.goal) + '</p><ul>' +
-x.list.map(function(t){ return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
-
-(x.sample
-? '<div class="ogesample"><div><b>Входные данные</b><pre>' +
-esc(x.sample.in.join("\n")) + '</pre></div>' +
-'<div><b>Выходные данные</b><pre>' + esc(x.sample.out) + '</pre></div></div>'
-: '') +
-
-(window.FIPI16 && FIPI16.applies(x)
-? '<p class="dim">📝 На ОГЭ такую программу проверяет эксперт: запускает её на ' +
-'тестах, которых ученик не видит, и ставит 2, 1 или 0 баллов. Программа без ' +
-'ввода данных получает 0. ' + (exam ? 'Сколько вышло бы — скажет итог варианта.'
-: 'После проверки здесь будет написано, сколько вышло бы.') + '</p>'
-: '') + '</div>';
-
-h += '<div id="studio"></div>' +
-
-(exam
-? '<div class="hintbox"><span class="tip">режим экзамена: подсказок нет, ' +
-'а верно ли решено — скажет итог варианта, а не эта страница</span></div>'
-: '<div class="hintbox"><button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-'<span class="tip">подсказки тут ничего не стоят — звёзд в этом разделе нет</span></div>') +
-'<div class="hintout" id="hintout"></div>' +
-'<div class="pager"><button class="bigbtn ghost" data-go="back">← ' +
-esc(algoBack ? algoBack.backLabel : "Ко всем задачам") + '</button></div>';
-app.innerHTML = h;
-
-var studio = makeStudio({
-engine: "mini", code: x.starter, lint: true,
-stdin: x.stdin || null,
-label: "твоя программа",
-viz: function(o){
-screenViz({ code: o.code, env: o.env,
-backTo: { label: "← Вернуться к задаче", go: function(){ openAlgo(id); } } });
-},
-check: function(ed, showMsg){ runAlgoCheck(x, ed, showMsg); }
-});
-document.getElementById("studio").appendChild(studio);
-session.studio = studio;
-session.lesson = "algo-" + id;
-session.starter = [{ name:"main.py", code: x.starter }];
-var d = draftGet(session.lesson);
-if (d) draftApply(studio.editor, d.files);
-studio.editor.onEdit = draftSchedule;
-
-if (!exam) wireHint(x.hints);
-
-var clk = document.getElementById("examclock");
-if (clk && algoBack && algoBack.clock){
-var tickClock = function(){
-if (!document.body.contains(clk)) return clearInterval(clockId);
-var c = (algoBack && algoBack.clock) ? algoBack.clock() : null;
-if (!c) return clearInterval(clockId);
-clk.textContent = "⏱ " + c.text;
-clk.classList.toggle("soon", !!c.soon);
-if (c.over){ clearInterval(clockId); algoBack.go(); }
-};
-var clockId = setInterval(tickClock, 1000);
-tickClock();
-}
-
-app.querySelectorAll("[data-go]").forEach(function(b){
-b.onclick = function(){ return algoBack ? algoBack.go() : screenAlgo(); };
-});
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function examSend(ok, fg){
-
-if (algoBack && algoBack.onSend) algoBack.onSend(!!ok, fg || null);
-markActiveToday(); save(); refreshTop();
-}
-var EXAM_SENT_MSG = "<b>Ответ записан</b>Верно или нет — скажет итог варианта, " +
-"когда выйдет время или ты нажмёшь «Завершить». Здесь этого не говорят: " +
-"на экзамене тоже не говорят. Переписать и сдать заново, пока идёт время, можно — " +
-"считается последний ответ.";
-
-function runAlgoCheck(x, ed, showMsg){
-session.attempts++;
-var exam = !!(algoBack && algoBack.exam);
-var eng = Runtime.get("mini"), code = ed.getCode();
-var stdin = (session.studio && session.studio.getStdin) ? session.studio.getStdin() : (x.stdin || []);
-
-if (x.check.kind === "tests" || x.check.kind === "output"){
-var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
-"find-binary":[".index("], "oge-max-base":["max("],
-"digit-sum":["str(", "list("],
-"base-convert":["bin(", "oct(", "hex("],
-"oge-min-even":["min(", "sorted("],
-"oge-two-even":["max(", "sorted(", ".sort("],
-"ege-sub":[".count("],
-"ege-maxsum":["max("],
-
-"sort-count":["sorted(", ".sort("],
-"cost-bubble":["sorted(", ".sort("],
-"cost-divisors":["sqrt", "**"],
-"cost-double":["/"] };
-var ban = banned[x.id] || [];
-for (var b = 0; b < ban.length; b++){
-if (code.indexOf(ban[b]) >= 0){
-showMsg("warn", "<b>Так нельзя</b>В этой задаче нельзя пользоваться <code>" +
-esc(ban[b]) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
-"Требование стоит в условии.");
-return;
-}
-}
-}
-
-var fipi = !!(window.FIPI16 && FIPI16.applies(x));
-var fg = fipi ? FIPI16.grade(eng, code, x) : null;
-var fgHTML = (fg && !exam) ? FIPI16.verdictHTML(fg) : "";
-var runOpts = function(din){ return { stdin: din, quietPrompt: fipi }; };
-
-var res = eng.run(code, runOpts(stdin.slice()));
-
-if (res.error){
-if (exam) examSend(false, fg);
-ed.setError(res.error.line); showMsg("bad", errHTML(res.error) + fgHTML); return;
-}
-
-if (fg && (fg.zero === "input" || fg.zero === "output")){
-if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
-showMsg("bad", "<b>" + (fg.zero === "input" ? "Программа не читает входные данные"
-: "Программа ничего не печатает") + "</b>" + fgHTML);
-return;
-}
-
-var problem = null;
-if (x.check.kind === "tests"){
-problem = runHiddenTests(eng, x.check.calls, code, {}, x.solution, {}, {}, stdin.slice());
-} else {
-var exp = eng.run(x.solution, runOpts(stdin.slice())).lines, got = res.lines;
-if (!(exp.length === got.length && exp.every(function(v, i){ return v === got[i]; })))
-problem = diffBlock(exp, got);
-}
-if (problem){
-if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
-showMsg("bad", "<b>Ещё не то</b>" + problem + fgHTML); return;
-}
-
-if (x.sets && x.sets.length){
-for (var si = 0; si < x.sets.length; si++){
-var din = x.sets[si].slice();
-var hres = eng.run(code, runOpts(din.slice()));
-if (hres.error){
-if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
-ed.setError(hres.error.line);
-showMsg("bad", "<b>Падает на скрытых данных</b>На открытом примере программа отработала, " +
-"а на другом наборе упала. Вход был:<pre>" + esc(din.join("\n")) + "</pre>" +
-errHTML(hres.error) + fgHTML);
-return;
-}
-var hexp = eng.run(x.solution, runOpts(din.slice())).lines, hgot = hres.lines;
-if (!(hexp.length === hgot.length && hexp.every(function(v, i){ return v === hgot[i]; }))){
-if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
-showMsg("bad", "<b>На скрытых данных — не то</b>На открытом примере вывод совпал, " +
-"но проверка гоняет программу и на других наборах. Вот на этом разошлось. " +
-"Вход:<pre>" + esc(din.join("\n")) + "</pre>" + diffBlock(hexp, hgot) + fgHTML);
-return;
-}
-}
-}
-
-if (x.budget){
-var cost = res.steps || 0;
-if (cost > x.budget){
-if (exam){ examSend(false, fg); showMsg("info", EXAM_SENT_MSG); return; }
-showMsg("warn", "<b>Работает, но дорого</b>Программа верна, а шагов ушло <b>" + cost +
-"</b> при разрешённых " + x.budget + ". В условии сказано, во сколько надо уложиться: " +
-"дело не в скорости компьютера, а в плане работы." + fgHTML);
-return;
-}
-}
-if (exam){ examSend(true, fg); showMsg("info", EXAM_SENT_MSG); return; }
-winAlgo(x, res, fg);
-}
-
-function winAlgo(x, res, fg){
-var first = !algoDone(x.id);
-algoMark(x.id);
-markActiveToday();
-
-if (algoBack && algoBack.onWin) algoBack.onWin(x);
-save(); refreshTop();
-document.getElementById("wincard").innerHTML =
-'<div class="big">' + (session.attempts === 1 ? "🎯" : "✅") + '</div>' +
-'<h2>' + (session.attempts === 1 ? "Решено с первой попытки" : "Задача решена") + '</h2>' +
-'<p>Проверял движок: он запустил твою программу на скрытых данных, ' +
-'а не сверил буквы кода.</p>' +
-'<div class="stepnote"><b>Что тут было.</b> ' + esc(x.note) + '</div>' +
-(fg && window.FIPI16 ? FIPI16.verdictHTML(fg) : '') +
-(res && res.steps
-? '<div class="stepnote">⚙️ Твоя программа обошлась в <b>' + res.steps + '</b> ' +
-plural(res.steps, "шаг", "шага", "шагов") + '. Это не оценка — это цена, ' +
-'и её всегда можно попробовать сбить.</div>'
-: '') +
-'<div class="winrow"><button class="bigbtn" id="walgo">' +
-esc(algoBack ? algoBack.winLabel : "Ко всем задачам") + '</button>' +
-'<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
-document.getElementById("win").classList.add("show");
-confetti(first ? 2 : 1);
-document.getElementById("walgo").onclick = function(){
-var back = algoBack;
-closeWin();
-return back ? back.go() : screenAlgo();
-};
-document.getElementById("wstay").onclick = closeWin;
-}
-
-var MYEXAM_LO = 1;             
-var MYEXAM_HI = 30;
-var MYEXAM_SPOTS = 3;          
-var MYEXAM_SRC = 4;            
-var MYEXAM_BOX = "⬜";
-
-function myExamSources(){
-var out = [];
-myWorksList().forEach(function(x){
-out.push({ code: x.code, from: "твоя программа «" + x.title + "»" });
-});
-var d = draftsAll();
-var ids = Object.keys(d).filter(function(id){
-var g = (S.log || {})[id] || {};
-return solved(id) && !g.shown && !!CURRICULUM.byId(id);
-});
-ids.sort(function(a, b){
-return (((S.log || {})[b] || {}).solvedAt || 0) - (((S.log || {})[a] || {}).solvedAt || 0);
-});
-ids.forEach(function(id){
-var dr = draftGet(id);
-if (!dr || dr.files.length !== 1) return;    
-var l = CURRICULUM.byId(id);
-out.push({ code: dr.files[0].code, id: id,
-from: "твоя программа из урока " + l.num + " «" + l.title + "»" });
-});
-return out;
-}
-
-function myExamHasSource(){ return myExamSources().length > 0; }
-
-function myExamMake(code){
-if (!myPredSafe(code)) return null;
-if (!myPredRun(code)) return null;
-var k = codeSkeleton(code);
-var re = /(^|[^A-Za-z_0-9.А-Яа-яЁё])(\d+)(?![.\dA-Za-z_])/g, m, spots = [];
-while ((m = re.exec(k)) !== null && spots.length < MYEXAM_SPOTS)
-spots.push({ at: m.index + m[1].length, txt: m[2] });
-for (var i = 0; i < spots.length; i++){
-var at = spots[i].at, len = spots[i].txt.length;
-var was = parseInt(spots[i].txt, 10);
-var outs = {}, seen = {}, v, o;
-for (v = MYEXAM_LO; v <= MYEXAM_HI; v++){
-o = myPredRun(code.slice(0, at) + String(v) + code.slice(at + len));
-outs[v] = o;
-if (o) seen[o] = (seen[o] || 0) + 1;
-}
-
-var span = MYEXAM_HI - MYEXAM_LO + 1;
-var shift = 0;
-for (var c = 0; c < code.length; c++) shift = (shift * 31 + code.charCodeAt(c)) % span;
-for (var t = 0; t < span; t++){
-v = MYEXAM_LO + ((shift + t) % span);
-o = outs[v];
-if (!o || seen[o] !== 1) continue;       
-if (v === was) continue;                 
-return { code: code.slice(0, at) + MYEXAM_BOX + code.slice(at + len),
-out: o, ans: v, lo: MYEXAM_LO, hi: MYEXAM_HI };
-}
-}
-return null;
-}
-
-function myExamPick(){
-var src = myExamSources();
-for (var i = 0; i < src.length && i < MYEXAM_SRC; i++){
-var made = myExamMake(src[i].code);
-if (made){ made.from = src[i].from; return made; }
-}
-return null;
-}
-
-var myExamCur = null;          
-
-function screenMyExam(){
-if (capHard()) return screenCapReached();
-enterScreen("train", "myexam");
-session = { id:null, attempts:0, hints:0, shown:false, myexam:true };
-var made = myExamCur;
-
-var head = '<div class="crumbs"><button class="backbtn" data-go="algo">← К задачам</button>' +
-'<span data-go="algo">Алгоритмы, ОГЭ и ЕГЭ</span> › 🧾 Задача по твоей программе</div>' +
-'<div class="lvlhead"><div><div class="idx">экзамен по своему коду</div>' +
-'<h1>🧾 Какое число закрыто?</h1></div>' +
-'<div class="right"><span class="tag">твой код</span></div></div>';
-
-if (!made){
-app.innerHTML = head +
-'<div class="card"><h3>Пока не из чего собрать</h3>' +
-'<p>Задача собирается из программы, которую написал ты сам: из сданного урока ' +
-'или из того, что ты сохранил в «Моё» из песочницы. Нужна программа, которая ' +
-'что-то печатает и печатает это всегда одинаково — без ввода с клавиатуры, ' +
-'без случайных чисел и без черепашки.</p>' +
-'<p class="dim">Урок, где ты открывал решение, сюда не идёт: это не твой код.</p>' +
-'<div class="winrow"><button class="bigbtn ghost" data-go="algo">← К задачам</button>' +
-'<button class="bigbtn ghost" id="me-sand">Открыть песочницу</button></div></div>';
-app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
-var sb = document.getElementById("me-sand");
-if (sb) sb.onclick = screenSandbox;
-refreshTop();
-return;
-}
-
-app.innerHTML = head +
-'<p class="lede">Это ' + esc(made.from) + '. Одно число в ней ' +
-'закрыто клеткой ' + MYEXAM_BOX + '. Известно только то, что она напечатала. ' +
-'Запускать нельзя: реши в голове, как на экзамене.</p>' +
-'<div class="goal"><h3>🎯 Твоя задача</h3>' +
-'<p>Программа напечатала:</p><pre><code>' + esc(made.out) + '</code></pre>' +
-'<p>Какое целое число от ' + made.lo + ' до ' + made.hi + ' стоит вместо ' + MYEXAM_BOX +
-'? Оно ровно одно: при любом другом программа напечатала бы не это.</p></div>' +
-'<div id="studio"></div>' +
-'<div class="pager"><button class="bigbtn ghost" data-go="algo">← К задачам</button></div>';
-
-var studio = makePredictStudio({
-code: made.code,
-ask: "какое число закрыто клеткой " + MYEXAM_BOX + "?",
-place: "число",
-hint: "Одно целое число от " + made.lo + " до " + made.hi + ". Потом нажми «Проверить».",
-rows: 2,
-outHead: "верное число",
-check: function(ed, showMsg){
-session.attempts++;
-var got = String(ed.getCode()).trim().replace(",", ".");
-if (!/^-?\d+$/.test(got))
-return showMsg("warn", "<b>Нужно число</b>Одно целое число от " + made.lo +
-" до " + made.hi + " — без слов и без пробелов.");
-if (parseInt(got, 10) === made.ans) return winMyExam(made);
-
-showMsg("bad", "<b>Не оно</b>При " + esc(got) + " программа напечатала бы другое. " +
-(parseInt(got, 10) < made.ans ? "Загаданное число больше." : "Загаданное число меньше.") +
-" Пройди программу по строчкам ещё раз.");
-}
-});
-document.getElementById("studio").appendChild(studio);
-session.studio = studio;
-app.querySelectorAll("[data-go]").forEach(function(b){ b.onclick = screenAlgo; });
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
-
-function winMyExam(made){
-var first = session.attempts === 1;
-algoMark("myexam");
-markActiveToday();
-save(); refreshTop();
-document.getElementById("wincard").innerHTML =
-'<div class="big">' + (first ? "🧾" : "✅") + '</div>' +
-'<h2>' + (first ? "Сошлось с первой попытки" : "Число найдено") + '</h2>' +
-'<p>Закрыто было <b>' + made.ans + '</b>. Ты решил это, не запуская программу, — ' +
-'а значит выполнил её в голове. Именно этого и просит экзамен.</p>' +
-'<div class="stepnote"><b>Что тут было.</b> Задача не написана нами: она собрана ' +
-'из твоего же кода. Другой ребёнок такой задачи не увидит — у него другая программа.</div>' +
-'<div class="winrow"><button class="bigbtn" id="me-more">Ещё одну</button>' +
-'<button class="bigbtn ghost" id="walgo">Ко всем задачам</button></div>';
-document.getElementById("win").classList.add("show");
-confetti(first ? 2 : 1);
-document.getElementById("walgo").onclick = function(){ closeWin(); screenAlgo(); };
-document.getElementById("me-more").onclick = function(){
-closeWin();
-myExamCur = myExamPick();
-screenMyExam();
-};
-}
+var screenAlgo = ALGO_SCREENS.screenAlgo, openAlgo = ALGO_SCREENS.openAlgo,
+openExamMap = ALGO_SCREENS.openExamMap, openMyExam = ALGO_SCREENS.openMyExam,
+screenMyExam = ALGO_SCREENS.screenMyExam, myExamSources = ALGO_SCREENS.myExamSources,
+myExamMake = ALGO_SCREENS.myExamMake, myExamPick = ALGO_SCREENS.myExamPick,
+myExamHasSource = ALGO_SCREENS.myExamHasSource,
+MYEXAM_LO = ALGO_SCREENS.MYEXAM_LO, MYEXAM_HI = ALGO_SCREENS.MYEXAM_HI,
+MYEXAM_BOX = ALGO_SCREENS.MYEXAM_BOX;
 
 var HW_MAX = 3;               
 
@@ -40619,7 +40678,7 @@ var ROUTES = [
 { h:"#hw",      place:"hw",      t:"Домашка",                    open:function(){ screenHW(); } },
 { h:"#folio",   place:"folio",   t:"Моё: работы и сертификаты",                  open:function(){ screenFolio(); } },
 { h:"#myexam",  place:"myexam",  t:"Задача по своей программе",
-open:function(){ myExamCur = myExamCur || myExamPick(); screenMyExam(); } },
+open:function(){ openMyExam(); } },
 { h:"#mine",    place:"mytasks", t:"Своё задание",               open:function(){ screenMyTasks(); } },
 { h:"#works",   place:"works",   t:"Что создают ученики",        open:function(){ screenShowcase(); } },
 { h:"#robot",   place:"robot",   t:"Робот",                      open:function(){ screenRobot(); } },
@@ -41150,11 +41209,6 @@ if (!ex) return null;
 var t = EXAMS.tally(ex, algoCountIn);
 return { id: id, em: ex.em, title: ex.title, full: ex.full, total: ex.total,
 year: ex.year, есть: t.yes + t.part, нет: t.soon + t.no };
-}
-
-function openExamMap(id){
-algoTab = (id === "oge" || id === "ege") ? id : "all";
-screenAlgo();
 }
 
 function aboutFootHTML(){
