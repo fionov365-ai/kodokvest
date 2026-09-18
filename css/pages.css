@@ -189,6 +189,21 @@ footer nav{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
 .note p:last-child{margin-bottom:0}
 
 /* ---- частые вопросы: <details> раскрывает браузер, скриптов нет ---- */
+/* ---- скриншоты продукта (18.09.2026) ----
+   Настоящие экраны, снятые с живого тренажёра, — не макеты. Сетка жёстко
+   2×2: авто-подбор колонок на 1044 px дал бы три колонки и одинокий
+   четвёртый снимок — та самая дыра из § 15 правил сайта. Снимки светлые,
+   поэтому рамка обязательна: в тёмной теме снимок без неё — вспышка. */
+.shots{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media (max-width:700px){ .shots{grid-template-columns:1fr} }
+.shot{margin:0; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px}
+.shot img{display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--line)}
+.shot figcaption{color:var(--dim); font-size:15px; margin-top:8px}
+
+/* Надзаголовок первого экрана: класс и экзамен одной строкой, как на
+   вывеске приложения, — родитель с порога видит, для кого это. */
+.eyebrow{color:var(--accent); font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin:0 0 10px}
+
 .faq{display:grid; gap:10px}
 .faq details{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:0 18px}
 .faq summary{cursor:pointer; font-weight:600; min-height:48px; display:flex; align-items:center; padding:10px 0}
