@@ -189,6 +189,59 @@ footer nav{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
 .note p:last-child{margin-bottom:0}
 
 /* ---- частые вопросы: <details> раскрывает браузер, скриптов нет ---- */
+/* ---- где я и куда дальше (18.09.2026) ----
+   Разбор навигации: шапка уезжала вверх и не возвращалась, статья справочника
+   в 6,4 экрана телефона шла без единой развилки, а каждая страница кончалась
+   разделом «Честно про границы» — то есть последним, что читал посетитель
+   перед решением, был список того, чего у нас нет, и дальше тупик. Три
+   правила ниже лечат ровно это: видно, ГДЕ ты; из середины длинной страницы
+   есть ход; в конце страницы стоит не стена, а двери. */
+
+/* ⚠️ Липкая шапка — только от 641 px, и это замер, а не небрежность. На
+   телефоне меню занимает ДВЕ строки под логотипом (семь пунктов, правило
+   § 3), вместе с логотипом это ~100 px из 812 — восьмая часть экрана
+   навсегда. На узком экране дорога назад даётся иначе: блоком «Куда дальше»
+   в конце страницы и полным меню в подвале, до которых читатель и так
+   доходит. На широком экране 56 px из 900 ничего не стоят. */
+@media (min-width:641px){
+  .top{position:sticky; top:0; z-index:20}
+}
+/* Якорь не должен уезжать под липкую шапку: цель отступает от верха на её
+   высоту. Ниже 641 px шапка не липкая, но отступ безвреден. */
+:target{scroll-margin-top:72px}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+
+/* Крошки: «Фионика › Справочник › эта страница». Последняя ступень — не
+   ссылка: ссылка на себя обманывает ожидание. */
+.crumbs{font-size:15px; color:var(--dim); margin:18px 0 0}
+.crumbs a{text-decoration:none}
+.crumbs a:hover{text-decoration:underline}
+.crumbs .sep{margin:0 6px; opacity:.6}
+
+/* Оглавление длинной статьи: по чему она идёт и куда прыгнуть. Ставится
+   только там, где разделов от четырёх, — иначе оглавление длиннее пользы. */
+.toc{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px 18px; margin:0 0 22px}
+.toc b{display:block; margin-bottom:8px}
+.toc ol{margin:0; padding-left:20px}
+.toc li{margin:4px 0}
+
+/* «Куда дальше» — двери, а не карточки: у каждой свой ход и одна строка о
+   том, что за ней. ⚠️ Дверей ставить 2, 3 или 4 (правило § 15 о ряде без
+   дыры); пять — переписывать, а не подпирать стилем. */
+.next{margin:28px 0 0}
+.next h2{margin-bottom:10px}
+.doors{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px}
+.door{
+  display:block; text-decoration:none; color:var(--ink);
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:16px 18px; transition:border-color .15s, transform .15s;
+}
+.door:hover{border-color:var(--accent); transform:translateY(-2px)}
+@media (prefers-reduced-motion:reduce){ .door{transition:none} .door:hover{transform:none} }
+.door b{display:block; color:var(--accent); margin-bottom:4px}
+.door span{color:var(--dim); font-size:15px}
+
 /* ---- скриншоты продукта (18.09.2026) ----
    Настоящие экраны, снятые с живого тренажёра, — не макеты. Сетка жёстко
    2×2: авто-подбор колонок на 1044 px дал бы три колонки и одинокий

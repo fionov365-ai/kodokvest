@@ -3,49 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Фионика</title>
+<title>Такой страницы нет — Фионика</title>
+<meta name="robots" content="noindex">
 <script>
-/* GitHub Pages отдаёт этот файл на любой неизвестный адрес.
-   Задача: .../kodokvest/admin (без #) открывает панель репетитора,
-   всё остальное — честная страница «такого адреса нет» со списком разделов. */
+/* GitHub Pages отдаёт этот файл на ЛЮБОЙ неизвестный адрес.
+   Две задачи, и обе решаются здесь, потому что больше негде.
+
+   1. .../kodokvest/admin (без #) открывает панель репетитора — это не
+      ошибка, а дверь.
+   2. Ссылки внизу обязаны работать с любой глубины. ⚠️ Оплачено разбором
+      18.09.2026: раньше они были «./», и на адресе .../kodokvest/a/b/c
+      «./» означает .../kodokvest/a/b/ — то есть все восемь ссылок со
+      страницы «вот всё, что есть» вели в никуда ровно там, где человек
+      уже заблудился. Теперь корень сайта вычисляется из адреса, а не
+      угадывается: до переезда он кончается на /kodokvest/, после переезда
+      сайт лежит в корне домена. */
 (function(){
   var p = location.pathname;
   var m = p.match(/^(.*\/)admin\/?$/i);
   if (m){ location.replace(m[1] + "?admin" + (location.hash || "")); return; }
-  /* ⚠️ Молчаливого перенаправления больше НЕТ, и это решение, а не упущение.
-     Раньше любой неизвестный адрес заменялся на корень раздела: человек,
-     ошибшийся в адресе, оказывался неизвестно где и не знал, что ошибся.
-     Плюс на адресе со слэшем на конце регулярка совпадала с пустым хвостом,
-     адрес не менялся, и браузер заменял страницу сам на себя. Теперь страница
-     говорит вслух, что такого адреса нет, и показывает все, какие есть.
-     Единственное исключение — .../admin: это не ошибка, а дверь. */
+
+  var i = p.indexOf("/kodokvest/");
+  var base = i >= 0 ? p.slice(0, i + "/kodokvest/".length) : "/";
+  document.addEventListener("DOMContentLoaded", function(){
+    var a = document.querySelectorAll("a[data-p]");
+    for (var k = 0; k < a.length; k++) a[k].href = base + a[k].getAttribute("data-p");
+  });
 })();
 </script>
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-       margin:0;padding:48px 24px;color:#1a1f3d;background:#f6f7fc;line-height:1.5}
+  /* ⚠️ Стили здесь СВОИ, а не css/pages.css, и это решение: страницу отдают
+     на любом адресе, и относительный путь к общему файлу с глубины не
+     разрешится. Цвета повторяют pages.css — обе темы, иначе ночью страница
+     ошибки бьёт по глазам белым листом. */
+  :root{--bg:#f1f4fc;--card:#fff;--ink:#141a2e;--dim:#5a6480;--line:#dfe4f2;--accent:#3a5bd9}
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0d1020;--card:#161c33;--ink:#e8ecf8;--dim:#9aa4c0;--line:#252d4a;--accent:#7d97ff}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:48px 16px;background:var(--bg);color:var(--ink);line-height:1.6;
+       font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
   .box{max-width:1080px;margin:0 auto}
   h1{font-size:30px;margin:0 0 10px}
-  p{margin:0 0 14px;color:#4a5372}
-  a{color:#5a41e0}
-  .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
-  .row a{display:inline-block;padding:10px 16px;border-radius:12px;
-         border:1px solid #c3cbe4;background:#fff;text-decoration:none}
+  p{margin:0 0 14px;color:var(--dim)}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:22px}
+  .row a{display:block;padding:14px 16px;border-radius:14px;border:1px solid var(--line);
+         background:var(--card);text-decoration:none;color:var(--ink);min-height:48px}
+  .row a:hover{border-color:var(--accent)}
+  .row b{display:block;color:var(--accent)}
+  .row span{color:var(--dim);font-size:15px}
 </style>
 </head>
 <body>
 <div class="box">
   <h1>Такой страницы нет</h1>
-  <p>Адрес набран с ошибкой или страницу переименовали. Вот всё, что есть:</p>
+  <p>Адрес набран с ошибкой или страницу переименовали. Вот всё, что на сайте есть:</p>
   <div class="row">
-    <a href="./">Тренажёр</a>
-    <a href="./vitrina/">Сайт Фионики</a>
-    <a href="./repetitoru/">Репетитору</a>
-    <a href="./semeynoe-obuchenie/">Семейное обучение</a>
-    <a href="./individualnyi-proekt/">Индивидуальный проект</a>
-    <a href="./shkole/">Школе</a>
-    <a href="./baza/">Справочник</a>
-    <a href="./kontakty/">Контакты</a>
+    <a data-p="" href="./"><b>Тренажёр</b><span>сто уроков Python, первая задача без регистрации</span></a>
+    <a data-p="vitrina/" href="./vitrina/"><b>Сайт Фионики</b><span>что это, для кого и сколько стоит</span></a>
+    <a data-p="roditelyu/" href="./roditelyu/"><b>Родителю</b><span>что видно о занятиях ребёнка</span></a>
+    <a data-p="repetitoru/" href="./repetitoru/"><b>Репетитору</b><span>проверка кода и панель группы</span></a>
+    <a data-p="shkole/" href="./shkole/"><b>Школе</b><span>класс без установки и без интернета</span></a>
+    <a data-p="semeynoe-obuchenie/" href="./semeynoe-obuchenie/"><b>Семейное обучение</b><span>занятие, отчёт и вопросы ребёнку</span></a>
+    <a data-p="individualnyi-proekt/" href="./individualnyi-proekt/"><b>Индивидуальный проект</b><span>10–11 класс, защита весной</span></a>
+    <a data-p="baza/" href="./baza/"><b>Справочник</b><span>разборы того, о чём нас спрашивают</span></a>
+    <a data-p="o-proekte/" href="./o-proekte/"><b>О проекте</b><span>кто делает Фионику и зачем</span></a>
+    <a data-p="kontakty/" href="./kontakty/"><b>Контакты</b><span>пишите: отвечает человек, который это делает</span></a>
   </div>
 </div>
 </body>
