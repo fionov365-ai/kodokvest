@@ -2259,10 +2259,13 @@ html{scroll-padding-top:84px;scroll-padding-bottom:140px}
    же моноширинный шрифт), а что его можно трогать — говорит пунктир снизу.
    Кнопкой не притворяется: это по-прежнему код, просто живой. */
 .numin{font:inherit;font-family:inherit;font-size:inherit;line-height:inherit;
-  color:var(--n);background:none;border:none;padding:0;margin:0;
+  color:var(--n);border:none;padding:0;margin:0;
   border-bottom:1px dashed currentColor;text-align:center;min-width:1.1em;
-  border-radius:0;-moz-appearance:textfield}
-.numin{background:rgba(127,127,127,.10)}
+  border-radius:0;-moz-appearance:textfield;
+  /* ⚠️ Здесь стояло background:none, а следующей же строкой отдельное правило
+     .numin его перебивало подсветкой: первое объявление было мёртвым, и глазами
+     это не видно. Оставлено одно, живое (ревизия 18.09.2026). */
+  background:rgba(127,127,127,.10)}
 .numin:hover{background:rgba(127,127,127,.22)}
 .numin:focus{outline:2px solid var(--acc2);outline-offset:1px;background:rgba(127,127,127,.14)}
 /* ⚠️ На телефоне в это поле не попасть пальцем. Замер 07.09.2026 на экране

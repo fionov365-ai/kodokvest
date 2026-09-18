@@ -97,7 +97,14 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
                      /* «Я застрял» (13.09.2026): { at, lesson, why, off }.
                         Один сигнал на ученика, три готовые фразы — без
                         свободного текста, см. HELP_WHY. */
-                     "help"];
+                     "help",
+                     /* «Мои программы» из песочницы: { id: { title, about, code, at } }.
+                        ⚠️ Заведено позже списков и в них не попало (18.09.2026):
+                        поэтому программы не приезжали на второе устройство
+                        (mergeProgress их выбрасывал) и не стирались при смене
+                        ученика — следующий ребёнок видел чужие. Это КОД ребёнка,
+                        поэтому стоит и в KEEP_ON_RESET. */
+                     "works"];
 /* codeSaved — единственный ответ продукта на «потерял код — потерял прогресс».
    ⚠️ Это НЕ восстановление: восстанавливать нечем и не будет чем, потому что
    ни почты, ни телефона мы не спрашиваем, и это обещание на вывеске. Это
@@ -109,14 +116,17 @@ var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect","codeSaved"];
 /* mytasks рядом с games по одной причине: и то и другое ребёнок сделал сам,
    а не «набрал результатов». Сброс прогресса в панели репетитора такое не
    стирает — стирает только смена ученика. */
-var KEEP_ON_RESET = ["games","mytasks","gallery","defense"];
+var KEEP_ON_RESET = ["games","mytasks","gallery","defense","works"];
 
 /* пустой прогресс: только структура, без данных */
 function blankProgress(){
   /* mytaskDraft — недособранное «своё задание» (название, условие, код).
      Живёт рядом с sandbox и по той же причине: это не результат занятий,
      а незаконченная работа ребёнка, и терять её на переходе нельзя. */
-  var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] },
+  /* shop — код верстака мастерской. Такое же «одна программа ребёнка», как
+     песочница, и объявлено здесь по той же причине: поле, которое появляется
+     само при первом сохранении, не видит ни сторож формы, ни очистка. */
+  var o = { v:2, badges:[], sandbox:null, shop:null, mytaskDraft:null, name:"", schedule:{ days:[] },
             frame: blankFrame(), now:null };
   PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
   PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
@@ -130,6 +140,7 @@ function ensureShape(o){
   PROGRESS_NUMS.forEach(function(k){ if (typeof o[k] !== "number") o[k] = 0; });
   if (!Array.isArray(o.badges)) o.badges = [];
   if (typeof o.sandbox !== "string") o.sandbox = null;
+  if (typeof o.shop !== "string") o.shop = null;
   /* «чем занят сейчас»: место и урок, обновляется активным тиком. Едет на
      сервер с прогрессом — из него взрослый видит статус присутствия */
   if (!o.now || typeof o.now !== "object" || typeof o.now.at !== "number") o.now = null;
@@ -177,7 +188,9 @@ function clearResults(o){
 function clearAll(o){
   clearResults(o);
   KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
-  o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
+  /* ⚠️ shop — это код верстака, такой же код ребёнка, как песочница. Его тут
+     забыли (18.09.2026), и верстак прежнего ребёнка достался следующему. */
+  o.sandbox = null; o.shop = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
   o.now = null;
   /* ⚠️ Рамку взрослого целиком здесь стирать НЕЛЬЗЯ. Раньше стирали — и потолок
      дня, жёсткий режим, дни занятий и каникулы исчезали от двух тапов в детском
@@ -340,16 +353,9 @@ function shieldsLeftIn(days, shields){
   if (n > SHIELD_MAX) n = SHIELD_MAX;
   return n > 0 ? n : 0;
 }
-/* сколько дней занятий до следующего щита (0 — запас уже полон) */
-function shieldToNextIn(days, shields){
-  if (shieldsLeftIn(days, shields) >= SHIELD_MAX) return 0;
-  var n = Object.keys(days || {}).length % SHIELD_EVERY;
-  return n === 0 ? SHIELD_EVERY : SHIELD_EVERY - n;
-}
 function coveredNow(){ return coveredDays(S.days, S.shields); }
 function shieldedOn(key){ return !!(S.shields && S.shields[key]); }
 function shieldsLeft(){ return shieldsLeftIn(S.days, S.shields); }
-function shieldToNext(){ return shieldToNextIn(S.days, S.shields); }
 
 var shieldJustUsed = null;   /* дата, которую щит закрыл только что */
 
@@ -836,13 +842,18 @@ function frameState(){ return (kidTarget && kidTarget.data) ? kidTarget.data : S
    если взрослый отдельно этого попросил галочкой.
    Считаем по карте часов, то есть по активным минутам ВЕЗДЕ в тренажёре, а не
    только на занятии: родитель мерит экранное время, а не учебное. */
-function todayMinutes(){
-  var row = (S.hours || {})[dayKey()] || [], sec = 0;
+/* st — чей прогресс считаем. По умолчанию свой: так это работает у ребёнка,
+   и так же считают потолок capReached/capHard. ⚠️ В карточке ученика у
+   взрослого «свой» — это прогресс ВЗРОСЛОГО, то есть почти всегда нули;
+   поэтому показ минут в чужой карточке обязан передать сюда снимок ребёнка
+   (frameState()), иначе родителю пишут «сегодня 0 минут из 45» про ребёнка,
+   который отзанимался сорок. Найдено ревизией 18.09.2026. */
+function todayMinutes(st){
+  var row = ((st || S).hours || {})[dayKey()] || [], sec = 0;
   for (var i = 0; i < 24; i++) sec += row[i] || 0;
   return Math.round(sec / 60);
 }
 function capOn(){ return frame().cap > 0; }
-function capLeft(){ return Math.max(0, frame().cap - todayMinutes()); }
 function capReached(){ return capOn() && todayMinutes() >= frame().cap; }
 function capHard(){ return capReached() && frame().capHard; }
 function capNoteHTML(){
@@ -2358,6 +2369,16 @@ function mergeProgress(a, b){
   });
   out.shop = fresher.shop || older.shop || null;
 
+  /* «Мои программы» из песочницы: каждая — КОД под своим неповторимым id,
+     поэтому это НАКОПЛЕНИЕ, как детали мастерской: сохранённое на одном
+     устройстве не пропадает из-за занятия на другом. Один id в двух копиях
+     бывает только если это одна и та же программа — берём свежую. */
+  out.works = {};
+  Object.keys(mergeSet(a.works, b.works)).forEach(function(k){
+    out.works[k] = (fresher.works || {})[k] || (older.works || {})[k] || null;
+    if (!out.works[k]) delete out.works[k];
+  });
+
   /* черновики уроков: это КОД, и сложить две версии нельзя — берём из более
      свежего сохранения, как песочницу и как свои версии игр. Урок, который
      правили только на одном устройстве, при этом не теряется. */
@@ -3080,11 +3101,6 @@ var ERR_BEASTS = [
 var BEAST_BADGE_AT = 6;   /* столько разных побеждённых — и бейдж */
 
 function errsAll(){ S.errs = S.errs || {}; return S.errs; }
-function beastByKind(kind){
-  for (var i = 0; i < ERR_BEASTS.length; i++)
-    if (ERR_BEASTS[i].kind === kind) return ERR_BEASTS[i];
-  return null;
-}
 /* Встреча: пишем всегда, даже незнакомый тип. Показываем только тех, кто в
    ERR_BEASTS, но копить полезно всё — по этому списку потом видно, чего
    в бестиарии не хватает. */
@@ -3867,11 +3883,31 @@ function solutionSources(body){
 /* Есть ли в коде такой кусок. Спецсимволы экранируем — иначе «max(» рушит
    регулярное выражение, а «\b» приклеиваем только к латинским краям: в
    JavaScript \w — это латиница, и после русской буквы граница слова не ловится. */
+/* Есть ли в коде нужная конструкция. ⚠️ Сверяем по СМЫСЛУ, а не по виду:
+   в Python `discount=10` и `discount = 10` — одно и то же, и отказывать за
+   лишний пробел нельзя. Раньше образец «discount=10» требовал точного
+   написания, и правильное `def cost(price, discount = 10)` не засчитывалось;
+   то же било по «inventory = {», «rooms = {», «days = {». Найдено ревизией
+   18.09.2026.
+   Правило перевода: пробел РЯДОМ со знаком (= ( ) { } [ ] , :) — «сколько
+   угодно, хоть ни одного», пробел между двумя словами — «хотя бы один».
+   Второе важно: образец «for » не должен совпадать со словом «format». */
 function codeHas(code, needle){
-  var esc = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var esc1 = function(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  var ЗНАК = /^[=(){}\[\],:]$/;
+  var parts = String(needle).split(/(\s+|[=(){}\[\],:])/).filter(function(p){ return p !== ""; });
+  var out = "";
+  parts.forEach(function(p, i){
+    if (/^\s+$/.test(p)){
+      var сосед = ЗНАК.test(parts[i - 1] || "") || ЗНАК.test(parts[i + 1] || "");
+      out += сосед ? "\\s*" : "\\s+";
+    }
+    else if (ЗНАК.test(p)) out += "\\s*" + esc1(p) + "\\s*";
+    else out += esc1(p);
+  });
   var pre = /^[A-Za-z0-9_]/.test(needle) ? "\\b" : "";
   var post = /[A-Za-z0-9_]$/.test(needle) ? "\\b" : "";
-  return new RegExp(pre + esc + post).test(code);
+  return new RegExp(pre + out + post).test(code);
 }
 
 function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data, stdin){
@@ -4130,12 +4166,12 @@ function helpBoxHTML(lessonId){
   if (h && h.lesson === lessonId)
     return '<div class="helpcard on">🙋 <b>Ты позвал взрослого:</b> «' + esc(HELP_WHY[h.why]) + '». ' +
       'Он увидит это в своём кабинете, когда откроет его, — это не звонок. Пока ждёшь, попробуй подсказку ' +
-      'или запусти код ещё раз. <button class="linkjump" data-help="off">Отменить</button></div>';
+      'или запусти код ещё раз. <button class="linkjump" data-stuck="off">Отменить</button></div>';
   if (!helpPick) return "";
   return '<div class="helpcard">Что случилось? Взрослый увидит ровно эту фразу и урок — больше ничего.' +
     '<div class="helprow">' + HELP_WHY.map(function(w, i){
-      return '<button class="rbtn sec" data-help="' + i + '">' + esc(w) + '</button>';
-    }).join("") + '<button class="linkjump" data-help="close">Не надо</button></div></div>';
+      return '<button class="rbtn sec" data-stuck="' + i + '">' + esc(w) + '</button>';
+    }).join("") + '<button class="linkjump" data-stuck="close">Не надо</button></div></div>';
 }
 function wireHelp(lessonId){
   var btn = document.getElementById("helpbtn"), out = document.getElementById("helpout");
@@ -4144,9 +4180,15 @@ function wireHelp(lessonId){
     out.innerHTML = helpBoxHTML(lessonId);
     var on = helpActive(S);
     btn.disabled = !!(on && on.lesson === lessonId);
-    out.querySelectorAll("[data-help]").forEach(function(b){
+    /* ⚠️ Атрибут здесь СВОЙ — data-stuck, а не data-help. Пока он назывался
+       data-help, клик по фразе делал две вещи: записывал сигнал (этот
+       обработчик) и всплывал до общего обработчика на странице, где «0» или
+       «off» уходили в openHelp как ключ справки. Ключа такого нет, справка
+       откатывалась на текущее место — и поверх урока распахивалось окно
+       «Урок — как он устроен». Найдено ревизией 18.09.2026. */
+    out.querySelectorAll("[data-stuck]").forEach(function(b){
       b.onclick = function(){
-        var k = b.getAttribute("data-help");
+        var k = b.getAttribute("data-stuck");
         if (k === "close"){ helpPick = false; return draw(); }
         if (k === "off"){ helpCancel(); helpPick = false; return draw(); }
         helpCall(lessonId, parseInt(k, 10));
@@ -4604,7 +4646,15 @@ function draftApply(ed, saved){
 function draftFlush(){
   if (draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
   var s = session;
-  if (!s || !s.studio || !s.studio.editor) return;
+  if (!s) return;
+  /* Экран с редактором не обязан быть студией: HTML-ступень «Проверки 2» —
+     обычная textarea, и своё несохранённое она теряла целиком (18.09.2026).
+     Поэтому сессия может объявить, как её сохранить, и сброс это уважает. */
+  if (typeof s.flush === "function"){
+    try { s.flush(); } catch(e){}
+    return;
+  }
+  if (!s.studio || !s.studio.editor) return;
   try {
     if (!document.body.contains(s.studio)) return;
     if (s.sandbox){ S.sandbox = s.studio.editor.getCode(); save(); return; }
@@ -5725,7 +5775,12 @@ var SANDBOX_START_PY = 'import sys\n\nprint("Это настоящий Python", 
    это правило, а не стиль. */
 var SANDBOX = KVSCREENS.sandbox({
   app: app, esc: esc, errHTML: errHTML, enterScreen: enterScreen, refreshTop: refreshTop,
-  save: save, award: award, copyText: copyText, claimScreen: claimScreen,
+  save: save, award: award, claimScreen: claimScreen,
+  /* ⚠️ copyText — обёрткой: он присваивается НИЖЕ по файлу (разрез профиля),
+     и значением сюда приезжал undefined. Кнопка «Скопировать ссылку» после
+     сохранения программы так и стояла мёртвой — ровно та ловушка, про которую
+     написано в § 4.40 и в шапке контрактов выше. Найдено ревизией 18.09.2026. */
+  copyText: function(t, btn){ return copyText(t, btn); },
   draftFlush: draftFlush, draftSchedule: draftSchedule, makeStudio: makeStudio,
   galleryAll: galleryAll, galleryDrawing: galleryDrawing, gallerySave: gallerySave,
   myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkSave: myWorkSave,
@@ -5736,7 +5791,9 @@ var SANDBOX = KVSCREENS.sandbox({
   screenViz: function(o){ screenViz(o); },
   screenWorlds: screenWorlds,
   SANDBOX_START: SANDBOX_START, SANDBOX_START_PY: SANDBOX_START_PY,
-  SFX_KEY: SFX_KEY, VOICE_KEY: VOICE_KEY,
+  /* ⚠️ SFX_KEY и VOICE_KEY отсюда убраны (18.09.2026): объявлены они ниже по
+     файлу, приезжали undefined, а песочница ими и не пользовалась — только
+     упоминала в комментарии. Понадобятся — передавать обёрткой, как copyText. */
   /* ⚠️ Функциями: и прогресс, и сессия — чужое изменяемое состояние. */
   S: function(){ return S; }, session: function(){ return session; },
   newSession: function(v){ session = v; }
@@ -6516,7 +6573,10 @@ function ptaskCardHTML(){
         (x.t === "ask"
           ? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
           : '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + esc(x.ref) + '">' +
-            (l ? "Открыть" : "Открыть") + '</button>') + '</div>';
+            /* ⚠️ Стояло (l ? "Открыть" : "Открыть") — обе ветки одинаковы, то есть
+               проверка урока не делала ничего. Задумано было назвать урок: ребёнок
+               видит просьбу взрослого и сразу знает, куда она ведёт. 18.09.2026. */
+            (l ? "Открыть урок «" + esc(l.title) + "»" : "Открыть") + '</button>') + '</div>';
     }).join("") +
     '<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
 }
@@ -10240,8 +10300,9 @@ function frameEditorHTML(f){
     (f.cap
       ? '<div class="admrow"><button class="rbtn ' + (f.capHard ? "check" : "sec") + '" data-act="fcaphard">' +
         (f.capHard ? "✓ После предела не пускать дальше" : "После предела только напоминать") + '</button></div>' +
-        '<p class="dim">Сегодня за тренажёром <b>' + todayMinutes() + '</b> ' +
-        plural(todayMinutes(), "минута", "минуты", "минут") + ' из ' + f.cap + '. ' +
+        /* ⚠️ Снимок ОТСЮДА: в карточке ученика это минуты ребёнка, а не свои. */
+        '<p class="dim">Сегодня за тренажёром <b>' + todayMinutes(frameState()) + '</b> ' +
+        plural(todayMinutes(frameState()), "минута", "минуты", "минут") + ' из ' + f.cap + '. ' +
         'Считается всё время в тренажёре, а не только занятие — вы мерите экранное время, а не учебное.</p>' +
         '<p class="dim">⚠️ По умолчанию тренажёр только напоминает. Жёсткий запрет наказывает за увлечённость, ' +
         'поэтому включается отдельно и никогда не обрывает начатый урок.</p>'
@@ -11061,6 +11122,17 @@ function kidRender(savedNote){
   if (!tabs.some(function(t){ return t[0] === kidTab; }))
     kidTab = kidTarget.fresh ? "frame" : "rep";
 
+  /* ⚠️ Подтверждение вклеиваем в ОТКРЫТУЮ вкладку, а не всегда в «Расписание».
+     Пока оно всегда шло в рамку, «Домашка задана» и «Вариант задан» рисовались
+     в скрытую панель: взрослый видел, как мигнуло «Сохраняю…», и больше ничего,
+     а потому жал кнопку второй раз. Найдено ревизией 18.09.2026.
+     Вкладка, до которой сообщение не относится, получает пустую строку. */
+  function noteHere(id){
+    if (!savedNote) return "";
+    var где = (kidTab === "hw" || kidTab === "note") ? kidTab : "frame";
+    return где === id ? '<div class="msg show ok">' + savedNote + '</div>' : "";
+  }
+
   var h = "";
   /* статус присутствия — НАД вкладками: «что он делает сейчас» и есть вопрос,
      с которым взрослый открыл карточку, и он виден с любой вкладки */
@@ -11124,10 +11196,10 @@ function kidRender(savedNote){
     '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
     /* Подтверждение сохранения должно пережить перерисовку рамки, которая
        идёт сразу за ним, — поэтому его вклеивает kidRender, а не kidSave. */
-    (savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
+    (noteHere("frame") || '<div class="msg" id="kidsavemsg"></div>'));
 
-  h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st));
-  h += kidPaneHTML("note", noteGiveHTML(st));
+  h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st) + noteHere("hw"));
+  h += kidPaneHTML("note", noteGiveHTML(st) + noteHere("note"));
   h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
   box.innerHTML = h;
@@ -13499,7 +13571,10 @@ function screenAdmin(){
       CURRICULUM.forEach(function(w){
         w.lessons.forEach(function(l){ if (l.id === id) cl = l; });
       });
-      if (!confirm("Сбросить урок " + (cl ? cl.n + " · " + cl.title : id) + "?\n\n" +
+      /* ⚠️ Номер урока — это num (поле n есть у МИРА, не у урока). Пока стояло
+         cl.n, репетитор читал «Сбросить урок undefined · Как читать ошибки?»
+         и не понимал, что именно сбрасывает. Найдено ревизией 18.09.2026. */
+      if (!confirm("Сбросить урок " + (cl ? cl.num + " · " + cl.title : id) + "?\n\n" +
                    "Пропадут звёзды и журнал урока: время, попытки, подсказки."))
         return;
       setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin();
@@ -14645,6 +14720,209 @@ var HELP = {
     'и <b>сертификат</b>, который печатается на бумаге.</p>' +
     '<p>Не помнишь, где было нужное, — есть <b>поиск по урокам</b> прямо над списком миров.</p>' },
 
+  /* ⚠️ Семь записей ниже добавлены ревизией 18.09.2026. До них «?» на этих
+     экранах показывал подсказку про ГЛАВНЫЙ экран — helpFor откатывается на
+     HELP.home, и обещание из index.html («"?" отвечает для ЛЮБОГО экрана»)
+     полтора месяца было неправдой на Роботе, в Алгоритмах, Домашке,
+     Приёмке, Мастерской и на витрине работ. */
+
+  /* Робот — единственный раздел, где ребёнок пишет не на Python, и первый
+     вопрос у него именно про это: «а почему тут русские слова». Отвечаем
+     сразу, иначе язык читается как наша выдумка, а он экзаменационный. */
+  robot: { t:"🤖 Робот — исполнитель с пятью командами", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Робот ходит по клетчатому полю и закрашивает клетки. Программа пишется ' +
+    '<b>не на Python</b>, а на языке Робота — русскими словами. Язык взят из КуМира ' +
+    'слово в слово: это <b>задание 15 ОГЭ</b>, там, где Python не примут.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Слева поле, справа окно <b>«Программа»</b>: команды пишутся по одной в строке.</li>' +
+    '<li><b>«▶ Выполнить»</b> и запускает, и сразу судит: под программой появится, ' +
+    'решено или нет. Отдельной кнопки «Проверить» тут нет.</li>' +
+    '<li><b>«Сначала»</b> вернёт заготовку, если программа запуталась совсем.</li>' +
+    '<li>Карточка <b>«Язык Робота»</b> под полем — все команды, условия и циклы сразу. ' +
+    'Подглядывать в неё не стыдно: на экзамене её печатают в самом условии.</li>' +
+    '<li>Не идёт — открой <b>«Подсказки»</b>, они идут от намёка к решению. ' +
+    'После победы на их месте встанет <b>«Разбор»</b>.</li></ul>' +
+    '<h4>Почему проверка такая строгая</h4>' +
+    '<p>Программа гоняется не только на нарисованном поле, но и на скрытых: там другая ' +
+    'длина стены и другие проходы. Поэтому «вправо, закрасить, вправо, закрасить» не ' +
+    'проходит — нужен цикл. Сломалось на скрытом поле — экран назовёт его номер и покажет ' +
+    'рядом, что вышло и что было нужно. А если Робот упёрся в стену, он разбивается, ' +
+    'и будет сказано, на какой строке.</p>' +
+    '<h4>Как устроен раздел</h4>' +
+    '<p>Часть задач — <b>формат ОГЭ</b>: две стены с проходами на бесконечном поле, и балл ' +
+    'за них считается по правилам эксперта ФИПИ — 2, 1 или 0. Остальные в группе ' +
+    '<b>«Приёмы по одному»</b> учат по одному приёму, и баллов за них нет. Звёзд Робот ' +
+    'не даёт; решённая задача помечается «решено ✓».</p>' },
+
+  /* ⚠️ Подсказка раздела обязана объяснить ВКЛАДКИ: «Темы» и карта экзамена
+     показывают один и тот же материал двумя разными способами, и без этого
+     человек ищет на вкладке ЕГЭ те же карточки, что видел в темах. */
+  algo: { t:"🧮 Алгоритмы, ОГЭ и ЕГЭ — школьная информатика", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Тот же Python и тот же судья, что в уроках, но задачи школьные: поиск, сортировка, ' +
+    'цена алгоритма, системы счисления, кодирование информации, логика, графы, исполнители, ' +
+    'рекурсия и перебор — и типовые задания экзамена. Заходить можно с любого места курса: ' +
+    'всё, что нужно, объясняется прямо в задании.</p>' +
+    '<h4>Три вкладки наверху</h4>' +
+    '<ul><li><b>«🧮 Темы»</b> — все задачи по темам. Здесь же карточка ' +
+    '<b>«🧾 Задача по твоей программе»</b>: её собирают кнопкой из твоего же кода.</li>' +
+    '<li><b>«📄 ОГЭ»</b> и <b>«🎓 ЕГЭ»</b> — тот же материал, разложенный по <b>номерам ' +
+    'заданий</b>. Это не другие задачи, а другой порядок.</li></ul>' +
+    '<h4>Как читать карту экзамена</h4>' +
+    '<ul><li><b>✓ есть задачи</b> — по этому номеру у нас есть что решать, ' +
+    '<b>◐ наполовину</b> — часть номера наша, и написано, какая именно не наша, ' +
+    '<b>◻ пока нет задач</b> — наш план работ, <b>— судить нечем</b> — задание требует ' +
+    'не программы (например, электронных таблиц), и против него написана причина.</li>' +
+    '<li><b>«Решать»</b> в строке ведёт к первой нерешённой задаче этой темы.</li>' +
+    '<li>Внизу — <b>«📝 Собрать пробный вариант»</b>: весь экзамен подряд, по одной задаче ' +
+    'на каждый номер. У вкладки ОГЭ там же дверь к <b>Роботу</b>: задания 15 и 16 на ' +
+    'экзамене оба обязательны.</li>' +
+    '<li>Номера сняты с демоверсии того года, который написан рядом. Нумерация между годами ' +
+    'меняется — сверяйтесь со своим годом.</li></ul>' +
+    '<h4>Чем задачи тут отличаются от уроков</h4>' +
+    '<ul><li><b>Звёзд раздел не даёт</b> — поэтому и подсказка здесь ничего не стоит.</li>' +
+    '<li><b>Проверка гоняет программу на скрытых данных.</b> Совпасть должен способ, а не ' +
+    'один напечатанный ответ: <code>print(3)</code> тут не проходит.</li>' +
+    '<li><b>Запреты из условия работают.</b> Если написано «без sorted()», сдать этим ' +
+    'нельзя: задача, закрываемая одной готовой функцией, ничему не учит.</li>' +
+    '<li><b>У некоторых задач есть бюджет шагов.</b> Программа может быть верной и всё ' +
+    'равно слишком дорогой — движок считает шаги и говорит число.</li></ul>' },
+
+  /* Задача собирается из кода самого ребёнка, поэтому первый его вопрос — не
+     «что делать», а «откуда она взялась»; с этого и начинаем. */
+  myexam: { t:"🧾 Какое число закрыто — задача по твоей программе", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Все остальные задачи раздела написаны нами и одинаковы у всех. Эта — нет: она ' +
+    'собрана <b>из твоей программы</b> — из сданного урока, где ты не открывал решение, ' +
+    'или из того, что ты сохранил в «Моё» из песочницы. Одно число в ней закрыто клеткой ' +
+    '⬜, и известно только то, что программа напечатала.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Программа сверху — <b>только для чтения</b>. Запускать нельзя: реши в голове, ' +
+    'как на экзамене.</li>' +
+    '<li>Впиши в поле ответа <b>одно целое число от 1 до 30</b> и нажми ' +
+    '<b>«✓ Проверить»</b>.</li>' +
+    '<li>Не сошлось — верное число тебе не покажут, но скажут направление: загаданное ' +
+    'больше или меньше. Для второй попытки этого хватает, а готовый ответ убил бы её.</li>' +
+    '<li>После победы <b>«Ещё одну»</b> соберёт новую задачу.</li></ul>' +
+    '<h4>Почему ответ ровно один</h4>' +
+    '<p>Движок подставляет в клетку все числа от 1 до 30 и берёт только то, чей вывод не ' +
+    'повторился ни у одного другого. Твоё собственное число в загадку не попадает: его ты ' +
+    'и так помнишь.</p>' +
+    '<h4>Если собрать не из чего</h4>' +
+    '<p>Нужна программа, которая что-то печатает и печатает это <b>всегда одинаково</b>: ' +
+    'без ввода с клавиатуры, без случайных чисел и без черепашки. Урок, где ты открывал ' +
+    'решение, сюда не идёт — это код автора, а не твой.</p>' },
+
+  hw: { t:"📮 Домашка — что задал взрослый", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Задачи, которые задаёт между занятиями взрослый — репетитор или родитель. Домашка — ' +
+    'это <b>не пройденный урок заново</b>: задача на то же умение, но с другими числами, ' +
+    'и своё решение из урока к ней не подойдёт.</p>' +
+    '<h4>Как читать список</h4>' +
+    '<ul><li><b>«Сделать»</b> — что ещё не сдано, <b>«Сдано»</b> — сделанное, с числом ' +
+    'попыток. Сданное можно решить ещё раз, на отметку это не повлияет.</li>' +
+    '<li>На карточке стоит срок словами: «на сегодня», «на завтра», «осталось 3 дня» или ' +
+    '«срок был вчера». <b>Просрочка ничего не сжигает</b> и ничем не наказывается: ' +
+    'сделанное поздно лучше несделанного.</li>' +
+    '<li>Больше трёх задач за раз взрослый задать не может — это нарочно.</li></ul>' +
+    '<h4>Что делать в задаче</h4>' +
+    '<ul><li>Читай условие в рамке <b>«🎯 Задача»</b>: все числа, которые нужны, названы ' +
+    'прямо в нём.</li>' +
+    '<li>Пиши программу и жми <b>«✓ Проверить»</b> — сверяется то, что она напечатала. ' +
+    'Если в задаче просят функцию или цикл, тремя <code>print</code> с готовыми числами ' +
+    'её не закрыть: об этом скажут до проверки вывода.</li>' +
+    '<li><b>💡 Подсказка</b> здесь бесплатная: звёзд в домашке нет.</li></ul>' +
+    '<h4>Что видит взрослый</h4>' +
+    '<p>Домашка звёзд не даёт и на прогресс по курсу не влияет. Что задача сдана и со ' +
+    'скольких попыток, взрослый увидит, когда откроет тренажёр в следующий раз.</p>' },
+
+  /* Приёмка — детский экран, хотя выглядит взрослым: ребёнок здесь заказчик, а
+     не исполнитель, и это первое, что надо сказать, иначе он ищет, где писать
+     программу, и не находит. */
+  specs: { t:"📋 Приёмка — принять работу напарника", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Здесь ты <b>не пишешь программу</b>. Её написал напарник, а ты принимаешь работу: ' +
+    'записываешь, что должно быть верно, и движок проверяет его код по твоим правилам. Так ' +
+    'работают со взрослым кодом и так придётся работать с ИИ — он пишет быстро и уверенно, ' +
+    'а отвечаешь за результат ты.</p>' +
+    '<h4>Четыре слова, больше не нужно</h4>' +
+    '<ul><li><code>пример сумма([1, 2, 3]) = 6</code> — конкретный случай и ответ к нему;</li>' +
+    '<li><code>всегда результат &gt;= 0</code> — правило, верное на всех примерах;</li>' +
+    '<li><code>никогда результат in числа</code> — чего быть не должно;</li>' +
+    '<li><code>не дороже 200 шагов</code> — цена вызова, её считает движок.</li></ul>' +
+    '<p>«Всегда» и «никогда» смотрят на данные из строк «пример», поэтому без ни одного ' +
+    'примера правило проверять не на чем — и об этом скажут прямо.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li>Прочитай, о чём просили напарника, и его код. <b>Менять его код нельзя</b> — ' +
+    'работу надо принять или вернуть.</li>' +
+    '<li>Пиши строки приёмки в поле и жми <b>«✓ Принять работу»</b>.</li>' +
+    '<li><b>«Показать на Python»</b> покажет твои же строки обычными <code>assert</code>. ' +
+    'Это не наш выдуманный язык: ровно так проверяют код взрослые.</li></ul>' +
+    '<h4>Как судят твою приёмку</h4>' +
+    '<p>Сначала твои правила прогоняются на <b>заведомо правильной</b> программе: правило, ' +
+    'которое отвергает верное решение, — плохое правило, и экран назовёт строку. Потом — на ' +
+    'коде напарника. Победа бывает двух видов: <b>работу приняли</b> и <b>работу вернули</b>, ' +
+    'потому что правила поймали поломку. А вот вернуть исправную работу — ошибка: правило ' +
+    'оказалось строже просьбы. Если строк слишком мало, принимать ещё рано, и будет ' +
+    'написано, сколько их нужно хотя бы.</p>' +
+    '<p>Подсказки тут ничего не стоят: это тренировка.</p>' },
+
+  shop: { t:"🔧 Мастерская — полка и верстак", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Обычно решил задачу — и она пропала. Здесь не так: каждая функция, которую ты ' +
+    'написал сам в сданном уроке, остаётся на <b>полке</b>, как деталь в коробке. А внизу ' +
+    '<b>верстак</b> — там из этих деталей собирается своя программа.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>«↓ На верстак»</b> — деталь встанет в начало программы внизу, и её можно ' +
+    'позвать по имени. <b>«✕»</b> убирает деталь с полки.</li>' +
+    '<li>На верстаке <b>проверок нет</b>: это твоя вещь, а не задание. Написанное ' +
+    'сохраняется между заходами.</li>' +
+    '<li><b>«💾 Сохранить вещь»</b> положит собранное в «Что уже собрано». Первая ' +
+    'строка-комментарий станет названием.</li>' +
+    '<li>У сохранённой вещи есть <b>«↓ Открыть на верстаке»</b> и <b>«🔗 Ссылка»</b>: ' +
+    'программа лежит прямо в адресе, сервер для этого не нужен.</li></ul>' +
+    '<h4>Что становится деталью</h4>' +
+    '<ul><li><b>Функция, которую ты написал сам</b>: у неё есть имя, вход и выход, и позвать ' +
+    'её можно откуда угодно. Полка начинает наполняться с урока про <code>def</code>.</li>' +
+    '<li><b>Показанное решение деталью не станет</b> — это код автора, а не твой. Функция из ' +
+    'заготовки тоже: её выдали, а не написали.</li>' +
+    '<li>Сломанное на полку не кладут: деталь обязана хотя бы определяться без ошибки.</li>' +
+    '<li>Полка держит до сорока деталей, а собранных вещей — до двенадцати; дальше самое ' +
+    'старое уходит.</li></ul>' +
+    '<h4>Если деталь ругается</h4>' +
+    '<p>Она могла опираться на то, что стояло рядом в уроке. Допиши недостающее прямо в ' +
+    'программе: движок скажет словами, чего не хватает.</p>' },
+
+  /* ⚠️ Витрина работ — экран, где «?» отвечает не ребёнку, а взрослому: сама
+     страница написана родителю («нажмите», «программа курса ничего не говорит
+     родителю»), и подсказка на «ты» противоречила бы тому, что человек читает
+     вокруг неё. */
+  works: { t:"🏗 Что создают ученики — витрина работ", h:
+    '<h4>Что это за экран</h4>' +
+    '<p>Программа курса ничего не говорит родителю: «списки, словари, классы» — это слова. ' +
+    'Здесь вещи, которые ученик собирает своими руками, и все они запускаются прямо на этой ' +
+    'странице. Это не картинки работ, а сами работы.</p>' +
+    '<h4>Что делать</h4>' +
+    '<ul><li><b>«▶ Что печатает»</b> под программой курса — она выполнится здесь и сейчас, ' +
+    'тем же движком, что у ребёнка. Рядом с названием написано, после какого урока до неё ' +
+    'доходят: это честная цена входа, а не «начните прямо сейчас».</li>' +
+    '<li>У проекта, который ребёнок уже собрал, появляется <b>«Открыть мою»</b> — его ' +
+    'программа, а не наша.</li>' +
+    '<li>Ниже — рисунки черепашки (настоящий вывод программ из уроков, а не заготовленные ' +
+    'картинки) и игры, у каждой из которых виден код.</li>' +
+    '<li>Блок <b>«А это собрано на этом устройстве»</b> считает сделанное: программы курса, ' +
+    'рисунки, вещи из мастерской и свои задания. <b>«🎒 Открыть портфолио»</b> ведёт туда, ' +
+    'где всё это лежит.</li></ul>' +
+    '<h4>Чего здесь нет, и это нарочно</h4>' +
+    '<p><b>Кода непройденного проекта.</b> Витрина — это витрина, а не ответы: выложить ' +
+    'решение рядом с курсом значит своими руками сломать курс.</p>' +
+    '<p><b>Чужих детей.</b> Имя и возраст под работой — персональные данные; мы имя ребёнка ' +
+    'не спрашиваем вовсе и на сервер не отправляем, значит и показывать нам нечего. ' +
+    'Публичной ленты работ не будет — её пришлось бы кому-то проверять руками. Вместо неё ' +
+    'адресная ссылка: ребёнок отправляет свою работу конкретному человеку, и больше она ' +
+    'никуда не попадает.</p>' },
+
   tools: { t:"🧰 Кнопки наверху", h:
     '<div class="iconlist">' +
     '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
@@ -14657,6 +14935,13 @@ var HELP = {
     '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — то, что ты сейчас читаешь</span></div>' +
     '</div>' }
 };
+/* Экран ОДНОЙ задачи — то же место, что и его список: справка одна, и писать
+   её дважды значило бы завести два текста, которые разойдутся. Без этих строк
+   ребёнок ВНУТРИ задачи читал подсказку про Главный экран (ревизия 18.09.2026). */
+HELP.algoone = HELP.algo;
+HELP.hwone = HELP.hw;
+HELP.spec = HELP.specs;
+HELP.work = HELP.works;
 
 function helpIsOpen(){
   var el = document.getElementById("helpwrap");
@@ -15270,7 +15555,7 @@ window.__game = {
   scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
   agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
   frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
-  shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
+  shieldsLeft: shieldsLeft, shieldedOn: shieldedOn, useShield: useShield,
   shieldWouldSave: shieldWouldSave,
   coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
   screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
@@ -15333,6 +15618,7 @@ window.__game = {
   lintCount: lintCount, lintNote: lintNote,
   LINT_MAX: LINT_MAX, LINT_LONG_FUNC: LINT_LONG_FUNC,
   HELP: HELP, openHelp: openHelp, closeHelp: closeHelp, helpIsOpen: helpIsOpen,
+  codeHas: codeHas,
   RANKS: RANKS,
   toggleHelp: toggleHelp, screenGuide: screenGuide,
   themeGet: themeGet, themeSet: themeSet,
@@ -15345,7 +15631,7 @@ window.__game = {
   lessonSearch: lessonSearch, lessonOpen: lessonOpen, homeCards: HOME.CARDS,
   ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
   errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
-  beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,
+  beastsMet: beastsMet, beastsHTML: beastsHTML,
   hlWatched: hlWatched, WATCH_MAX_STEPS: WATCH_MAX_STEPS, WATCH_LINE_MAX: WATCH_LINE_MAX,
   LEAN_XP: LEAN_XP, LEAN_BADGE_AT: LEAN_BADGE_AT, FRIEND_XP: FRIEND_XP,
   screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
@@ -15369,7 +15655,7 @@ window.__game = {
   zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
   zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
   zanStats: zanStats, zanSlotsFor: zanSlotsFor, median: median, ZAN_STAT_MIN: ZAN_STAT_MIN,
-  todayMinutes: todayMinutes, capOn: capOn, capLeft: capLeft, capReached: capReached,
+  todayMinutes: todayMinutes, capOn: capOn, capReached: capReached,
   capHard: capHard, capNoteHTML: capNoteHTML, CAP_CHOICES: CAP_CHOICES,
   zanOnBreak: zanOnBreak, zanBreakStart: zanBreakStart, zanBreakEnd: zanBreakEnd,
   zanBreakDue: zanBreakDue, ZAN_BREAK: ZAN_BREAK,
@@ -15446,7 +15732,7 @@ window.__game = {
   worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
   nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
   zanAfterPause: zanAfterPause,
-  grpStats: grpStats, stuckTopHTML: stuckTopHTML, STUCK_PRICE: STUCK_PRICE,
+  grpStats: grpStats, stuckTopHTML: stuckTopHTML,
   playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
   presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
   presenceDetailHTML: presenceDetailHTML,
@@ -15455,7 +15741,7 @@ window.__game = {
   liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
   livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
   liveWatcher: liveWatcher, liveAccept: liveAccept,
-  quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
+  quietReminderText: quietReminderText,
   groupAssignVariant: groupAssignVariant, grpVarState: grpVarState,
   grpAssignOf: grpAssignOf, kidVarHTML: kidVarHTML, kidSaveVariant: kidSaveVariant, kidVarForm: kidVarForm,
   ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,

@@ -188,6 +188,16 @@ function bitsSum(b, len){
 /* ⚠️ У обеих лестниц по 10 ступеней, поэтому раскладка битов одна и отличает
    их только номер версии. Появится лестница с другим числом ступеней —
    раскладку ей заводить свою, по её версии. */
+/* Сколько заняла проверка — словами. ⚠️ В коде итога под минуты отведено
+   ровно 6 бит (раскладка занята целиком: 3+12+20+6+30+9 = 80 бит = 16 знаков),
+   поэтому всё, что дольше 63 минут, упирается в 63. Печатать «заняла 63
+   минуты» про проверку, которая шла полтора часа, — врать числом; говорим
+   «больше часа». Найдено ревизией 18.09.2026. */
+function minsText(mins, A){
+  if (!mins) return "меньше минуты";
+  if (mins >= 63) return "больше часа";
+  return mins + " " + A.plural(mins, "минуту", "минуты", "минут");
+}
 function packVer(ver, res){
   var b = [];
   bitsPush(b, ver, 3);
@@ -709,10 +719,30 @@ function rung2Web(p, x, rung, trk, r, left){
   var timer = null;
   function preview(){ frame.setAttribute("srcdoc", A.pageDoc(ta.value)); }
   preview();
+  /* ⚠️ Набранное надо не только держать в памяти, но и СОХРАНЯТЬ. Пока
+     сохранение случалось лишь по «Сдать» и по пропуску, закрытая вкладка
+     уносила страницу целиком: `r.draft` жил в объекте, до которого никто не
+     доходил. У ступеней на Python этого не было — там редактор сам зовёт
+     A.draftSchedule. Найдено ревизией 18.09.2026.
+
+     Сохраняем двумя путями. Первый — с задержкой, пока ребёнок печатает.
+     Второй — через штатный сброс уходящего экрана (draftFlush): сессия
+     объявляет, как её сохранить, и закрытие вкладки или переход на другой
+     экран доводят дело до конца. Своего beforeunload здесь быть НЕ должно:
+     экран перерисовывается, и обработчики копились бы с каждым входом. */
+  var saveTimer = null;
+  function flushWeb(){
+    if (saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
+    r.draft = ta.value;
+    A.proverka2Set(p);
+  }
+  A.session().flush = flushWeb;
   ta.addEventListener("input", function(){
     r.draft = ta.value;
     clearTimeout(timer);
     timer = setTimeout(preview, 250);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushWeb, 900);
   });
   /* Вставка чужой страницы — тот же сигнал, что у кода Python. Заготовку и
      текст условия вставлять законно — они и так на экране. */
@@ -793,7 +823,7 @@ function screenReport(rawCode, rawPrev, mine){
         ' код пришёл вставкой, а не был набран. Такие ступени в «уверенно сам» не входят.</p>' : '') +
     (pt
       ? '<p>📈 <b>Прошлая проверка от ' + dateText(prev.day) + ': ' + pt.firm + ' из ' + n + '. Сейчас: ' + t.firm + ' из ' + n + '.</b></p>' : '') +
-    '<p class="dim">Проверка заняла ' + (res.mins ? res.mins + ' ' + A.plural(res.mins, "минуту", "минуты", "минут") : 'меньше минуты') +
+    '<p class="dim">Проверка заняла ' + minsText(res.mins, A) +
     '; пройдено ступеней: ' + t.reached + ' из ' + n + '.</p></div>';
 
   h += '<div class="exmap">';
@@ -910,7 +940,7 @@ function screenReport2(res, rawPrev, mine){
     '<div class="prvcode">' + A.esc(code) + '</div>' +
     '<p class="dim">По этому коду тот же итог откроется на любом устройстве: «Тренировки» → «Проверка» → ' +
     '«У меня есть код». Или отправьте ссылкой. Сервер для этого не нужен — всё в самих знаках.</p>' +
-    '<p class="dim">Проверка заняла ' + (mins ? mins + ' ' + A.plural(mins, "минуту", "минуты", "минут") : 'меньше минуты') +
+    '<p class="dim">Проверка заняла ' + minsText(mins, A) +
     '; пройдено ступеней: ' + reached + ' из ' + RUNGS2.length + '.</p>' +
     '<div class="admrow"><button class="bigbtn ghost" id="prvcopy">Скопировать ссылку на итог</button></div></div>';
 

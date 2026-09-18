@@ -241,7 +241,12 @@ function makeEditor(initial, label, files){
       e.preventDefault();
       var s = ta.selectionStart;
       ta.value = ta.value.slice(0,s) + "    " + ta.value.slice(ta.selectionEnd);
-      ta.selectionStart = ta.selectionEnd = s + 4; traceTyped(4); sync(); return;
+      ta.selectionStart = ta.selectionEnd = s + 4; traceTyped(4); sync();
+      /* ⚠️ И автосохранение: Tab и Enter правят текст в обход обработчика
+         input, поэтому без этой строки правка «только отступами» не
+         планировала сохранение черновика (ревизия 18.09.2026). */
+      if (box.onEdit) box.onEdit();
+      return;
     }
     if (e.key === "Enter" && !e.ctrlKey && !e.metaKey){
       var pos = ta.selectionStart, before = ta.value.slice(0,pos);
@@ -251,7 +256,9 @@ function makeEditor(initial, label, files){
       e.preventDefault();
       ta.value = before + "\n" + ind + ta.value.slice(ta.selectionEnd);
       ta.selectionStart = ta.selectionEnd = pos + 1 + ind.length;
-      traceTyped(1 + ind.length); sync(); return;
+      traceTyped(1 + ind.length); sync();
+      if (box.onEdit) box.onEdit();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
       e.preventDefault();

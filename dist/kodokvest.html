@@ -1679,10 +1679,10 @@ cursor:pointer;transition:.15s}
 @keyframes ranewflash{ from{background:rgba(0,224,184,.22)} to{background:var(--res)} }
 .ldout.ranew{animation:ranewflash .65s ease-out}
 .numin{font:inherit;font-family:inherit;font-size:inherit;line-height:inherit;
-color:var(--n);background:none;border:none;padding:0;margin:0;
+color:var(--n);border:none;padding:0;margin:0;
 border-bottom:1px dashed currentColor;text-align:center;min-width:1.1em;
-border-radius:0;-moz-appearance:textfield}
-.numin{background:rgba(127,127,127,.10)}
+border-radius:0;-moz-appearance:textfield;
+background:rgba(127,127,127,.10)}
 .numin:hover{background:rgba(127,127,127,.22)}
 .numin:focus{outline:2px solid var(--acc2);outline-offset:1px;background:rgba(127,127,127,.14)}
 @media (max-width:640px){
@@ -2318,7 +2318,8 @@ var FLOATTAG = "__isFloat__";
 function mkFloat(v){
 var n = new Number(v); n[FLOATTAG] = true; return n;
 }
-function isNum(x){ return typeof x === "number" || x instanceof Number; }
+
+function isNum(x){ return typeof x === "number" || x instanceof Number || typeof x === "boolean"; }
 function isFloat(x){
 if (x instanceof Number) return !!x[FLOATTAG] || !Number.isInteger(+x);
 return typeof x === "number" && !Number.isInteger(x);
@@ -2327,6 +2328,13 @@ function nv(x){ return +x; }
 function num(v, floaty){
 if (floaty || !Number.isInteger(v)) return mkFloat(v);
 return v;
+}
+
+function strTimes(s, count, line){
+var times = Math.max(0, Math.trunc(count));
+if (s.length * times > 1000000)
+raise("RuntimeError", "Строка получится слишком длинной — браузер не выдержит.", line);
+return s.repeat(times);
 }
 
 function Tup(arr){ var a = arr.slice(); a.__tuple__ = true; return a; }
@@ -2679,12 +2687,35 @@ continue;
 }
 
 if (/[0-9]/.test(c)){
+
+if (c === "0" && /[xXbBoO]/.test(src[i+1] || "")){
+var база = src[i+1].toLowerCase();
+var цифры = база === "x" ? /[0-9a-fA-F_]/ : база === "b" ? /[01_]/ : /[0-7_]/;
+var цс = "", j2 = i + 2;
+while (j2 < src.length && цифры.test(src[j2])){ цс += src[j2]; j2++; }
+if (!цс.replace(/_/g, ""))
+raise("SyntaxError", "После 0" + src[i+1] + " нужны цифры этой системы счисления.", start);
+i = j2;
+push("NUMBER", { v: parseInt(цс.replace(/_/g, ""), база === "x" ? 16 : база === "b" ? 2 : 8), f: false });
+continue;
+}
 var s = "";
 while (i < src.length && /[0-9_]/.test(src[i])){ s += src[i]; i++; }
 var flt = false;
 if (src[i] === "." && /[0-9]/.test(src[i+1] || "")){
 flt = true; s += "."; i++;
 while (i < src.length && /[0-9_]/.test(src[i])){ s += src[i]; i++; }
+}
+
+if (/[eE]/.test(src[i] || "")){
+var зн = /[+-]/.test(src[i+1] || "") ? src[i+1] : "";
+var поз = i + 1 + (зн ? 1 : 0);
+if (/[0-9]/.test(src[поз] || "")){
+var пок = "";
+while (поз < src.length && /[0-9_]/.test(src[поз])){ пок += src[поз]; поз++; }
+s += "e" + зн + пок.replace(/_/g, "");
+flt = true; i = поз;
+}
 }
 push("NUMBER", { v: parseFloat(s.replace(/_/g, "")), f: flt });
 continue;
@@ -2818,6 +2849,13 @@ if (!this.at("NEWLINE") && !this.at("EOF")) exc = this.parseExpr();
 if (this.atKw("from"))
 raise("NotSupported", "Запись «raise ... from ...» в тренажёре не нужна — достаточно «raise ...».", line);
 return { type:"Raise", exc: exc, line: line };
+}
+
+if (tk.v === "del"){
+this.next();
+var цели = [this.parseExpr()];
+while (this.atOp(",")){ this.next(); цели.push(this.parseExpr()); }
+return { type:"Delete", targets: цели, line: line };
 }
 if (tk.v === "assert"){
 this.next();
@@ -3597,7 +3635,10 @@ function fmtNum(x){
 var v = nv(x);
 if (isFloat(x)){
 if (Number.isInteger(v) && Math.abs(v) < 1e16) return v.toFixed(1);
-return String(v);
+
+var s = String(v);
+if (s.indexOf("e") < 0 && Math.abs(v) >= 1e16) s = v.toExponential();
+return s.replace(/e([+-])(\d)$/, "e$10$2");
 }
 return String(v);
 }
@@ -3616,6 +3657,7 @@ else out += c;
 }
 return q + out + q;
 }
+var reprSeen = [];    
 function pyRepr(v){
 if (v === null || v === undefined) return "None";
 if (v === true) return "True";
@@ -3628,14 +3670,21 @@ if (v instanceof PyFile) return "<файл '" + v.name + "'>";
 if (v instanceof PyGen) return "<генератор " + v.name + ">";
 if (v instanceof Bound) return "<метод " + v.fn.name + ">";
 if (v instanceof PyObj) return objRepr(v);
+
+if (v instanceof PySet || isTup(v) || Array.isArray(v) || v instanceof Map){
+if (reprSeen.indexOf(v) >= 0)
+return v instanceof PySet ? "set(...)" : isTup(v) ? "(...)"
+: Array.isArray(v) ? "[...]" : "{...}";
+reprSeen.push(v);
+try {
 if (v instanceof PySet)
 return v.size === 0 ? "set()" : "{" + v.values().map(pyRepr).join(", ") + "}";
 if (isTup(v)) return "(" + v.map(pyRepr).join(", ") + (v.length === 1 ? "," : "") + ")";
 if (Array.isArray(v)) return "[" + v.map(pyRepr).join(", ") + "]";
-if (v instanceof Map){
 var out = [];
 v.forEach(function(val, k){ out.push(pyRepr(k) + ": " + pyRepr(val)); });
 return "{" + out.join(", ") + "}";
+} finally { reprSeen.pop(); }
 }
 if (v instanceof PyFunc) return "<функция " + v.name + ">";
 if (typeof v === "function") return "<встроенная функция>";
@@ -3768,7 +3817,8 @@ if (isNum(v)) return "n:" + nv(v);
 if (v === true) return "b:1";
 if (v === false) return "b:0";
 if (v === null) return "none";
-if (isTup(v)) return "t:" + v.map(keyOf).join("");
+
+if (isTup(v)) return "t:" + v.map(keyOf).join("\u0001");
 if (v instanceof PyType) return "cls:" + v.fullName();
 if (v instanceof PyObj){
 if (!v.__id__) v.__id__ = ++OBJ_ID;
@@ -3857,6 +3907,8 @@ if (st.orelse) walk(st.orelse);
 if (st.finalbody) walk(st.finalbody);
 break;
 case "FuncDef": case "ClassDef": found[st.name] = 1; break;
+
+case "Delete": st.targets.forEach(walkTarget); break;
 
 case "Global": case "Nonlocal":
 st.names.forEach(function(n){ globals[n] = 1; }); break;
@@ -4031,6 +4083,21 @@ return Tup([num(q, fl), num(r, fl)]);
 def("pow", function(args, kw, line){
 if (!isNum(args[0]) || !isNum(args[1]))
 raise("TypeError", "pow() работает только с числами.", line);
+
+if (args.length > 2 && args[2] !== null){
+if (isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0)
+raise("ValueError", "pow() с остатком работает только с целыми неотрицательными степенями.", line,
+{ pymsg: "pow() 2nd argument cannot be negative when 3rd argument specified" });
+var м = Math.trunc(nv(args[2]));
+if (м === 0) raise("ValueError", "Остаток по нулю не берут.", line, { pymsg: "pow() 3rd argument cannot be 0" });
+var осн = Math.trunc(nv(args[0])) % м, сте = Math.trunc(nv(args[1])), акк = 1;
+while (сте > 0){
+if (сте % 2) акк = (акк * осн) % м;
+осн = (осн * осн) % м;
+сте = Math.floor(сте / 2);
+}
+return ((акк % м) + м) % м;
+}
 var r = Math.pow(nv(args[0]), nv(args[1]));
 var fl = isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0;
 return num(fl ? r : Math.round(r), fl);
@@ -4041,7 +4108,8 @@ var v = args[0];
 if (isNum(v)) return mkFloat(nv(v));
 if (typeof v === "string"){
 var t = v.trim();
-if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t))
+
+if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t))
 raise("ValueError", "Строку «" + v + "» нельзя превратить в число.", line,
 { pymsg: "could not convert string to float: " + pyRepr(v) });
 return mkFloat(parseFloat(t));
@@ -4075,9 +4143,12 @@ return num(acc, floaty);
 function mkMinMax(dir){
 var f = function*(args, kw, line){
 var arr = args.length === 1 ? I.iterate(args[0], line) : args;
-if (!arr.length)
+if (!arr.length){
+
+if (kw && kw.default !== undefined) return kw.default;
 raise("ValueError", (dir > 0 ? "max()" : "min()") + " из пустой последовательности.", line,
 { pymsg: (dir > 0 ? "max()" : "min()") + " arg is an empty sequence" });
+}
 var useKey = !!(kw && kw.key);
 var best = arr[0];
 var bestKey = useKey ? yield* I.call(kw.key, [arr[0]], {}, line) : arr[0];
@@ -4137,7 +4208,8 @@ return arr.map(function(v, i){ return Tup([i + st, v]); });
 });
 def("zip", function(args, kw, line){
 var lists = args.map(function(a){ return I.iterate(a, line); });
-var n = Math.min.apply(null, lists.map(function(l){ return l.length; }));
+
+var n = lists.length ? Math.min.apply(null, lists.map(function(l){ return l.length; })) : 0;
 var res = [];
 for (var i = 0; i < n; i++) res.push(Tup(lists.map(function(l){ return l[i]; })));
 return res;
@@ -4168,7 +4240,11 @@ if (I.interactive) I.write(ответ + "\n");
 return ответ;
 });
 
-def("sqrt", function(args, kw, line){ return mkFloat(Math.sqrt(nv(args[0]))); });
+def("sqrt", function(args, kw, line){
+if (nv(args[0]) < 0) raise("ValueError", "Квадратного корня из отрицательного числа нет.", line,
+{ pymsg: "math domain error" });
+return mkFloat(Math.sqrt(nv(args[0])));
+});
 def("randint", function(args, kw, line){
 var a = Math.trunc(nv(args[0])), b = Math.trunc(nv(args[1]));
 return a + Math.floor(I.random() * (b - a + 1));
@@ -4348,13 +4424,6 @@ raise("TypeError", "issubclass() сравнивает два типа.", line);
 return isSubType(args[0], args[1]);
 });
 def("repr", function(args){ return pyRepr(args[0]); });
-def("hasattr", function(args, kw, line){
-var o = args[0], n = pyStr(args[1]);
-if (o instanceof PyObj) return o.fields.has(n) || o.cls.lookup(n) !== undefined;
-if (o instanceof PyType) return o.lookup(n) !== undefined;
-if (o instanceof PyModule) return o.vars.has(n);
-return false;
-});
 
 g.set("pi", mkFloat(Math.PI));
 this.builtinNames = Array.from(g.keys());
@@ -4365,15 +4434,6 @@ Interp.prototype.random = function(){
 this._seed = (this._seed || 12345);
 this._seed = (this._seed * 1103515245 + 12345) % 2147483648;
 return this._seed / 2147483648;
-};
-
-Interp.prototype.minmax = function(args, line, dir){
-var arr = args.length === 1 ? this.iterate(args[0], line) : args;
-if (!arr.length) raise("ValueError", (dir > 0 ? "max()" : "min()") + " из пустой последовательности.", line);
-var best = arr[0];
-for (var i = 1; i < arr.length; i++)
-if (this.cmp(arr[i], best, line) * dir > 0) best = arr[i];
-return best;
 };
 
 Interp.prototype.cmp = function(a, b, line){
@@ -4582,6 +4642,11 @@ var b0 = yield* this.eval(st.bases[0], env);
 if (!(b0 instanceof PyType))
 raise("TypeError", "В скобках после имени класса должен стоять другой класс.", st.line);
 base = b0;
+
+if (st.bases.length > 1)
+raise("NotSupported", "Наследование сразу от нескольких классов тренажёр не разбирает: " +
+"оставьте одного родителя в скобках. Общее для двух классов обычно выносят " +
+"в третий, от которого наследуются оба по очереди.", st.line);
 }
 var cls = new PyType(st.name, base, { module: "__main__" });
 cls.doc = docOf(st.body);
@@ -4725,6 +4790,56 @@ return new Sig("return", v);
 case "Break": return new Sig("break");
 case "Continue": return new Sig("continue");
 case "Pass": return null;
+
+case "Delete": {
+for (var dti = 0; dti < st.targets.length; dti++){
+var tg = st.targets[dti];
+if (tg.type === "Subscript"){
+var dobj = yield* this.eval(tg.value, env);
+var didx = yield* this.eval(tg.index, env);
+if (isTup(dobj))
+raise("TypeError", "Из кортежа удалять нельзя — в этом и смысл кортежа.", st.line,
+{ pymsg: "'tuple' object doesn't support item deletion" });
+if (dobj instanceof Map){
+if (!dictHas(dobj, didx))
+raise("KeyError", "В словаре нет ключа " + pyRepr(didx) + ".", st.line, { pymsg: didx });
+dobj.delete(keyOf(didx));
+continue;
+}
+if (Array.isArray(dobj)){
+if (!isNum(didx) || !Number.isInteger(+didx))
+raise("TypeError", "Номер для удаления должен быть целым числом.", st.line,
+{ pymsg: "list indices must be integers or slices" });
+var dn = Math.trunc(nv(didx));
+if (dn < 0) dn += dobj.length;
+if (dn < 0 || dn >= dobj.length)
+raise("IndexError", "В списке " + dobj.length +
+" элемент(ов), а удалить просят номер " + Math.trunc(nv(didx)) + ".", st.line,
+{ pymsg: "list assignment index out of range" });
+dobj.splice(dn, 1);
+continue;
+}
+raise("TypeError", "Из значения типа " + typeName(dobj) + " удалять по номеру нельзя.", st.line);
+}
+if (tg.type === "Name"){
+var поле = env;
+while (поле && !поле.vars.has(tg.id)) поле = поле.parent;
+if (!поле)
+raise("NameError", "Имя «" + tg.id + "» не определено — удалять нечего.", st.line,
+{ pymsg: "name '" + tg.id + "' is not defined" });
+поле.vars.delete(tg.id);
+continue;
+}
+if (tg.type === "Attribute"){
+var aobj = yield* this.eval(tg.value, env);
+if (aobj instanceof PyObj && aobj.fields.has(tg.attr)){ aobj.fields.delete(tg.attr); continue; }
+raise("AttributeError", "Поля «" + tg.attr + "» нет — удалять нечего.", st.line,
+{ pymsg: tg.attr });
+}
+raise("NotSupported", "Такое del тренажёр не разбирает.", st.line);
+}
+return null;
+}
 case "Nonlocal": {
 var rootEnv = env; while (rootEnv.parent) rootEnv = rootEnv.parent;
 for (var nli = 0; nli < st.names.length; nli++){
@@ -4865,6 +4980,11 @@ var idx = yield* this.eval(target.index, env);
 if (isTup(obj))
 raise("TypeError", "Кортеж менять нельзя — в этом и смысл кортежа. Если нужно менять, сделай список: list(...).", target.line);
 if (Array.isArray(obj)){
+
+if (isNum(idx) && !Number.isInteger(+idx))
+raise("TypeError", "Номер должен быть целым числом, а " + fmtNum(idx) +
+" — дробь. Деление / всегда даёт дробь; для номера нужно целое деление //.", target.line,
+{ pymsg: "list indices must be integers or slices, not float" });
 var n = Math.trunc(nv(idx));
 if (n < 0) n += obj.length;
 if (n < 0 || n >= obj.length)
@@ -5124,7 +5244,14 @@ env.declared = fn.localSet;
 var taken = {};
 for (var i = 0; i < np; i++){
 var p = fn.params[i];
-if (i < args.length) env.vars.set(p, args[i]);
+if (i < args.length){
+
+if (kw && kw[p] !== undefined)
+raise("TypeError", "Функции «" + fn.name + "» аргумент «" + p +
+"» передан дважды: и по порядку, и по имени.", line,
+{ pymsg: fn.name + "() got multiple values for argument '" + p + "'" });
+env.vars.set(p, args[i]);
+}
 else if (kw && kw[p] !== undefined){ env.vars.set(p, kw[p]); taken[p] = 1; }
 else if (fn.defaultVals && fn.defaultVals[i] !== undefined) env.vars.set(p, fn.defaultVals[i]);
 else if (fn.defaults[i]) env.vars.set(p, yield* this.eval(fn.defaults[i], fn.closure));
@@ -5196,7 +5323,15 @@ return mkPath(a.fields.get("__path__").replace(/\/$/, "") + "/" + pyStr(b));
 if (op === "+"){
 if (isNum(a) && isNum(b)) return num(nv(a) + nv(b), isFloat(a) || isFloat(b));
 if (typeof a === "string" && typeof b === "string") return a + b;
-if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+
+if (Array.isArray(a) && Array.isArray(b)){
+if (isTup(a) !== isTup(b))
+raise("TypeError", "Нельзя сложить " + typeName(a) + " и " + typeName(b) +
+": превратите одно в другое — list(…) или tuple(…).", line,
+{ pymsg: 'can only concatenate ' + typeName(a) + ' (not "' + typeName(b) + '") to ' + typeName(a) });
+var сум = a.concat(b);
+return isTup(a) ? Tup(сум) : сум;
+}
 if (typeof a === "string" && isNum(b))
 raise("TypeError", "Нельзя сложить текст и число. Преврати число в текст: str(" + fmtNum(b) + ") — или используй f-строку.", line,
 { pymsg: 'can only concatenate str (not "' + typeName(b) + '") to str' });
@@ -5233,13 +5368,20 @@ return out;
 }
 if (op === "*"){
 if (isNum(a) && isNum(b)) return num(nv(a) * nv(b), isFloat(a) || isFloat(b));
-if (typeof a === "string" && isNum(b)) return a.repeat(Math.max(0, Math.trunc(nv(b))));
-if (isNum(a) && typeof b === "string") return b.repeat(Math.max(0, Math.trunc(nv(a))));
+
+if (typeof a === "string" && isNum(b)) return strTimes(a, nv(b), line);
+if (isNum(a) && typeof b === "string") return strTimes(b, nv(a), line);
 if (Array.isArray(a) && isNum(b)){
+var times = Math.max(0, Math.trunc(nv(b)));
+if (a.length * times > 200000)
+raise("RuntimeError", "Список получится слишком большим — браузер не выдержит.", line);
 var out = [];
-for (var i = 0; i < Math.max(0, Math.trunc(nv(b))); i++) out = out.concat(a);
-return out;
+for (var i = 0; i < times; i++)
+for (var j = 0; j < a.length; j++) out.push(a[j]);
+
+return isTup(a) ? Tup(out) : out;
 }
+if (isNum(a) && Array.isArray(b)) return this.binop("*", b, a, line);
 raise("TypeError", "Нельзя умножить " + typeName(a) + " на " + typeName(b) + ".", line);
 }
 
@@ -5287,7 +5429,17 @@ return num(Math.floor(x / y), f);
 case "%":
 if (y === 0) raise("ZeroDivisionError", "Остаток от деления на ноль не существует.", line, { pymsg: "integer division or modulo by zero" });
 return num(((x % y) + y) % y, f);
-case "**": return num(Math.pow(x, y), f || !Number.isInteger(Math.pow(x, y)));
+case "**": {
+var ст = Math.pow(x, y);
+
+if (!f && Number.isInteger(ст) && !Number.isSafeInteger(ст))
+raise("RuntimeError", "Число получилось больше, чем тренажёр считает точно " +
+"(до 9 007 199 254 740 991). Настоящий Python умеет целые любой длины, " +
+"а здесь с этого места начались бы неверные цифры — поэтому останавливаемся. " +
+"Если нужен только остаток, считайте его по ходу: pow(основание, степень, модуль).", line,
+{ pymsg: "result too large" });
+return num(ст, f || !Number.isInteger(ст));
+}
 }
 raise("RuntimeError", "Неизвестная операция «" + op + "».", line);
 };
@@ -5326,6 +5478,11 @@ raise("RuntimeError", "Неизвестное сравнение.", line);
 Interp.prototype.index = function(obj, idx, line){
 if (typeof obj === "string" || Array.isArray(obj)){
 if (!isNum(idx)) raise("TypeError", "Индекс должен быть целым числом, а не " + typeName(idx) + ".", line);
+
+if (!Number.isInteger(+idx))
+raise("TypeError", "Номер должен быть целым числом, а " + fmtNum(idx) +
+" — дробь. Деление / всегда даёт дробь; для номера нужно целое деление //.", line,
+{ pymsg: (Array.isArray(obj) ? "list" : "string") + " indices must be integers or slices, not float" });
 var n = Math.trunc(nv(idx)), L = obj.length;
 if (n < 0) n += L;
 if (n < 0 || n >= L)
@@ -5354,6 +5511,12 @@ Interp.prototype.slice = function(o, lo, hi, step, line){
 if (typeof o !== "string" && !Array.isArray(o))
 raise("TypeError", "Срез работает только со строками и списками.", line);
 var L = o.length;
+
+[["начало", lo], ["конец", hi], ["шаг", step]].forEach(function(p){
+if (p[1] !== null && p[1] !== undefined && !Number.isInteger(+p[1]))
+raise("TypeError", "Граница среза (" + p[0] + ") должна быть целым числом, а не дробью.", line,
+{ pymsg: "slice indices must be integers or None or have an __index__ method" });
+});
 step = step === null || step === undefined ? 1 : Math.trunc(step);
 if (step === 0) raise("ValueError", "Шаг среза не может быть нулём.", line);
 var arr = typeof o === "string" ? o.split("") : o;
@@ -5367,7 +5530,8 @@ var s2 = lo === null ? L - 1 : (lo < 0 ? L + lo : Math.min(lo, L - 1));
 var e2 = hi === null ? -1 : (hi < 0 ? L + hi : hi);
 for (var i2 = s2; i2 > e2; i2 += step) if (i2 >= 0 && i2 < L) res.push(arr[i2]);
 }
-return typeof o === "string" ? res.join("") : res;
+
+return typeof o === "string" ? res.join("") : (isTup(o) ? Tup(res) : res);
 };
 
 function makeDataclass(cls, line){
@@ -5635,7 +5799,13 @@ load: function(args, kw, line){
 var f = args[0];
 if (!(f instanceof PyFile)) raise("TypeError", "json.load() читает из файла.", line);
 f.checkOpen(line);
-return jsonToPy(JSON.parse(f.readAll()));
+var parsed;
+try { parsed = JSON.parse(f.readAll()); }
+catch (e){
+raise("JSONDecodeError", "Это не похоже на JSON: " + e.message, line,
+{ pymsg: "Expecting value: line 1 column 1 (char 0)" });
+}
+return jsonToPy(parsed);
 }
 };
 },
@@ -5752,6 +5922,8 @@ var pools = [];
 for (var r = 0; r < reps; r++) pools = pools.concat(lists);
 return genOf("product", function*(){
 if (!pools.length){ yield Tup([]); return; }
+
+if (pools.some(function(p){ return !p.length; })) return;
 var idx = pools.map(function(){ return 0; });
 for (;;){
 yield Tup(pools.map(function(p, i){ return p[idx[i]]; }));
@@ -5807,8 +5979,13 @@ var dateCls = TYPES["datetime.date"], dtCls = TYPES["datetime.datetime"], tdCls 
 function mkDate(args, kw, line){
 var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
 if (mo < 1 || mo > 12) raise("ValueError", "Месяц бывает от 1 до 12.", line, { pymsg: "month must be in 1..12" });
+
 if (d < 1 || d > 31) raise("ValueError", "Такого числа в месяце нет.", line, { pymsg: "day is out of range for month" });
-return mkDT(dateCls, Date.UTC(y, mo - 1, d));
+var мс = Date.UTC(y, mo - 1, d), пр = new Date(мс);
+if (пр.getUTCMonth() !== mo - 1 || пр.getUTCDate() !== d)
+raise("ValueError", "В этом месяце нет числа " + d + ".", line,
+{ pymsg: "day is out of range for month" });
+return mkDT(dateCls, мс);
 }
 function mkDatetime(args, kw, line){
 var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
@@ -5874,8 +6051,16 @@ search: function(args, kw, line){ return reFind(args, line, false); },
 match: function(args, kw, line){ return reFind(args, line, true); },
 fullmatch: function(args, kw, line){ return reFind(args, line, true, true); },
 findall: function(args, kw, line){ return reFindall(pyStr(args[0]), pyStr(args[1]), args[2], line); },
-sub: function(args, kw, line){ return reSub(pyStr(args[0]), args[1], pyStr(args[2]), args[3], line); },
-split: function(args, kw, line){ return reSplit(pyStr(args[0]), pyStr(args[1]), args[2], line); }
+sub: function(args, kw, line){
+return reSub(pyStr(args[0]), args[1], pyStr(args[2]),
+(kw && kw.count !== undefined) ? kw.count : args[3], line,
+kw && kw.flags !== undefined ? kw.flags : undefined);
+},
+split: function(args, kw, line){
+return reSplit(pyStr(args[0]), pyStr(args[1]),
+(kw && kw.maxsplit !== undefined) ? kw.maxsplit : args[2], line,
+kw && kw.flags !== undefined ? kw.flags : undefined);
+}
 };
 },
 
@@ -5910,8 +6095,8 @@ var allInt = raw.every(function(x){ return !isFloat(x); });
 var xs = raw.map(nv).slice().sort(function(a, b){ return a - b; });
 var mid = Math.floor(xs.length / 2);
 if (xs.length % 2) return allInt ? xs[mid] : mkFloat(xs[mid]);
-var res = (xs[mid - 1] + xs[mid]) / 2;
-return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+
+return mkFloat((xs[mid - 1] + xs[mid]) / 2);
 }
 };
 }
@@ -5942,6 +6127,10 @@ if (inClass && c === "]"){ inClass = false; out += c; i++; continue; }
 if (pattern.substr(i, 4) === "(?P<"){ out += "(?<"; i += 4; continue; }
 if (pattern.substr(i, 4) === "(?P="){
 var end = pattern.indexOf(")", i);
+
+if (end < 0)
+raise("ValueError", "Непонятный шаблон: " + pattern + " (нет закрывающей скобки)", line,
+{ pymsg: "bad pattern" });
 out += "\\k<" + pattern.slice(i + 4, end) + ">";
 i = end + 1; continue;
 }
@@ -5964,14 +6153,47 @@ if (m[0] === "") rx.lastIndex++;
 }
 return out;
 }
-function reSub(pattern, repl, text, flags, line){
+
+function reSub(pattern, repl, text, count, line, flags){
 var rx = toJsRegex(pattern, flags, line, true);
-var rep = pyStr(repl).replace(/\\(\d)/g, "$$$1");
-return text.replace(rx, rep);
+var шаблон = pyStr(repl);
+var лимит = (count === undefined || count === null) ? 0 : Math.trunc(nv(count));
+var сделано = 0;
+return text.replace(rx, function(){
+var m = arguments;
+if (лимит > 0 && сделано >= лимит) return m[0];
+сделано++;
+var out = "";
+for (var i = 0; i < шаблон.length; i++){
+
+if (шаблон[i] === "\\" && /[0-9]/.test(шаблон[i + 1] || "")){
+var g = +шаблон[i + 1];
+out += (m[g] === undefined || m[g] === null) ? "" : m[g];
+i++;
+continue;
 }
-function reSplit(pattern, text, flags, line){
+if (шаблон[i] === "\\" && шаблон[i + 1] === "\\"){ out += "\\"; i++; continue; }
+out += шаблон[i];
+}
+return out;
+});
+}
+
+function reSplit(pattern, text, maxsplit, line, flags){
 var rx = toJsRegex(pattern, flags, line, true);
-return text.split(rx).map(function(x){ return x === undefined ? "" : x; });
+var все = text.split(rx).map(function(x){ return x === undefined ? "" : x; });
+var лим = (maxsplit === undefined || maxsplit === null) ? 0 : Math.trunc(nv(maxsplit));
+if (лим <= 0) return все;
+
+var out = [], rx2 = toJsRegex(pattern, flags, line, true), от = 0, m, сд = 0;
+while (сд < лим && (m = rx2.exec(text)) !== null){
+if (m[0] === ""){ rx2.lastIndex++; continue; }
+out.push(text.slice(от, m.index));
+for (var gi = 1; gi < m.length; gi++) out.push(m[gi] === undefined ? "" : m[gi]);
+от = m.index + m[0].length; сд++;
+}
+out.push(text.slice(от));
+return out;
 }
 function reFind(args, line, anchored, full){
 var src = pyStr(args[0]);
@@ -6074,8 +6296,8 @@ search:    function(a){ return reFind([pat, pyStr(a[0]), pflags], line, false); 
 match:     function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true); },
 fullmatch: function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true, true); },
 findall:   function(a){ return reFindall(pat, pyStr(a[0]), pflags, line); },
-sub:       function(a){ return reSub(pat, a[0], pyStr(a[1]), pflags, line); },
-split:     function(a){ return reSplit(pat, pyStr(a[0]), pflags, line); }
+sub:       function(a){ return reSub(pat, a[0], pyStr(a[1]), a[2], line, pflags); },
+split:     function(a){ return reSplit(pat, pyStr(a[0]), a[1], line, pflags); }
 };
 if (!C[name]) return undefined;
 return function(a){ return C[name](a); };
@@ -6244,10 +6466,30 @@ var S = {
 upper: function(){ return obj.toUpperCase(); },
 lower: function(){ return obj.toLowerCase(); },
 strip: function(a){ return a && a.length ? trimChars(obj, pyStr(a[0])) : obj.trim(); },
-lstrip: function(){ return obj.replace(/^\s+/, ""); },
-rstrip: function(){ return obj.replace(/\s+$/, ""); },
+
+lstrip: function(a){
+if (!a || !a.length || a[0] === null) return obj.replace(/^\s+/, "");
+var ch = pyStr(a[0]), i = 0;
+while (i < obj.length && ch.indexOf(obj[i]) >= 0) i++;
+return obj.slice(i);
+},
+rstrip: function(a){
+if (!a || !a.length || a[0] === null) return obj.replace(/\s+$/, "");
+var ch2 = pyStr(a[0]), j = obj.length;
+while (j > 0 && ch2.indexOf(obj[j - 1]) >= 0) j--;
+return obj.slice(0, j);
+},
 capitalize: function(){ return obj ? obj[0].toUpperCase() + obj.slice(1).toLowerCase() : obj; },
-title: function(){ return obj.replace(/\S+/g, function(w){ return w[0].toUpperCase() + w.slice(1).toLowerCase(); }); },
+
+title: function(){
+var out = "", буквой = false;
+for (var i = 0; i < obj.length; i++){
+var ch = obj[i], это = /\p{L}/u.test(ch);
+out += это ? (буквой ? ch.toLowerCase() : ch.toUpperCase()) : ch;
+буквой = это;
+}
+return out;
+},
 
 split: function(a){
 var lim = (a && a.length > 1 && a[1] !== null) ? Math.trunc(nv(a[1])) : -1;
@@ -6301,11 +6543,42 @@ var parts = I.iterate(a[0], line);
 parts.forEach(function(p){ if (typeof p !== "string") raise("TypeError", "join() склеивает только строки.", line); });
 return parts.join(obj);
 },
-replace: function(a){ return obj.split(pyStr(a[0])).join(pyStr(a[1])); },
-startswith: function(a){ return obj.indexOf(pyStr(a[0])) === 0; },
-endswith: function(a){ var s = pyStr(a[0]); return obj.slice(obj.length - s.length) === s; },
-find: function(a){ return obj.indexOf(pyStr(a[0])); },
-count: function(a){ return obj.split(pyStr(a[0])).length - 1; },
+
+replace: function(a){
+var from = pyStr(a[0]), to = pyStr(a[1]);
+var cnt = (a.length > 2 && a[2] !== null) ? Math.trunc(nv(a[2])) : -1;
+if (cnt < 0) return obj.split(from).join(to);
+var res = "", pos = 0, made = 0;
+while (made < cnt){
+var at = from === "" ? (pos <= obj.length ? pos : -1) : obj.indexOf(from, pos);
+if (at < 0) break;
+res += obj.slice(pos, at) + to;
+pos = at + from.length;
+made++;
+if (from === "") { res += obj[pos] === undefined ? "" : obj[pos]; pos++; }
+}
+return res + obj.slice(pos);
+},
+
+startswith: function(a){
+var part = sliceFor(a, 1, obj).s;
+return anyAffix(a, function(s){ return part.indexOf(s) === 0; });
+},
+endswith: function(a){
+var part2 = sliceFor(a, 1, obj).s;
+return anyAffix(a, function(s){ return part2.slice(part2.length - s.length) === s; });
+},
+
+find: function(a){
+var r = sliceFor(a, 1, obj);
+var i = r.s.indexOf(pyStr(a[0]));
+return i < 0 ? -1 : i + r.from;
+},
+count: function(a){
+var r2 = sliceFor(a, 1, obj), n = pyStr(a[0]);
+if (n === "") return r2.s.length + 1;
+return r2.s.split(n).length - 1;
+},
 isdigit: function(){ return obj.length > 0 && /^[0-9]+$/.test(obj); },
 
 isalpha: function(){ return obj.length > 0 && /^\p{L}+$/u.test(obj); },
@@ -6313,27 +6586,27 @@ isalnum: function(){ return obj.length > 0 && /^[\p{L}\p{N}]+$/u.test(obj); },
 isspace: function(){ return obj.length > 0 && /^\s+$/.test(obj); },
 isupper: function(){
 return /\p{L}/u.test(obj) && obj === obj.toUpperCase() && obj !== obj.toLowerCase();
-      },
-      islower: function(){
-        return /\p{L}/u.test(obj) && obj === obj.toLowerCase() && obj !== obj.toUpperCase();
-      },
-      swapcase: function(){
-        return obj.replace(/\p{L}/gu, function(ch){
-          return ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
-        });
-      },
-      ljust: function(a){
-        var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
-        return obj.length >= w ? obj : obj + fill.repeat(w - obj.length);
-      },
-      rjust: function(a){
-        var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
-        return obj.length >= w ? obj : fill.repeat(w - obj.length) + obj;
-      },
-      center: function(a){
-        var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
-        if (obj.length >= w) return obj;
-        var left = Math.floor((w - obj.length) / 2);
+},
+islower: function(){
+return /\p{L}/u.test(obj) && obj === obj.toLowerCase() && obj !== obj.toUpperCase();
+},
+swapcase: function(){
+return obj.replace(/\p{L}/gu, function(ch){
+return ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
+});
+},
+ljust: function(a){
+var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
+return obj.length >= w ? obj : obj + fill.repeat(w - obj.length);
+},
+rjust: function(a){
+var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
+return obj.length >= w ? obj : fill.repeat(w - obj.length) + obj;
+},
+center: function(a){
+var w = Math.trunc(nv(a[0])), fill = a.length > 1 ? pyStr(a[1]) : " ";
+if (obj.length >= w) return obj;
+var left = Math.floor((w - obj.length) / 2);
 return fill.repeat(left) + obj + fill.repeat(w - obj.length - left);
 },
 zfill: function(a){
@@ -6343,7 +6616,11 @@ var sign = (obj[0] === "-" || obj[0] === "+") ? obj[0] : "";
 var rest = sign ? obj.slice(1) : obj;
 return sign + "0".repeat(w - obj.length) + rest;
 },
-rfind: function(a){ return obj.lastIndexOf(pyStr(a[0])); },
+rfind: function(a){
+var r3 = sliceFor(a, 1, obj);
+var i3 = r3.s.lastIndexOf(pyStr(a[0]));
+return i3 < 0 ? -1 : i3 + r3.from;
+},
 
 partition: function(a){
 var sep = pyStr(a[0]);
@@ -6362,10 +6639,11 @@ return j < 0 ? Tup(["", "", obj])
 : Tup([obj.slice(0, j), sep2, obj.slice(j + sep2.length)]);
 },
 index: function(a){
-var i = obj.indexOf(pyStr(a[0]));
+var r4 = sliceFor(a, 1, obj);
+var i = r4.s.indexOf(pyStr(a[0]));
 if (i < 0) raise("ValueError", "Подстроки " + pyRepr(a[0]) + " в строке нет.", line,
 { pymsg: "substring not found" });
-return i;
+return i + r4.from;
 },
 splitlines: function(){ return obj.length ? obj.replace(/\n$/, "").split("\n") : []; },
 removeprefix: function(a){
@@ -6407,7 +6685,7 @@ raise("ValueError", "Значения " + pyRepr(a[0]) + " нет в списк�
 { pymsg: pyRepr(a[0]) + " is not in list" });
 },
 count: function(a){ return obj.filter(function(x){ return pyEq(x, a[0]); }).length; },
-sort: function(a, kw){ obj.sort(function(x, y){ return I.cmp(x, y, line); }); if (kw && truthy(kw.reverse)) obj.reverse(); return null; },
+
 reverse: function(){ obj.reverse(); return null; },
 clear: function(){ obj.length = 0; return null; },
 copy: function(){ return obj.slice(); }
@@ -6441,8 +6719,12 @@ get: function(a){ var v = dictGet(obj, a[0]); return v === undefined ? (a.length
 keys: function(){ return dictKeys(obj); },
 values: function(){ return dictVals(obj); },
 items: function(){ return Array.from(obj.values()).map(function(p){ return Tup([p[0], p[1]]); }); },
+
 pop: function(a){
-if (!dictHas(obj, a[0])) raise("KeyError", "В словаре нет ключа " + pyRepr(a[0]) + ".", line);
+if (!dictHas(obj, a[0])){
+if (a.length > 1) return a[1];
+raise("KeyError", "В словаре нет ключа " + pyRepr(a[0]) + ".", line, { pymsg: a[0] });
+}
 var v = dictGet(obj, a[0]); obj.delete(keyOf(a[0])); return v;
 },
 setdefault: function(a){
@@ -6535,6 +6817,25 @@ return function(args){ return SS[name](args); };
 raise("AttributeError", "У значения типа " + typeName(obj) + " нет метода «" + name + "».", line);
 };
 
+function sliceFor(a, at, s){
+var n = s.length;
+var norm = function(v, def){
+if (v === undefined || v === null) return def;
+var i = Math.trunc(nv(v));
+if (i < 0) i += n;
+return Math.max(0, Math.min(n, i));
+};
+var from = norm(a && a[at], 0), to = norm(a && a[at + 1], n);
+if (to < from) to = from;
+return { s: s.slice(from, to), from: from };
+}
+
+function anyAffix(a, test){
+var v = a && a[0];
+var список = isTup(v) ? v : [v];
+for (var i = 0; i < список.length; i++) if (test(pyStr(список[i]))) return true;
+return false;
+}
 function trimChars(s, chars){
 var a = 0, b = s.length;
 while (a < b && chars.indexOf(s[a]) >= 0) a++;
@@ -6564,7 +6865,8 @@ if (kind.length > 1) return pyStr(v);
 var s;
 if (kind === "%"){
 s = toFixedPy(nv(v) * 100, prec === undefined ? 6 : +prec) + "%";
-} else if (kind === "f" || (prec !== undefined && kind !== "s" && isNum(v))){
+
+} else if (kind === "f" || (prec !== undefined && "sxXboeEgG".indexOf(kind) < 0 && isNum(v))){
 if (!isNum(v)) raise("TypeError", "Числовой формат работает только с числами, а не с " + typeName(v) + ".", line,
 { pymsg: "Unknown format code '" + (kind || "f") + "' for object of type '" + typeName(v) + "'" });
 s = toFixedPy(nv(v), prec === undefined ? 6 : +prec);
@@ -6572,6 +6874,31 @@ s = toFixedPy(nv(v), prec === undefined ? 6 : +prec);
 if (!isNum(v)) raise("TypeError", "Формат «d» работает только с целыми числами.", line,
 { pymsg: "Unknown format code 'd' for object of type '" + typeName(v) + "'" });
 s = String(Math.trunc(nv(v)));
+
+} else if ("xXbo".indexOf(kind) >= 0 && kind !== ""){
+if (!isNum(v) || !Number.isInteger(+v))
+raise("ValueError", "Формат «" + kind + "» работает только с целыми числами.", line,
+{ pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+var цел = Math.trunc(nv(v)), осн = kind === "b" ? 2 : kind === "o" ? 8 : 16;
+s = Math.abs(цел).toString(осн);
+if (kind === "X") s = s.toUpperCase();
+if (цел < 0) s = "-" + s;
+} else if (kind === "e" || kind === "E"){
+if (!isNum(v)) raise("ValueError", "Формат «" + kind + "» работает только с числами.", line,
+{ pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+s = nv(v).toExponential(prec === undefined ? 6 : +prec);
+
+s = s.replace(/e([+-])(\d)$/, "e$10$2");
+if (kind === "E") s = s.toUpperCase();
+} else if (kind === "g" || kind === "G"){
+if (!isNum(v)) raise("ValueError", "Формат «" + kind + "» работает только с числами.", line,
+{ pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+var зн = prec === undefined ? 6 : Math.max(1, +prec);
+s = nv(v).toPrecision(зн);
+
+if (s.indexOf("e") < 0 && s.indexOf(".") >= 0) s = s.replace(/\.?0+$/, "");
+else s = s.replace(/\.?0+e/, "e").replace(/e([+-])(\d)$/, "e$10$2");
+if (kind === "G") s = s.toUpperCase();
 } else {
 s = pyStr(v);
 if (prec !== undefined) s = s.slice(0, +prec);
@@ -6671,10 +6998,17 @@ try {
 var step = it.next();
 while (!step.done) step = it.next();
 } catch (e){
-if (!e.pyKind) throw e;
 
 if (e.pyKind === "__AwaitInput__") result.awaitingInput = true;
-else result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+else if (e.pyKind) result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+else {
+
+result.error = { kind: "RuntimeError",
+msg: (e instanceof RangeError)
+? "Данные получились слишком большими — браузер не выдержал."
+: "Движок споткнулся: " + e.message + ". Покажи этот код взрослому.",
+line: 0 };
+}
 }
 result.output = I.out.join("");
 result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
@@ -6702,7 +7036,13 @@ if (s.done) return { done: true, output: I.out.join("") };
 return { done: false, line: s.value.line, env: s.value.env,
 stack: I.stack.slice(), output: I.out.join("") };
 } catch (e){
-if (!e.pyKind) throw e;
+if (!e.pyKind)
+
+return { done: true, output: I.out.join(""), error: { kind: "RuntimeError",
+msg: (e instanceof RangeError)
+? "Данные получились слишком большими — браузер не выдержал."
+: "Движок споткнулся: " + e.message + ". Покажи этот код взрослому.",
+line: 0 } };
 return { done: true, output: I.out.join(""), error: { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 } };
 }
 }
@@ -10417,6 +10757,8 @@ goal: "Напиши функцию bfind(nums, want) для ОТСОРТИРОВ
 "в которой числа быть не может.",
 list: ["Список отсортирован по возрастанию — на это и опирается алгоритм",
 "Каждый шаг обязан выбрасывать половину оставшегося",
+
+"Готовым поиском .index() пользоваться нельзя — ищем сами",
 "Если не нашёл — вернуть -1"],
 starter: "def bfind(nums, want):\n    low = 0\n    high = len(nums) - 1\n    # твой код\n    return -1\n",
 solution: "def bfind(nums, want):\n" +
@@ -10749,7 +11091,8 @@ goal: "Напиши программу, которая в последовате
 list: ["На вход в первой строке — количество чисел N (3 ≤ N ≤ 10 000)",
 "Затем N натуральных чисел, не превышающих 30 000, каждое в отдельной строке",
 "Вывести одно число — наименьший чётный элемент, или NO",
-"Встроенным min() не пользоваться: смысл в том, чтобы вести минимум самому"],
+
+"Встроенным min() и готовой сортировкой sorted() не пользоваться: смысл в том, чтобы вести минимум самому"],
 sample: { in:["5","7","12","9","4","15"], out:"4" },
 stdin: ["5", "7", "12", "9", "4", "15"],
 sets: [["4","3","9","7","5"], ["3","30000","2","6"], ["5","9","8","7","2","11"]],
@@ -11030,7 +11373,8 @@ list: ["На вход — два числа: A в первой строке, B �
 "Перебор делителей до самого числа допустим: отрезок маленький"],
 sample: { in:["1","50"], out:"8 12" },
 stdin: ["1", "50"],
-sets: [["45","47"], ["12","12"]],
+
+sets: [["45","47"], ["12","12"], ["2","3"]],
 starter: "a = int(input())\nb = int(input())\ncount = 0\nfirst = -1\n# твой код\n",
 solution: "a = int(input())\n" +
 "b = int(input())\n" +
@@ -13681,6 +14025,8 @@ list: [
 "В первой строке — количество оценок N (1 ≤ N ≤ 100 000)",
 "Далее N строк — целые числа от 0 до 100",
 "Оценки между собой не сравнивать: смысл задания в счётчиках",
+
+"Готовой сортировкой sorted() и .sort() пользоваться нельзя",
 "Вывести все числа по возрастанию в одной строке через пробел"
 ],
 sample: { in: ["5", "3", "1", "3", "0", "2"], out: "0 1 2 3 3" },
@@ -13802,6 +14148,8 @@ list: [
 "Один проход — это сравнение каждой соседней пары от начала списка до конца",
 "Проходы повторяются, пока в очередном проходе был хотя бы один обмен",
 "Считать каждое сравнение соседей и каждый обмен",
+
+"Готовой сортировкой sorted() и .sort() пользоваться нельзя: считаем шаги своей",
 "Вывести два числа через пробел: сравнений и обменов"
 ],
 sample: { in: ["3", "3", "1", "2"], out: "4 2" },
@@ -14163,7 +14511,7 @@ return { field: f, error: null, steps: steps };
 
 window.ROBOT = {
 parseField: parseField, fieldRows: fieldRows, run: run, parse: parse,
-samePainted: samePainted, paintedKeys: paintedKeys, MAX_STEPS: MAX_STEPS
+samePainted: samePainted, MAX_STEPS: MAX_STEPS
 };
 })();
 
@@ -15009,68 +15357,67 @@ solution: "<!doctype html>\n<html>\n<head>\n  <title>Мой сайт</title>\n</
 "  <h1>Мой сайт</h1>\n  <p>Скоро здесь что-то будет.</p>\n</body>\n</html>\n",
 checks: [
 { t: "Первой строкой стоит <!doctype html>", f: function(W){ return /^\s*<!doctype html>/i.test(W.src); } },
-    { t: "Документ обёрнут в <html> … </html>", f: function(W){
-        return /<html[\s>]/i.test(W.src) && /<\/html>/i.test(W.src); } },
-    { t: "В <head> стоит <title> с названием", f: function(W){
-        return /<head[^>]*>[\s\S]*<title[^>]*>[^<]*\S[^<]*<\/title>[\s\S]*<\/head>/i.test(W.src); } },
-    { t: "Заголовок <h1> стоит внутри <body>", f: function(W){
-        return /<body[^>]*>[\s\S]*<h1[\s>][\s\S]*<\/body>/i.test(W.src); } }
-  ],
-  hints: [
-    "Начни с первой строки: <!doctype html>.",
-    "Дальше <html>, внутри него сначала <head>, потом <body>. В конце всё закрой.",
-    "В <head> положи <title>Мой сайт</title> — это название вкладки.",
-    "Заголовок и абзац из заготовки перенеси внутрь <body>."
-  ],
-  note: "Браузер прощает многое: страница из одного абзаца тоже откроется, он сам достроит недостающее. " +
-        "Но достроит как решит сам, а не как хотел ты. <!doctype html> включает современные правила, " +
-        "а <title> — это имя вкладки, закладки и строка в поисковой выдаче."
+{ t: "Документ обёрнут в <html> … </html>", f: function(W){
+return /<html[\s>]/i.test(W.src) && /<\/html>/i.test(W.src); } },
+{ t: "В <head> стоит <title> с названием", f: function(W){
+return /<head[^>]*>[\s\S]*<title[^>]*>[^<]*\S[^<]*<\/title>[\s\S]*<\/head>/i.test(W.src); } },
+{ t: "Заголовок <h1> стоит внутри <body>", f: function(W){
+return /<body[^>]*>[\s\S]*<h1[\s>][\s\S]*<\/body>/i.test(W.src); } }
+],
+hints: [
+"Начни с первой строки: <!doctype html>.",
+"Дальше <html>, внутри него сначала <head>, потом <body>. В конце всё закрой.",
+"В <head> положи <title>Мой сайт</title> — это название вкладки.",
+"Заголовок и абзац из заготовки перенеси внутрь <body>."
+],
+note: "Браузер прощает многое: страница из одного абзаца тоже откроется, он сам достроит недостающее. " +
+"Но достроит как решит сам, а не как хотел ты. <!doctype html> включает современные правила, " +
+"а <title> — это имя вкладки, закладки и строка в поисковой выдаче."
 },
 
-/* ---------------- Списки, ссылки, картинки, таблицы ---------------- */
 {
-  id: "web-ul", topic: "blocks", emoji: "🛒", title: "Список покупок",
-  intro: "Всё, что перечисляют, на странице оформляют списком, а не строчкой через запятую.",
-  goal: "Сделай список покупок к празднику: заголовок и маркированный список хотя бы из трёх пунктов.",
-  learn: "<ul> — список с точками. Каждый пункт — отдельный <li> внутри него.",
-  example: "<ul>\n  <li>Хлеб</li>\n</ul>\n",
-  starter: "<h2>Купить к празднику</h2>\nторт, свечи, шарики\n",
-  solution: "<h2>Купить к празднику</h2>\n<ul>\n  <li>Торт</li>\n  <li>Свечи</li>\n  <li>Шарики</li>\n</ul>\n",
-  checks: [
-    { t: "Есть заголовок", f: function(W){ return W.text(W.q("h1, h2, h3")) !== ""; } },
-    { t: "Есть список <ul>", f: function(W){ return !!W.q("ul"); } },
-    { t: "В списке хотя бы три пункта <li>", f: function(W){ return W.n("ul > li") >= 3; } },
-    { t: "Ни один пункт не пустой", f: function(W){
-        var li = W.qa("ul > li");
-        return li.length > 0 && li.every(function(x){ return W.text(x) !== ""; }); } }
-  ],
-  hints: [
-    "Вместо строчки через запятую открой <ul> и закрой </ul>.",
-    "Каждую покупку оберни в свой <li>…</li>.",
-    "Пункты пишутся ВНУТРИ <ul>, а не после него.",
-    "Точки перед пунктами ставит браузер — самому их писать не нужно."
-  ],
-  note: "Список — это не «строчки с точками», а сообщение: «здесь перечень». Поэтому браузер может сам " +
-        "оформить его, а программа чтения вслух скажет: «список из трёх пунктов». Строчка через запятую " +
-        "ничего такого не сообщает."
+id: "web-ul", topic: "blocks", emoji: "🛒", title: "Список покупок",
+intro: "Всё, что перечисляют, на странице оформляют списком, а не строчкой через запятую.",
+goal: "Сделай список покупок к празднику: заголовок и маркированный список хотя бы из трёх пунктов.",
+learn: "<ul> — список с точками. Каждый пункт — отдельный <li> внутри него.",
+example: "<ul>\n  <li>Хлеб</li>\n</ul>\n",
+starter: "<h2>Купить к празднику</h2>\nторт, свечи, шарики\n",
+solution: "<h2>Купить к празднику</h2>\n<ul>\n  <li>Торт</li>\n  <li>Свечи</li>\n  <li>Шарики</li>\n</ul>\n",
+checks: [
+{ t: "Есть заголовок", f: function(W){ return W.text(W.q("h1, h2, h3")) !== ""; } },
+{ t: "Есть список <ul>", f: function(W){ return !!W.q("ul"); } },
+{ t: "В списке хотя бы три пункта <li>", f: function(W){ return W.n("ul > li") >= 3; } },
+{ t: "Ни один пункт не пустой", f: function(W){
+var li = W.qa("ul > li");
+return li.length > 0 && li.every(function(x){ return W.text(x) !== ""; }); } }
+],
+hints: [
+"Вместо строчки через запятую открой <ul> и закрой </ul>.",
+"Каждую покупку оберни в свой <li>…</li>.",
+"Пункты пишутся ВНУТРИ <ul>, а не после него.",
+"Точки перед пунктами ставит браузер — самому их писать не нужно."
+],
+note: "Список — это не «строчки с точками», а сообщение: «здесь перечень». Поэтому браузер может сам " +
+"оформить его, а программа чтения вслух скажет: «список из трёх пунктов». Строчка через запятую " +
+"ничего такого не сообщает."
 },
 {
-  id: "web-ol", topic: "blocks", emoji: "🥪", title: "Рецепт по шагам",
-  intro: "Когда порядок важен, пункты нумеруют. Но номера ставишь не ты, а браузер.",
-  goal: "Рецепт бутерброда: список продуктов с точками и шаги приготовления нумерованным списком — хотя бы четыре шага.",
-  learn: "<ol> — список с номерами. Браузер сам ставит 1, 2, 3, а если переставить пункты — пересчитает.",
-  example: "<ol>\n  <li>Проснуться</li>\n  <li>Умыться</li>\n</ol>\n",
-  starter: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n",
-  solution: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n<ol>\n" +
-            "  <li>Отрезать ломтик хлеба</li>\n  <li>Намазать масло</li>\n" +
-            "  <li>Положить сыр</li>\n  <li>Съесть</li>\n</ol>\n",
-  checks: [
-    { t: "Есть список продуктов <ul>, хотя бы два пункта", f: function(W){ return W.n("ul > li") >= 2; } },
-    { t: "Есть нумерованный список <ol>", f: function(W){ return !!W.q("ol"); } },
-    { t: "В нумерованном списке хотя бы четыре шага", f: function(W){ return W.n("ol > li") >= 4; } },
-    { t: "Номера ставит браузер, а не ты", f: function(W){
-        var li = W.qa("ol > li");
-        return li.length > 0 && li.every(function(x){ return !/^\d+\s*[.)]/.test(W.text(x)); }); } }
+id: "web-ol", topic: "blocks", emoji: "🥪", title: "Рецепт по шагам",
+intro: "Когда порядок важен, пункты нумеруют. Но номера ставишь не ты, а браузер.",
+goal: "Рецепт бутерброда: список продуктов с точками и шаги приготовления нумерованным списком — хотя бы четыре шага.",
+learn: "<ol> — список с номерами. Браузер сам ставит 1, 2, 3, а если переставить пункты — пересчитает.",
+example: "<ol>\n  <li>Проснуться</li>\n  <li>Умыться</li>\n</ol>\n",
+starter: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n",
+solution: "<h2>Бутерброд</h2>\n<ul>\n  <li>Хлеб</li>\n  <li>Сыр</li>\n</ul>\n<ol>\n" +
+"  <li>Отрезать ломтик хлеба</li>\n  <li>Намазать масло</li>\n" +
+"  <li>Положить сыр</li>\n  <li>Съесть</li>\n</ol>\n",
+checks: [
+{ t: "Есть список продуктов <ul>, хотя бы два пункта", f: function(W){ return W.n("ul > li") >= 2; } },
+{ t: "Есть нумерованный список <ol>", f: function(W){ return !!W.q("ol"); } },
+{ t: "В нумерованном списке хотя бы четыре шага", f: function(W){ return W.n("ol > li") >= 4; } },
+{ t: "Номера ставит браузер, а не ты", f: function(W){
+var li = W.qa("ol > li");
+return li.length > 0 && li.every(function(x){ return !/^\d+\s*[.)]/.test(W.text(x)); }); } }
 ],
 hints: [
 "Продукты уже есть. Под ними открой <ol>.",
@@ -16209,7 +16556,7 @@ params: [{ k:"seedy", min:1, max:40 }, { k:"port", min:3, max:4 }],
 fix: function(v){
 
 var xs = [], k = v.seedy;
-for (var i = 0; i < 8; i++){ k = (k * 37 + 11) % 5; xs.push(2 + k); }
+for (var i = 0; i < 8; i++){ k = (k * 37 + 11) % 97; xs.push(2 + k % 4); }
 v.marks = xs;
 return v;
 },
@@ -17141,7 +17488,8 @@ hints: [
 id: "hw-piggy-bank",
 after: "generators",
 emoji: "🐷",
-title: "Копилка",
+
+title: "Копилка по дням",
 tag: "генераторы",
 params: [{ k: "money", min: 5, max: 20, step: 5 }, { k: "days", min: 3, max: 6 }],
 goal: function(v){
@@ -19755,7 +20103,10 @@ if (e.key === "Tab"){
 e.preventDefault();
 var s = ta.selectionStart;
 ta.value = ta.value.slice(0,s) + "    " + ta.value.slice(ta.selectionEnd);
-ta.selectionStart = ta.selectionEnd = s + 4; traceTyped(4); sync(); return;
+ta.selectionStart = ta.selectionEnd = s + 4; traceTyped(4); sync();
+
+if (box.onEdit) box.onEdit();
+return;
 }
 if (e.key === "Enter" && !e.ctrlKey && !e.metaKey){
 var pos = ta.selectionStart, before = ta.value.slice(0,pos);
@@ -19765,7 +20116,9 @@ if (/:\s*$/.test(line)) ind += "    ";
 e.preventDefault();
 ta.value = before + "\n" + ind + ta.value.slice(ta.selectionEnd);
 ta.selectionStart = ta.selectionEnd = pos + 1 + ind.length;
-traceTyped(1 + ind.length); sync(); return;
+traceTyped(1 + ind.length); sync();
+if (box.onEdit) box.onEdit();
+return;
 }
 if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
 e.preventDefault();
@@ -20431,8 +20784,10 @@ wmsg.innerHTML = "<b>Сохранять нечего</b>В редакторе п
 return;
 }
 
-var r = Runtime.get(real ? "pyodide" : "mini").run(code, { stdin: [] });
-if (r.error){
+var r = Runtime.get(real ? "pyodide" : "mini").run(code, { stdin: [], interactive: true });
+
+var ждётОтвета = r.awaitingInput || (r.error && r.error.kind === "EOFError");
+if (r.error && !ждётОтвета){
 wmsg.className = "msg show bad";
 wmsg.innerHTML = "<b>Сначала пусть заработает</b>" + A.errHTML(r.error) +
 "<br>Программу с ошибкой сохранять незачем: тот, кому ты дашь ссылку, " +
@@ -20726,7 +21081,8 @@ if (on) A.speak("Чтение вслух включено.");
 paintSound();
 (function(){ var r = document.getElementById("gorole"); if (r) r.onclick = A.screenRoles; })();
 document.getElementById("logout").onclick = function(){
-var yes = true;
+
+var yes = false;
 
 var back = (typeof Cloud !== "undefined" && Cloud.configured())
 ? "На сервере он останется — его можно вернуть по коду " + Cloud.myCode() + "."
@@ -22065,7 +22421,8 @@ var h = '<div class="lvlhead"><div><div class="idx">витрина</div>' +
 'это слова. Вот вещи, которые ученик собирает своими руками. Все они запускаются ' +
 'прямо на этой странице — это не картинки работ, а сами работы.</p>';
 
-h += '<div class="card"><h3>🧱 Шесть программ курса</h3>' +
+h += '<div class="card"><h3>🧱 ' + list.length + ' ' +
+A.plural(list.length, "программа", "программы", "программ") + ' курса</h3>' +
 '<p class="dim">Каждая собирается по шагам в конце своего мира: ребёнок дописывает её сам, ' +
 'а движок проверяет каждый шаг. Нажмите «Что печатает» — программа выполнится здесь и сейчас.</p>' +
 '<div class="shelf">';
@@ -26084,12 +26441,17 @@ var banned = { "find-linear":[".index("], "sort-bubble":["sorted(", ".sort("],
 "sort-count":["sorted(", ".sort("],
 "cost-bubble":["sorted(", ".sort("],
 "cost-divisors":["sqrt", "**"],
-"cost-double":["/"] };
+
+"cost-double":[/(^|[^\/])\/([^\/]|$)/] };
 var ban = banned[x.id] || [];
+
+var bare = code.replace(/(^|[^\\"'])#[^\n]*/g, "$1");
 for (var b = 0; b < ban.length; b++){
-if (code.indexOf(ban[b]) >= 0){
+var hit = (ban[b] instanceof RegExp) ? ban[b].test(bare) : bare.indexOf(ban[b]) >= 0;
+if (hit){
+var имя = (ban[b] instanceof RegExp) ? "дробным делением /" : ban[b];
 showMsg("warn", "<b>Так нельзя</b>В этой задаче нельзя пользоваться <code>" +
-A.esc(ban[b]) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
+A.esc(имя) + "</code> — иначе она решается одной строкой, и учиться нечему. " +
 "Требование стоит в условии.");
 return;
 }
@@ -27855,6 +28217,11 @@ h ^= h >>> 15; h = Math.imul(h, 2246822507); h ^= h >>> 13;
 return (h >>> 0) % 512;
 }
 
+function minsText(mins, A){
+if (!mins) return "меньше минуты";
+if (mins >= 63) return "больше часа";
+return mins + " " + A.plural(mins, "минуту", "минуты", "минут");
+}
 function packVer(ver, res){
 var b = [];
 bitsPush(b, ver, 3);
@@ -28343,10 +28710,20 @@ A.pageFrameWire(frame, A.app.querySelector(".wbright .pagenote"), "только 
 var timer = null;
 function preview(){ frame.setAttribute("srcdoc", A.pageDoc(ta.value)); }
 preview();
+
+var saveTimer = null;
+function flushWeb(){
+if (saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
+r.draft = ta.value;
+A.proverka2Set(p);
+}
+A.session().flush = flushWeb;
 ta.addEventListener("input", function(){
 r.draft = ta.value;
 clearTimeout(timer);
 timer = setTimeout(preview, 250);
+clearTimeout(saveTimer);
+saveTimer = setTimeout(flushWeb, 900);
 });
 
 ta.addEventListener("paste", function(e){
@@ -28425,7 +28802,7 @@ h += '<div class="card"><h3>' + (t.firm
 ' код пришёл вставкой, а не был набран. Такие ступени в «уверенно сам» не входят.</p>' : '') +
 (pt
 ? '<p>📈 <b>Прошлая проверка от ' + dateText(prev.day) + ': ' + pt.firm + ' из ' + n + '. Сейчас: ' + t.firm + ' из ' + n + '.</b></p>' : '') +
-'<p class="dim">Проверка заняла ' + (res.mins ? res.mins + ' ' + A.plural(res.mins, "минуту", "минуты", "минут") : 'меньше минуты') +
+'<p class="dim">Проверка заняла ' + minsText(res.mins, A) +
 '; пройдено ступеней: ' + t.reached + ' из ' + n + '.</p></div>';
 
 h += '<div class="exmap">';
@@ -28538,7 +28915,7 @@ h += '<div class="card"><h3>Код результата</h3>' +
 '<div class="prvcode">' + A.esc(code) + '</div>' +
 '<p class="dim">По этому коду тот же итог откроется на любом устройстве: «Тренировки» → «Проверка» → ' +
 '«У меня есть код». Или отправьте ссылкой. Сервер для этого не нужен — всё в самих знаках.</p>' +
-'<p class="dim">Проверка заняла ' + (mins ? mins + ' ' + A.plural(mins, "минуту", "минуты", "минут") : 'меньше минуты') +
+'<p class="dim">Проверка заняла ' + minsText(mins, A) +
 '; пройдено ступеней: ' + reached + ' из ' + RUNGS2.length + '.</p>' +
 '<div class="admrow"><button class="bigbtn ghost" id="prvcopy">Скопировать ссылку на итог</button></div></div>';
 
@@ -33428,15 +33805,17 @@ var PROGRESS_MAPS = ["stars","log","drawDone","warmups","ailab","games","gamesPl
 
 "proverka2",
 
-"help"];
+"help",
+
+"works"];
 
 var PROGRESS_NUMS = ["xp","sandboxRuns","firstTry","perfect","codeSaved"];
 
-var KEEP_ON_RESET = ["games","mytasks","gallery","defense"];
+var KEEP_ON_RESET = ["games","mytasks","gallery","defense","works"];
 
 function blankProgress(){
 
-var o = { v:2, badges:[], sandbox:null, mytaskDraft:null, name:"", schedule:{ days:[] },
+var o = { v:2, badges:[], sandbox:null, shop:null, mytaskDraft:null, name:"", schedule:{ days:[] },
 frame: blankFrame(), now:null };
 PROGRESS_MAPS.forEach(function(k){ o[k] = {}; });
 PROGRESS_NUMS.forEach(function(k){ o[k] = 0; });
@@ -33449,6 +33828,7 @@ PROGRESS_MAPS.forEach(function(k){ if (!o[k] || typeof o[k] !== "object") o[k] =
 PROGRESS_NUMS.forEach(function(k){ if (typeof o[k] !== "number") o[k] = 0; });
 if (!Array.isArray(o.badges)) o.badges = [];
 if (typeof o.sandbox !== "string") o.sandbox = null;
+if (typeof o.shop !== "string") o.shop = null;
 
 if (!o.now || typeof o.now !== "object" || typeof o.now.at !== "number") o.now = null;
 if (!o.mytaskDraft || typeof o.mytaskDraft !== "object") o.mytaskDraft = null;
@@ -33484,7 +33864,8 @@ return ensureShape(o);
 function clearAll(o){
 clearResults(o);
 KEEP_ON_RESET.forEach(function(k){ o[k] = {}; });
-o.sandbox = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
+
+o.sandbox = null; o.shop = null; o.mytaskDraft = null; o.name = ""; o.schedule = { days:[] };
 o.now = null;
 
 var keep = frameShape(o.frame);
@@ -33611,16 +33992,9 @@ var n = shieldsEarnedIn(days) - shieldsSpentIn(shields);
 if (n > SHIELD_MAX) n = SHIELD_MAX;
 return n > 0 ? n : 0;
 }
-
-function shieldToNextIn(days, shields){
-if (shieldsLeftIn(days, shields) >= SHIELD_MAX) return 0;
-var n = Object.keys(days || {}).length % SHIELD_EVERY;
-return n === 0 ? SHIELD_EVERY : SHIELD_EVERY - n;
-}
 function coveredNow(){ return coveredDays(S.days, S.shields); }
 function shieldedOn(key){ return !!(S.shields && S.shields[key]); }
 function shieldsLeft(){ return shieldsLeftIn(S.days, S.shields); }
-function shieldToNext(){ return shieldToNextIn(S.days, S.shields); }
 
 var shieldJustUsed = null;    
 
@@ -33941,13 +34315,12 @@ return s;
 
 function frameState(){ return (kidTarget && kidTarget.data) ? kidTarget.data : S; }
 
-function todayMinutes(){
-var row = (S.hours || {})[dayKey()] || [], sec = 0;
+function todayMinutes(st){
+var row = ((st || S).hours || {})[dayKey()] || [], sec = 0;
 for (var i = 0; i < 24; i++) sec += row[i] || 0;
 return Math.round(sec / 60);
 }
 function capOn(){ return frame().cap > 0; }
-function capLeft(){ return Math.max(0, frame().cap - todayMinutes()); }
 function capReached(){ return capOn() && todayMinutes() >= frame().cap; }
 function capHard(){ return capReached() && frame().capHard; }
 function capNoteHTML(){
@@ -35034,6 +35407,12 @@ if (!out.builds[k]) delete out.builds[k];
 });
 out.shop = fresher.shop || older.shop || null;
 
+out.works = {};
+Object.keys(mergeSet(a.works, b.works)).forEach(function(k){
+out.works[k] = (fresher.works || {})[k] || (older.works || {})[k] || null;
+if (!out.works[k]) delete out.works[k];
+});
+
 out.drafts = {};
 Object.keys(mergeSet(a.drafts, b.drafts)).forEach(function(k){
 out.drafts[k] = (fresher.drafts || {})[k] || (older.drafts || {})[k] || null;
@@ -35624,11 +36003,6 @@ how:"Сверь имя модуля и имя, которое из него бе
 var BEAST_BADGE_AT = 6;    
 
 function errsAll(){ S.errs = S.errs || {}; return S.errs; }
-function beastByKind(kind){
-for (var i = 0; i < ERR_BEASTS.length; i++)
-if (ERR_BEASTS[i].kind === kind) return ERR_BEASTS[i];
-return null;
-}
 
 function errSeen(kind){
 if (!kind) return;
@@ -36251,10 +36625,21 @@ return out;
 }
 
 function codeHas(code, needle){
-var esc = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var esc1 = function(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+var ЗНАК = /^[=(){}\[\],:]$/;
+var parts = String(needle).split(/(\s+|[=(){}\[\],:])/).filter(function(p){ return p !== ""; });
+var out = "";
+parts.forEach(function(p, i){
+if (/^\s+$/.test(p)){
+var сосед = ЗНАК.test(parts[i - 1] || "") || ЗНАК.test(parts[i + 1] || "");
+out += сосед ? "\\s*" : "\\s+";
+}
+else if (ЗНАК.test(p)) out += "\\s*" + esc1(p) + "\\s*";
+else out += esc1(p);
+});
 var pre = /^[A-Za-z0-9_]/.test(needle) ? "\\b" : "";
 var post = /[A-Za-z0-9_]$/.test(needle) ? "\\b" : "";
-return new RegExp(pre + esc + post).test(code);
+return new RegExp(pre + out + post).test(code);
 }
 
 function runHiddenTests(eng, calls, code, srcs, solution, refSrcs, data, stdin){
@@ -36450,12 +36835,12 @@ var h = helpActive(S);
 if (h && h.lesson === lessonId)
 return '<div class="helpcard on">🙋 <b>Ты позвал взрослого:</b> «' + esc(HELP_WHY[h.why]) + '». ' +
 'Он увидит это в своём кабинете, когда откроет его, — это не звонок. Пока ждёшь, попробуй подсказку ' +
-'или запусти код ещё раз. <button class="linkjump" data-help="off">Отменить</button></div>';
+'или запусти код ещё раз. <button class="linkjump" data-stuck="off">Отменить</button></div>';
 if (!helpPick) return "";
 return '<div class="helpcard">Что случилось? Взрослый увидит ровно эту фразу и урок — больше ничего.' +
 '<div class="helprow">' + HELP_WHY.map(function(w, i){
-return '<button class="rbtn sec" data-help="' + i + '">' + esc(w) + '</button>';
-}).join("") + '<button class="linkjump" data-help="close">Не надо</button></div></div>';
+return '<button class="rbtn sec" data-stuck="' + i + '">' + esc(w) + '</button>';
+}).join("") + '<button class="linkjump" data-stuck="close">Не надо</button></div></div>';
 }
 function wireHelp(lessonId){
 var btn = document.getElementById("helpbtn"), out = document.getElementById("helpout");
@@ -36464,9 +36849,10 @@ function draw(){
 out.innerHTML = helpBoxHTML(lessonId);
 var on = helpActive(S);
 btn.disabled = !!(on && on.lesson === lessonId);
-out.querySelectorAll("[data-help]").forEach(function(b){
+
+out.querySelectorAll("[data-stuck]").forEach(function(b){
 b.onclick = function(){
-var k = b.getAttribute("data-help");
+var k = b.getAttribute("data-stuck");
 if (k === "close"){ helpPick = false; return draw(); }
 if (k === "off"){ helpCancel(); helpPick = false; return draw(); }
 helpCall(lessonId, parseInt(k, 10));
@@ -36826,7 +37212,13 @@ return { name: f.name, code: by.hasOwnProperty(f.name) ? by[f.name] : f.code };
 function draftFlush(){
 if (draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
 var s = session;
-if (!s || !s.studio || !s.studio.editor) return;
+if (!s) return;
+
+if (typeof s.flush === "function"){
+try { s.flush(); } catch(e){}
+return;
+}
+if (!s.studio || !s.studio.editor) return;
 try {
 if (!document.body.contains(s.studio)) return;
 if (s.sandbox){ S.sandbox = s.studio.editor.getCode(); save(); return; }
@@ -37441,264 +37833,221 @@ var k = body.task.check && body.task.check.kind;
 if (k === "turtle" || k === "custom") return false;
 return /\b(randint|choice|shuffle|sample|random)\s*\(/.test(String(body.task.solution || "")) === false;
 }
-/* Строка про цену в победной карточке. Ругать за длинную программу нельзя:
-ребёнок только что её дописал и она работает. Поэтому говорим фактом, а
-«можно короче» — только когда разница действительно велика. */
+
 function stepsNote(l, body, lean){
-  if (!stepsShown(body)) return "";
-  var mine = session.steps || 0, ref = session.refSteps || 0;
-  if (!mine) return "";
-  var lg = logOf(l.id);
-  var prev = lg.bestSteps || 0;
-  var record = !prev || mine < prev;
-  if (record) lg.bestSteps = mine;
-  var line = '<p class="stepnote">⚙️ Твоя программа — <b>' + mine + '</b> ' +
-    plural(mine, "шаг", "шага", "шагов") + " движка";
-  if (ref) line += ", решение автора — " + ref;
-  line += ".";
-  if (prev && mine < prev) line += " <b>Твой рекорд был " + prev + " — побит.</b>";
-  else if (prev && mine > prev) line += " Твой рекорд по этому уроку — " + prev + ".";
-  line += "</p>";
-  return line + leanNote(lean, mine, ref);
+if (!stepsShown(body)) return "";
+var mine = session.steps || 0, ref = session.refSteps || 0;
+if (!mine) return "";
+var lg = logOf(l.id);
+var prev = lg.bestSteps || 0;
+var record = !prev || mine < prev;
+if (record) lg.bestSteps = mine;
+var line = '<p class="stepnote">⚙️ Твоя программа — <b>' + mine + '</b> ' +
+plural(mine, "шаг", "шага", "шагов") + " движка";
+if (ref) line += ", решение автора — " + ref;
+line += ".";
+if (prev && mine < prev) line += " <b>Твой рекорд был " + prev + " — побит.</b>";
+else if (prev && mine > prev) line += " Твой рекорд по этому уроку — " + prev + ".";
+line += "</p>";
+return line + leanNote(lean, mine, ref);
 }
-/* Строка про цель. Ругать за промах нельзя — программа только что заработала,
-   и это главное. Поэтому промах звучит как открытое приглашение вернуться, а
-   не как двойка: звёзды за перепрохождение не отнимаются. */
+
 function leanNote(lean, mine, ref){
-  if (!lean || !lean.show) return "";
-  if (lean.shown)
-    return '<p class="stepnote">🎯 Цель «уложиться не дороже ' + ref + ' ' +
-      plural(ref, "шага", "шагов", "шагов") + '» на этот раз не считается: ' +
-      'в редакторе решение автора. Пройди урок сам — и цель будет твоей.</p>';
-  if (lean.hit)
-    return '<p class="stepnote lean">🪶 <b>Цель выполнена:</b> ' +
-      (mine === ref
-        ? 'ровно столько же, сколько у автора — ' + mine + ' ' + plural(mine, "шаг", "шага", "шагов") + '.'
-        : mine + ' ' + plural(mine, "шаг", "шага", "шагов") + ' вместо ' + ref + ' у автора — короче.') +
-      (lean.first ? ' <b>+' + lean.xp + ' XP</b> — за цель платят один раз на урок.' : '') + '</p>';
-  return '<p class="stepnote">🎯 <b>Цель:</b> уложиться в ' + ref + ' ' +
-    plural(ref, "шаг", "шага", "шагов") + ' — столько стоит решение автора. ' +
-    'Урок уже пройден, звёзды никуда не денутся: вернись и попробуй переписать короче, когда захочется.</p>';
+if (!lean || !lean.show) return "";
+if (lean.shown)
+return '<p class="stepnote">🎯 Цель «уложиться не дороже ' + ref + ' ' +
+plural(ref, "шага", "шагов", "шагов") + '» на этот раз не считается: ' +
+'в редакторе решение автора. Пройди урок сам — и цель будет твоей.</p>';
+if (lean.hit)
+return '<p class="stepnote lean">🪶 <b>Цель выполнена:</b> ' +
+(mine === ref
+? 'ровно столько же, сколько у автора — ' + mine + ' ' + plural(mine, "шаг", "шага", "шагов") + '.'
+: mine + ' ' + plural(mine, "шаг", "шага", "шагов") + ' вместо ' + ref + ' у автора — короче.') +
+(lean.first ? ' <b>+' + lean.xp + ' XP</b> — за цель платят один раз на урок.' : '') + '</p>';
+return '<p class="stepnote">🎯 <b>Цель:</b> уложиться в ' + ref + ' ' +
+plural(ref, "шаг", "шага", "шагов") + ' — столько стоит решение автора. ' +
+'Урок уже пройден, звёзды никуда не денутся: вернись и попробуй переписать короче, когда захочется.</p>';
 }
 
-/* ===== цель по шагам =====
-   Цена программы считалась и раньше, но говорилась фактом: «твоя программа —
-   340 шагов, решение автора — 120». Факт ничего не просит, и ребёнок шёл
-   дальше. Цель просит: «уложись не дороже решения автора».
-
-   Почему именно «не дороже», а не «короче»: эталон написан человеком и до
-   предела не выжат, поэтому цель достижима без трюков. А требование «меньше»
-   толкало бы к нечитаемым однострочникам — ровно к тому, от чего курс
-   отучает в уроке про PEP 8.
-
-   Надбавка даётся ОДИН раз на урок: цель — повод переписать программу, а не
-   источник опыта. Показанное решение цель не засчитывает: код автора, конечно,
-   уложился бы в цену автора, и медаль за это была бы обманом. */
-var LEAN_XP = 10;          /* разовая надбавка за попадание в цель */
-var LEAN_BADGE_AT = 5;     /* столько уроков в цель — и бейдж «Лёгкая рука» */
+var LEAN_XP = 10;           
+var LEAN_BADGE_AT = 5;      
 
 function leanCount(){
-  var n = 0, log = S.log || {};
-  Object.keys(log).forEach(function(k){ if (log[k] && log[k].lean) n++; });
-  return n;
-}
-/* Считается ПЕРЕД сборкой победной карточки: надбавка должна попасть в опыт
-   до refreshTop, иначе полоска и карточка разошлись бы на 10 XP. */
-function leanAward(l, body){
-  var out = { show:false, mine:0, ref:0, hit:false, first:false, xp:0, shown:!!session.shown };
-  if (!stepsShown(body)) return out;
-  var mine = session.steps || 0, ref = session.refSteps || 0;
-  if (!mine || !ref) return out;
-  out.show = true; out.mine = mine; out.ref = ref;
-  if (out.shown) return out;                  /* решение показано — цель не в счёт */
-  out.hit = mine <= ref;
-  if (!out.hit) return out;
-  var lg = logOf(l.id);
-  if (!lg.lean){ lg.lean = 1; out.first = true; out.xp = LEAN_XP; S.xp += LEAN_XP; }
-  if (leanCount() >= LEAN_BADGE_AT) award("lean");
-  return out;
+var n = 0, log = S.log || {};
+Object.keys(log).forEach(function(k){ if (log[k] && log[k].lean) n++; });
+return n;
 }
 
-/* Сколько советов «как сделать чище» есть по только что зачтённому коду.
-   Сам разбор в победную карточку не выносим: она и без него из шести блоков,
-   а совет требует спокойного чтения. Поэтому здесь только приглашение. */
-function lintCount(l, body){
-  if (!session.code || (body.task && body.task.files)) return 0;
-  var found = lintCode(session.code,
-    { needCode: (body.task.check && body.task.check.needCode) || null });
-  return found ? found.length : 0;
+function leanAward(l, body){
+var out = { show:false, mine:0, ref:0, hit:false, first:false, xp:0, shown:!!session.shown };
+if (!stepsShown(body)) return out;
+var mine = session.steps || 0, ref = session.refSteps || 0;
+if (!mine || !ref) return out;
+out.show = true; out.mine = mine; out.ref = ref;
+if (out.shown) return out;                   
+out.hit = mine <= ref;
+if (!out.hit) return out;
+var lg = logOf(l.id);
+if (!lg.lean){ lg.lean = 1; out.first = true; out.xp = LEAN_XP; S.xp += LEAN_XP; }
+if (leanCount() >= LEAN_BADGE_AT) award("lean");
+return out;
 }
-/* Про полку говорим ровно в тот момент, когда на неё что-то легло. Отдельного
-   экрана-объявления не заводим: накопление должно ощущаться как побочный
-   подарок за работу, а не как ещё одна вкладка, которую надо изучить. */
+
+function lintCount(l, body){
+if (!session.code || (body.task && body.task.files)) return 0;
+var found = lintCode(session.code,
+{ needCode: (body.task.check && body.task.check.needCode) || null });
+return found ? found.length : 0;
+}
+
 function partsNote(n){
-  if (!n) return "";
-  return '<p class="stepnote">🔧 На полку мастерской ' +
-    (n === 1 ? 'легла деталь' : 'легли детали') + ': ' + n + ' ' +
-    plural(n, "функция", "функции", "функций") + ', которые ты написал сам. ' +
-    'Из деталей потом собирается вещь — «Моё» → «Мастерская».</p>';
+if (!n) return "";
+return '<p class="stepnote">🔧 На полку мастерской ' +
+(n === 1 ? 'легла деталь' : 'легли детали') + ': ' + n + ' ' +
+plural(n, "функция", "функции", "функций") + ', которые ты написал сам. ' +
+'Из деталей потом собирается вещь — «Моё» → «Мастерская».</p>';
 }
 function lintNote(n){
-  if (!n) return "";
-  return '<p class="stepnote">🧹 Программа работает — и её можно сделать чище: ' +
-    'разбор нашёл ' + n + ' ' + plural(n, "замечание", "замечания", "замечаний") +
-    '. Кнопка «Ревью кода» под редактором, звёзды за это не отнимаются.</p>';
+if (!n) return "";
+return '<p class="stepnote">🧹 Программа работает — и её можно сделать чище: ' +
+'разбор нашёл ' + n + ' ' + plural(n, "замечание", "замечания", "замечаний") +
+'. Кнопка «Ревью кода» под редактором, звёзды за это не отнимаются.</p>';
 }
 
 function winLesson(l, body){
-  var stars = session.shown ? 1 : (session.hints > 0 || session.attempts > 1 ? 2 : 3);
-  var prev = starsOf(l.id), gained = 0;
-  if (stars > prev){ gained = STAR_XP[stars] - STAR_XP[prev]; S.xp += gained; S.stars[l.id] = stars; }
+var stars = session.shown ? 1 : (session.hints > 0 || session.attempts > 1 ? 2 : 3);
+var prev = starsOf(l.id), gained = 0;
+if (stars > prev){ gained = STAR_XP[stars] - STAR_XP[prev]; S.xp += gained; S.stars[l.id] = stars; }
 
-  if (stars === 3 && session.attempts === 1 && !session.shown && !session.hints){
-    S.firstTry = (S.firstTry || 0) + 1;
-    if (S.firstTry >= 3) award("sniper");
-  } else S.firstTry = 0;
-  if (stars === 3){ S.perfect = (S.perfect || 0) + 1; if (S.perfect >= 5) award("perfect"); }
-  if (body.draw){ S.drawDone[l.id] = 1; if (Object.keys(S.drawDone).length >= 3) award("artist"); }
-  if (Object.keys(S.stars).length >= 10) award("ten");
-  var w = CURRICULUM.world(l.world);
-  if (worldReadyLessons(w).length === w.lessons.length &&
-      w.lessons.every(function(x){ return solved(x.id); })) award("world1");
-  var lean = leanAward(l, body);   /* до save/refreshTop: надбавка идёт в тот же опыт */
-  var tidy = lintCount(l, body);   /* сколько советов «как чище» есть по этому коду */
-  var lg = logOf(l.id);
-  lg.stars = Math.max(lg.stars || 0, stars);
-  /* ===== запись авторства пишется ОДИН раз, на первой сдаче =====
-     Повторное прохождение того же урока запись не переписывает: она
-     свидетельствует о том, как урок был сдан впервые, а не о последнем
-     заходе. Иначе достаточно было бы пройти урок ещё раз, чтобы запись
-     «часть пришла готовой» исчезла, — и грош ей тогда цена. */
-  if (!lg.tr && session.trace){
-    var starterLen = (session.starter || []).reduce(function(a, f){ return a + (f.code || "").length; }, 0);
-    var mineCode = session.allCode || session.code || "";
-    lg.tr = {
-      at: Date.now(),
-      typed: session.trace.typed || 0,
-      pasted: session.trace.pasted || 0,
-      own: session.trace.own || 0,
-      edits: session.trace.edits || 0,
-      len: mineCode.length,
-      slen: starterLen,
-      shown: session.shown ? 1 : 0,
-      hints: session.hints || 0,
-      /* «Вперёд программы» считаем от того, что этому заданию и так нужно:
-         конструкция из эталонного решения — это работа по уроку, а не
-         забег вперёд. Проверено на всех ста уроках курса. */
-      ahead: aheadIn(mineCode, [body.task.starter || "", body.task.solution || ""].join("\n"))
-    };
-  }
-  if (!lg.solvedAt) lg.solvedAt = Date.now();
-  lg.last = Date.now();
-  reviewAfterLesson(l.id);   /* трудный урок встаёт в очередь на повтор */
-  markActiveToday();   /* пройденный урок держит дневной стрик живым */
-  /* ⚠️ ДО zanNote: последний блок плана закрывает занятие сам, и программа,
-     положенная после, легла бы в уже закрытое занятие. Многофайловые уроки
-     не кладём — вопрос задаётся про одну страницу кода. */
-  if (!(body.task && body.task.files)) zanKeepProg(l.id, session.code || "");
-  var gotParts = partsHarvest(l, body);   /* функции, написанные самим, идут на полку */
-  zanNote("lesson", l.id);   /* если идёт занятие — шаг плана закрыт */
-  save(); refreshTop();
+if (stars === 3 && session.attempts === 1 && !session.shown && !session.hints){
+S.firstTry = (S.firstTry || 0) + 1;
+if (S.firstTry >= 3) award("sniper");
+} else S.firstTry = 0;
+if (stars === 3){ S.perfect = (S.perfect || 0) + 1; if (S.perfect >= 5) award("perfect"); }
+if (body.draw){ S.drawDone[l.id] = 1; if (Object.keys(S.drawDone).length >= 3) award("artist"); }
+if (Object.keys(S.stars).length >= 10) award("ten");
+var w = CURRICULUM.world(l.world);
+if (worldReadyLessons(w).length === w.lessons.length &&
+w.lessons.every(function(x){ return solved(x.id); })) award("world1");
+var lean = leanAward(l, body);    
+var tidy = lintCount(l, body);    
+var lg = logOf(l.id);
+lg.stars = Math.max(lg.stars || 0, stars);
 
-  var ready = worldReadyLessons(w), pos = ready.indexOf(l);
-  var next = pos < ready.length - 1 ? ready[pos+1] : null;
-  var starStr = "";
-  for (var k = 0; k < 3; k++) starStr += k < stars ? "<b>★</b>" : "★";
+if (!lg.tr && session.trace){
+var starterLen = (session.starter || []).reduce(function(a, f){ return a + (f.code || "").length; }, 0);
+var mineCode = session.allCode || session.code || "";
+lg.tr = {
+at: Date.now(),
+typed: session.trace.typed || 0,
+pasted: session.trace.pasted || 0,
+own: session.trace.own || 0,
+edits: session.trace.edits || 0,
+len: mineCode.length,
+slen: starterLen,
+shown: session.shown ? 1 : 0,
+hints: session.hints || 0,
 
-  document.getElementById("wincard").innerHTML =
-    '<div class="big">' + (stars === 3 ? "🏆" : stars === 2 ? "🎉" : "✅") + '</div>' +
-    '<h2>' + (stars === 3 ? "Идеально!" : "Урок пройден") + '</h2>' +
-    '<div class="winstars">' + starStr + '</div>' +
-    '<p>' + (stars === 3 ? "С первой попытки и без подсказок."
-          : stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
-          : "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
-    takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
-    partsNote(gotParts) +
-    '<div class="winxp">+' + (gained + lean.xp) + ' XP</div>' + winSaveHTML() + '<div class="winrow">' +
-      /* Идёт занятие — возвращаем В ЗАНЯТИЕ, а не в следующий урок. Иначе
-«Дальше →» уносит мимо плана, и разговор «время вышло, что дальше»
-не случается никогда: ребёнок просто едет вперёд, пока не надоест. */
-      (zanOpen() ? '<button class="bigbtn" id="wzan">← К занятию</button>'
-                 : (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
-                         : '<button class="bigbtn" id="wlist">К списку уроков</button>')) +
-      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button>' +
-      workShareHTML(session && session.code) + '</div>';
-  document.getElementById("win").classList.add("show");
-  confetti(stars);
-  sfx(stars === 3 ? "win3" : "win");
-  var wsh = document.getElementById("wshare");
-  if (wsh) wsh.onclick = function(){
-    copyText(workLink({ title: l.title, code: session.code, author: myName() }), wsh);
-  };
-  var wn = document.getElementById("wnext");
-  if (wn) wn.onclick = function(){ closeWin(); openLesson(next.id); };
-  var wl = document.getElementById("wlist");
-  if (wl) wl.onclick = function(){ closeWin(); screenWorld(l.world); };
-  var wz = document.getElementById("wzan");
-  if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
-  document.getElementById("wstay").onclick = closeWin;
-  winSaveWire();
+ahead: aheadIn(mineCode, [body.task.starter || "", body.task.solution || ""].join("\n"))
+};
+}
+if (!lg.solvedAt) lg.solvedAt = Date.now();
+lg.last = Date.now();
+reviewAfterLesson(l.id);    
+markActiveToday();    
+
+if (!(body.task && body.task.files)) zanKeepProg(l.id, session.code || "");
+var gotParts = partsHarvest(l, body);    
+zanNote("lesson", l.id);    
+save(); refreshTop();
+
+var ready = worldReadyLessons(w), pos = ready.indexOf(l);
+var next = pos < ready.length - 1 ? ready[pos+1] : null;
+var starStr = "";
+for (var k = 0; k < 3; k++) starStr += k < stars ? "<b>★</b>" : "★";
+
+document.getElementById("wincard").innerHTML =
+'<div class="big">' + (stars === 3 ? "🏆" : stars === 2 ? "🎉" : "✅") + '</div>' +
+'<h2>' + (stars === 3 ? "Идеально!" : "Урок пройден") + '</h2>' +
+'<div class="winstars">' + starStr + '</div>' +
+'<p>' + (stars === 3 ? "С первой попытки и без подсказок."
+: stars === 2 ? "Работает. Три звезды дают за решение с первого раза без подсказок."
+: "Решение было показано — звезда одна. Попробуй пройти урок заново сам.") + '</p>' +
+takeShieldNote() + reviewNote(l.id) + stepsNote(l, body, lean) + lintNote(tidy) +
+partsNote(gotParts) +
+'<div class="winxp">+' + (gained + lean.xp) + ' XP</div>' + winSaveHTML() + '<div class="winrow">' +
+
+(zanOpen() ? '<button class="bigbtn" id="wzan">← К занятию</button>'
+: (next ? '<button class="bigbtn" id="wnext">Дальше →</button>'
+: '<button class="bigbtn" id="wlist">К списку уроков</button>')) +
+'<button class="bigbtn ghost" id="wstay">Остаться здесь</button>' +
+workShareHTML(session && session.code) + '</div>';
+document.getElementById("win").classList.add("show");
+confetti(stars);
+sfx(stars === 3 ? "win3" : "win");
+var wsh = document.getElementById("wshare");
+if (wsh) wsh.onclick = function(){
+copyText(workLink({ title: l.title, code: session.code, author: myName() }), wsh);
+};
+var wn = document.getElementById("wnext");
+if (wn) wn.onclick = function(){ closeWin(); openLesson(next.id); };
+var wl = document.getElementById("wlist");
+if (wl) wl.onclick = function(){ closeWin(); screenWorld(l.world); };
+var wz = document.getElementById("wzan");
+if (wz) wz.onclick = function(){ closeWin(); screenZan(); };
+document.getElementById("wstay").onclick = closeWin;
+winSaveWire();
 }
 function closeWin(){ document.getElementById("win").classList.remove("show"); }
 
-/* ===== имя — после первой победы, а не на входе =====
-   ⚠️ Решение 11.09.2026 (1.138.0). Вывеска больше не просит представиться:
-   «Начать первый урок» открывает урок гостем. Имя спрашиваем ЗДЕСЬ — когда у
-   ребёнка уже есть что сохранять, и просьба звучит как «сохранить сделанное»,
-   а не как анкета на входе.
-   Гость — это устройство без кода и без имени, и не взрослое: у репетитора и
-   родителя урок — просмотр, сохранять там нечего и некому.
-   Просьба не мешает идти дальше: «Дальше →» работает и без имени, а на
-   следующей победе гостя спросят снова. Прогресс при этом не теряется —
-   doRegister гостю его не стирает (там же разбор, почему). */
 function guestKid(){
-  return !myCode() && !S.name && !isAdminDevice() && !isParentDevice();
+return !myCode() && !S.name && !isAdminDevice() && !isParentDevice();
 }
 function winSaveHTML(){
-  if (!guestKid()) return "";
-  return '<div class="winsave" id="winsave">' +
-    '<b>Сохранить, что получилось?</b>' +
-    '<p>Впиши имя — и урок останется за тобой.</p>' +
-    '<div class="ldauthrow">' +
-      '<input type="text" id="wsname" autocomplete="off" spellcheck="false" maxlength="24"' +
-        ' aria-label="Твоё имя" placeholder="Как тебя зовут?">' +
-      '<button class="bigbtn" id="wsgo">Сохранить</button>' +
-    '</div><div class="msg" id="wsmsg"></div></div>';
+if (!guestKid()) return "";
+return '<div class="winsave" id="winsave">' +
+'<b>Сохранить, что получилось?</b>' +
+'<p>Впиши имя — и урок останется за тобой.</p>' +
+'<div class="ldauthrow">' +
+'<input type="text" id="wsname" autocomplete="off" spellcheck="false" maxlength="24"' +
+' aria-label="Твоё имя" placeholder="Как тебя зовут?">' +
+'<button class="bigbtn" id="wsgo">Сохранить</button>' +
+'</div><div class="msg" id="wsmsg"></div></div>';
 }
 function winSaveWire(){
-  var go = document.getElementById("wsgo"), inp = document.getElementById("wsname");
-  if (!go || !inp) return;
-  function keep(){
-    doRegister(inp.value, function(err){
-      var m = document.getElementById("wsmsg");
-      if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
-      if (inp.focus) inp.focus();
-    }, { stay: true });
-    if (!S.name) return;                    /* имя не подошло — ошибка уже на экране */
-    var code = myCode();
-    document.getElementById("winsave").innerHTML =
-      '<p class="winsaved">✅ Готово, <b>' + esc(S.name) + '</b>! Урок сохранён за тобой.' +
-      (code ? ' Код для входа с другого устройства — <b>' + esc(code) + '</b>.' : '') + '</p>';
-  }
-  go.onclick = keep;
-  inp.addEventListener("keydown", function(e){
-    if (e.key !== "Enter") return;
-    e.preventDefault(); e.stopPropagation();    /* Enter здесь — «сохранить», а не «дальше» */
-    keep();
-  });
+var go = document.getElementById("wsgo"), inp = document.getElementById("wsname");
+if (!go || !inp) return;
+function keep(){
+doRegister(inp.value, function(err){
+var m = document.getElementById("wsmsg");
+if (m){ m.className = "msg show bad"; m.innerHTML = "<b>" + esc(err) + "</b>"; }
+if (inp.focus) inp.focus();
+}, { stay: true });
+if (!S.name) return;                     
+var code = myCode();
+document.getElementById("winsave").innerHTML =
+'<p class="winsaved">✅ Готово, <b>' + esc(S.name) + '</b>! Урок сохранён за тобой.' +
+(code ? ' Код для входа с другого устройства — <b>' + esc(code) + '</b>.' : '') + '</p>';
+}
+go.onclick = keep;
+inp.addEventListener("keydown", function(e){
+if (e.key !== "Enter") return;
+e.preventDefault(); e.stopPropagation();     
+keep();
+});
 }
 
 function confetti(n){
-  var c = document.getElementById("confetti");
-  var ctx = c.getContext && c.getContext("2d");
-  if (!ctx || reduced()) return;
-  c.style.display = "block";
-  var dpr = Math.min(2, window.devicePixelRatio || 1);
-  c.width = innerWidth*dpr; c.height = innerHeight*dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  var cols = ["#7c5cff","#00e0b8","#ffc53d","#ff6b6b","#3ddc84"], ps = [];
-  for (var i = 0; i < 40*n; i++)
-    ps.push({ x: innerWidth/2 + (Math.random()-.5)*260, y: innerHeight/2 - 60,
+var c = document.getElementById("confetti");
+var ctx = c.getContext && c.getContext("2d");
+if (!ctx || reduced()) return;
+c.style.display = "block";
+var dpr = Math.min(2, window.devicePixelRatio || 1);
+c.width = innerWidth*dpr; c.height = innerHeight*dpr;
+ctx.setTransform(dpr,0,0,dpr,0,0);
+var cols = ["#7c5cff","#00e0b8","#ffc53d","#ff6b6b","#3ddc84"], ps = [];
+for (var i = 0; i < 40*n; i++)
+ps.push({ x: innerWidth/2 + (Math.random()-.5)*260, y: innerHeight/2 - 60,
 vx:(Math.random()-.5)*9, vy:-Math.random()*11-3, s:4+Math.random()*6,
 c:cols[i%cols.length], r:Math.random()*6 });
 var t0 = performance.now();
@@ -37720,7 +38069,9 @@ var SANDBOX_START_PY = 'import sys\n\nprint("Это настоящий Python", 
 
 var SANDBOX = KVSCREENS.sandbox({
 app: app, esc: esc, errHTML: errHTML, enterScreen: enterScreen, refreshTop: refreshTop,
-save: save, award: award, copyText: copyText, claimScreen: claimScreen,
+save: save, award: award, claimScreen: claimScreen,
+
+copyText: function(t, btn){ return copyText(t, btn); },
 draftFlush: draftFlush, draftSchedule: draftSchedule, makeStudio: makeStudio,
 galleryAll: galleryAll, galleryDrawing: galleryDrawing, gallerySave: gallerySave,
 myWorkById: myWorkById, myWorkLink: myWorkLink, myWorkSave: myWorkSave,
@@ -37729,7 +38080,6 @@ screenFolio: function(){ screenFolio(); }, screenStale: screenStale,
 screenViz: function(o){ screenViz(o); },
 screenWorlds: screenWorlds,
 SANDBOX_START: SANDBOX_START, SANDBOX_START_PY: SANDBOX_START_PY,
-SFX_KEY: SFX_KEY, VOICE_KEY: VOICE_KEY,
 
 S: function(){ return S; }, session: function(){ return session; },
 newSession: function(v){ session = v; }
@@ -38388,7 +38738,8 @@ return '<div class="ptrow"><span>' + esc(x.text) + '</span>' +
 (x.t === "ask"
 ? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
 : '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + esc(x.ref) + '">' +
-(l ? "Открыть" : "Открыть") + '</button>') + '</div>';
+
+(l ? "Открыть урок «" + esc(l.title) + "»" : "Открыть") + '</button>') + '</div>';
 }).join("") +
 '<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
 }
@@ -41249,8 +41600,9 @@ h += '<div class="admlbl">Сколько минут в день достаточ
 (f.cap
 ? '<div class="admrow"><button class="rbtn ' + (f.capHard ? "check" : "sec") + '" data-act="fcaphard">' +
 (f.capHard ? "✓ После предела не пускать дальше" : "После предела только напоминать") + '</button></div>' +
-'<p class="dim">Сегодня за тренажёром <b>' + todayMinutes() + '</b> ' +
-plural(todayMinutes(), "минута", "минуты", "минут") + ' из ' + f.cap + '. ' +
+
+'<p class="dim">Сегодня за тренажёром <b>' + todayMinutes(frameState()) + '</b> ' +
+plural(todayMinutes(frameState()), "минута", "минуты", "минут") + ' из ' + f.cap + '. ' +
 'Считается всё время в тренажёре, а не только занятие — вы мерите экранное время, а не учебное.</p>' +
 '<p class="dim">⚠️ По умолчанию тренажёр только напоминает. Жёсткий запрет наказывает за увлечённость, ' +
 'поэтому включается отдельно и никогда не обрывает начатый урок.</p>'
@@ -41919,6 +42271,12 @@ var tabs = KID_TABS.slice();
 if (!tabs.some(function(t){ return t[0] === kidTab; }))
 kidTab = kidTarget.fresh ? "frame" : "rep";
 
+function noteHere(id){
+if (!savedNote) return "";
+var где = (kidTab === "hw" || kidTab === "note") ? kidTab : "frame";
+return где === id ? '<div class="msg show ok">' + savedNote + '</div>' : "";
+}
+
 var h = "";
 
 h += '<div id="kidpresence">' + presenceDetailHTML(st, kidTarget.serverAt) + '</div>';
@@ -41964,10 +42322,10 @@ frameEditorHTML(frame()) +
 '<div class="admrow"><button class="rbtn check" data-kf="save">Сохранить ученику</button>' +
 '<span class="sp"></span><span class="dim" id="kidsaved"></span></div>' +
 
-(savedNote ? '<div class="msg show ok">' + savedNote + '</div>' : '<div class="msg" id="kidsavemsg"></div>'));
+(noteHere("frame") || '<div class="msg" id="kidsavemsg"></div>'));
 
-h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st));
-h += kidPaneHTML("note", noteGiveHTML(st));
+h += kidPaneHTML("hw", hwGiveHTML(st) + kidVarHTML(st) + noteHere("hw"));
+h += kidPaneHTML("note", noteGiveHTML(st) + noteHere("note"));
 h += kidPaneHTML("link", kidLinksHTML(kidTarget.code, mentor));
 
 box.innerHTML = h;
@@ -43948,7 +44306,8 @@ var cl = null;
 CURRICULUM.forEach(function(w){
 w.lessons.forEach(function(l){ if (l.id === id) cl = l; });
 });
-if (!confirm("Сбросить урок " + (cl ? cl.n + " · " + cl.title : id) + "?\n\n" +
+
+if (!confirm("Сбросить урок " + (cl ? cl.num + " · " + cl.title : id) + "?\n\n" +
 "Пропадут звёзды и журнал урока: время, попытки, подсказки."))
 return;
 setStars(id, 0); delete S.log[id]; save(); refreshTop(); screenAdmin();
@@ -44901,6 +45260,188 @@ worlds: { t:"🗺 Пять миров, сто уроков", h:
 'и <b>сертификат</b>, который печатается на бумаге.</p>' +
 '<p>Не помнишь, где было нужное, — есть <b>поиск по урокам</b> прямо над списком миров.</p>' },
 
+robot: { t:"🤖 Робот — исполнитель с пятью командами", h:
+'<h4>Что это за экран</h4>' +
+'<p>Робот ходит по клетчатому полю и закрашивает клетки. Программа пишется ' +
+'<b>не на Python</b>, а на языке Робота — русскими словами. Язык взят из КуМира ' +
+'слово в слово: это <b>задание 15 ОГЭ</b>, там, где Python не примут.</p>' +
+'<h4>Что делать</h4>' +
+'<ul><li>Слева поле, справа окно <b>«Программа»</b>: команды пишутся по одной в строке.</li>' +
+'<li><b>«▶ Выполнить»</b> и запускает, и сразу судит: под программой появится, ' +
+'решено или нет. Отдельной кнопки «Проверить» тут нет.</li>' +
+'<li><b>«Сначала»</b> вернёт заготовку, если программа запуталась совсем.</li>' +
+'<li>Карточка <b>«Язык Робота»</b> под полем — все команды, условия и циклы сразу. ' +
+'Подглядывать в неё не стыдно: на экзамене её печатают в самом условии.</li>' +
+'<li>Не идёт — открой <b>«Подсказки»</b>, они идут от намёка к решению. ' +
+'После победы на их месте встанет <b>«Разбор»</b>.</li></ul>' +
+'<h4>Почему проверка такая строгая</h4>' +
+'<p>Программа гоняется не только на нарисованном поле, но и на скрытых: там другая ' +
+'длина стены и другие проходы. Поэтому «вправо, закрасить, вправо, закрасить» не ' +
+'проходит — нужен цикл. Сломалось на скрытом поле — экран назовёт его номер и покажет ' +
+'рядом, что вышло и что было нужно. А если Робот упёрся в стену, он разбивается, ' +
+'и будет сказано, на какой строке.</p>' +
+'<h4>Как устроен раздел</h4>' +
+'<p>Часть задач — <b>формат ОГЭ</b>: две стены с проходами на бесконечном поле, и балл ' +
+'за них считается по правилам эксперта ФИПИ — 2, 1 или 0. Остальные в группе ' +
+'<b>«Приёмы по одному»</b> учат по одному приёму, и баллов за них нет. Звёзд Робот ' +
+'не даёт; решённая задача помечается «решено ✓».</p>' },
+
+algo: { t:"🧮 Алгоритмы, ОГЭ и ЕГЭ — школьная информатика", h:
+'<h4>Что это за экран</h4>' +
+'<p>Тот же Python и тот же судья, что в уроках, но задачи школьные: поиск, сортировка, ' +
+'цена алгоритма, системы счисления, кодирование информации, логика, графы, исполнители, ' +
+'рекурсия и перебор — и типовые задания экзамена. Заходить можно с любого места курса: ' +
+'всё, что нужно, объясняется прямо в задании.</p>' +
+'<h4>Три вкладки наверху</h4>' +
+'<ul><li><b>«🧮 Темы»</b> — все задачи по темам. Здесь же карточка ' +
+'<b>«🧾 Задача по твоей программе»</b>: её собирают кнопкой из твоего же кода.</li>' +
+'<li><b>«📄 ОГЭ»</b> и <b>«🎓 ЕГЭ»</b> — тот же материал, разложенный по <b>номерам ' +
+'заданий</b>. Это не другие задачи, а другой порядок.</li></ul>' +
+'<h4>Как читать карту экзамена</h4>' +
+'<ul><li><b>✓ есть задачи</b> — по этому номеру у нас есть что решать, ' +
+'<b>◐ наполовину</b> — часть номера наша, и написано, какая именно не наша, ' +
+'<b>◻ пока нет задач</b> — наш план работ, <b>— судить нечем</b> — задание требует ' +
+'не программы (например, электронных таблиц), и против него написана причина.</li>' +
+'<li><b>«Решать»</b> в строке ведёт к первой нерешённой задаче этой темы.</li>' +
+'<li>Внизу — <b>«📝 Собрать пробный вариант»</b>: весь экзамен подряд, по одной задаче ' +
+'на каждый номер. У вкладки ОГЭ там же дверь к <b>Роботу</b>: задания 15 и 16 на ' +
+'экзамене оба обязательны.</li>' +
+'<li>Номера сняты с демоверсии того года, который написан рядом. Нумерация между годами ' +
+'меняется — сверяйтесь со своим годом.</li></ul>' +
+'<h4>Чем задачи тут отличаются от уроков</h4>' +
+'<ul><li><b>Звёзд раздел не даёт</b> — поэтому и подсказка здесь ничего не стоит.</li>' +
+'<li><b>Проверка гоняет программу на скрытых данных.</b> Совпасть должен способ, а не ' +
+'один напечатанный ответ: <code>print(3)</code> тут не проходит.</li>' +
+'<li><b>Запреты из условия работают.</b> Если написано «без sorted()», сдать этим ' +
+'нельзя: задача, закрываемая одной готовой функцией, ничему не учит.</li>' +
+'<li><b>У некоторых задач есть бюджет шагов.</b> Программа может быть верной и всё ' +
+'равно слишком дорогой — движок считает шаги и говорит число.</li></ul>' },
+
+myexam: { t:"🧾 Какое число закрыто — задача по твоей программе", h:
+'<h4>Что это за экран</h4>' +
+'<p>Все остальные задачи раздела написаны нами и одинаковы у всех. Эта — нет: она ' +
+'собрана <b>из твоей программы</b> — из сданного урока, где ты не открывал решение, ' +
+'или из того, что ты сохранил в «Моё» из песочницы. Одно число в ней закрыто клеткой ' +
+'⬜, и известно только то, что программа напечатала.</p>' +
+'<h4>Что делать</h4>' +
+'<ul><li>Программа сверху — <b>только для чтения</b>. Запускать нельзя: реши в голове, ' +
+'как на экзамене.</li>' +
+'<li>Впиши в поле ответа <b>одно целое число от 1 до 30</b> и нажми ' +
+'<b>«✓ Проверить»</b>.</li>' +
+'<li>Не сошлось — верное число тебе не покажут, но скажут направление: загаданное ' +
+'больше или меньше. Для второй попытки этого хватает, а готовый ответ убил бы её.</li>' +
+'<li>После победы <b>«Ещё одну»</b> соберёт новую задачу.</li></ul>' +
+'<h4>Почему ответ ровно один</h4>' +
+'<p>Движок подставляет в клетку все числа от 1 до 30 и берёт только то, чей вывод не ' +
+'повторился ни у одного другого. Твоё собственное число в загадку не попадает: его ты ' +
+'и так помнишь.</p>' +
+'<h4>Если собрать не из чего</h4>' +
+'<p>Нужна программа, которая что-то печатает и печатает это <b>всегда одинаково</b>: ' +
+'без ввода с клавиатуры, без случайных чисел и без черепашки. Урок, где ты открывал ' +
+'решение, сюда не идёт — это код автора, а не твой.</p>' },
+
+hw: { t:"📮 Домашка — что задал взрослый", h:
+'<h4>Что это за экран</h4>' +
+'<p>Задачи, которые задаёт между занятиями взрослый — репетитор или родитель. Домашка — ' +
+'это <b>не пройденный урок заново</b>: задача на то же умение, но с другими числами, ' +
+'и своё решение из урока к ней не подойдёт.</p>' +
+'<h4>Как читать список</h4>' +
+'<ul><li><b>«Сделать»</b> — что ещё не сдано, <b>«Сдано»</b> — сделанное, с числом ' +
+'попыток. Сданное можно решить ещё раз, на отметку это не повлияет.</li>' +
+'<li>На карточке стоит срок словами: «на сегодня», «на завтра», «осталось 3 дня» или ' +
+'«срок был вчера». <b>Просрочка ничего не сжигает</b> и ничем не наказывается: ' +
+'сделанное поздно лучше несделанного.</li>' +
+'<li>Больше трёх задач за раз взрослый задать не может — это нарочно.</li></ul>' +
+'<h4>Что делать в задаче</h4>' +
+'<ul><li>Читай условие в рамке <b>«🎯 Задача»</b>: все числа, которые нужны, названы ' +
+'прямо в нём.</li>' +
+'<li>Пиши программу и жми <b>«✓ Проверить»</b> — сверяется то, что она напечатала. ' +
+'Если в задаче просят функцию или цикл, тремя <code>print</code> с готовыми числами ' +
+'её не закрыть: об этом скажут до проверки вывода.</li>' +
+'<li><b>💡 Подсказка</b> здесь бесплатная: звёзд в домашке нет.</li></ul>' +
+'<h4>Что видит взрослый</h4>' +
+'<p>Домашка звёзд не даёт и на прогресс по курсу не влияет. Что задача сдана и со ' +
+'скольких попыток, взрослый увидит, когда откроет тренажёр в следующий раз.</p>' },
+
+specs: { t:"📋 Приёмка — принять работу напарника", h:
+'<h4>Что это за экран</h4>' +
+'<p>Здесь ты <b>не пишешь программу</b>. Её написал напарник, а ты принимаешь работу: ' +
+'записываешь, что должно быть верно, и движок проверяет его код по твоим правилам. Так ' +
+'работают со взрослым кодом и так придётся работать с ИИ — он пишет быстро и уверенно, ' +
+'а отвечаешь за результат ты.</p>' +
+'<h4>Четыре слова, больше не нужно</h4>' +
+'<ul><li><code>пример сумма([1, 2, 3]) = 6</code> — конкретный случай и ответ к нему;</li>' +
+'<li><code>всегда результат &gt;= 0</code> — правило, верное на всех примерах;</li>' +
+'<li><code>никогда результат in числа</code> — чего быть не должно;</li>' +
+'<li><code>не дороже 200 шагов</code> — цена вызова, её считает движок.</li></ul>' +
+'<p>«Всегда» и «никогда» смотрят на данные из строк «пример», поэтому без ни одного ' +
+'примера правило проверять не на чем — и об этом скажут прямо.</p>' +
+'<h4>Что делать</h4>' +
+'<ul><li>Прочитай, о чём просили напарника, и его код. <b>Менять его код нельзя</b> — ' +
+'работу надо принять или вернуть.</li>' +
+'<li>Пиши строки приёмки в поле и жми <b>«✓ Принять работу»</b>.</li>' +
+'<li><b>«Показать на Python»</b> покажет твои же строки обычными <code>assert</code>. ' +
+'Это не наш выдуманный язык: ровно так проверяют код взрослые.</li></ul>' +
+'<h4>Как судят твою приёмку</h4>' +
+'<p>Сначала твои правила прогоняются на <b>заведомо правильной</b> программе: правило, ' +
+'которое отвергает верное решение, — плохое правило, и экран назовёт строку. Потом — на ' +
+'коде напарника. Победа бывает двух видов: <b>работу приняли</b> и <b>работу вернули</b>, ' +
+'потому что правила поймали поломку. А вот вернуть исправную работу — ошибка: правило ' +
+'оказалось строже просьбы. Если строк слишком мало, принимать ещё рано, и будет ' +
+'написано, сколько их нужно хотя бы.</p>' +
+'<p>Подсказки тут ничего не стоят: это тренировка.</p>' },
+
+shop: { t:"🔧 Мастерская — полка и верстак", h:
+'<h4>Что это за экран</h4>' +
+'<p>Обычно решил задачу — и она пропала. Здесь не так: каждая функция, которую ты ' +
+'написал сам в сданном уроке, остаётся на <b>полке</b>, как деталь в коробке. А внизу ' +
+'<b>верстак</b> — там из этих деталей собирается своя программа.</p>' +
+'<h4>Что делать</h4>' +
+'<ul><li><b>«↓ На верстак»</b> — деталь встанет в начало программы внизу, и её можно ' +
+'позвать по имени. <b>«✕»</b> убирает деталь с полки.</li>' +
+'<li>На верстаке <b>проверок нет</b>: это твоя вещь, а не задание. Написанное ' +
+'сохраняется между заходами.</li>' +
+'<li><b>«💾 Сохранить вещь»</b> положит собранное в «Что уже собрано». Первая ' +
+'строка-комментарий станет названием.</li>' +
+'<li>У сохранённой вещи есть <b>«↓ Открыть на верстаке»</b> и <b>«🔗 Ссылка»</b>: ' +
+'программа лежит прямо в адресе, сервер для этого не нужен.</li></ul>' +
+'<h4>Что становится деталью</h4>' +
+'<ul><li><b>Функция, которую ты написал сам</b>: у неё есть имя, вход и выход, и позвать ' +
+'её можно откуда угодно. Полка начинает наполняться с урока про <code>def</code>.</li>' +
+'<li><b>Показанное решение деталью не станет</b> — это код автора, а не твой. Функция из ' +
+'заготовки тоже: её выдали, а не написали.</li>' +
+'<li>Сломанное на полку не кладут: деталь обязана хотя бы определяться без ошибки.</li>' +
+'<li>Полка держит до сорока деталей, а собранных вещей — до двенадцати; дальше самое ' +
+'старое уходит.</li></ul>' +
+'<h4>Если деталь ругается</h4>' +
+'<p>Она могла опираться на то, что стояло рядом в уроке. Допиши недостающее прямо в ' +
+'программе: движок скажет словами, чего не хватает.</p>' },
+
+works: { t:"🏗 Что создают ученики — витрина работ", h:
+'<h4>Что это за экран</h4>' +
+'<p>Программа курса ничего не говорит родителю: «списки, словари, классы» — это слова. ' +
+'Здесь вещи, которые ученик собирает своими руками, и все они запускаются прямо на этой ' +
+'странице. Это не картинки работ, а сами работы.</p>' +
+'<h4>Что делать</h4>' +
+'<ul><li><b>«▶ Что печатает»</b> под программой курса — она выполнится здесь и сейчас, ' +
+'тем же движком, что у ребёнка. Рядом с названием написано, после какого урока до неё ' +
+'доходят: это честная цена входа, а не «начните прямо сейчас».</li>' +
+'<li>У проекта, который ребёнок уже собрал, появляется <b>«Открыть мою»</b> — его ' +
+'программа, а не наша.</li>' +
+'<li>Ниже — рисунки черепашки (настоящий вывод программ из уроков, а не заготовленные ' +
+'картинки) и игры, у каждой из которых виден код.</li>' +
+'<li>Блок <b>«А это собрано на этом устройстве»</b> считает сделанное: программы курса, ' +
+'рисунки, вещи из мастерской и свои задания. <b>«🎒 Открыть портфолио»</b> ведёт туда, ' +
+'где всё это лежит.</li></ul>' +
+'<h4>Чего здесь нет, и это нарочно</h4>' +
+'<p><b>Кода непройденного проекта.</b> Витрина — это витрина, а не ответы: выложить ' +
+'решение рядом с курсом значит своими руками сломать курс.</p>' +
+'<p><b>Чужих детей.</b> Имя и возраст под работой — персональные данные; мы имя ребёнка ' +
+'не спрашиваем вовсе и на сервер не отправляем, значит и показывать нам нечего. ' +
+'Публичной ленты работ не будет — её пришлось бы кому-то проверять руками. Вместо неё ' +
+'адресная ссылка: ребёнок отправляет свою работу конкретному человеку, и больше она ' +
+'никуда не попадает.</p>' },
+
 tools: { t:"🧰 Кнопки наверху", h:
 '<div class="iconlist">' +
 '<div class="iconrow"><span class="ic">🏠</span><span><b>Главное</b> — уроки и что делать сейчас</span></div>' +
@@ -44913,6 +45454,11 @@ tools: { t:"🧰 Кнопки наверху", h:
 '<div class="iconrow"><span class="ic">?</span><span><b>Подсказка</b> — то, что ты сейчас читаешь</span></div>' +
 '</div>' }
 };
+
+HELP.algoone = HELP.algo;
+HELP.hwone = HELP.hw;
+HELP.spec = HELP.specs;
+HELP.work = HELP.works;
 
 function helpIsOpen(){
 var el = document.getElementById("helpwrap");
@@ -45389,7 +45935,7 @@ homeLabel: homeLabel, goHome: goHome,
 scheduleDays: scheduleDays, isStudyDay: isStudyDay, toggleStudyDay: toggleStudyDay, studyDue: studyDue,
 agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
 frameTime: frameTime, addMonths: addMonths, planDates: planDates, icsForFrame: icsForFrame,
-shieldsLeft: shieldsLeft, shieldToNext: shieldToNext, shieldedOn: shieldedOn, useShield: useShield,
+shieldsLeft: shieldsLeft, shieldedOn: shieldedOn, useShield: useShield,
 shieldWouldSave: shieldWouldSave,
 coveredDays: coveredDays, shieldsLeftIn: shieldsLeftIn, SHIELD_EVERY: SHIELD_EVERY, SHIELD_MAX: SHIELD_MAX,
 screenRegister: screenRegister, screenAccount: screenAccount, doRegister: doRegister,
@@ -45452,6 +45998,7 @@ lintCode: lintCode, lintHTML: lintHTML, lintKnows: lintKnows, astWalk: astWalk,
 lintCount: lintCount, lintNote: lintNote,
 LINT_MAX: LINT_MAX, LINT_LONG_FUNC: LINT_LONG_FUNC,
 HELP: HELP, openHelp: openHelp, closeHelp: closeHelp, helpIsOpen: helpIsOpen,
+codeHas: codeHas,
 RANKS: RANKS,
 toggleHelp: toggleHelp, screenGuide: screenGuide,
 themeGet: themeGet, themeSet: themeSet,
@@ -45464,7 +46011,7 @@ skinsOpen: skinsOpen, skinPickHTML: skinPickHTML, skinApply: skinApply,
 lessonSearch: lessonSearch, lessonOpen: lessonOpen, homeCards: HOME.CARDS,
 ERR_BEASTS: ERR_BEASTS, BEAST_BADGE_AT: BEAST_BADGE_AT, KIND_RU: KIND_RU,
 errSeen: errSeen, errBeaten: errBeaten, beastsBeaten: beastsBeaten,
-beastsMet: beastsMet, beastsHTML: beastsHTML, beastByKind: beastByKind,
+beastsMet: beastsMet, beastsHTML: beastsHTML,
 hlWatched: hlWatched, WATCH_MAX_STEPS: WATCH_MAX_STEPS, WATCH_LINE_MAX: WATCH_LINE_MAX,
 LEAN_XP: LEAN_XP, LEAN_BADGE_AT: LEAN_BADGE_AT, FRIEND_XP: FRIEND_XP,
 screenFolio: screenFolio, certList: certList, certBodyHTML: certBodyHTML,
@@ -45488,7 +46035,7 @@ zanSlots: zanSlots, zanPlanFor: zanPlanFor, zanStart: zanStart, zanOpen: zanOpen
 zanNote: zanNote, zanFinish: zanFinish, zanReport: zanReport, zanOfDay: zanOfDay,
 zanLast: zanLast, zanMins: zanMins, zanTick: zanTick, zanAll: zanAll,
 zanStats: zanStats, zanSlotsFor: zanSlotsFor, median: median, ZAN_STAT_MIN: ZAN_STAT_MIN,
-todayMinutes: todayMinutes, capOn: capOn, capLeft: capLeft, capReached: capReached,
+todayMinutes: todayMinutes, capOn: capOn, capReached: capReached,
 capHard: capHard, capNoteHTML: capNoteHTML, CAP_CHOICES: CAP_CHOICES,
 zanOnBreak: zanOnBreak, zanBreakStart: zanBreakStart, zanBreakEnd: zanBreakEnd,
 zanBreakDue: zanBreakDue, ZAN_BREAK: ZAN_BREAK,
@@ -45565,7 +46112,7 @@ weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHT
 worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
 nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
 zanAfterPause: zanAfterPause,
-grpStats: grpStats, stuckTopHTML: stuckTopHTML, STUCK_PRICE: STUCK_PRICE,
+grpStats: grpStats, stuckTopHTML: stuckTopHTML,
 playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
 presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
 presenceDetailHTML: presenceDetailHTML,
@@ -45574,7 +46121,7 @@ fmtDur: fmtDur, daySec: daySec, dayMs: dayMs, goHome: goHome,
 liveOn: liveOn, liveOffNow: liveOffNow, liveTick: liveTick, liveShare: liveShare,
 livePayload: livePayload, LIVE_FRESH: LIVE_FRESH, screenLiveView: screenLiveView,
 liveWatcher: liveWatcher, liveAccept: liveAccept,
-quietReminderText: quietReminderText, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
+quietReminderText: quietReminderText,
 groupAssignVariant: groupAssignVariant, grpVarState: grpVarState,
 grpAssignOf: grpAssignOf, kidVarHTML: kidVarHTML, kidSaveVariant: kidSaveVariant, kidVarForm: kidVarForm,
 ZAN_LEN: ZAN_LEN, ZAN_SANE: ZAN_SANE, IDLE_MS: IDLE_MS,

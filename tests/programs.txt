@@ -1581,3 +1581,104 @@ print(f"{name=!s}")
 print(f"{x + 1=}")
 print(f"{x==5}")
 print(f"{x>=3} {x!r}")
+
+### revizia_bool_kak_chislo
+print(True + 1)
+print(sum([x > 1 for x in [1, 2, 3]]))
+print(True == 1, True > 0, -True, abs(True))
+print({True: "a"}[1])
+print(sorted([True, 0, 2, False]))
+print(10 / True, "a" * True)
+print(int(True), float(True))
+
+### revizia_kortezhi_i_indeksy
+t = (1, 2)
+print(t + (3,), t * 2, 2 * t)
+print(t[0:2], t[::-1], type(t * 2).__name__)
+xs = [1, 2, 3]
+print(xs[len(xs) // 2])
+try:
+    print(xs[len(xs) / 2])
+except TypeError:
+    print("TypeError drob")
+try:
+    print([1] + (2,))
+except TypeError:
+    print("TypeError plus")
+
+### revizia_stroki_granicy
+print("xxabc".lstrip("x"), "abcxx".rstrip("x"))
+print("aaa".replace("a", "b", 1), "aaa".replace("a", "b", 2))
+print("abcabc".find("b", 2), "abcabc".rfind("b", 0, 3))
+print("abcabc".count("a", 1), "abcabc".index("c", 3))
+print("hello".startswith(("he", "xx")), "hello".endswith(("lo", "xx")))
+print("hello".startswith("he", 1))
+print("it's fine".title())
+
+### revizia_del_i_pop
+d = {"a": 1, "b": 2}
+del d["a"]
+print(d)
+xs = [10, 20, 30]
+del xs[1]
+print(xs)
+print(d.pop("zz", 0), d.pop("b"))
+try:
+    d.pop("nope")
+except KeyError:
+    print("KeyError")
+print(hasattr("abc", "upper"), hasattr([1], "append"), hasattr("abc", "netu"))
+
+### revizia_formaty_i_chisla
+print(f"{255:x}", f"{255:X}", f"{255:b}", f"{255:o}")
+print(f"{255:08b}", f"{-10:b}")
+print(f"{1500:.2e}", f"{3.14159:.3g}", f"{1500:g}")
+print(1e3, 2.5e-4, 0x1F, 0b101, 0o17)
+print(float("1e3"), 1e16, 0.0000001)
+print(pow(2, 10, 1000), pow(3, 5, 7))
+
+### revizia_modul_i_argumenty
+import math
+import statistics
+import itertools
+import datetime
+try:
+    math.sqrt(-4)
+except ValueError:
+    print("ValueError sqrt")
+print(statistics.median([2, 4]), statistics.median([1, 2, 3]))
+print(max([], default=0), min([], default=-1))
+print(list(itertools.product([1], [])))
+try:
+    datetime.date(2021, 2, 30)
+except ValueError:
+    print("ValueError date")
+
+
+def f(a, b=5):
+    return a + b
+
+
+try:
+    f(1, a=2)
+except TypeError:
+    print("TypeError dvazhdy")
+print(f(1, b=2))
+
+### revizia_regulyarki_scheta
+import re
+print(re.sub("a", "b", "aaa", 1), re.sub("a", "b", "aaa"))
+print(re.sub(r"(\d)", r"<\1>", "a1b2", 1))
+print(re.split(",", "a,b,c", 1))
+print(re.split(r"(\s)", "a b c", 1))
+p = re.compile("x")
+print(p.sub("y", "xxx", 1), p.split("axbxc"))
+
+### revizia_zip_i_predely
+print(list(zip()))
+print(list(zip([1, 2], [3, 4])))
+a = [0] * 100000
+print(len(a))
+l = []
+l.append(l)
+print(l)

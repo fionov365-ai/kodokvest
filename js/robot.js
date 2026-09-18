@@ -259,6 +259,6 @@ function run(text, field){
 
 window.ROBOT = {
   parseField: parseField, fieldRows: fieldRows, run: run, parse: parse,
-  samePainted: samePainted, paintedKeys: paintedKeys, MAX_STEPS: MAX_STEPS
+  samePainted: samePainted, MAX_STEPS: MAX_STEPS
 };
 })();

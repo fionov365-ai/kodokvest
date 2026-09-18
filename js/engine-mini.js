@@ -32,7 +32,10 @@ var FLOATTAG = "__isFloat__";
 function mkFloat(v){
   var n = new Number(v); n[FLOATTAG] = true; return n;
 }
-function isNum(x){ return typeof x === "number" || x instanceof Number; }
+/* булево — тоже число, как в Python (bool — подвид int): True + 1 == 2,
+   sum([x > 1 for x in …]) считает, True == 1. Кто должен видеть булево
+   булевым (печать, typeName, json) — проверяет v === true ДО isNum. */
+function isNum(x){ return typeof x === "number" || x instanceof Number || typeof x === "boolean"; }
 function isFloat(x){
   if (x instanceof Number) return !!x[FLOATTAG] || !Number.isInteger(+x);
   return typeof x === "number" && !Number.isInteger(x);
@@ -41,6 +44,14 @@ function nv(x){ return +x; }
 function num(v, floaty){
   if (floaty || !Number.isInteger(v)) return mkFloat(v);
   return v;
+}
+
+/* умножение строки с пределом: без него "a" * 10**10 роняет вкладку RangeError-ом */
+function strTimes(s, count, line){
+  var times = Math.max(0, Math.trunc(count));
+  if (s.length * times > 1000000)
+    raise("RuntimeError", "Строка получится слишком длинной — браузер не выдержит.", line);
+  return s.repeat(times);
 }
 
 /* ---------- кортеж ---------- */
@@ -446,12 +457,38 @@ function lex(src){
 
     // числа
     if (/[0-9]/.test(c)){
+      /* ⚠️ 0x1F, 0b101, 0o17 и запись с показателем 1e3 разбора не имели:
+         лексер читал «0», потом видел букву и падал с SyntaxError, текст
+         которой про другое. Между тем шестнадцатеричная и двоичная запись —
+         это прямо тема ОГЭ про системы счисления. Найдено ревизией 18.09.2026. */
+      if (c === "0" && /[xXbBoO]/.test(src[i+1] || "")){
+        var база = src[i+1].toLowerCase();
+        var цифры = база === "x" ? /[0-9a-fA-F_]/ : база === "b" ? /[01_]/ : /[0-7_]/;
+        var цс = "", j2 = i + 2;
+        while (j2 < src.length && цифры.test(src[j2])){ цс += src[j2]; j2++; }
+        if (!цс.replace(/_/g, ""))
+          raise("SyntaxError", "После 0" + src[i+1] + " нужны цифры этой системы счисления.", start);
+        i = j2;
+        push("NUMBER", { v: parseInt(цс.replace(/_/g, ""), база === "x" ? 16 : база === "b" ? 2 : 8), f: false });
+        continue;
+      }
       var s = "";
       while (i < src.length && /[0-9_]/.test(src[i])){ s += src[i]; i++; }
       var flt = false;
       if (src[i] === "." && /[0-9]/.test(src[i+1] || "")){
         flt = true; s += "."; i++;
         while (i < src.length && /[0-9_]/.test(src[i])){ s += src[i]; i++; }
+      }
+      /* показатель: 1e3, 2.5e-4, 1E+6 — всегда float, как в Python */
+      if (/[eE]/.test(src[i] || "")){
+        var зн = /[+-]/.test(src[i+1] || "") ? src[i+1] : "";
+        var поз = i + 1 + (зн ? 1 : 0);
+        if (/[0-9]/.test(src[поз] || "")){
+          var пок = "";
+          while (поз < src.length && /[0-9_]/.test(src[поз])){ пок += src[поз]; поз++; }
+          s += "e" + зн + пок.replace(/_/g, "");
+          flt = true; i = поз;
+        }
       }
       push("NUMBER", { v: parseFloat(s.replace(/_/g, "")), f: flt });
       continue;
@@ -591,6 +628,16 @@ Parser.prototype = {
         if (this.atKw("from"))
           raise("NotSupported", "Запись «raise ... from ...» в тренажёре не нужна — достаточно «raise ...».", line);
         return { type:"Raise", exc: exc, line: line };
+      }
+      /* ⚠️ del стоял в списке слов, но ветки разбора не имел: школьная
+         классика `del d[ключ]` и `del xs[i]` падала с «Слово „del“ не может
+         стоять здесь». Найдено ревизией 18.09.2026.
+         Принимаем и несколько цели через запятую: del a, b — как в Python. */
+      if (tk.v === "del"){
+        this.next();
+        var цели = [this.parseExpr()];
+        while (this.atOp(",")){ this.next(); цели.push(this.parseExpr()); }
+        return { type:"Delete", targets: цели, line: line };
       }
       if (tk.v === "assert"){
         this.next();
@@ -1423,7 +1470,13 @@ function fmtNum(x){
   var v = nv(x);
   if (isFloat(x)){
     if (Number.isInteger(v) && Math.abs(v) < 1e16) return v.toFixed(1);
-    return String(v);
+    /* ⚠️ Python и JavaScript переходят к записи с показателем в РАЗНЫХ местах:
+       Python с 1e16, JavaScript только с 1e21 — поэтому print(1e16) печатался
+       как 10000000000000000 вместо 1e+16. И показатель Python пишет минимум
+       двумя цифрами: 1e-07, а не 1e-7. Ревизия 18.09.2026. */
+    var s = String(v);
+    if (s.indexOf("e") < 0 && Math.abs(v) >= 1e16) s = v.toExponential();
+    return s.replace(/e([+-])(\d)$/, "e$10$2");
   }
   return String(v);
 }
@@ -1443,6 +1496,7 @@ function strRepr(v){
   }
   return q + out + q;
 }
+var reprSeen = [];   /* стопка контейнеров, которые pyRepr печатает прямо сейчас */
 function pyRepr(v){
   if (v === null || v === undefined) return "None";
   if (v === true) return "True";
@@ -1455,14 +1509,22 @@ function pyRepr(v){
   if (v instanceof PyGen) return "<генератор " + v.name + ">";
   if (v instanceof Bound) return "<метод " + v.fn.name + ">";
   if (v instanceof PyObj) return objRepr(v);
-  if (v instanceof PySet)
-    return v.size === 0 ? "set()" : "{" + v.values().map(pyRepr).join(", ") + "}";
-  if (isTup(v)) return "(" + v.map(pyRepr).join(", ") + (v.length === 1 ? "," : "") + ")";
-  if (Array.isArray(v)) return "[" + v.map(pyRepr).join(", ") + "]";
-  if (v instanceof Map){
-    var out = [];
-    v.forEach(function(val, k){ out.push(pyRepr(k) + ": " + pyRepr(val)); });
-    return "{" + out.join(", ") + "}";
+  /* список, который содержит сам себя, без стражи печатался бы вечно
+     и ронял вкладку; python3 в этом месте печатает [...] */
+  if (v instanceof PySet || isTup(v) || Array.isArray(v) || v instanceof Map){
+    if (reprSeen.indexOf(v) >= 0)
+      return v instanceof PySet ? "set(...)" : isTup(v) ? "(...)"
+           : Array.isArray(v) ? "[...]" : "{...}";
+    reprSeen.push(v);
+    try {
+      if (v instanceof PySet)
+        return v.size === 0 ? "set()" : "{" + v.values().map(pyRepr).join(", ") + "}";
+      if (isTup(v)) return "(" + v.map(pyRepr).join(", ") + (v.length === 1 ? "," : "") + ")";
+      if (Array.isArray(v)) return "[" + v.map(pyRepr).join(", ") + "]";
+      var out = [];
+      v.forEach(function(val, k){ out.push(pyRepr(k) + ": " + pyRepr(val)); });
+      return "{" + out.join(", ") + "}";
+    } finally { reprSeen.pop(); }
   }
   if (v instanceof PyFunc) return "<функция " + v.name + ">";
   if (typeof v === "function") return "<встроенная функция>";
@@ -1596,7 +1658,10 @@ function keyOf(v){
   if (v === true) return "b:1";
   if (v === false) return "b:0";
   if (v === null) return "none";
-  if (isTup(v)) return "t:" + v.map(keyOf).join("");
+  /* ⚠️ Разделитель — \u0001, невидимый знак: в обычном просмотре строка
+     выглядела как join("") и читалась как ошибка (ревизия 18.09.2026).
+     Он нужен, чтобы ключи (1, 23) и (12, 3) не слиплись в один. */
+  if (isTup(v)) return "t:" + v.map(keyOf).join("\u0001");
   if (v instanceof PyType) return "cls:" + v.fullName();
   if (v instanceof PyObj){
     if (!v.__id__) v.__id__ = ++OBJ_ID;
@@ -1696,6 +1761,8 @@ function localNames(body){
           if (st.finalbody) walk(st.finalbody);
           break;
         case "FuncDef": case "ClassDef": found[st.name] = 1; break;
+        /* `del x` внутри функции тоже делает имя местным — как присваивание */
+        case "Delete": st.targets.forEach(walkTarget); break;
         /* ⚠️ И global, и nonlocal вычёркивают имя из «своих»: иначе разбор
            решит, что переменная местная, и чтение внешней упадёт с
            UnboundLocalError ещё до запуска. На nonlocal я на этом и попался —
@@ -1897,6 +1964,22 @@ Interp.prototype.installBuiltins = function(){
   def("pow", function(args, kw, line){
     if (!isNum(args[0]) || !isNum(args[1]))
       raise("TypeError", "pow() работает только с числами.", line);
+    /* ⚠️ Третий аргумент — остаток: pow(2, 10, 1000) это 24, а не 1024. Его
+       молча игнорировали. Считаем по шагам, иначе 2**100 % m уже неточно. */
+    if (args.length > 2 && args[2] !== null){
+      if (isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0)
+        raise("ValueError", "pow() с остатком работает только с целыми неотрицательными степенями.", line,
+              { pymsg: "pow() 2nd argument cannot be negative when 3rd argument specified" });
+      var м = Math.trunc(nv(args[2]));
+      if (м === 0) raise("ValueError", "Остаток по нулю не берут.", line, { pymsg: "pow() 3rd argument cannot be 0" });
+      var осн = Math.trunc(nv(args[0])) % м, сте = Math.trunc(nv(args[1])), акк = 1;
+      while (сте > 0){
+        if (сте % 2) акк = (акк * осн) % м;
+        осн = (осн * осн) % м;
+        сте = Math.floor(сте / 2);
+      }
+      return ((акк % м) + м) % м;
+    }
     var r = Math.pow(nv(args[0]), nv(args[1]));
     var fl = isFloat(args[0]) || isFloat(args[1]) || nv(args[1]) < 0;
     return num(fl ? r : Math.round(r), fl);
@@ -1907,7 +1990,9 @@ Interp.prototype.installBuiltins = function(){
     if (isNum(v)) return mkFloat(nv(v));
     if (typeof v === "string"){
       var t = v.trim();
-      if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t))
+      /* ⚠️ Запись с показателем: float("1e3") — это 1000.0, а регулярка её не
+         принимала и говорила «нельзя превратить в число». 18.09.2026. */
+      if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t))
         raise("ValueError", "Строку «" + v + "» нельзя превратить в число.", line,
               { pymsg: "could not convert string to float: " + pyRepr(v) });
       return mkFloat(parseFloat(t));
@@ -1942,9 +2027,13 @@ Interp.prototype.installBuiltins = function(){
   function mkMinMax(dir){
     var f = function*(args, kw, line){
       var arr = args.length === 1 ? I.iterate(args[0], line) : args;
-      if (!arr.length)
+      if (!arr.length){
+        /* ⚠️ default= — что вернуть, если последовательность пуста. Без него
+           max([], default=0) падал ошибкой, хотя в Python это 0. 18.09.2026. */
+        if (kw && kw.default !== undefined) return kw.default;
         raise("ValueError", (dir > 0 ? "max()" : "min()") + " из пустой последовательности.", line,
               { pymsg: (dir > 0 ? "max()" : "min()") + " arg is an empty sequence" });
+      }
       var useKey = !!(kw && kw.key);
       var best = arr[0];
       var bestKey = useKey ? yield* I.call(kw.key, [arr[0]], {}, line) : arr[0];
@@ -2005,7 +2094,8 @@ Interp.prototype.installBuiltins = function(){
   });
   def("zip", function(args, kw, line){
     var lists = args.map(function(a){ return I.iterate(a, line); });
-    var n = Math.min.apply(null, lists.map(function(l){ return l.length; }));
+    /* без аргументов Math.min от пустого — Infinity, и цикл ниже вечный */
+    var n = lists.length ? Math.min.apply(null, lists.map(function(l){ return l.length; })) : 0;
     var res = [];
     for (var i = 0; i < n; i++) res.push(Tup(lists.map(function(l){ return l[i]; })));
     return res;
@@ -2042,7 +2132,14 @@ Interp.prototype.installBuiltins = function(){
   });
 
   // математика
-  def("sqrt", function(args, kw, line){ return mkFloat(Math.sqrt(nv(args[0]))); });
+  /* ⚠️ Тот же sqrt, что в модуле math, и с той же ошибкой на отрицательном:
+     встроенный дубль печатал NaN (даже не питоновское nan), а math.sqrt честно
+     говорил ValueError — два ответа на один вопрос. Ревизия 18.09.2026. */
+  def("sqrt", function(args, kw, line){
+    if (nv(args[0]) < 0) raise("ValueError", "Квадратного корня из отрицательного числа нет.", line,
+                               { pymsg: "math domain error" });
+    return mkFloat(Math.sqrt(nv(args[0])));
+  });
   def("randint", function(args, kw, line){
     var a = Math.trunc(nv(args[0])), b = Math.trunc(nv(args[1]));
     return a + Math.floor(I.random() * (b - a + 1));
@@ -2237,13 +2334,10 @@ Interp.prototype.installBuiltins = function(){
     return isSubType(args[0], args[1]);
   });
   def("repr", function(args){ return pyRepr(args[0]); });
-  def("hasattr", function(args, kw, line){
-    var o = args[0], n = pyStr(args[1]);
-    if (o instanceof PyObj) return o.fields.has(n) || o.cls.lookup(n) !== undefined;
-    if (o instanceof PyType) return o.lookup(n) !== undefined;
-    if (o instanceof PyModule) return o.vars.has(n);
-    return false;
-  });
+  /* ⚠️ Здесь стояла ВТОРАЯ копия hasattr, и она перебивала правильную (выше,
+     через bindMethod): для встроенных типов возвращала False, то есть
+     hasattr("abc", "upper") отвечало «нет такого метода». Копию убрал,
+     первая осталась одна — ревизия 18.09.2026. */
 
   g.set("pi", mkFloat(Math.PI));
   this.builtinNames = Array.from(g.keys());
@@ -2256,14 +2350,6 @@ Interp.prototype.random = function(){
   return this._seed / 2147483648;
 };
 
-Interp.prototype.minmax = function(args, line, dir){
-  var arr = args.length === 1 ? this.iterate(args[0], line) : args;
-  if (!arr.length) raise("ValueError", (dir > 0 ? "max()" : "min()") + " из пустой последовательности.", line);
-  var best = arr[0];
-  for (var i = 1; i < arr.length; i++)
-    if (this.cmp(arr[i], best, line) * dir > 0) best = arr[i];
-  return best;
-};
 
 Interp.prototype.cmp = function(a, b, line){
   if (isNum(a) && isNum(b)) return nv(a) - nv(b);
@@ -2481,6 +2567,14 @@ Interp.prototype.execStmt = function*(st, env){
         if (!(b0 instanceof PyType))
           raise("TypeError", "В скобках после имени класса должен стоять другой класс.", st.line);
         base = b0;
+        /* ⚠️ Второго родителя движок не поддерживает — и раньше молча его
+           ВЫБРАСЫВАЛ: class C(A, B) собирался, а c.метод_из_B() падал с
+           AttributeError, и понять почему было нельзя. Говорим прямо в том
+           месте, где дело: лучше честный отказ, чем класс-обманка. 18.09.2026. */
+        if (st.bases.length > 1)
+          raise("NotSupported", "Наследование сразу от нескольких классов тренажёр не разбирает: " +
+                "оставьте одного родителя в скобках. Общее для двух классов обычно выносят " +
+                "в третий, от которого наследуются оба по очереди.", st.line);
       }
       var cls = new PyType(st.name, base, { module: "__main__" });
       cls.doc = docOf(st.body);
@@ -2625,6 +2719,59 @@ Interp.prototype.execStmt = function*(st, env){
     case "Break": return new Sig("break");
     case "Continue": return new Sig("continue");
     case "Pass": return null;
+
+    /* del: убрать пару из словаря, элемент из списка или само имя.
+       ⚠️ Слово было в списке ключевых с самого начала, но ветки не имело —
+       `del d[ключ]` падала синтаксической ошибкой (ревизия 18.09.2026). */
+    case "Delete": {
+      for (var dti = 0; dti < st.targets.length; dti++){
+        var tg = st.targets[dti];
+        if (tg.type === "Subscript"){
+          var dobj = yield* this.eval(tg.value, env);
+          var didx = yield* this.eval(tg.index, env);
+          if (isTup(dobj))
+            raise("TypeError", "Из кортежа удалять нельзя — в этом и смысл кортежа.", st.line,
+                  { pymsg: "'tuple' object doesn't support item deletion" });
+          if (dobj instanceof Map){
+            if (!dictHas(dobj, didx))
+              raise("KeyError", "В словаре нет ключа " + pyRepr(didx) + ".", st.line, { pymsg: didx });
+            dobj.delete(keyOf(didx));
+            continue;
+          }
+          if (Array.isArray(dobj)){
+            if (!isNum(didx) || !Number.isInteger(+didx))
+              raise("TypeError", "Номер для удаления должен быть целым числом.", st.line,
+                    { pymsg: "list indices must be integers or slices" });
+            var dn = Math.trunc(nv(didx));
+            if (dn < 0) dn += dobj.length;
+            if (dn < 0 || dn >= dobj.length)
+              raise("IndexError", "В списке " + dobj.length +
+                    " элемент(ов), а удалить просят номер " + Math.trunc(nv(didx)) + ".", st.line,
+                    { pymsg: "list assignment index out of range" });
+            dobj.splice(dn, 1);
+            continue;
+          }
+          raise("TypeError", "Из значения типа " + typeName(dobj) + " удалять по номеру нельзя.", st.line);
+        }
+        if (tg.type === "Name"){
+          var поле = env;
+          while (поле && !поле.vars.has(tg.id)) поле = поле.parent;
+          if (!поле)
+            raise("NameError", "Имя «" + tg.id + "» не определено — удалять нечего.", st.line,
+                  { pymsg: "name '" + tg.id + "' is not defined" });
+          поле.vars.delete(tg.id);
+          continue;
+        }
+        if (tg.type === "Attribute"){
+          var aobj = yield* this.eval(tg.value, env);
+          if (aobj instanceof PyObj && aobj.fields.has(tg.attr)){ aobj.fields.delete(tg.attr); continue; }
+          raise("AttributeError", "Поля «" + tg.attr + "» нет — удалять нечего.", st.line,
+                { pymsg: tg.attr });
+        }
+        raise("NotSupported", "Такое del тренажёр не разбирает.", st.line);
+      }
+      return null;
+    }
     case "Nonlocal": {
       var rootEnv = env; while (rootEnv.parent) rootEnv = rootEnv.parent;
       for (var nli = 0; nli < st.names.length; nli++){
@@ -2775,6 +2922,11 @@ Interp.prototype.assign = function*(target, val, env){
     if (isTup(obj))
       raise("TypeError", "Кортеж менять нельзя — в этом и смысл кортежа. Если нужно менять, сделай список: list(...).", target.line);
     if (Array.isArray(obj)){
+      /* та же строгость, что при чтении: дробный номер — ошибка, не усечение */
+      if (isNum(idx) && !Number.isInteger(+idx))
+        raise("TypeError", "Номер должен быть целым числом, а " + fmtNum(idx) +
+              " — дробь. Деление / всегда даёт дробь; для номера нужно целое деление //.", target.line,
+              { pymsg: "list indices must be integers or slices, not float" });
       var n = Math.trunc(nv(idx));
       if (n < 0) n += obj.length;
       if (n < 0 || n >= obj.length)
@@ -3048,7 +3200,16 @@ Interp.prototype.call = function*(fn, args, kw, line, nameHint){
     var taken = {};
     for (var i = 0; i < np; i++){
       var p = fn.params[i];
-      if (i < args.length) env.vars.set(p, args[i]);
+      if (i < args.length){
+        /* ⚠️ Одно и то же значение и позицией, и по имени — ошибка, а не выбор:
+           f(1, a=2) молча брала позиционное и теряла a=2, то есть программа
+           делала не то, что написано, и никто об этом не узнавал. 18.09.2026. */
+        if (kw && kw[p] !== undefined)
+          raise("TypeError", "Функции «" + fn.name + "» аргумент «" + p +
+                "» передан дважды: и по порядку, и по имени.", line,
+                { pymsg: fn.name + "() got multiple values for argument '" + p + "'" });
+        env.vars.set(p, args[i]);
+      }
       else if (kw && kw[p] !== undefined){ env.vars.set(p, kw[p]); taken[p] = 1; }
       else if (fn.defaultVals && fn.defaultVals[i] !== undefined) env.vars.set(p, fn.defaultVals[i]);
       else if (fn.defaults[i]) env.vars.set(p, yield* this.eval(fn.defaults[i], fn.closure));
@@ -3124,7 +3285,17 @@ Interp.prototype.binop = function(op, a, b, line){
   if (op === "+"){
     if (isNum(a) && isNum(b)) return num(nv(a) + nv(b), isFloat(a) || isFloat(b));
     if (typeof a === "string" && typeof b === "string") return a + b;
-    if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+    /* ⚠️ Кортеж плюс кортеж — снова КОРТЕЖ, а список плюс кортеж в Python
+       вообще нельзя. Раньше тип терялся: (1,2) + (3,) печаталось как
+       [1, 2, 3], а [1] + (2,) молча склеивалось. Ревизия 18.09.2026. */
+    if (Array.isArray(a) && Array.isArray(b)){
+      if (isTup(a) !== isTup(b))
+        raise("TypeError", "Нельзя сложить " + typeName(a) + " и " + typeName(b) +
+              ": превратите одно в другое — list(…) или tuple(…).", line,
+              { pymsg: 'can only concatenate ' + typeName(a) + ' (not "' + typeName(b) + '") to ' + typeName(a) });
+      var сум = a.concat(b);
+      return isTup(a) ? Tup(сум) : сум;
+    }
     if (typeof a === "string" && isNum(b))
       raise("TypeError", "Нельзя сложить текст и число. Преврати число в текст: str(" + fmtNum(b) + ") — или используй f-строку.", line,
             { pymsg: 'can only concatenate str (not "' + typeName(b) + '") to str' });
@@ -3162,13 +3333,20 @@ Interp.prototype.binop = function(op, a, b, line){
   }
   if (op === "*"){
     if (isNum(a) && isNum(b)) return num(nv(a) * nv(b), isFloat(a) || isFloat(b));
-    if (typeof a === "string" && isNum(b)) return a.repeat(Math.max(0, Math.trunc(nv(b))));
-    if (isNum(a) && typeof b === "string") return b.repeat(Math.max(0, Math.trunc(nv(a))));
+    /* пределы — как у range(): иначе "a" * 10**10 и [0] * 10**8 вешают вкладку */
+    if (typeof a === "string" && isNum(b)) return strTimes(a, nv(b), line);
+    if (isNum(a) && typeof b === "string") return strTimes(b, nv(a), line);
     if (Array.isArray(a) && isNum(b)){
+      var times = Math.max(0, Math.trunc(nv(b)));
+      if (a.length * times > 200000)
+        raise("RuntimeError", "Список получится слишком большим — браузер не выдержит.", line);
       var out = [];
-      for (var i = 0; i < Math.max(0, Math.trunc(nv(b))); i++) out = out.concat(a);
-      return out;
+      for (var i = 0; i < times; i++)
+        for (var j = 0; j < a.length; j++) out.push(a[j]);
+      /* кортеж, повторённый несколько раз, остаётся кортежем */
+      return isTup(a) ? Tup(out) : out;
     }
+    if (isNum(a) && Array.isArray(b)) return this.binop("*", b, a, line);
     raise("TypeError", "Нельзя умножить " + typeName(a) + " на " + typeName(b) + ".", line);
   }
   /* разность множеств */
@@ -3216,7 +3394,21 @@ Interp.prototype.binop = function(op, a, b, line){
     case "%":
       if (y === 0) raise("ZeroDivisionError", "Остаток от деления на ноль не существует.", line, { pymsg: "integer division or modulo by zero" });
       return num(((x % y) + y) % y, f);
-    case "**": return num(Math.pow(x, y), f || !Number.isInteger(Math.pow(x, y)));
+    case "**": {
+      var ст = Math.pow(x, y);
+      /* ⚠️ Настоящий Python считает целые ЛЮБОЙ длины, а здесь числа
+         восьмибайтовые: 2**70 печаталось как 1.1805916207174113e+21 — то есть
+         движок тихо врал в задаче про цифры числа. Врать нельзя; говорим, где
+         кончается точность. Для factorial такой предел уже стоял, а для «**»
+         его забыли. Ревизия 18.09.2026. */
+      if (!f && Number.isInteger(ст) && !Number.isSafeInteger(ст))
+        raise("RuntimeError", "Число получилось больше, чем тренажёр считает точно " +
+              "(до 9 007 199 254 740 991). Настоящий Python умеет целые любой длины, " +
+              "а здесь с этого места начались бы неверные цифры — поэтому останавливаемся. " +
+              "Если нужен только остаток, считайте его по ходу: pow(основание, степень, модуль).", line,
+              { pymsg: "result too large" });
+      return num(ст, f || !Number.isInteger(ст));
+    }
   }
   raise("RuntimeError", "Неизвестная операция «" + op + "».", line);
 };
@@ -3255,6 +3447,13 @@ Interp.prototype.compare = function(op, a, b, line){
 Interp.prototype.index = function(obj, idx, line){
   if (typeof obj === "string" || Array.isArray(obj)){
     if (!isNum(idx)) raise("TypeError", "Индекс должен быть целым числом, а не " + typeName(idx) + ".", line);
+    /* ⚠️ Дробь молча усекалась, и самая частая детская ошибка l[len(l)/2]
+       «работала»: ребёнок так и не узнавал, что деление / даёт дробь, а для
+       номера нужно //. Теперь говорим прямо, как python3. Ревизия 18.09.2026. */
+    if (!Number.isInteger(+idx))
+      raise("TypeError", "Номер должен быть целым числом, а " + fmtNum(idx) +
+            " — дробь. Деление / всегда даёт дробь; для номера нужно целое деление //.", line,
+            { pymsg: (Array.isArray(obj) ? "list" : "string") + " indices must be integers or slices, not float" });
     var n = Math.trunc(nv(idx)), L = obj.length;
     if (n < 0) n += L;
     if (n < 0 || n >= L)
@@ -3283,6 +3482,14 @@ Interp.prototype.slice = function(o, lo, hi, step, line){
   if (typeof o !== "string" && !Array.isArray(o))
     raise("TypeError", "Срез работает только со строками и списками.", line);
   var L = o.length;
+  /* ⚠️ Границы среза обязаны быть ЦЕЛЫМИ. Раньше дробь молча усекалась, и
+     [1,2,3][1.5:] печатало [None, None] — вывод, который не объясняет ничего.
+     Python говорит прямо, и мы теперь тоже. Ревизия 18.09.2026. */
+  [["начало", lo], ["конец", hi], ["шаг", step]].forEach(function(p){
+    if (p[1] !== null && p[1] !== undefined && !Number.isInteger(+p[1]))
+      raise("TypeError", "Граница среза (" + p[0] + ") должна быть целым числом, а не дробью.", line,
+            { pymsg: "slice indices must be integers or None or have an __index__ method" });
+  });
   step = step === null || step === undefined ? 1 : Math.trunc(step);
   if (step === 0) raise("ValueError", "Шаг среза не может быть нулём.", line);
   var arr = typeof o === "string" ? o.split("") : o;
@@ -3296,7 +3503,8 @@ Interp.prototype.slice = function(o, lo, hi, step, line){
     var e2 = hi === null ? -1 : (hi < 0 ? L + hi : hi);
     for (var i2 = s2; i2 > e2; i2 += step) if (i2 >= 0 && i2 < L) res.push(arr[i2]);
   }
-  return typeof o === "string" ? res.join("") : res;
+  /* срез кортежа — снова кортеж, а не список (t[0:2] печаталось как [1, 2]) */
+  return typeof o === "string" ? res.join("") : (isTup(o) ? Tup(res) : res);
 };
 
 /* ============================================================
@@ -3577,7 +3785,13 @@ var BUILTIN_MODULES = {
         var f = args[0];
         if (!(f instanceof PyFile)) raise("TypeError", "json.load() читает из файла.", line);
         f.checkOpen(line);
-        return jsonToPy(JSON.parse(f.readAll()));
+        var parsed;
+        try { parsed = JSON.parse(f.readAll()); }
+        catch (e){
+          raise("JSONDecodeError", "Это не похоже на JSON: " + e.message, line,
+                { pymsg: "Expecting value: line 1 column 1 (char 0)" });
+        }
+        return jsonToPy(parsed);
       }
     };
   },
@@ -3694,6 +3908,10 @@ var BUILTIN_MODULES = {
         for (var r = 0; r < reps; r++) pools = pools.concat(lists);
         return genOf("product", function*(){
           if (!pools.length){ yield Tup([]); return; }
+          /* ⚠️ Пустой список среди сомножителей — и произведение пусто: брать
+             из него нечего. Раньше выдавалось [(1, None)] — пара с ничем.
+             Ревизия 18.09.2026. */
+          if (pools.some(function(p){ return !p.length; })) return;
           var idx = pools.map(function(){ return 0; });
           for (;;){
             yield Tup(pools.map(function(p, i){ return p[idx[i]]; }));
@@ -3749,8 +3967,16 @@ var BUILTIN_MODULES = {
     function mkDate(args, kw, line){
       var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
       if (mo < 1 || mo > 12) raise("ValueError", "Месяц бывает от 1 до 12.", line, { pymsg: "month must be in 1..12" });
+      /* ⚠️ Проверять «не больше 31» мало: 30 февраля Date.UTC молча перекатывал
+         в 2 марта, и date(2021, 2, 30) печаталась как 2021-03-02 вместо ошибки.
+         Сверяем ПОСЛЕ сборки: если день съехал — такого числа в этом месяце нет.
+         Ревизия 18.09.2026. */
       if (d < 1 || d > 31) raise("ValueError", "Такого числа в месяце нет.", line, { pymsg: "day is out of range for month" });
-      return mkDT(dateCls, Date.UTC(y, mo - 1, d));
+      var мс = Date.UTC(y, mo - 1, d), пр = new Date(мс);
+      if (пр.getUTCMonth() !== mo - 1 || пр.getUTCDate() !== d)
+        raise("ValueError", "В этом месяце нет числа " + d + ".", line,
+              { pymsg: "day is out of range for month" });
+      return mkDT(dateCls, мс);
     }
     function mkDatetime(args, kw, line){
       var y = Math.trunc(nv(args[0])), mo = Math.trunc(nv(args[1])), d = Math.trunc(nv(args[2]));
@@ -3819,8 +4045,16 @@ var BUILTIN_MODULES = {
       match: function(args, kw, line){ return reFind(args, line, true); },
       fullmatch: function(args, kw, line){ return reFind(args, line, true, true); },
       findall: function(args, kw, line){ return reFindall(pyStr(args[0]), pyStr(args[1]), args[2], line); },
-      sub: function(args, kw, line){ return reSub(pyStr(args[0]), args[1], pyStr(args[2]), args[3], line); },
-      split: function(args, kw, line){ return reSplit(pyStr(args[0]), pyStr(args[1]), args[2], line); }
+      sub: function(args, kw, line){
+        return reSub(pyStr(args[0]), args[1], pyStr(args[2]),
+                     (kw && kw.count !== undefined) ? kw.count : args[3], line,
+                     kw && kw.flags !== undefined ? kw.flags : undefined);
+      },
+      split: function(args, kw, line){
+        return reSplit(pyStr(args[0]), pyStr(args[1]),
+                       (kw && kw.maxsplit !== undefined) ? kw.maxsplit : args[2], line,
+                       kw && kw.flags !== undefined ? kw.flags : undefined);
+      }
     };
   },
 
@@ -3856,8 +4090,10 @@ var BUILTIN_MODULES = {
         var xs = raw.map(nv).slice().sort(function(a, b){ return a - b; });
         var mid = Math.floor(xs.length / 2);
         if (xs.length % 2) return allInt ? xs[mid] : mkFloat(xs[mid]);
-        var res = (xs[mid - 1] + xs[mid]) / 2;
-        return (allInt && Number.isInteger(res)) ? res : mkFloat(res);
+        /* ⚠️ При ЧЁТНОМ количестве Python всегда отдаёт float: median([2, 4])
+           это 3.0, а не 3 — это среднее двух средних, а не элемент списка.
+           Ревизия 18.09.2026. */
+        return mkFloat((xs[mid - 1] + xs[mid]) / 2);
       }
     };
   }
@@ -3891,6 +4127,10 @@ function toJsRegex(pattern, flagsArg, line, global){
     if (pattern.substr(i, 4) === "(?P<"){ out += "(?<"; i += 4; continue; }
     if (pattern.substr(i, 4) === "(?P="){
       var end = pattern.indexOf(")", i);
+      /* без закрывающей скобки end = -1, i = 0 — разбор зацикливается навсегда */
+      if (end < 0)
+        raise("ValueError", "Непонятный шаблон: " + pattern + " (нет закрывающей скобки)", line,
+              { pymsg: "bad pattern" });
       out += "\\k<" + pattern.slice(i + 4, end) + ">";
       i = end + 1; continue;
     }
@@ -3913,14 +4153,55 @@ function reFindall(pattern, text, flags, line){
   }
   return out;
 }
-function reSub(pattern, repl, text, flags, line){
+/* ⚠️ Два исправления 18.09.2026.
+   1. Четвёртый аргумент re.sub в Python — это СКОЛЬКО замен (count), а не
+      флаги: re.sub(p, r, s, 1) меняет только ПЕРВОЕ вхождение, а движок читал
+      его как flags и менял всё.
+   2. Знаки, которые в замене JavaScript считает особыми (доллар с амперсандом
+      или с цифрой), у Python особыми НЕ являются и должны вставляться
+      буквально; группу Python обозначает обратной косой с цифрой.
+   Поэтому замену собираем САМИ, посимвольно, и ничего не передаём на
+   истолкование строке замены JavaScript. */
+function reSub(pattern, repl, text, count, line, flags){
   var rx = toJsRegex(pattern, flags, line, true);
-  var rep = pyStr(repl).replace(/\\(\d)/g, "$$$1");
-  return text.replace(rx, rep);
+  var шаблон = pyStr(repl);
+  var лимит = (count === undefined || count === null) ? 0 : Math.trunc(nv(count));
+  var сделано = 0;
+  return text.replace(rx, function(){
+    var m = arguments;
+    if (лимит > 0 && сделано >= лимит) return m[0];
+    сделано++;
+    var out = "";
+    for (var i = 0; i < шаблон.length; i++){
+      /* \1 … \9 — номер группы, \\ — сама косая; всё прочее как есть */
+      if (шаблон[i] === "\\" && /[0-9]/.test(шаблон[i + 1] || "")){
+        var g = +шаблон[i + 1];
+        out += (m[g] === undefined || m[g] === null) ? "" : m[g];
+        i++;
+        continue;
+      }
+      if (шаблон[i] === "\\" && шаблон[i + 1] === "\\"){ out += "\\"; i++; continue; }
+      out += шаблон[i];
+    }
+    return out;
+  });
 }
-function reSplit(pattern, text, flags, line){
+/* ⚠️ Третий аргумент re.split — maxsplit, тоже не флаги (та же ошибка). */
+function reSplit(pattern, text, maxsplit, line, flags){
   var rx = toJsRegex(pattern, flags, line, true);
-  return text.split(rx).map(function(x){ return x === undefined ? "" : x; });
+  var все = text.split(rx).map(function(x){ return x === undefined ? "" : x; });
+  var лим = (maxsplit === undefined || maxsplit === null) ? 0 : Math.trunc(nv(maxsplit));
+  if (лим <= 0) return все;
+  /* режем сами: нужно оставить хвост целым после лим-го разделителя */
+  var out = [], rx2 = toJsRegex(pattern, flags, line, true), от = 0, m, сд = 0;
+  while (сд < лим && (m = rx2.exec(text)) !== null){
+    if (m[0] === ""){ rx2.lastIndex++; continue; }
+    out.push(text.slice(от, m.index));
+    for (var gi = 1; gi < m.length; gi++) out.push(m[gi] === undefined ? "" : m[gi]);
+    от = m.index + m[0].length; сд++;
+  }
+  out.push(text.slice(от));
+  return out;
 }
 function reFind(args, line, anchored, full){
   var src = pyStr(args[0]);
@@ -4026,8 +4307,8 @@ function moduleMethod(I, obj, name, line){
       match:     function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true); },
       fullmatch: function(a){ return reFind([pat, pyStr(a[0]), pflags], line, true, true); },
       findall:   function(a){ return reFindall(pat, pyStr(a[0]), pflags, line); },
-      sub:       function(a){ return reSub(pat, a[0], pyStr(a[1]), pflags, line); },
-      split:     function(a){ return reSplit(pat, pyStr(a[0]), pflags, line); }
+      sub:       function(a){ return reSub(pat, a[0], pyStr(a[1]), a[2], line, pflags); },
+      split:     function(a){ return reSplit(pat, pyStr(a[0]), a[1], line, pflags); }
     };
     if (!C[name]) return undefined;
     return function(a){ return C[name](a); };
@@ -4202,10 +4483,35 @@ Interp.prototype.bindMethod = function(obj, name, line){
       upper: function(){ return obj.toUpperCase(); },
       lower: function(){ return obj.toLowerCase(); },
       strip: function(a){ return a && a.length ? trimChars(obj, pyStr(a[0])) : obj.trim(); },
-      lstrip: function(){ return obj.replace(/^\s+/, ""); },
-      rstrip: function(){ return obj.replace(/\s+$/, ""); },
+      /* ⚠️ Аргумент — НАБОР знаков, которые снимаем (как у strip). Раньше его
+         молча пропускали: "xxabc".lstrip("x") возвращала строку без изменений,
+         и ребёнок не понимал, почему. Найдено ревизией 18.09.2026. */
+      lstrip: function(a){
+        if (!a || !a.length || a[0] === null) return obj.replace(/^\s+/, "");
+        var ch = pyStr(a[0]), i = 0;
+        while (i < obj.length && ch.indexOf(obj[i]) >= 0) i++;
+        return obj.slice(i);
+      },
+      rstrip: function(a){
+        if (!a || !a.length || a[0] === null) return obj.replace(/\s+$/, "");
+        var ch2 = pyStr(a[0]), j = obj.length;
+        while (j > 0 && ch2.indexOf(obj[j - 1]) >= 0) j--;
+        return obj.slice(0, j);
+      },
       capitalize: function(){ return obj ? obj[0].toUpperCase() + obj.slice(1).toLowerCase() : obj; },
-      title: function(){ return obj.replace(/\S+/g, function(w){ return w[0].toUpperCase() + w.slice(1).toLowerCase(); }); },
+      /* ⚠️ title() в Python считает словом череду БУКВ, а не «всё между
+         пробелами»: любой не-буквенный знак начинает новое слово, поэтому
+         "it's".title() — это "It'S". Выглядит странно, но наше дело —
+         совпадать с настоящим Python, а не спорить с ним. 18.09.2026. */
+      title: function(){
+        var out = "", буквой = false;
+        for (var i = 0; i < obj.length; i++){
+          var ch = obj[i], это = /\p{L}/u.test(ch);
+          out += это ? (буквой ? ch.toLowerCase() : ch.toUpperCase()) : ch;
+          буквой = это;
+        }
+        return out;
+      },
       /* Второй аргумент — сколько раз делить: "a=b=c".split("=", 1) даёт
          ['a', 'b=c']. Без него разбор «имя=значение» ломается на значениях,
          в которых сам знак равенства и встречается. */
@@ -4261,11 +4567,45 @@ Interp.prototype.bindMethod = function(obj, name, line){
         parts.forEach(function(p){ if (typeof p !== "string") raise("TypeError", "join() склеивает только строки.", line); });
         return parts.join(obj);
       },
-      replace: function(a){ return obj.split(pyStr(a[0])).join(pyStr(a[1])); },
-      startswith: function(a){ return obj.indexOf(pyStr(a[0])) === 0; },
-      endswith: function(a){ var s = pyStr(a[0]); return obj.slice(obj.length - s.length) === s; },
-      find: function(a){ return obj.indexOf(pyStr(a[0])); },
-      count: function(a){ return obj.split(pyStr(a[0])).length - 1; },
+      /* ⚠️ Третий аргумент — СКОЛЬКО замен сделать: "aaa".replace("a","b",1)
+         даёт "baa", а не "bbb". Его молча пропускали (ревизия 18.09.2026). */
+      replace: function(a){
+        var from = pyStr(a[0]), to = pyStr(a[1]);
+        var cnt = (a.length > 2 && a[2] !== null) ? Math.trunc(nv(a[2])) : -1;
+        if (cnt < 0) return obj.split(from).join(to);
+        var res = "", pos = 0, made = 0;
+        while (made < cnt){
+          var at = from === "" ? (pos <= obj.length ? pos : -1) : obj.indexOf(from, pos);
+          if (at < 0) break;
+          res += obj.slice(pos, at) + to;
+          pos = at + from.length;
+          made++;
+          if (from === "") { res += obj[pos] === undefined ? "" : obj[pos]; pos++; }
+        }
+        return res + obj.slice(pos);
+      },
+      /* ⚠️ Python принимает и кортеж вариантов: s.startswith(("а", "б")).
+         Раньше кортеж молча давал False. */
+      startswith: function(a){
+        var part = sliceFor(a, 1, obj).s;
+        return anyAffix(a, function(s){ return part.indexOf(s) === 0; });
+      },
+      endswith: function(a){
+        var part2 = sliceFor(a, 1, obj).s;
+        return anyAffix(a, function(s){ return part2.slice(part2.length - s.length) === s; });
+      },
+      /* ⚠️ start и end — откуда и докуда искать: "abcabc".find("b", 2) даёт 4,
+         а не 1. Границы молча пропускались (ревизия 18.09.2026). */
+      find: function(a){
+        var r = sliceFor(a, 1, obj);
+        var i = r.s.indexOf(pyStr(a[0]));
+        return i < 0 ? -1 : i + r.from;
+      },
+      count: function(a){
+        var r2 = sliceFor(a, 1, obj), n = pyStr(a[0]);
+        if (n === "") return r2.s.length + 1;
+        return r2.s.split(n).length - 1;
+      },
       isdigit: function(){ return obj.length > 0 && /^[0-9]+$/.test(obj); },
       /* \w в JavaScript — это только латиница, поэтому проверяем по свойствам
          символов Unicode: иначе "абв".isalpha() врёт и отвечает False. */
@@ -4304,7 +4644,11 @@ Interp.prototype.bindMethod = function(obj, name, line){
         var rest = sign ? obj.slice(1) : obj;
         return sign + "0".repeat(w - obj.length) + rest;
       },
-      rfind: function(a){ return obj.lastIndexOf(pyStr(a[0])); },
+      rfind: function(a){
+        var r3 = sliceFor(a, 1, obj);
+        var i3 = r3.s.lastIndexOf(pyStr(a[0]));
+        return i3 < 0 ? -1 : i3 + r3.from;
+      },
       /* partition режет строку на ТРИ части: до разделителя, сам разделитель
          и после. Удобнее split там, где важно, нашёлся разделитель или нет:
          не нашёлся — вторая и третья части пустые, и проверять длину списка
@@ -4326,10 +4670,11 @@ Interp.prototype.bindMethod = function(obj, name, line){
                      : Tup([obj.slice(0, j), sep2, obj.slice(j + sep2.length)]);
       },
       index: function(a){
-        var i = obj.indexOf(pyStr(a[0]));
+        var r4 = sliceFor(a, 1, obj);
+        var i = r4.s.indexOf(pyStr(a[0]));
         if (i < 0) raise("ValueError", "Подстроки " + pyRepr(a[0]) + " в строке нет.", line,
                          { pymsg: "substring not found" });
-        return i;
+        return i + r4.from;
       },
       splitlines: function(){ return obj.length ? obj.replace(/\n$/, "").split("\n") : []; },
       removeprefix: function(a){
@@ -4371,7 +4716,9 @@ Interp.prototype.bindMethod = function(obj, name, line){
               { pymsg: pyRepr(a[0]) + " is not in list" });
       },
       count: function(a){ return obj.filter(function(x){ return pyEq(x, a[0]); }).length; },
-      sort: function(a, kw){ obj.sort(function(x, y){ return I.cmp(x, y, line); }); if (kw && truthy(kw.reverse)) obj.reverse(); return null; },
+      /* ⚠️ sort здесь НЕ объявляем: ниже стоит if (name === "sort") с версией,
+         которая умеет key=, и он перехватывает раньше — простая копия была
+         недостижима и только сбивала с толку (ревизия 18.09.2026). */
       reverse: function(){ obj.reverse(); return null; },
       clear: function(){ obj.length = 0; return null; },
       copy: function(){ return obj.slice(); }
@@ -4405,8 +4752,13 @@ Interp.prototype.bindMethod = function(obj, name, line){
       keys: function(){ return dictKeys(obj); },
       values: function(){ return dictVals(obj); },
       items: function(){ return Array.from(obj.values()).map(function(p){ return Tup([p[0], p[1]]); }); },
+      /* ⚠️ Второй аргумент — что вернуть, если ключа нет: d.pop("x", 0) даёт 0,
+         а не KeyError. Его молча пропускали (ревизия 18.09.2026). */
       pop: function(a){
-        if (!dictHas(obj, a[0])) raise("KeyError", "В словаре нет ключа " + pyRepr(a[0]) + ".", line);
+        if (!dictHas(obj, a[0])){
+          if (a.length > 1) return a[1];
+          raise("KeyError", "В словаре нет ключа " + pyRepr(a[0]) + ".", line, { pymsg: a[0] });
+        }
         var v = dictGet(obj, a[0]); obj.delete(keyOf(a[0])); return v;
       },
       setdefault: function(a){
@@ -4499,6 +4851,28 @@ Interp.prototype.bindMethod = function(obj, name, line){
   raise("AttributeError", "У значения типа " + typeName(obj) + " нет метода «" + name + "».", line);
 };
 
+/* Границы start/end у find/count/index/startswith: аргументы идут после
+   искомого, отрицательные считаются от конца — ровно как у срезов. Возвращаем
+   и сам кусок, и смещение, чтобы номер вернулся в координатах ЦЕЛОЙ строки. */
+function sliceFor(a, at, s){
+  var n = s.length;
+  var norm = function(v, def){
+    if (v === undefined || v === null) return def;
+    var i = Math.trunc(nv(v));
+    if (i < 0) i += n;
+    return Math.max(0, Math.min(n, i));
+  };
+  var from = norm(a && a[at], 0), to = norm(a && a[at + 1], n);
+  if (to < from) to = from;
+  return { s: s.slice(from, to), from: from };
+}
+/* startswith/endswith принимают строку ИЛИ кортеж вариантов */
+function anyAffix(a, test){
+  var v = a && a[0];
+  var список = isTup(v) ? v : [v];
+  for (var i = 0; i < список.length; i++) if (test(pyStr(список[i]))) return true;
+  return false;
+}
 function trimChars(s, chars){
   var a = 0, b = s.length;
   while (a < b && chars.indexOf(s[a]) >= 0) a++;
@@ -4531,7 +4905,10 @@ function applySpec(v, spec, line){
   var s;
   if (kind === "%"){
     s = toFixedPy(nv(v) * 100, prec === undefined ? 6 : +prec) + "%";
-  } else if (kind === "f" || (prec !== undefined && kind !== "s" && isNum(v))){
+  /* ⚠️ «Есть точность — значит дробное» верно только для букв, у которых своей
+     ветки нет: у .2e и .3g точность означает совсем другое, и эта ветка их
+     перехватывала (f"{1500:.2e}" печаталось «1500.00»). 18.09.2026. */
+  } else if (kind === "f" || (prec !== undefined && "sxXboeEgG".indexOf(kind) < 0 && isNum(v))){
     if (!isNum(v)) raise("TypeError", "Числовой формат работает только с числами, а не с " + typeName(v) + ".", line,
                          { pymsg: "Unknown format code '" + (kind || "f") + "' for object of type '" + typeName(v) + "'" });
     s = toFixedPy(nv(v), prec === undefined ? 6 : +prec);
@@ -4539,6 +4916,33 @@ function applySpec(v, spec, line){
     if (!isNum(v)) raise("TypeError", "Формат «d» работает только с целыми числами.", line,
                          { pymsg: "Unknown format code 'd' for object of type '" + typeName(v) + "'" });
     s = String(Math.trunc(nv(v)));
+  /* ⚠️ Системы счисления и запись с показателем. Раньше эти буквы молча
+     ИГНОРИРОВАЛИСЬ: f"{255:x}" печатало «255» вместо «ff», а перевод в двоичную
+     через формат — самое частое задание ОГЭ про системы счисления. 18.09.2026. */
+  } else if ("xXbo".indexOf(kind) >= 0 && kind !== ""){
+    if (!isNum(v) || !Number.isInteger(+v))
+      raise("ValueError", "Формат «" + kind + "» работает только с целыми числами.", line,
+            { pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+    var цел = Math.trunc(nv(v)), осн = kind === "b" ? 2 : kind === "o" ? 8 : 16;
+    s = Math.abs(цел).toString(осн);
+    if (kind === "X") s = s.toUpperCase();
+    if (цел < 0) s = "-" + s;
+  } else if (kind === "e" || kind === "E"){
+    if (!isNum(v)) raise("ValueError", "Формат «" + kind + "» работает только с числами.", line,
+                         { pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+    s = nv(v).toExponential(prec === undefined ? 6 : +prec);
+    /* Python пишет показатель минимум двумя цифрами: 1.5e+03, а не 1.5e+3 */
+    s = s.replace(/e([+-])(\d)$/, "e$10$2");
+    if (kind === "E") s = s.toUpperCase();
+  } else if (kind === "g" || kind === "G"){
+    if (!isNum(v)) raise("ValueError", "Формат «" + kind + "» работает только с числами.", line,
+                         { pymsg: "Unknown format code '" + kind + "' for object of type '" + typeName(v) + "'" });
+    var зн = prec === undefined ? 6 : Math.max(1, +prec);
+    s = nv(v).toPrecision(зн);
+    /* toPrecision оставляет хвостовые нули, а «g» их снимает */
+    if (s.indexOf("e") < 0 && s.indexOf(".") >= 0) s = s.replace(/\.?0+$/, "");
+    else s = s.replace(/\.?0+e/, "e").replace(/e([+-])(\d)$/, "e$10$2");
+    if (kind === "G") s = s.toUpperCase();
   } else {
     s = pyStr(v);
     if (prec !== undefined) s = s.slice(0, +prec);
@@ -4645,11 +5049,19 @@ function run(src, opts){
     var step = it.next();
     while (!step.done) step = it.next();
   } catch (e){
-    if (!e.pyKind) throw e;
     /* программа дошла до input() без готового ответа — это не ошибка,
        а сигнал «жду ввод»: раннер добавит ответ и перезапустит */
     if (e.pyKind === "__AwaitInput__") result.awaitingInput = true;
-    else result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+    else if (e.pyKind) result.error = { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 };
+    else {
+      /* сбой самого движка. Наружу не бросаем: иначе кнопка «Запустить»
+         молча умирает без карточки ошибки, а ребёнок не видит ничего */
+      result.error = { kind: "RuntimeError",
+        msg: (e instanceof RangeError)
+          ? "Данные получились слишком большими — браузер не выдержал."
+          : "Движок споткнулся: " + e.message + ". Покажи этот код взрослому.",
+        line: 0 };
+    }
   }
   result.output = I.out.join("");
   result.lines = result.output.length ? result.output.replace(/\n$/, "").split("\n") : [];
@@ -4678,7 +5090,13 @@ function stepper(src, opts){
         return { done: false, line: s.value.line, env: s.value.env,
                  stack: I.stack.slice(), output: I.out.join("") };
       } catch (e){
-        if (!e.pyKind) throw e;
+        if (!e.pyKind)
+          /* сбой движка — та же страховка, что у run(): карточка вместо тишины */
+          return { done: true, output: I.out.join(""), error: { kind: "RuntimeError",
+            msg: (e instanceof RangeError)
+              ? "Данные получились слишком большими — браузер не выдержал."
+              : "Движок споткнулся: " + e.message + ". Покажи этот код взрослому.",
+            line: 0 } };
         return { done: true, output: I.out.join(""), error: { kind: e.pyKind, msg: e.pyMsg, line: e.pyLine || 0 } };
       }
     }
