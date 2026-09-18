@@ -7141,10 +7141,13 @@ var AI_SCREENS = KVSCREENS.ailab({
   codeHas: codeHas, confetti: confetti, diffBlock: diffBlock, editUnits: editUnits,
   enterScreen: enterScreen, errHTML: errHTML, esc: esc, goHome: goHome, hl: hl,
   makePredictStudio: makePredictStudio, makeStudio: makeStudio,
-  markActiveToday: markActiveToday, normPred: normPred, openProject: openProject,
+  /* ⚠️ Обёртками: экраны проекта — модуль ниже по файлу (§ 4.40). */
+  markActiveToday: markActiveToday, normPred: normPred,
+  openProject: function(id, st){ openProject(id, st); },
   predictDiff: predictDiff, projectDone: projectDone, projectOfWorld: projectOfWorld,
   projectOpen: projectOpen, projectState: projectState, refreshTop: refreshTop, save: save,
-  screenCapReached: screenCapReached, screenProjectDone: screenProjectDone,
+  screenCapReached: screenCapReached,
+  screenProjectDone: function(id){ screenProjectDone(id); },
   /* ⚠️ Обёртками: приёмка — модуль ниже по файлу (§ 4.40). */
   screenSpecs: function(){ screenSpecs(); },
   specDone: function(id){ return specDone(id); },
@@ -7236,254 +7239,34 @@ function projectStartCode(p, i){
   return st.code || p.steps[i-1].solution;
 }
 
-function openProject(id, forceStep){
-  var p = projectById(id);
-  if (!p) return screenWorlds();
-  var seq = claimScreen();
-  worldContent(p.world).then(function(){
-    if (screenStale(seq)) return;          /* ушли на другой экран, пока грузился мир */
-    if (!projectOpen(p)) return screenWorld(p.world);
-    var st = projectState(p.id);
-    var i = (typeof forceStep === "number") ? forceStep : st.step;
-    if (i >= p.steps.length) return screenProjectDone(p.id);
-    var step = p.steps[i];
-    enterScreen(undefined, "project");
-    /* ⚠️ Адрес проекта routeHash читал с самого начала (`#project-w3`), а вот
-       писать его было некому — то есть ссылка работала только у того, кто её
-       набрал руками. Теперь обе половины на месте. */
-    setRoute("#" + p.id, "Проект «" + p.title + "»");
-    /* Черновик шага проекта — тем же механизмом, что у уроков: ключ шага
-       вместо id урока. До этого код шага сохранялся ТОЛЬКО на победе, и уход
-       за подсказкой в шпаргалку стирал написанное. */
-    var draftId = projectDraftId(p.id, i);
-    var startCode = projectStartCode(p, i);
-    session = { id:null, attempts:0, hints:0, shown:false, project:p.id, pstep:i,
-                lesson:draftId, starter:[{ name:"main.py", code:startCode }] };
-
-    var dots = p.steps.map(function(s, k){
-      var cls = k < st.step ? "done" : (k === i ? "now" : "");
-      return '<span class="pdot ' + cls + '" title="' + esc(s.title) + '">' + (k + 1) + '</span>';
-    }).join("");
-
-    var where = p.world === 0 ? "🤖 Ты и ИИ" : "Мир " + p.world;
-    var kicker = p.world === 0 ? "Проект раздела «Ты и ИИ»" : "Проект мира " + p.world;
-    var head = '<div class="crumbs"><span data-go="world">' + esc(where) + '</span> › ' +
-        p.emoji + ' ' + esc(p.title) + '</div>' +
-      '<div class="lvlhead"><div><div class="idx">' + kicker +
-        ' · шаг ' + (i + 1) + ' из ' + p.steps.length + '</div>' +
-      '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
-      '<div class="right"><span class="tag">звёзд не даёт</span></div></div>' +
-      '<p class="lede">' + esc(p.intro) + '</p>' +
-      '<div class="pstepbar">' + dots + '</div>';
-
-    var goal = '<div class="goal"><h3>🎯 Шаг ' + (i + 1) + ': ' + esc(step.title) + '</h3>' +
-      '<p>' + esc(step.brief) + '</p>' +
-      /* ⚠️ Пункты требований — HTML, как у уроков: так их пишут в
-         js/projects.js, и tests/lessons.js [разметка] требует записывать
-         показываемые теги сущностями (&lt;h1&gt;). До 1.142.0 здесь стоял
-         esc(x) — сущность экранировалась второй раз, и ребёнок в проекте
-         «Свой сайт» видел буквально «&lt;h1&gt;» вместо «<h1>». */
-      (step.list ? '<ul>' + step.list.map(function(x){ return '<li>' + x + '</li>'; }).join("") + '</ul>' : '') +
-      (i > 0 ? '<span class="bugtip">' + (step.starter !== undefined
-          ? 'В редакторе — НОВАЯ редакция от напарника, а не твой код. Он что-то добавил и мог заодно сломать сделанное раньше: сравни с тем, что было, и почини.'
-          : 'В редакторе — твой код с прошлого шага. Дописывай в него, а не начинай с нуля.') + '</span>' : '') +
-      '</div>';
-
-    var hints = '<div class="hintbox">' +
-      '<button class="rbtn sec" id="hintbtn">💡 Подсказка</button>' +
-      '<button class="rbtn sec" id="solbtn">Показать решение шага</button>' +
-      '<span class="tip">проект без звёзд — подсказки ничего не отнимают</span></div>' +
-      '<div class="hintout" id="hintout"></div>';
-
-    var pager = '<div class="pager"><button class="bigbtn ghost" data-go="world">← ' +
-      (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
-
-    app.innerHTML = head + goal +
-      '<div class="draftnote" id="draftnote" hidden></div>' +
-      '<div id="studio"></div>' + hints + pager;
-
-    var studio = makeStudio({
-      engine: "mini",
-      code: startCode,
-      label: "твоя программа",
-      stdin: step.stdin || null,
-      check: function(ed, showMsg){ runProjectCheck(p, i, ed, showMsg); }
-    });
-    document.getElementById("studio").appendChild(studio);
-    session.studio = studio;
-
-    var pdraft = draftGet(draftId);
-    if (pdraft){
-      draftApply(studio.editor, pdraft.files);
-      var pnote = document.getElementById("draftnote");
-      pnote.hidden = false;
-      pnote.innerHTML = '<span>\u{1F4DD} В редакторе код с прошлого раза, а не то, с чего шаг начинался.</span>' +
-        '<button class="rbtn sec" id="draftfresh">Начать шаг заново</button>';
-      document.getElementById("draftfresh").onclick = function(){
-        draftDrop(draftId);
-        studio.editor.setCode(startCode);
-        pnote.hidden = true;
-        studio.editor.focusEditor();
-      };
-    }
-    studio.editor.onEdit = draftSchedule;
-
-    wireHint(step.hints);
-    document.getElementById("solbtn").onclick = function(){
-      session.shown = true;
-      studio.editor.setCode(step.solution);
-      studio.showMsg("warn", "<b>Вот программа на конец этого шага</b>Прочитай её и запусти. Звёзд в проекте нет — смотреть можно без потерь, но сначала попробуй сам.");
-    };
-    app.querySelectorAll('[data-go="world"]').forEach(function(b){
-      b.onclick = function(){ if (p.world === 0) screenAILab(); else screenWorld(p.world); };
-    });
-    refreshTop();
-    window.scrollTo({ top:0, behavior:"smooth" });
-  });
-}
-
-/* проверка шага: вывод должен совпасть с выводом эталона этого шага */
-function runProjectCheck(p, i, ed, showMsg){
-  session.attempts++;
-  var step = p.steps[i];
-  var eng = Runtime.get("mini"), code = ed.getCode();
-  if (step.needCode){
-    for (var k = 0; k < step.needCode.length; k++){
-      if (!codeHas(code, step.needCode[k])){
-        showMsg("warn", "<b>Почти</b>" + (step.needMsg || "Не хватает нужной конструкции."));
-        return;
-      }
-    }
-  }
-  /* Ответы на input() — из шага, одинаковые для кода ребёнка и эталона:
-     без этого шаг с игрой (а игра ЖДЁТ хода) было бы не проверить вовсе. */
-  var answers = (step.stdin || []).slice();
-  var res = eng.run(code, { stdin: answers.slice() });
-  if (res.error){ ed.setError(res.error.line); showMsg("bad", errHTML(res.error)); return; }
-  var exp = eng.run(step.solution, { stdin: answers.slice() }).lines, got = res.lines;
-  if (!(exp.length === got.length && exp.every(function(v, n){ return v === got[n]; }))){
-    showMsg("bad", "<b>Ещё не то</b>" + diffBlock(exp, got));
-    return;
-  }
-  winProjectStep(p, i, code);
-}
-
-function winProjectStep(p, i, code){
-  var st = projectState(p.id);
-  st.code = code;
-  /* Дата шага и запись работы по шагу — для пакета к защите (1.142.0).
-     Пишутся ОДИН раз, на первой сдаче, по тому же правилу, что запись
-     авторства урока (lg.tr): повторная сдача не переписывает ни дату, ни то,
-     как шаг был сделан впервые. Иначе достаточно пройти шаг ещё раз. */
-  if (!st.stepsAt[i]) st.stepsAt[i] = Date.now();
-  var ped = session && session.studio && session.studio.editor;
-  if (!st.tr[i] && ped && ped.trace){
-    st.tr[i] = { at: Date.now(), typed: ped.trace.typed || 0, pasted: ped.trace.pasted || 0,
-                 edits: ped.trace.edits || 0, shown: session.shown ? 1 : 0, hints: session.hints || 0 };
-  }
-  /* Шаг сдан — код уехал в st.code, черновик шага больше не нужен. Заготовку
-     сессии подменяем на сданный код: иначе draftFlush при уходе на следующий
-     шаг заведёт черновик заново, и он останется висеть навсегда. */
-  draftDrop(projectDraftId(p.id, i));
-  if (session && session.project === p.id && session.pstep === i){
-    session.starter = [{ name:"main.py", code: code }];
-  }
-  if (i + 1 > st.step) st.step = i + 1;
-  var last = st.step >= p.steps.length;
-  /* doneAt ставится ОДИН раз: это дата на сертификате, и она не должна
-     переписываться, если проект потом откроют заново. */
-  if (last && !st.done){ st.done = 1; st.doneAt = st.doneAt || Date.now(); award("builder"); }
-  markActiveToday();          /* шаг проекта держит дневной стрик живым */
-  save();
-
-  var firstTry = session.attempts === 1 && session.hints === 0 && !session.shown;
-  document.getElementById("wincard").innerHTML = last
-    ? '<div class="big">🏆</div><h2>Проект собран!</h2>' +
-      '<p>' + esc(p.finale) + '</p>' +
-      '<div class="winrow"><button class="bigbtn" id="pfin">Посмотреть, что получилось</button>' +
-      /* ⚠️ Проект мира — это и конец мира. Раньше в этот момент ребёнку
-         показывали собранную программу и всё; на вопрос «что я теперь умею»
-         не отвечал никто. Кнопка стоит второй, а не первой: сначала он хочет
-         увидеть свою вещь, и отнимать у него эту минуту нельзя. */
-      (worldGraduated(p.world)
-        ? '<button class="bigbtn ghost" id="pgrad">🎓 Что я теперь умею</button>' : '') +
-      '</div>'
-    : '<div class="big">' + (firstTry ? "🎯" : "🧱") + '</div>' +
-      '<h2>Шаг ' + (i + 1) + ' из ' + p.steps.length + ' готов</h2>' +
-      '<p>' + esc(p.steps[i + 1].brief) + '</p>' +
-      '<div class="winrow"><button class="bigbtn" id="pnext">Следующий шаг →</button>' +
-      '<button class="bigbtn ghost" id="wstay">Остаться здесь</button></div>';
-  document.getElementById("win").classList.add("show");
-  confetti(last ? 3 : 1);
-  var pn = document.getElementById("pnext");
-  if (pn) pn.onclick = function(){ closeWin(); openProject(p.id, i + 1); };
-  var pf = document.getElementById("pfin");
-  if (pf) pf.onclick = function(){ closeWin(); screenProjectDone(p.id); };
-  var pg = document.getElementById("pgrad");
-  if (pg) pg.onclick = function(){ closeWin(); screenWorldDone(p.world); };
-  var ws = document.getElementById("wstay");
-  if (ws) ws.onclick = closeWin;
-}
-
-/* финал проекта: вся программа целиком, её можно запустить и забрать себе */
-function screenProjectDone(id){
-  var p = projectById(id);
-  if (!p) return screenWorlds();
-  enterScreen(undefined, "projectdone");
-  session = { id:null, attempts:0, hints:0, shown:false };
-  var st = projectState(p.id);
-  var code = st.code || p.steps[p.steps.length - 1].solution;
-
-  var where2 = p.world === 0 ? "🤖 Ты и ИИ" : "Мир " + p.world;
-  app.innerHTML =
-    '<div class="crumbs"><span data-go="world">' + esc(where2) + '</span> › ' + p.emoji + ' ' + esc(p.title) + '</div>' +
-    '<div class="lvlhead"><div><div class="idx">' +
-    (p.world === 0 ? "проект раздела «Ты и ИИ» собран" : "проект мира " + p.world + " собран") + '</div>' +
-    '<h1>' + p.emoji + ' ' + esc(p.title) + '</h1></div>' +
-    '<div class="right"><span class="tag">готово ✓</span></div></div>' +
-    '<p class="lede">' + esc(p.finale) + '</p>' +
-    '<div id="studio"></div>' +
-    '<div class="pager"><button class="bigbtn" id="tosand">Забрать в песочницу</button>' +
-    (p.kind === "game" ? '<button class="bigbtn" id="pshare">🔗 Отправить игру другу</button>' : '') +
-    '<button class="bigbtn ghost" id="pdef">📁 Пакет к защите</button>' +
-    '<button class="bigbtn ghost" id="pfolio">🎒 Все мои работы</button>' +
-    '<button class="bigbtn ghost" id="pagain">Пройти заново</button><span class="sp"></span>' +
-    '<button class="bigbtn ghost" data-go="world">← ' +
-    (p.world === 0 ? "Ко всем заданиям" : "К миру " + p.world) + '</button></div>';
-
-  /* Игра-проект на финале ИГРАЕТСЯ, а не просто показывается: у неё внутри
-     input(), и кнопка «Запустить» без игрового режима падала бы на первом же
-     ходе. Правишь код — «Новая игра» играет твою версию. */
-  var studio = makeStudio({ engine: "mini", code: code, play: p.kind === "game",
-                            label: "твоя программа целиком" });
-  document.getElementById("studio").appendChild(studio);
-  session.studio = studio;
-
-  document.getElementById("tosand").onclick = function(){
-    S.sandbox = studio.editor.getCode(); save(); screenSandbox();
-  };
-  var psh = document.getElementById("pshare");
-  if (psh) psh.onclick = function(){
-    /* уезжает ТЕКУЩИЙ код: поменял секретное слово — друг играет твою версию */
-    copyText(playLink({ title: p.title, code: studio.editor.getCode(),
-                        author: myName() || "", emoji: p.emoji }), psh);
-  };
-  document.getElementById("pfolio").onclick = screenFolio;
-  document.getElementById("pdef").onclick = function(){ screenDefense(p.id); };
-  document.getElementById("pagain").onclick = function(){
-    var yes = true;
-    try { yes = confirm("Начать проект заново? Пройденные шаги обнулятся, но код останется в редакторе."); } catch(e){}
-    if (!yes) return;
-    var s2 = projectState(p.id);
-    s2.step = 0; s2.done = 0; s2.aiAt = -1;   /* редакции напарника подставятся заново */
-    save(); openProject(p.id, 0);
-  };
-  app.querySelectorAll('[data-go="world"]').forEach(function(b){
-    b.onclick = function(){ if (p.world === 0) screenAILab(); else screenWorld(p.world); };
-  });
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
+/* ================= экраны проекта =================
+   ⚠️ Уехали в js/screens-project.js — разрез архитектурного долга
+   18.09.2026. Замер и почему слой данных выше остался здесь — в шапке того
+   файла. Портфолио, «Моё», защита и песочница объявлены НИЖЕ — обёртками
+   (§ 4.40). */
+var PROJECT_SCREENS = KVSCREENS.project({
+  app: app, esc: esc, save: save, errHTML: errHTML, diffBlock: diffBlock,
+  enterScreen: enterScreen, refreshTop: refreshTop, setRoute: setRoute,
+  claimScreen: claimScreen, screenStale: screenStale, worldContent: worldContent,
+  screenWorlds: screenWorlds, screenWorld: screenWorld, screenWorldDone: screenWorldDone,
+  worldGraduated: worldGraduated, award: award, markActiveToday: markActiveToday,
+  confetti: confetti, closeWin: closeWin, codeHas: codeHas, myName: myName,
+  makeStudio: makeStudio, wireHint: wireHint,
+  draftGet: draftGet, draftApply: draftApply, draftDrop: draftDrop, draftSchedule: draftSchedule,
+  projectById: projectById, projectState: projectState, projectOpen: projectOpen,
+  projectDraftId: projectDraftId, projectStartCode: projectStartCode,
+  screenAILab: function(){ screenAILab(); },
+  screenSandbox: function(){ screenSandbox(); },
+  screenFolio: function(){ screenFolio(); },
+  screenDefense: function(k){ screenDefense(k); },
+  playLink: function(w){ return playLink(w); },
+  copyText: function(t, b){ return copyText(t, b); },
+  S: function(){ return S; },
+  session: function(){ return session; },
+  newSession: function(v){ session = v; return v; }
+});
+var openProject = PROJECT_SCREENS.openProject,
+    screenProjectDone = PROJECT_SCREENS.screenProjectDone;
 
 /* ================= галерея рисунков =================
    Рисунок — единственный результат занятий, который хочется показать бабушке.

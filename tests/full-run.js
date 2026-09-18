@@ -10570,6 +10570,77 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- [двери-проект] дороги в проект и в «проект собран» жмутся ---
+     ⚠️ Родилась из разреза экранов проекта 18.09.2026 (1.190.0, § 4.55).
+     Из десяти нарочных поломок прогон поймал четыре: те, что валили саму
+     отрисовку. Зелёными прошли ПЯТЬ дверей, у которых обработчик ищет экран
+     только в момент нажатия: веха проекта на карте пути, карточка игры-
+     проекта, «Открыть мой проект» на выпускном мира, адрес #<id проекта> и
+     «проект собран» в «Ты и ИИ», взятый значением до договора. */
+  let projdoorsChecked = 0;
+  if (typeof g.openProject === "function" && typeof g.projectOfWorld === "function"){
+    const p0 = problems.length;
+    const at = (want, where) => { if (g.place() !== want) bad("[двери-проект] " + where + " привела не туда: " + g.place() + " вместо " + want); };
+    const projWas = JSON.parse(JSON.stringify(g.state.projects || {}));
+    const starsWas = g.state.stars;
+
+    /* 1) карта пути → веха проекта */
+    g.screenPath(); await tick(); await tick();
+    const pm = doc.querySelector(".pmile[data-proj]");
+    if (!pm) bad("[двери-проект] на карте пути нет вехи проекта");
+    else { pm.click(); await tick(); await tick(); at("project", "веха проекта на карте пути"); }
+
+    /* 2) игры → карточка игры-проекта */
+    g.screenGames(); await tick();
+    const gc = doc.querySelector(".gamecard[data-proj]");
+    if (!gc) bad("[двери-проект] среди игр нет карточки игры-проекта");
+    else { gc.click(); await tick(); await tick(); at("project", "карточка игры-проекта"); }
+
+    /* 3) адрес по имени проекта: #<id> открывает сам проект.
+          ⚠️ Делается ДО того, как проекты отмечены собранными: у собранного
+          тот же адрес честно ведёт на «проект собран», а не в сборку. */
+    const pid = g.projectOfWorld(1).id;
+    g.screenWorlds(); await tick();
+    w.location.hash = "#" + pid;
+    g.bootRender(); await tick(); await tick();
+    at("project", "адрес #" + pid);
+    w.location.hash = "";
+    await tick(); await tick();   /* дать отработать hashchange, иначе он догонит следующий экран */
+
+    /* 4) выпускной мира → «Открыть мой проект» (кнопка есть только у собранного) */
+    const pw = g.projectOfWorld(1);
+    g.state.projects[pw.id] = { step: pw.steps.length, code: "print(1)", done: 1, aiAt: -1, doneAt: Date.now() };
+    g.screenWorldDone(1); await tick(); await tick();
+    const gp = doc.getElementById("gr-proj");
+    if (!gp) bad("[двери-проект] на выпускном мира нет «Открыть мой проект»");
+    else { gp.click(); await tick(); await tick(); at("projectdone", "«Открыть мой проект» на выпускном мира"); }
+
+    /* 5) «Ты и ИИ» → собранный проект раздела открывается как «проект собран» */
+    const ap = g.projectOfWorld(0);
+    if (ap){
+      g.state.projects[ap.id] = { step: ap.steps.length, code: "print(1)", done: 1, aiAt: -1, doneAt: Date.now() };
+      g.screenAILab(); await tick();
+      const aop = doc.getElementById("openaiproj");
+      if (!aop) bad("[двери-проект] в «Ты и ИИ» нет двери к проекту раздела");
+      else { aop.click(); await tick(); await tick(); at("projectdone", "дверь к собранному проекту в «Ты и ИИ»"); }
+    }
+
+    /* 6) замок проекта: пока уроки мира не пройдены, дверь возвращает на карту
+          мира, а не показывает сборку (нарочная поломка проверки прошла
+          зелёной — экран рисовался и без неё) */
+    const unlockWas = g.state.admin.unlockAll;
+    g.state.admin.unlockAll = false;
+    g.state.stars = {};
+    g.state.projects = {};
+    g.openProject(pw.id); await tick(); await tick();
+    if (g.place() === "project") bad("[двери-проект] проект открылся, хотя уроки его мира не пройдены");
+    g.state.admin.unlockAll = unlockWas;
+
+    g.state.projects = projWas; g.state.stars = starsWas;
+    if (problems.length === p0) projdoorsChecked++;
+    viewReset(g);
+  }
+
   /* --- 12бис. одно имя — одна функция ---
      ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
      workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
@@ -12767,6 +12838,7 @@ function checkEncoding(){
   console.log(`двери на вывеску жмутся: ${aboutdoorsChecked ? "да" : "нет"}`);
   console.log(`двери экзамена жмутся: ${examdoorsChecked ? "да" : "нет"}`);
   console.log(`двери приёмки жмутся: ${specdoorsChecked ? "да" : "нет"}`);
+  console.log(`двери проекта жмутся: ${projdoorsChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
