@@ -10526,6 +10526,50 @@ function checkEncoding(){
     viewReset(g);
   }
 
+  /* --- [двери-приёмка] дороги в «Приёмку» и обратно жмутся ---
+     ⚠️ Родилась из разреза приёмки 18.09.2026 (1.189.0, § 4.55). Из десяти
+     нарочных поломок прогон поймал пять. Зелёными прошли: кнопка «Открыть
+     приёмку» в «Ты и ИИ» (её обработчик — A.screenSpecs, взятый значением
+     до договора: функция есть, экрана в ней нет), мёртвый адрес #specs,
+     «Назад» из работы мимо списка и два экрана, переставшие сбрасывать
+     сессию. Два счётчика (specsList, specDone) значением прогон валил сам —
+     их зовут при отрисовке, а не при нажатии; экран — только при нажатии. */
+  let specdoorsChecked = 0;
+  if (typeof g.screenSpecs === "function" && typeof g.openSpec === "function" && g.specsList().length){
+    const p0 = problems.length;
+    const at = (want, where) => { if (g.place() !== want) bad("[двери-приёмка] " + where + " привела не туда: " + g.place() + " вместо " + want); };
+
+    /* 1) «Ты и ИИ» → «Открыть приёмку» */
+    g.screenAILab(); await tick();
+    const ts = doc.getElementById("toaispecs");
+    if (!ts) bad("[двери-приёмка] в «Ты и ИИ» нет кнопки «Открыть приёмку»");
+    else { ts.click(); await tick(); at("specs", "кнопка «Открыть приёмку» в «Ты и ИИ»"); }
+
+    /* 2) адрес #specs */
+    const rs = g.ROUTE_BY_HASH["#specs"];
+    if (!rs) bad("[двери-приёмка] нет адреса #specs");
+    else { g.screenWorlds(); await tick(); rs.open(); await tick(); at("specs", "адрес #specs"); }
+
+    /* 3) работа: своя сессия; «Назад» ведёт в список работ, а не в «Ты и ИИ» */
+    const t0 = g.specsList()[0];
+    g.openSpec(t0.id); await tick();
+    at("spec", "открытая работа");
+    const ss = g.getSession();
+    if (!ss || ss.id !== t0.id || !ss.spec) bad("[двери-приёмка] работа не завела свою сессию: " + JSON.stringify(ss && { id: ss.id, spec: ss.spec }));
+    const bb2 = doc.getElementById("btn-back");
+    if (!bb2 || bb2.hidden) bad("[двери-приёмка] в работе нет кнопки «Назад»");
+    else { bb2.click(); await tick(); at("specs", "«Назад» из работы"); }
+
+    /* 4) список работ гасит сессию работы */
+    g.openSpec(t0.id); await tick();
+    g.screenSpecs(); await tick();
+    const ss2 = g.getSession();
+    if (!ss2 || ss2.id !== null || ss2.spec) bad("[двери-приёмка] список работ не сбросил сессию работы");
+
+    if (problems.length === p0) specdoorsChecked++;
+    viewReset(g);
+  }
+
   /* --- 12бис. одно имя — одна функция ---
      ⚠️ Проверка родилась из настоящей ошибки 07.09.2026: я объявил функцию
      workLink, не заметив, что такая уже есть (ссылка «поделиться работой»,
@@ -12722,6 +12766,7 @@ function checkEncoding(){
   console.log(`двери в «Моё» и из него жмутся: ${foldoorsChecked ? "да" : "нет"}`);
   console.log(`двери на вывеску жмутся: ${aboutdoorsChecked ? "да" : "нет"}`);
   console.log(`двери экзамена жмутся: ${examdoorsChecked ? "да" : "нет"}`);
+  console.log(`двери приёмки жмутся: ${specdoorsChecked ? "да" : "нет"}`);
   console.log(`логотип ведёт на страницу сайта: ${logoChecked ? "да" : "нет"}`);
   console.log(`алгоритмы и формат ОГЭ: ${algoChecked ? "да" : "нет"}`);
   console.log(`пробный вариант экзамена: ${variantChecked ? "да" : "нет"}`);
