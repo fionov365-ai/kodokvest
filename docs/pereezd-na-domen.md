@@ -42,6 +42,7 @@ location.pathname`; манифест ходит по «.», service worker — �
 | `index.html` | три строки карточки ссылки: `canonical`, `og:url`, `og:image` | приложение |
 | `robots.txt` | строка `Sitemap:` | статика |
 | `sitemap.xml` | **все** `<loc>` | статика |
+| `vitrina/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `individualnyi-proekt/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `semeynoe-obuchenie/index.html` | то же | статика |
 | `roditelyu/index.html` | `canonical`, `og:url`, `og:image` (заведена 13.09.2026) | статика |
@@ -63,6 +64,13 @@ grep -rl "fionov365-ai.github.io" --include="*.html" --include="*.xml" --include
 ```
 
 После переезда список обязан стать пустым.
+
+⚠️ **Дополнено 20.09.2026 проверкой готовности к запуску:** в списке не было
+`vitrina/index.html` — три строки на странице, которая после переезда
+становится корнём домена. Вне таблицы сознательно: `tests/full-run.js`
+(адрес площадки прошит в стороже `[страницы]` — он упадёт сам и скажет),
+`content/world5.js` (урок про GitHub Pages: чужой адрес там по смыслу) и
+`dist/` (пересобирается). Итого мест с адресом — 19 файлов, а не 16.
 
 ## 2. ⚠️ Что заработает только после переезда
 
