@@ -45,6 +45,7 @@ location.pathname`; манифест ходит по «.», service worker — �
 | `vitrina/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `individualnyi-proekt/index.html` | `canonical`, `og:url`, `og:image` | статика |
 | `semeynoe-obuchenie/index.html` | то же | статика |
+| `chto-vnutri/index.html` | `canonical`, `og:url`, `og:image` (заведена 20.09.2026) | статика |
 | `roditelyu/index.html` | `canonical`, `og:url`, `og:image` (заведена 13.09.2026) | статика |
 | `repetitoru/index.html` | то же | статика |
 | `shkole/index.html` | то же | статика |
