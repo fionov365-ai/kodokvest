@@ -68,6 +68,8 @@ GitHub Desktop не используем — виснет на `.lock`-файл�
 | `docs/rynok-i-rov-2026-09-12.md` | игроки рынка, чем мы лучше, ров, выход |
 | `docs/licenziya-proverka-2026-09-13.md` | почему без лицензии, красные линии, 38-ФЗ ст. 6 |
 | `docs/smeta-zapuska.md` | деньги и действия до запуска |
+| `docs/den-zapuska.md` | день запуска: что делает фаундер, что делает сессия |
+| `docs/dokumenty-k-oplate.md` | оферта, политика, РКН, чек НПД — готовые тексты |
 | `docs/vitrina-litsenziya-napravleniya-2026-09-09.md` | Яндекс, лицензия, конкуренты, ниши |
 | `docs/foresight-2027.md` | ставки вдолгую |
 | `docs/zanyatie-i-vzroslyj.md` | взрослый контур, занятие, ПДн |
