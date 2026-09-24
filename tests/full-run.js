@@ -3478,6 +3478,22 @@ function checkEncoding(){
     if (!g.routeHash()) bad("[адрес] адрес урока не открывает урок обратно");
     await tick(60);
     if (g.place() !== "lesson") bad("[адрес] адрес урока привёл не на урок: " + g.place());
+
+    /* --- номер экзамена с сетки на витрине (24.09.2026) ---
+       Кружок на /vitrina/ ведёт на #exam=oge-16. Обещание сетки — «нажмите
+       номер, откроется задача»; серый номер обязан открыть карту, а не пустоту. */
+    for (const [адрес, куда] of [["#exam=oge-16", "algoone"], ["#exam=ege-27", "algoone"],
+                                 ["#exam=oge-15", "robot"], ["#exam=oge-13", "algo"], ["#exam=oge-99", "algo"]]){
+      w.location.hash = адрес;
+      if (!g.routeHash()) bad("[сетка-экзамена] адрес " + адрес + " не разобран");
+      await tick(60);
+      if (g.place() !== куда)
+        bad("[сетка-экзамена] " + адрес + " привёл на «" + g.place() + "», а не на «" + куда + "»");
+    }
+    /* серый номер открыл карту на вкладке ОГЭ — вернуть «Темы», иначе
+       следующие проверки раздела найдут не ту вкладку */
+    if (typeof g.openExamMap === "function"){ g.openExamMap("all"); await tick(); }
+    w.location.hash = ""; viewReset(g);
     viewReset(g);
 
     /* --- экран без маршрута адрес ЧИСТИТ, а не тащит чужой ---
@@ -4071,6 +4087,28 @@ function checkEncoding(){
      Полными считаются 1, 2, 3, 4 и 6: 4 — по правилу выше, 6 — это 3 + 3.
      Пять или семь карточек ряд не заполняют ничем, и такую сетку надо
      переписать, а не подпирать стилем. */
+  /* --- [сетка-экзамена]: сетка номеров на витрине совпадает с продуктом ---
+     Кусок витрины между метками setka собирает tools/setka-ekzamena.js из
+     js/exams.js и банка задач. Здесь он собирается ЗАНОВО и сравнивается с
+     файлом: задачи номера появились или пропали, а витрину не пересобрали —
+     посетитель нажал бы серый номер, который уже есть, или синий, которого нет. */
+  let setkaChecked = 0;
+  {
+    const p0 = problems.length;
+    const S = require(path.join(root, "tools/setka-ekzamena.js"));
+    const vit = fs.readFileSync(path.join(root, "vitrina/index.html"), "utf8");
+    const now = (vit.match(S.RX) || [])[0];
+    if (!now) bad("[сетка-экзамена] на витрине нет меток setka:start / setka:end — сетка пропала");
+    else if (now !== S.render(root))
+      bad("[сетка-экзамена] сетка номеров на витрине разошлась с данными продукта — " +
+          "запустите node tools/setka-ekzamena.js");
+    else {
+      const ссылок = (now.match(/href="\.\.\/#exam=(oge|ege)-\d+"/g) || []).length;
+      if (ссылок < 40) bad("[сетка-экзамена] ссылок на номера всего " + ссылок + " — сборка сетки сломана");
+    }
+    if (problems.length === p0) setkaChecked++;
+  }
+
   let cardRowChecked = 0;
   {
     const p0 = problems.length;
@@ -13210,6 +13248,7 @@ function checkEncoding(){
   console.log(`список переезда на домен полон: ${pereezdChecked ? "да" : "нет"}`);
   console.log(`числа на страницах сверены с продуктом: ${siteNumsChecked ? "да" : "нет"}`);
   console.log(`ряд карточек без дыры справа: ${cardRowChecked ? "да" : "нет"}`);
+  console.log(`сетка номеров экзамена совпадает с продуктом: ${setkaChecked ? "да" : "нет"}`);
   console.log(`контракты экранов без undefined: ${contractsChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),

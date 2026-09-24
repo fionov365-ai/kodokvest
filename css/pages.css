@@ -416,3 +416,26 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible{outline:3px solid color
 .demo figcaption{padding:10px 16px 14px; font-size:14px; color:var(--dim); border-top:1px solid var(--line)}
 @media (prefers-color-scheme: dark){ .demo pre .s{color:#7fd08f} }
 
+
+/* ---- сетка номеров ОГЭ и ЕГЭ (24.09.2026) ----
+   Разметку собирает node tools/setka-ekzamena.js из данных продукта. Два
+   блока рядом и равной высоты: у ОГЭ две строки кружков и строка «чего нет»,
+   у ЕГЭ три строки — кончаются вровень (правила сайта, § 6). Кружок не
+   мельче 44 px — это цель для пальца (§ 8), поэтому колонки auto-fill, а не
+   заданное число: на телефоне их шесть, на широком экране девять. */
+.exams{display:grid; gap:14px; margin:0 0 14px}
+@media (min-width:1000px){ .exams{grid-template-columns:1fr 1fr} }
+.exam{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:var(--pad);
+      box-shadow:0 1px 2px rgba(20,26,46,.04), 0 6px 20px -12px rgba(20,26,46,.12)}
+.exam .fine{margin:4px 0 12px}
+.exam .fine:last-child{margin:12px 0 0}
+.nums{display:grid; grid-template-columns:repeat(auto-fill,minmax(44px,1fr)); gap:6px}
+.num{aspect-ratio:1; min-height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+     font-weight:700; font-size:16px; text-decoration:none; border:2px solid transparent;
+     transition:transform .15s, background-color .15s}
+a.num.yes{background:var(--accent); color:var(--accent-ink)}
+a.num.part{background:color-mix(in srgb, var(--accent) 22%, var(--card)); color:var(--ink); border-color:var(--accent)}
+a.num:hover{transform:translateY(-2px) scale(1.06)}
+a.num.yes:hover{background:color-mix(in srgb, var(--accent) 85%, var(--ink))}
+.num.no,.num.soon{background:var(--bg); color:var(--dim); border:2px dashed var(--line)}
+@media (prefers-reduced-motion:reduce){ .num{transition:none} a.num:hover{transform:none} }

@@ -9745,6 +9745,18 @@ function routeHash(){
      уводит на Главное молча, а открывает вход проверки с объяснением. */
   var prk = /^#proverka=([0-9A-Za-z-]+)$/.exec(location.hash || "");
   if (prk){ PROVERKA.screenReport(prk[1], ""); return true; }
+  /* Номер экзамена с сетки на витрине (24.09.2026): #exam=oge-16. Есть задачи —
+     сразу первая нерешённая этого формата, как кнопка «Решать» в карте; 15 ОГЭ —
+     Робот; номера, где судить нечем, — карта экзамена на своей вкладке. */
+  var epk = /^#exam=(oge|ege)-(\d+)$/.exec(location.hash || "");
+  if (epk && typeof EXAMS !== "undefined"){
+    var ex1 = EXAMS[epk[1]].tasks.filter(function(t){ return t.n === Number(epk[2]); })[0];
+    var st1 = ex1 ? EXAMS.state(ex1, algoCountIn) : "";
+    if (st1 === "yes" && ex1.robot){ screenRobot(); return true; }
+    var nx1 = (st1 === "yes" || st1 === "part") ? algoNextIn(ex1.g) : null;
+    if (nx1){ openAlgo(nx1.id); return true; }
+    openExamMap(epk[1]); return true;
+  }
   var wpn = /^#world=(\d+)$/.exec(location.hash || "");
   if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }
 
