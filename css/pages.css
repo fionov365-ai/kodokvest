@@ -439,3 +439,24 @@ a.num:hover{transform:translateY(-2px) scale(1.06)}
 a.num.yes:hover{background:color-mix(in srgb, var(--accent) 85%, var(--ink))}
 .num.no,.num.soon{background:var(--bg); color:var(--dim); border:2px dashed var(--line)}
 @media (prefers-reduced-motion:reduce){ .num{transition:none} a.num:hover{transform:none} }
+
+/* ---- «Уже есть код?» на первом экране витрины (24.09.2026) ----
+   Одна строка: подпись, поле, кнопка. Поле — 44 px, как всякая цель для
+   пальца (§ 8), и 16 px кегля: мельче — и iPhone приближает страницу. */
+.havecode{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:14px 0 0}
+.havecode label{color:var(--dim)}
+.havecode input{flex:1 1 200px; min-height:44px; font:16px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink)}
+.havecode input:focus{outline:3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset:1px; border-color:var(--accent)}
+.havecode .btn{min-height:44px; padding:8px 18px}
+.hcmsg{flex:1 1 100%; display:none}
+.hcmsg.show{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px;
+  background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+.hcmsg.bad{background:var(--warn-bg); border-color:var(--warn-line)}
+.hcmsg p{margin:0; flex:1 1 100%}
+.hcmsg .btn{min-height:44px; padding:8px 16px}
+@media (max-width:640px){
+  .havecode label{flex:1 1 100%}          /* подпись над полем, поле и кнопка — одной строкой */
+  .havecode input{flex:1 1 0; min-width:0}
+  .hcmsg .btn{flex:1 1 100%}
+}

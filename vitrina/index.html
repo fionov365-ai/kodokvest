@@ -65,6 +65,17 @@
     <a class="btn ghost" href="../roditelyu/">Я родитель</a>
     <a class="btn ghost" href="../repetitoru/">Я репетитор или учитель</a>
   </div>
+  <!-- «Уже есть код?» — 24.09.2026, приём kompege («№ КИМ»), разбор конкурентов.
+       Одно поле на три наших кода; какой это код, поле узнаёт по виду и
+       говорит словами, куда он ведёт, — сразу не прыгает: код ученика
+       годится и ребёнку, и родителю, и выбрать между ними может только
+       человек. Код уходит в адрес после «#» — хостингу он не виден. -->
+  <form class="havecode" id="havecode" autocomplete="off">
+    <label for="hccode">Уже есть код?</label>
+    <input id="hccode" placeholder="например, sova-3f7a2" spellcheck="false" maxlength="40" autocapitalize="off">
+    <button class="btn ghost" type="submit">Открыть</button>
+    <div class="hcmsg" id="hcmsg" role="status" aria-live="polite"></div>
+  </form>
   </div>
   <!-- ⚠️ Ответ тренажёра здесь ДОСЛОВНЫЙ: так движок (js/engine-mini.js)
        отвечает на эту программу, а «Неизвестное имя» — заголовок той же
@@ -289,5 +300,61 @@
   <p class="up"><a href="#">↑ Наверх</a></p>
 </div></footer>
 
+<script>
+/* Поле «Уже есть код?». Узнаёт код по виду — так же, как его выдаёт тренажёр:
+   итог проверки — 16 знаков азбуки без похожих букв (js/proverka.js), код
+   варианта — 6 знаков той же азбуки (js/variant.js), код ученика — латиница,
+   цифры и дефис, 3–32 знака (js/cloud.js). ⚠️ Поменялся формат там — поменять
+   здесь; сторож [код-на-витрине] в tests/full-run.js сверяет разбор. */
+(function(){
+  var f = document.getElementById("havecode"); if (!f) return;
+  var inp = document.getElementById("hccode"), out = document.getElementById("hcmsg");
+  var A = "[2-9A-HJ-NP-Z]";
+  function kind(raw){
+    var t = String(raw || "").replace(/\s+/g, "");
+    if (new RegExp("^" + A + "{4}(-?" + A + "{4}){3}$", "i").test(t))
+      return { k: "proverka", c: t.toUpperCase().replace(/-/g, "").replace(/(.{4})(?=.)/g, "$1-") };
+    if (new RegExp("^" + A + "{6}$", "i").test(t)) return { k: "variant", c: t.toUpperCase() };
+    if (/^[a-z0-9][a-z0-9_-]{2,31}$/i.test(t)) return { k: "kid", c: t.toLowerCase() };
+    return { k: t ? "bad" : "empty", c: t };
+  }
+  /* Разметку собираем узлами, а не строкой с разметкой ссылки: так её не примет за
+     ссылку проверка страниц, и в текст не попадёт ничего из поля ввода. */
+  function node(tag, cls, text, href){
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (href) e.setAttribute("href", href);
+    if (text) e.textContent = text;
+    return e;
+  }
+  function say(){
+    out.textContent = "";
+    for (var i = 0; i < arguments.length; i++) out.appendChild(arguments[i]);
+  }
+  f.addEventListener("submit", function(e){
+    e.preventDefault();
+    var r = kind(inp.value);
+    if (r.k === "proverka")
+      say(node("p", "", "Это итог проверки «что умеет сам»."),
+          node("a", "btn", "Открыть итог", "../#proverka=" + r.c));
+    else if (r.k === "variant"){
+      var alt = node("p", "fine", "Это код ученика, а не варианта? ");
+      alt.appendChild(node("a", "", "Войти учеником", "../#kidlogin=" + r.c.toLowerCase()));
+      say(node("p", "", "Это код пробного варианта от репетитора: по нему соберётся тот же вариант, что у всей группы."),
+          node("a", "btn", "Собрать этот вариант", "../#variant=" + r.c), alt);
+    }
+    else if (r.k === "kid")
+      say(node("p", "", "Это код ученика. Кто вы?"),
+          node("a", "btn", "Я ученик — к своим занятиям", "../#kidlogin=" + r.c),
+          node("a", "btn ghost", "Я родитель — смотреть занятия", "../#parentlogin=" + r.c));
+    else if (r.k === "empty")
+      say(node("p", "", "Впишите код, который вам дали: код ученика, код варианта или итог проверки."));
+    else
+      say(node("p", "", "Такого кода мы не выдаём. Код ученика — латинские буквы, цифры и дефис, например " +
+          "sova-3f7a2; код варианта — шесть знаков, итог проверки — шестнадцать."));
+    out.className = "hcmsg show" + (r.k === "bad" || r.k === "empty" ? " bad" : "");
+  });
+})();
+</script>
 </body>
 </html>

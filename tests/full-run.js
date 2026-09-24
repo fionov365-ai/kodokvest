@@ -3494,6 +3494,62 @@ function checkEncoding(){
        следующие проверки раздела найдут не ту вкладку */
     if (typeof g.openExamMap === "function"){ g.openExamMap("all"); await tick(); }
     w.location.hash = ""; viewReset(g);
+
+    /* --- [код-на-витрине]: поле «Уже есть код?» (24.09.2026) ---
+       Витрина узнаёт код по виду и ведёт на #kidlogin= / #parentlogin= /
+       #variant= / #proverka=. Здесь: (1) адреса открывают свой экран с
+       вписанным кодом; (2) азбуки и шаблоны витрины совпадают с теми, по
+       которым коды ВЫДАЁТ тренажёр, — иначе поле скажет «такого кода мы не
+       выдаём» про настоящий код; (3) разбор на самой витрине, нажатием. */
+    for (const [адрес, куда, поле, значение] of [
+      ["#variant=abc234", "variant", "vseed", "ABC234"],
+      ["#kidlogin=nikogo-net", "kidlogin", "klcode", "nikogo-net"],
+      ["#parentlogin=nikogo-net", "parentlogin", "plcode", "nikogo-net"]]){
+      /* ⚠️ replaceState, а не присваивание hash: с главной сюда приходят
+         ЗАГРУЗКОЙ страницы, адрес разбирается один раз. Присваивание дало бы
+         ещё и hashchange — второй разбор уже без кода, и тест мерил бы то,
+         чего не бывает. */
+      w.history.replaceState(null, "", w.location.pathname + адрес);
+      if (!g.routeHash()) { bad("[код-на-витрине] адрес " + адрес + " не разобран"); continue; }
+      await tick(80);
+      if (g.place() !== куда) bad("[код-на-витрине] " + адрес + " привёл на «" + g.place() + "», а не на «" + куда + "»");
+      const el = doc.getElementById(поле);
+      if (!el || el.value !== значение)
+        bad("[код-на-витрине] " + адрес + ": код не вписан в поле (" + (el ? el.value : "поля нет") + ")");
+      if (/login=/.test(w.location.hash)) bad("[код-на-витрине] код ученика остался в адресе: " + w.location.hash);
+    }
+    w.location.hash = ""; viewReset(g);
+    {
+      const vit = fs.readFileSync(path.join(root, "vitrina/index.html"), "utf8");
+      const букв = (vit.match(/var A = "\[([^\]]+)\]"/) || [])[1];
+      const все = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const азбукаВитрины = букв ? все.split("").filter(c => new RegExp("[" + букв + "]").test(c)).join("") : "";
+      const срц = f => fs.readFileSync(path.join(root, f), "utf8");
+      const азП = (срц("js/proverka.js").match(/var ABC = "([^"]+)"/) || [])[1];
+      const азВ = (срц("js/variant.js").match(/var CODE_ABC = "([^"]+)"/) || [])[1];
+      if (!азбукаВитрины || азбукаВитрины !== азП || азбукаВитрины !== азВ)
+        bad("[код-на-витрине] азбука кодов на витрине «" + азбукаВитрины + "» не та, что у проверки «" +
+            азП + "» и варианта «" + азВ + "»");
+      const reК = (срц("js/cloud.js").match(/var CODE_RE = (\/[^;]+\/);/) || [])[1];
+      if (!reК || vit.indexOf(reК) < 0)
+        bad("[код-на-витрине] шаблон кода ученика на витрине разошёлся с js/cloud.js: " + reК);
+      const vd = new JSDOM(vit, { runScripts: "dangerously" });
+      const vdoc = vd.window.document, vin = vdoc.getElementById("hccode"), vf = vdoc.getElementById("havecode");
+      const разбор = код => {
+        vin.value = код;
+        vf.dispatchEvent(new vd.window.Event("submit", { cancelable: true }));
+        return [...vdoc.querySelectorAll("#hcmsg a")].map(a => a.getAttribute("href")).join(" ");
+      };
+      const ждём = [["yozh-jgayv", "../#kidlogin=yozh-jgayv ../#parentlogin=yozh-jgayv"],
+                    ["abc234", "../#variant=ABC234 ../#kidlogin=abc234"],
+                    ["2345 6789 abcd efgh", "../#proverka=2345-6789-ABCD-EFGH"],
+                    ["ну привет", ""]];
+      ждём.forEach(([код, надо]) => {
+        const есть = разбор(код);
+        if (есть !== надо) bad("[код-на-витрине] «" + код + "» разобран в «" + есть + "», а надо «" + надо + "»");
+      });
+      vd.window.close();
+    }
     viewReset(g);
 
     /* --- экран без маршрута адрес ЧИСТИТ, а не тащит чужой ---

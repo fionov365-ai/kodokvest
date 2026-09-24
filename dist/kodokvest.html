@@ -27775,6 +27775,7 @@ var raw = el ? el.value : "";
 if (!String(raw).trim()) return "";
 var ok = cleanSeed(raw);
 if (!ok){ seedFail(raw); return null; }
+pendingSeed = "";
 return ok;
 };
 A.app.querySelectorAll("[data-vnew]").forEach(function(b){
@@ -27791,6 +27792,9 @@ if (sd === null) return;
 startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10), sd);
 };
 });
+
+var vsIn = document.getElementById("vseed");
+if (vsIn && pendingSeed) vsIn.value = pendingSeed;
 wireAssign();
 document.getElementById("tovtrain").onclick = A.screenTrain;
 A.refreshTop();
@@ -28100,7 +28104,15 @@ parts.push(name + ": " +
 return parts.join(" · ");
 }
 
-return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
+var pendingSeed = "";
+function openSeed(raw){
+var v = cur();
+if (v && isExam(v) && !v.closed) return screenVariant();
+pendingSeed = cleanSeed(raw) || String(raw || "").slice(0, 6);
+screenPick();
+}
+
+return { screenVariant: screenVariant, screenVariantDone: screenVariantDone, variantOpenSeed: openSeed,
 variantStat: variantStat, variantOpenFor: openFor,
 buildItems: buildItems, makeVariant: makeVariant, seedV2: seedV2, newSeed: newSeed };
 };
@@ -39926,6 +39938,7 @@ dueText: function(due){ return hwDueText({ due: due }); }
 var screenVariant = VARIANT.screenVariant,
 screenVariantDone = VARIANT.screenVariantDone,
 variantOpenFor = VARIANT.variantOpenFor,
+variantOpenSeed = VARIANT.variantOpenSeed,
 variantStat = VARIANT.variantStat;
 
 var PROVERKA = KVSCREENS.proverka({
@@ -41217,6 +41230,28 @@ if (st1 === "yes" && ex1.robot){ screenRobot(); return true; }
 var nx1 = (st1 === "yes" || st1 === "part") ? algoNextIn(ex1.g) : null;
 if (nx1){ openAlgo(nx1.id); return true; }
 openExamMap(epk[1]); return true;
+}
+
+var cpk = /^#(kid|parent)login=([\w-]+)$/.exec(location.hash || "");
+if (cpk){
+var cc = cpk[2].toLowerCase(), mine = myCode();
+try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+if (cpk[1] === "kid"){
+if (mine === cc && !isParentDevice()){ screenWorlds(); return true; }
+screenKidLogin(); document.getElementById("klcode").value = cc;
+if (!mine && !isAdminDevice() && !isParentDevice()) document.getElementById("klgo").click();
+} else {
+if (parentOf() === cc){ screenParent(cc); return true; }
+screenParentLogin(); document.getElementById("plcode").value = cc;
+if (!mine && !isAdminDevice()) document.getElementById("plgo").click();
+}
+return true;
+}
+var vsk = /^#variant=([0-9a-z]{6})$/i.exec(location.hash || "");
+if (vsk){
+
+try { history.replaceState(null, "", location.pathname + location.search + "#variant"); } catch(e){}
+variantOpenSeed(vsk[1]); return true;
 }
 var wpn = /^#world=(\d+)$/.exec(location.hash || "");
 if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }

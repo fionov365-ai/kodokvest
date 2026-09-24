@@ -8079,6 +8079,7 @@ var VARIANT = KVSCREENS.variant({
 var screenVariant = VARIANT.screenVariant,
     screenVariantDone = VARIANT.screenVariantDone,
     variantOpenFor = VARIANT.variantOpenFor,
+    variantOpenSeed = VARIANT.variantOpenSeed,
     variantStat = VARIANT.variantStat;
 
 /* ================= проверка «что умеет сам» =================
@@ -9756,6 +9757,33 @@ function routeHash(){
     var nx1 = (st1 === "yes" || st1 === "part") ? algoNextIn(ex1.g) : null;
     if (nx1){ openAlgo(nx1.id); return true; }
     openExamMap(epk[1]); return true;
+  }
+  /* Поле «Уже есть код?» на витрине (24.09.2026). Код в адресе после «#»,
+     а не в «?…»: так он не уходит хостингу. ⚠️ Молча не входим, если на
+     устройстве уже занимается ДРУГОЙ ученик: вход по коду заменяет его
+     прогресс здесь. Тогда экран входа открывается с вписанным кодом, и
+     «Войти» человек нажимает сам. Родитель проверяется на сервере (опечатка). */
+  var cpk = /^#(kid|parent)login=([\w-]+)$/.exec(location.hash || "");
+  if (cpk){
+    var cc = cpk[2].toLowerCase(), mine = myCode();
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    if (cpk[1] === "kid"){
+      if (mine === cc && !isParentDevice()){ screenWorlds(); return true; }
+      screenKidLogin(); document.getElementById("klcode").value = cc;
+      if (!mine && !isAdminDevice() && !isParentDevice()) document.getElementById("klgo").click();
+    } else {
+      if (parentOf() === cc){ screenParent(cc); return true; }
+      screenParentLogin(); document.getElementById("plcode").value = cc;
+      if (!mine && !isAdminDevice()) document.getElementById("plgo").click();
+    }
+    return true;
+  }
+  var vsk = /^#variant=([0-9a-z]{6})$/i.exec(location.hash || "");
+  if (vsk){
+    /* адрес сразу — свой, «#variant»: иначе смена адреса экраном перерисует
+       сборку заново, уже без вписанного кода */
+    try { history.replaceState(null, "", location.pathname + location.search + "#variant"); } catch(e){}
+    variantOpenSeed(vsk[1]); return true;
   }
   var wpn = /^#world=(\d+)$/.exec(location.hash || "");
   if (wpn && CURRICULUM.world(Number(wpn[1]))){ screenWorld(Number(wpn[1])); return true; }

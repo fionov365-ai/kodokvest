@@ -579,6 +579,7 @@ function screenPick(){
     if (!String(raw).trim()) return "";
     var ok = cleanSeed(raw);
     if (!ok){ seedFail(raw); return null; }
+    pendingSeed = "";
     return ok;
   };
   A.app.querySelectorAll("[data-vnew]").forEach(function(b){
@@ -595,6 +596,10 @@ function screenPick(){
       startVariant(tab, parseInt(b.getAttribute("data-vexam"), 10), sd);
     };
   });
+  /* код, пришедший с витрины, переживает перерисовку экрана (например, когда
+     приехал прогресс с сервера) — до первой сборки */
+  var vsIn = document.getElementById("vseed");
+  if (vsIn && pendingSeed) vsIn.value = pendingSeed;
   wireAssign();
   document.getElementById("tovtrain").onclick = A.screenTrain;
   A.refreshTop();
@@ -972,7 +977,19 @@ function variantStat(){
   return parts.join(" · ");
 }
 
-return { screenVariant: screenVariant, screenVariantDone: screenVariantDone,
+/* Код варианта с поля «Уже есть код?» на витрине (#variant=КОД, 24.09.2026):
+   сборка с уже вписанным кодом. Собирать сами не спешим — экзамен и режим
+   выбирает ребёнок, как если бы код продиктовали. ⚠️ Идущий экзамен не
+   перебиваем: там тикает время, и чужой код не повод его бросить. */
+var pendingSeed = "";
+function openSeed(raw){
+  var v = cur();
+  if (v && isExam(v) && !v.closed) return screenVariant();
+  pendingSeed = cleanSeed(raw) || String(raw || "").slice(0, 6);
+  screenPick();
+}
+
+return { screenVariant: screenVariant, screenVariantDone: screenVariantDone, variantOpenSeed: openSeed,
          variantStat: variantStat, variantOpenFor: openFor,
          buildItems: buildItems, makeVariant: makeVariant, seedV2: seedV2, newSeed: newSeed };
 };
