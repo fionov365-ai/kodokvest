@@ -460,3 +460,21 @@ a.num.yes:hover{background:color-mix(in srgb, var(--accent) 85%, var(--ink))}
   .havecode input{flex:1 1 0; min-width:0}
   .hcmsg .btn{flex:1 1 100%}
 }
+
+/* ---- лента «Что нового» (24.09.2026) ----
+   Дата слева колонкой одной ширины — ленту читают по датам сверху вниз.
+   Номер версии мелко: он для сверки, а не для чтения. На телефоне дата
+   встаёт над текстом. Свежие пять видны, остальное под «Раньше». */
+.feed{list-style:none; margin:0; padding:0; background:var(--card); border:1px solid var(--line);
+      border-radius:var(--radius); overflow:hidden}
+.feed li{display:grid; grid-template-columns:112px 1fr; gap:14px; padding:12px 18px; border-top:1px solid var(--line)}
+.feed li:first-child{border-top:0}
+.feed time{color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
+.feed small{color:var(--dim); font-size:13px; white-space:nowrap}
+@media (max-width:640px){ .feed li{grid-template-columns:1fr; gap:2px} }
+.feedmore{margin-top:10px}
+.feedmore summary{cursor:pointer; color:var(--accent); font-weight:600; min-height:44px; display:flex; align-items:center}
+.feedmore[open] summary{margin-bottom:8px}
+/* стрелка у «Раньше»: у summary с display:flex браузер свой треугольник прячет */
+.feedmore summary::after{content:"▾"; margin-left:6px}
+.feedmore[open] summary::after{content:"▴"}

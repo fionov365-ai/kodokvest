@@ -4165,6 +4165,51 @@ function checkEncoding(){
     if (problems.length === p0) setkaChecked++;
   }
 
+  /* --- [лента]: «Что нового» на витрине — правда о датах (24.09.2026) ---
+     Лента собирается tools/lenta.js из content/novoe.json. Сторож: (1) витрина
+     совпадает со сборкой; (2) записи сверху вниз по версии, без повторов;
+     (3) дата записи — день коммита ЕЁ версии в git. Версии, которой в
+     истории нет, быть не может — кроме текущей, ещё не закоммиченной
+     (у неё даты в git пока нет, как и у lastmod в карте сайта). */
+  let lentaChecked = 0;
+  {
+    const p0 = problems.length;
+    const L = require(path.join(root, "tools/lenta.js"));
+    const vit = fs.readFileSync(path.join(root, "vitrina/index.html"), "utf8");
+    const now = (vit.match(L.RX) || [])[0];
+    if (!now) bad("[лента] на витрине нет меток lenta:start / lenta:end — лента пропала");
+    else if (now !== L.render(root))
+      bad("[лента] лента на витрине разошлась с content/novoe.json — запустите node tools/lenta.js");
+    const xs = L.items(root);
+    const num = v => v.split(".").map(Number).reduce((a, b) => a * 1000 + b, 0);
+    const тек = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
+    const было = {};
+    xs.forEach((x, i) => {
+      if (!/^\d+\.\d+\.\d+$/.test(x.v) || !/^\d{4}-\d{2}-\d{2}$/.test(x.d) || !String(x.t || "").trim())
+        bad("[лента] запись " + (i + 1) + " без версии, даты или текста: " + JSON.stringify(x));
+      if (было[x.v]) bad("[лента] версия " + x.v + " в ленте дважды");
+      было[x.v] = 1;
+      if (i && num(x.v) >= num(xs[i - 1].v))
+        bad("[лента] порядок сломан: " + x.v + " стоит ниже " + xs[i - 1].v + " — новое должно быть сверху");
+      if (i && x.d > xs[i - 1].d) bad("[лента] дата " + x.d + " новее записи выше (" + xs[i - 1].d + ")");
+      let дни = null;
+      try {
+        дни = require("child_process").execFileSync("git",
+          ["log", "--fixed-strings", "--grep=(" + x.v + ")", "--format=%as"],
+          { cwd: root, encoding: "utf8" }).trim().split("\n").filter(Boolean);
+      } catch (e) { /* без git сверять не с чем — молчим, как lastmod */ }
+      if (!дни) return;
+      if (!дни.length){
+        if (x.v !== тек) bad("[лента] версии " + x.v + " нет в истории git — запись о том, чего не выходило");
+        return;
+      }
+      if (дни[дни.length - 1] !== x.d)
+        bad("[лента] у версии " + x.v + " в ленте дата " + x.d + ", а вышла она " + дни[дни.length - 1]);
+    });
+    if (xs.length < 3) bad("[лента] в ленте всего " + xs.length + " записей — показывать нечего");
+    if (problems.length === p0) lentaChecked++;
+  }
+
   let cardRowChecked = 0;
   {
     const p0 = problems.length;
@@ -13305,6 +13350,7 @@ function checkEncoding(){
   console.log(`числа на страницах сверены с продуктом: ${siteNumsChecked ? "да" : "нет"}`);
   console.log(`ряд карточек без дыры справа: ${cardRowChecked ? "да" : "нет"}`);
   console.log(`сетка номеров экзамена совпадает с продуктом: ${setkaChecked ? "да" : "нет"}`);
+  console.log(`лента «Что нового» сверена с git: ${lentaChecked ? "да" : "нет"}`);
   console.log(`контракты экранов без undefined: ${contractsChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),
