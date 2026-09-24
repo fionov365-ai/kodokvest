@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Калькулятор баллов ОГЭ по информатике 2026 — перевод в оценку | Фионика</title>
+<meta name="description" content="Отметьте решённые задания ОГЭ по информатике — калькулятор сложит первичные баллы и переведёт их в отметку по шкале 2026 года (максимум 21). Без регистрации, с источником ФИПИ.">
+<link rel="canonical" href="https://fionov365-ai.github.io/kodokvest/baza/kalkulyator-ballov-oge-informatika/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Фионика">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:url" content="https://fionov365-ai.github.io/kodokvest/baza/kalkulyator-ballov-oge-informatika/">
+<meta property="og:title" content="Калькулятор баллов ОГЭ по информатике 2026">
+<meta property="og:description" content="Первичный балл по заданиям и перевод в отметку по шкале 2026 года. Без регистрации.">
+<meta property="og:image" content="https://fionov365-ai.github.io/kodokvest/og/og.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="stylesheet" href="../../css/pages.css">
+</head>
+<body>
+<!-- Калькулятор баллов ОГЭ — 24.09.2026, приём Neuronis из разбора
+     конкурентов (docs/konkurenty-sajty-2026-09-24.md): бесплатный инструмент,
+     который ищут перед экзаменом, — вход из поиска. ⚠️ Список заданий,
+     шкалу и источники собирает node tools/kalkulyator-oge.js; официальные
+     числа — только там, с датой сверки. Считает то, что ввели, и НЕ
+     предсказывает балл на экзамене: это обещание мы дать не можем. -->
+
+<div class="top"><div class="wrap">
+  <a class="logo" href="../../vitrina/"><span>🐍</span> Фионика</a>
+  <nav>
+    <a href="../../#lesson=print-first">Попробовать</a>
+    <a href="../../chto-vnutri/">Что внутри</a>
+    <a href="../../roditelyu/">Родителю</a>
+    <a href="../../repetitoru/">Репетитору</a>
+    <a href="../../shkole/">Школе</a>
+    <a href="../../vitrina/#cena">Цена</a>
+    <a href="../../baza/" aria-current="page">Справочник</a>
+    <a href="../../o-proekte/">О проекте</a>
+  </nav>
+</div></div>
+
+<div class="wrap">
+
+<nav class="crumbs" aria-label="Где вы"><a href="../../vitrina/">Фионика</a><span class="sep">›</span><a href="../">Справочник</a><span class="sep">›</span>Калькулятор баллов ОГЭ</nav>
+
+<header class="hero">
+  <h1>Калькулятор баллов ОГЭ по информатике</h1>
+  <p class="lede">Отметьте, что решено, — калькулятор сложит первичные баллы и переведёт их в отметку
+  по шкале 2026 года. Регистрации нет, ничего никуда не отправляется.</p>
+</header>
+
+<section id="kalkulyator">
+  <h2>Посчитать</h2>
+  <p class="sub">Задания 1–12 — по баллу, за развёрнутые ответы — от 0 до 2 или 3 баллов, как ставит эксперт.</p>
+  <div class="calcres" id="calcres" aria-live="polite">
+    <p class="big"><b id="csum">0</b> из <span id="ctot">21</span> → отметка <b id="cmark">«2»</b></p>
+    <button class="btn ghost" type="button" id="creset">Сбросить</button>
+    <p id="cnext" class="dim">Отметьте решённые задания ниже.</p>
+  </div>
+    <!-- kalk:start -->
+    <ol class="calc" id="calc">
+      <li><b class="kn">1</b><span class="kt">Количественные параметры информационных объектов <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-1">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="1" value="1"> решено</label></span></li>
+      <li><b class="kn">2</b><span class="kt">Кодирование и декодирование информации <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-2">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="2" value="1"> решено</label></span></li>
+      <li><b class="kn">3</b><span class="kt">Значение логического выражения <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-3">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="3" value="1"> решено</label></span></li>
+      <li><b class="kn">4</b><span class="kt">Формализация и моделирование <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-4">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="4" value="1"> решено</label></span></li>
+      <li><b class="kn">5</b><span class="kt">Алгоритмы и блок-схемы <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-5">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="5" value="1"> решено</label></span></li>
+      <li><b class="kn">6</b><span class="kt">Линейный и циклический алгоритм <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-6">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="6" value="1"> решено</label></span></li>
+      <li><b class="kn">7</b><span class="kt">Принципы адресации в Интернете <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-7">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="7" value="1"> решено</label></span></li>
+      <li><b class="kn">8</b><span class="kt">Поиск информации в Интернете <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-8">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="8" value="1"> решено</label></span></li>
+      <li><b class="kn">9</b><span class="kt">Анализ информации в виде схем <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-9">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="9" value="1"> решено</label></span></li>
+      <li><b class="kn">10</b><span class="kt">Дискретная форма представления информации <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-10">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="10" value="1"> решено</label></span></li>
+      <li><b class="kn">11</b><span class="kt">Поиск файлов и каталогов <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-11">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="11" value="1"> решено</label></span></li>
+      <li><b class="kn">12</b><span class="kt">Файловая система <span class="dim">· до 1 балла</span><br><a href="../../#exam=oge-12">потренировать&nbsp;→</a></span><span class="kc"><label class="tick"><input type="checkbox" data-n="12" value="1"> решено</label></span></li>
+      <li><b class="kn">13</b><span class="kt">Презентация или текстовый документ <span class="dim">· до 2 баллов</span><br><span class="dim">в тренажёре нет: ответ здесь файл с оформлением, а не значение</span></span><span class="kc"><span class="pts" role="radiogroup" aria-label="Баллы за задание 13"><label><input type="radio" name="t13" data-n="13" value="0" checked><span>0</span></label><label><input type="radio" name="t13" data-n="13" value="1"><span>1</span></label><label><input type="radio" name="t13" data-n="13" value="2"><span>2</span></label></span></span></li>
+      <li><b class="kn">14</b><span class="kt">Электронные таблицы и диаграмма <span class="dim">· до 3 баллов</span><br><a href="../../#exam=oge-14">потренировать&nbsp;→</a> <span class="dim">(кроме: диаграмма — ответ там файл, а не значение)</span></span><span class="kc"><span class="pts" role="radiogroup" aria-label="Баллы за задание 14"><label><input type="radio" name="t14" data-n="14" value="0" checked><span>0</span></label><label><input type="radio" name="t14" data-n="14" value="1"><span>1</span></label><label><input type="radio" name="t14" data-n="14" value="2"><span>2</span></label><label><input type="radio" name="t14" data-n="14" value="3"><span>3</span></label></span></span></li>
+      <li><b class="kn">15</b><span class="kt">Алгоритм для исполнителя «Робот» <span class="dim">· до 2 баллов</span><br><a href="../../#exam=oge-15">потренировать&nbsp;→</a></span><span class="kc"><span class="pts" role="radiogroup" aria-label="Баллы за задание 15"><label><input type="radio" name="t15" data-n="15" value="0" checked><span>0</span></label><label><input type="radio" name="t15" data-n="15" value="1"><span>1</span></label><label><input type="radio" name="t15" data-n="15" value="2"><span>2</span></label></span></span></li>
+      <li><b class="kn">16</b><span class="kt">Программа на языке программирования <span class="dim">· до 2 баллов</span><br><a href="../../#exam=oge-16">потренировать&nbsp;→</a></span><span class="kc"><span class="pts" role="radiogroup" aria-label="Баллы за задание 16"><label><input type="radio" name="t16" data-n="16" value="0" checked><span>0</span></label><label><input type="radio" name="t16" data-n="16" value="1"><span>1</span></label><label><input type="radio" name="t16" data-n="16" value="2"><span>2</span></label></span></span></li>
+    </ol>
+    <script type="application/json" id="shkala">{"total":21,"scale":[{"mark":2,"from":0,"to":4},{"mark":3,"from":5,"to":10},{"mark":4,"from":11,"to":16},{"mark":5,"from":17,"to":21}],"profile":15}</script>
+  </section>
+
+  <section id="shkala-2026">
+    <h2>Шкала 2026 года</h2>
+    <p class="sub">Максимум — 21 первичный балл. Для профильного класса рекомендуют от 15.</p>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th scope="col">Первичный балл</th><th scope="col">Отметка</th></tr></thead>
+      <tbody>
+        <tr><td>0–4</td><td>«2»</td></tr>
+        <tr><td>5–10</td><td>«3»</td></tr>
+        <tr><td>11–16</td><td>«4»</td></tr>
+        <tr><td>17–21</td><td>«5»</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="fine gap">Источники: шкала — <a href="https://doc.fipi.ru/oge/normativno-pravovye-dokumenty/04-44_18.02.2026.pdf">письмо Рособрнадзора от 18.02.2026 № 04-44</a>, таблица 11; баллы за задания — <a href="https://doc.fipi.ru/oge/demoversii-specifikacii-kodifikatory/2026/inf_9_2026.zip">спецификация КИМ ОГЭ 2026 (ФИПИ)</a>. Сверено 24.09.2026.</p>
+    <!-- kalk:end -->
+</section>
+
+<section>
+  <div class="note">
+    <p><b>Шкала рекомендательная.</b> Её предлагает Рособрнадзор, а регион вправе уточнить границы
+    отметок — перед экзаменом сверьтесь с сайтом своего органа управления образованием.</p>
+    <p>Калькулятор считает то, что вы ввели, и не предсказывает балл на экзамене: задания с развёрнутым
+    ответом оценивает эксперт по критериям ФИПИ.</p>
+  </div>
+  <div class="btnrow end">
+    <a class="btn" href="../../#variant">Решить пробный вариант целиком</a>
+    <a class="btn ghost" href="../../#algo">Карта заданий ОГЭ и ЕГЭ</a>
+  </div>
+</section>
+
+<nav class="next" aria-label="Куда дальше">
+  <h2>Куда дальше</h2>
+  <div class="doors">
+    <a class="door" href="../../vitrina/#ekzamen"><b>Экзамен по номерам&nbsp;→</b><span>какой номер можно потренировать прямо сейчас</span></a>
+    <a class="door" href="../informatika-na-semeynom-obuchenii/"><b>Информатика на семейном обучении&nbsp;→</b><span>закон об аттестации и состав предмета</span></a>
+    <a class="door" href="../skolko-stoit-repetitor-po-informatike/"><b>Сколько стоит репетитор&nbsp;→</b><span>цены школ и за что в них платят</span></a>
+  </div>
+</nav>
+
+</div>
+
+<footer><div class="wrap">
+  <nav>
+    <a href="../../vitrina/">Фионика</a>
+    <a href="../../">Тренажёр</a>
+    <a href="../">Справочник</a>
+    <a href="../../chto-vnutri/">Что внутри</a>
+    <a href="../../individualnyi-proekt/">Индивидуальный проект</a>
+    <a href="../../semeynoe-obuchenie/">Семейное обучение</a>
+    <a href="../../repetitoru/">Репетитору</a>
+    <a href="../../shkole/">Школе</a>
+    <a href="../../kontakty/">Контакты</a>
+    <a href="../../pravo/politika/">Конфиденциальность</a>
+    <a href="../../pravo/soglashenie/">Условия</a>
+  </nav>
+  <p>Фионика — тренажёр по информатике для школьников. Программирование на Python в браузере.</p>
+  <p class="up"><a href="#">↑ Наверх</a></p>
+</div></footer>
+
+<script>
+/* Счёт. Числа шкалы — не здесь, а в блоке #shkala, который собирает
+   tools/kalkulyator-oge.js из официальных документов. */
+(function(){
+  var box = document.getElementById("calc"), data;
+  try { data = JSON.parse(document.getElementById("shkala").textContent); } catch(e){ return; }
+  var sumEl = document.getElementById("csum"), markEl = document.getElementById("cmark"),
+      nextEl = document.getElementById("cnext");
+  function word(n){ var a = n % 10, b = n % 100;
+    return (a === 1 && b !== 11) ? "балл" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "балла" : "баллов"; }
+  function count(){
+    var s = 0;
+    box.querySelectorAll("input:checked").forEach(function(i){ s += Number(i.value) || 0; });
+    var cur = data.scale.filter(function(x){ return s >= x.from && s <= x.to; })[0];
+    var up = data.scale.filter(function(x){ return x.from > s; })[0];
+    sumEl.textContent = s;
+    markEl.textContent = cur ? "«" + cur.mark + "»" : "—";
+    var t = up ? "До «" + up.mark + "» не хватает " + (up.from - s) + " " + word(up.from - s) + "." : "Это высшая отметка.";
+    t += s >= data.profile ? " Порог для профильного класса (" + data.profile + ") пройден."
+                           : " До рекомендованного порога профильного класса (" + data.profile + ") — " + (data.profile - s) + " " + word(data.profile - s) + ".";
+    nextEl.textContent = t;
+  }
+  document.getElementById("ctot").textContent = data.total;
+  box.addEventListener("change", count);
+  document.getElementById("creset").addEventListener("click", function(){
+    box.querySelectorAll("input[type=checkbox]").forEach(function(i){ i.checked = false; });
+    box.querySelectorAll("input[type=radio][value='0']").forEach(function(i){ i.checked = true; });
+    count();
+  });
+  count();
+})();
+</script>
+</body>
+</html>

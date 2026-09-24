@@ -53,6 +53,7 @@ location.pathname`; манифест ходит по «.», service worker — �
 | `baza/rebenok-ne-hochet-uchitsya/index.html` | `canonical` | статика |
 | `baza/skolko-stoit-repetitor-po-informatike/index.html` | `canonical` | статика |
 | `baza/informatika-na-semeynom-obuchenii/index.html` | `canonical` | статика |
+| `baza/kalkulyator-ballov-oge-informatika/index.html` | `canonical` | статика |
 | `o-proekte/index.html` | `canonical` | статика |
 | `kontakty/index.html` | `canonical` | статика |
 | `pravo/politika/index.html` | `canonical` | статика |

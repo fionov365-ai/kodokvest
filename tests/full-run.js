@@ -4210,6 +4210,47 @@ function checkEncoding(){
     if (problems.length === p0) lentaChecked++;
   }
 
+  /* --- [калькулятор-огэ]: справочник, калькулятор баллов (24.09.2026) ---
+     Официальные числа живут в tools/kalkulyator-oge.js (OFFICIAL, с
+     источником и датой). Сторож: страница совпадает со сборкой; баллы
+     заданий складываются в максимум; шкала идёт от нуля до максимума без
+     дыр и наложений; счёт на странице работает — нажатием в jsdom. */
+  let kalkChecked = 0;
+  {
+    const p0 = problems.length;
+    const K = require(path.join(root, "tools/kalkulyator-oge.js"));
+    const page = fs.readFileSync(path.join(root, K.FILE), "utf8");
+    const now = (page.match(K.RX) || [])[0];
+    if (!now) bad("[калькулятор-огэ] на странице нет меток kalk:start / kalk:end");
+    else if (now !== K.render(root))
+      bad("[калькулятор-огэ] страница разошлась с данными — запустите node tools/kalkulyator-oge.js");
+    const O = K.OFFICIAL, oge = w.EXAMS.oge;
+    const сумма = oge.tasks.reduce((a, x) => a + K.maxOf(x.n), 0);
+    if (сумма !== O.total) bad("[калькулятор-огэ] баллы заданий дают " + сумма + ", а максимум " + O.total);
+    let ждём = 0;
+    O.scale.forEach(x => { if (x.from !== ждём) bad("[калькулятор-огэ] в шкале дыра или наложение перед «" + x.mark + "»"); ждём = x.to + 1; });
+    if (ждём !== O.total + 1) bad("[калькулятор-огэ] шкала кончается на " + (ждём - 1) + ", а максимум " + O.total);
+    if (!(O.profile > 0 && O.profile <= O.total)) bad("[калькулятор-огэ] порог профильного класса вне шкалы: " + O.profile);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(O.checked) || !/fipi\.ru/.test(O.letterUrl) || !/fipi\.ru/.test(O.specUrl))
+      bad("[калькулятор-огэ] у официальных чисел нет даты сверки или ссылки на первоисточник");
+    const kd = new JSDOM(page, { runScripts: "dangerously" });
+    const kdoc = kd.window.document;
+    const ch = () => kdoc.getElementById("calc").dispatchEvent(new kd.window.Event("change", { bubbles: true }));
+    const итог = () => kdoc.getElementById("csum").textContent + " " + kdoc.getElementById("cmark").textContent;
+    kdoc.querySelectorAll("#calc input[type=checkbox]").forEach(i => { i.checked = true; });
+    kdoc.querySelectorAll("#calc .pts").forEach(g => { const r = g.querySelectorAll("input"); r[r.length - 1].checked = true; });
+    ch();
+    if (итог() !== O.total + " «5»") bad("[калькулятор-огэ] всё решено, а итог «" + итог() + "»");
+    kdoc.querySelectorAll("#calc input[type=radio][value='0']").forEach(i => { i.checked = true; });
+    kdoc.querySelector("#calc input[name=t14][value='3']").checked = true;
+    ch();
+    if (итог() !== "15 «4»") bad("[калькулятор-огэ] 12 заданий по баллу и 3 за 14-е — а итог «" + итог() + "»");
+    if (!/не хватает 2 балла/.test(kdoc.getElementById("cnext").textContent) || !/пройден/.test(kdoc.getElementById("cnext").textContent))
+      bad("[калькулятор-огэ] подсказка к 15 баллам: «" + kdoc.getElementById("cnext").textContent + "»");
+    kd.window.close();
+    if (problems.length === p0) kalkChecked++;
+  }
+
   let cardRowChecked = 0;
   {
     const p0 = problems.length;
@@ -13385,6 +13426,7 @@ function checkEncoding(){
   console.log(`ряд карточек без дыры справа: ${cardRowChecked ? "да" : "нет"}`);
   console.log(`сетка номеров экзамена совпадает с продуктом: ${setkaChecked ? "да" : "нет"}`);
   console.log(`лента «Что нового» сверена с git: ${lentaChecked ? "да" : "нет"}`);
+  console.log(`калькулятор баллов ОГЭ сверен со шкалой: ${kalkChecked ? "да" : "нет"}`);
   console.log(`контракты экранов без undefined: ${contractsChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),

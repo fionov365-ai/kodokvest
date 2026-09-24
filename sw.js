@@ -17,7 +17,7 @@
    старые файлы жили в кэше вечно и могли подмешаться к новой странице.
    Теперь каждый выпуск заводит свой кэш, а старые чистятся в activate.
    Версия обязана совпадать с package.json — на это есть проверка в тестах. */
-var CACHE = "kodokvest-1.207.0";
+var CACHE = "kodokvest-1.208.0";
 
 /* Оболочка: то, без чего страница не откроется. Уроки (content/worldN.js)
    тоже здесь — иначе офлайн открылась бы карта миров без самих уроков. */
@@ -35,6 +35,7 @@ var SHELL = [
   "./baza/", "./baza/informatika-na-semeynom-obuchenii/",
   "./baza/rebenok-ne-hochet-uchitsya/",
   "./baza/skolko-stoit-repetitor-po-informatike/",
+  "./baza/kalkulyator-ballov-oge-informatika/",
   "./pravo/politika/", "./pravo/soglashenie/",
   /* Шрифты лежат у нас (см. шапку css/style.css). Без них в офлайне
      страница рисовалась бы системными — то есть иначе, чем онлайн. */

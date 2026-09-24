@@ -478,3 +478,41 @@ a.num.yes:hover{background:color-mix(in srgb, var(--accent) 85%, var(--ink))}
 /* стрелка у «Раньше»: у summary с display:flex браузер свой треугольник прячет */
 .feedmore summary::after{content:"▾"; margin-left:6px}
 .feedmore[open] summary::after{content:"▴"}
+
+/* ---- калькулятор баллов ОГЭ (справочник, 24.09.2026) ----
+   Итог прилипает к верху, пока отмечают задания: иначе на телефоне сумма
+   уезжает за край после третьей строки. Переключатели — не мельче 44 px. */
+.calcres{position:sticky; top:8px; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px;
+  background:var(--card); border:2px solid var(--accent); border-radius:var(--radius); padding:12px 16px; margin:0 0 14px;
+  box-shadow:0 10px 24px -16px rgba(20,26,46,.4)}
+@media (min-width:641px){ .calcres{top:66px} }   /* под липкой шапкой */
+.calcres .big{margin:0; font-size:20px; flex:1 1 auto}
+.calcres .big b{color:var(--accent)}
+.calcres #cnext{margin:0; flex:1 1 100%; font-size:15px}
+.calcres .btn{min-height:44px; padding:8px 16px}
+.calc{list-style:none; margin:0; padding:0; background:var(--card); border:1px solid var(--line); border-radius:var(--radius)}
+.calc li{display:grid; grid-template-columns:40px 1fr auto; gap:12px; align-items:center; padding:10px 16px; border-top:1px solid var(--line)}
+.calc li:first-child{border-top:0}
+.calc .kn{font-size:18px; color:var(--accent); text-align:center}
+.calc .kt{font-size:15px; line-height:1.45}
+.calc .kt a{font-size:14px}
+.tick{display:inline-flex; align-items:center; gap:8px; min-height:44px; cursor:pointer; white-space:nowrap}
+.tick input{width:22px; height:22px; accent-color:var(--accent)}
+.pts{display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.pts label{position:relative; cursor:pointer}
+.pts input{position:absolute; opacity:0; inset:0; margin:0; cursor:pointer}
+.pts span{display:flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; font-weight:700; color:var(--dim)}
+.pts label + label span{border-left:1px solid var(--line)}
+.pts input:checked + span{background:var(--accent); color:var(--accent-ink)}
+.pts input:focus-visible + span{outline:3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset:-3px}
+@media (max-width:640px){
+  .calc li{grid-template-columns:32px 1fr; gap:6px 10px}
+  .calc .kc{grid-column:2}
+}
+@media (max-width:640px){
+  /* прилипший итог на телефоне — не больше двух-трёх строк: итог и кнопка рядом */
+  .calcres{padding:8px 12px; gap:4px 10px}
+  .calcres .big{font-size:16px; flex:0 1 auto}
+  .calcres .btn{padding:4px 10px; font-size:13px; margin-left:auto}
+  .calcres #cnext{font-size:13px; line-height:1.4}
+}
