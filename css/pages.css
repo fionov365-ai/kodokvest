@@ -329,3 +329,90 @@ html{scroll-behavior:smooth}
 .faq summary{cursor:pointer; font-weight:600; min-height:48px; display:flex; align-items:center; padding:10px 0}
 .faq details[open] summary{border-bottom:1px solid var(--line)}
 .faq details p{margin:12px 0 14px; color:var(--dim)}
+
+/* ============================================================
+   Проход по виду сайта, 24.09.2026 (разбор конкурентов — RAZVITIE § 2.10).
+   Ничего из правил выше не отменяется: ширину текста держит только .wrap,
+   ряд карточек кончается ровно, цели для пальца не мельче 44 px.
+   ============================================================ */
+
+/* Мягкий свет сверху страницы: первый экран отделён от остальных без
+   лишней полосы и без картинки. Цвет — акцент темы, поэтому в тёмной
+   теме он сам становится тише. */
+body{
+  background-image:radial-gradient(900px 420px at 78% -120px, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%);
+  background-repeat:no-repeat;
+}
+
+/* Шапка на широком экране липкая — пусть сквозь неё чуть видно страницу. */
+@media (min-width:641px){
+  .top{background:color-mix(in srgb, var(--card) 88%, transparent);
+       -webkit-backdrop-filter:saturate(1.4) blur(10px); backdrop-filter:saturate(1.4) blur(10px)}
+}
+
+/* Кнопки: отклик на наведение и видимый фокус с клавиатуры. До 24.09.2026
+   кнопка никак не отвечала на мышь, а фокус был браузерный. */
+.btn{transition:background-color .15s, border-color .15s, transform .15s, box-shadow .15s}
+.btn:not(.ghost){box-shadow:0 6px 18px -8px color-mix(in srgb, var(--accent) 70%, transparent)}
+.btn:not(.ghost):hover{background:color-mix(in srgb, var(--accent) 88%, var(--ink)); transform:translateY(-1px)}
+.btn.ghost{background:var(--card)}
+.btn.ghost:hover{border-color:var(--accent); color:var(--accent)}
+a:focus-visible,.btn:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){ .btn{transition:none} .btn:hover{transform:none} }
+
+/* ⚠️ Кнопка под рядом карточек стояла ВПЛОТНУЮ к ним (найдено 24.09.2026 на
+   витрине, «Родителю», «Репетитору»): у .btnrow нет верхнего отступа, у
+   сетки — нижнего, и кнопка читалась как пятая карточка. */
+.cards + .btnrow, .shots + .btnrow, .steps + .btnrow{margin-top:18px}
+
+/* Карточки: лёгкая тень вместо одной рамки — сетка читается слоями, а не
+   клеткой. Карточка-дверь (с ссылкой внутри заголовка) отвечает наведению. */
+.card{box-shadow:0 1px 2px rgba(20,26,46,.04), 0 6px 20px -12px rgba(20,26,46,.12);
+      transition:border-color .15s, transform .15s}
+.card:has(h3 > a):hover{border-color:var(--accent); transform:translateY(-2px)}
+.card h3 > a{text-decoration:none}
+.card h3 > a:hover{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){ .card{transition:none} .card:hover{transform:none} }
+@media (prefers-color-scheme: dark){
+  .card{box-shadow:none}
+}
+
+/* ---- первый экран витрины: текст слева, живой ответ тренажёра справа ----
+   Разбор конкурентов 24.09.2026: у всех на первом экране либо фото, либо
+   иллюстрация, либо сетка номеров; у нас был только текст. Справа теперь
+   ровно то, что обещает заголовок, — код и ответ тренажёра словами, с
+   дословным текстом движка (выдумывать ответ нельзя, § 13). Колонки
+   выровнены по верху (правила сайта, § 6). */
+.hero-grid{display:grid; gap:28px; align-items:start}
+@media (min-width:1000px){
+  .hero-grid{grid-template-columns:1.3fr 1fr}
+  /* роли — одной строкой рядом с «Кто вы:», а не двумя (замер на 1280 px) */
+  .hero-grid .roles .btn{padding:10px 16px}
+}
+
+/* Строка фактов под кнопкой: проверяемые вещи, а не чужие рейтинги. */
+.facts{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; padding:0; list-style:none}
+.facts li{font-size:14px; color:var(--dim); background:var(--card); border:1px solid var(--line);
+          border-radius:999px; padding:5px 12px}
+@media (max-width:640px){ .facts{gap:6px} .facts li{font-size:13px; padding:4px 10px} }
+
+.demo{margin:0; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden;
+      box-shadow:0 18px 40px -22px rgba(20,26,46,.35)}
+.demo-bar{display:flex; align-items:center; gap:6px; padding:10px 14px; border-bottom:1px solid var(--line);
+          font-size:13px; color:var(--dim)}
+.demo-bar i{width:10px; height:10px; border-radius:50%; background:var(--line); display:inline-block}
+.demo-bar b{margin-left:6px; font-weight:600; color:var(--ink)}
+.demo pre{margin:0; padding:14px 16px; font:15px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          overflow-x:auto; background:color-mix(in srgb, var(--bg) 55%, var(--card))}
+.demo pre .ln{color:var(--dim); opacity:.6; display:inline-block; width:1.6em; user-select:none}
+.demo pre .s{color:#2f8a4b}
+.demo pre .bad{background:color-mix(in srgb, #e5484d 16%, transparent); border-radius:4px}
+.demo-out{padding:12px 16px 16px; border-top:1px solid var(--line)}
+.demo-out .lbl{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); margin:0 0 6px}
+.demo-out samp{display:block; font:15px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.demo-err{margin:10px 0 0; padding:10px 12px; border-radius:10px; font-size:15px;
+          background:var(--warn-bg); border:1px solid var(--warn-line)}
+.demo-err b{display:block}
+.demo figcaption{padding:10px 16px 14px; font-size:14px; color:var(--dim); border-top:1px solid var(--line)}
+@media (prefers-color-scheme: dark){ .demo pre .s{color:#7fd08f} }
+

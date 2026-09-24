@@ -27,6 +27,18 @@ const lessonById = id => {
   for (const w of CURRICULUM) { const b = (CONTENT["world" + w.n] || {})[id]; if (b) return { w, b }; }
   return null;
 };
+/* Текст урока и всех уроков до него: параметр, объяснённый уроком раньше
+   (encoding= — в «Чтении файлов»), честно числится и за следующим. */
+const lessonTextUpTo = id => {
+  const out = [];
+  for (const w of CURRICULUM) for (const l of (w.lessons || [])) {
+    const b = (CONTENT["world" + w.n] || {})[l.id];
+    if (b) out.push((b.theory || []).map(t => [t.demo, t.show, noTags(t.p)].join("\n")).join("\n"),
+      b.task ? [b.task.solution, b.task.starter, noTags(b.task.goal)].join("\n") : "");
+    if (l.id === id) return out.join("\n");
+  }
+  return out.join("\n");
+};
 let total = 0;
 const section = t => console.log("\n\n═══ " + t + " ═══");
 const hit = m => { total++; console.log("  • " + m); };
@@ -53,8 +65,17 @@ section("1. Шпаргалка ссылается на урок, где кома
     const m = /\.?([A-Za-z_][A-Za-z_0-9]*)\s*\(/.exec(it.sig);
     const token = m ? m[1] : null;
     if (!token) { ok++; return; }
+    /* Имя функции мало: «print(..., sep=, end=)» числилась за первым уроком,
+       потому что print там есть, — а sep и end там не было, и родитель
+       получал «вопрос за ужином» про то, чего ребёнок не проходил
+       (24.09.2026). Поэтому именованные параметры сверяются по одному. */
+    const upTo = lessonTextUpTo(it.lesson);
+    const params = (String(it.sig).match(/[A-Za-z_]+(?==)/g) || [])
+      .filter(p => !new RegExp("\\b" + p + "\\s*=").test(upTo));
     if (all.indexOf(token) < 0)
       hit(`${it.id} («${it.sig}») числится за уроком «${it.lesson}», но «${token}» там не встречается`);
+    else if (params.length)
+      hit(`${it.id} («${it.sig}») числится за уроком «${it.lesson}», но ${params.join(", ")}= там не встречается`);
     else ok++;
   }));
   if (total === 0) clean(ok + " записей подтверждены");

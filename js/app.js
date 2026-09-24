@@ -1270,7 +1270,7 @@ function zanReport(rec, st){
   /* 4. что спросить — вопрос за ужином, он уже написан и берётся из шпаргалки */
   var pick = dinnerPickFrom(st, dayKey());
   var ask = pick
-    ? "Спроси: «что делает " + pick.it.sig + "?» — и попроси показать на примере. " +
+    ? "Спросите: «что делает " + pick.it.sig + "?» — и попросите показать на примере. " +
       "Верный ответ: " + pick.it.what + "."
     : "Вопрос появится, когда будет пройден первый урок.";
 
@@ -1449,7 +1449,7 @@ function doLogin(code, onErr){
   var prev = Cloud.myCode();
   Cloud.load(v).then(function(res){
     if (!res.found || !res.data){
-      if (onErr) onErr("На сервере нет ученика с кодом «" + v + "». Проверьте код — " +
+      if (onErr) onErr("На сервере нет ученика с кодом «" + v + "». Проверь код — " +
                        "прогресс на этом устройстве не тронут.");
       return;
     }
@@ -5727,7 +5727,7 @@ function winSaveWire(){
     var code = myCode();
     document.getElementById("winsave").innerHTML =
       '<p class="winsaved">✅ Готово, <b>' + esc(S.name) + '</b>! Урок сохранён за тобой.' +
-      (code ? ' Код для входа с другого устройства — <b>' + esc(code) + '</b>.' : '') + '</p>';
+      (code ? ' Код для входа с другого устройства — <b style="white-space:nowrap">' + esc(code) + '</b>.' : '') + '</p>';
   }
   go.onclick = keep;
   inp.addEventListener("keydown", function(e){
@@ -9960,8 +9960,11 @@ function adminDeviceOff(){
    и дальше всегда открывается в кабинет родителя. Отдельная от детской (?kid=),
    потому что ведёт в другой кабинет. */
 function parentLink(code, name){
+  /* ⚠️ Имя — после «#», а не в «?…&n=»: всё до решётки браузер шлёт хостингу,
+     и имя ребёнка оседало бы в журналах сервера страниц вопреки обещанию
+     «имя остаётся на устройстве» (24.09.2026). Старые ссылки с &n= читаются. */
   var tail = "?parent=" + encodeURIComponent(code) +
-    (name ? "&n=" + encodeURIComponent(String(name).slice(0, 40)) : "");
+    (name ? "#n=" + encodeURIComponent(String(name).slice(0, 40)) : "");
   try { return location.origin + location.pathname + tail; }
   catch(e){ return tail; }
 }
@@ -10436,7 +10439,7 @@ function roomNavHTML(cur){
   }).join("") + '</div>' +
   '<p class="roomhint">Это <b>один кабинет</b> и три его вкладки, а не три разных входа: ' +
   '<b>Ученики</b> — кого вы ведёте с этого устройства, имена и ссылки; ' +
-  '<b>Группа</b> — все ученики сразу, с сервера, по ключу репетитора; ' +
+  '<b>Группа</b> — те же ученики одной таблицей: кто сколько сдал и с кем поговорить; ' +
   '<b>Панель</b> — служебное: обзор, сервер, звёзды и перенос прогресса файлом.</p>';
 }
 function wireRoomNav(box){
@@ -10460,13 +10463,16 @@ function wireRoomNav(box){
 function screenRoles(){
   enterScreen("home", "roles");
   app.innerHTML =
-    '<div class="lvlhead"><div><div class="idx">общий компьютер</div>' +
-    '<h1>🐍 Фионика — кто занимается?</h1></div></div>' +
-    '<p class="lede">Выберите, чей это заход. На своём личном устройстве этот экран ' +
-    'не появляется — там сразу открывается нужное.</p>' +
+    /* ⚠️ Сюда приходят и с «Войти» на вывеске впервые открытого сайта — то
+       есть со СВОЕГО устройства. Прежняя надпись «общий компьютер» и «на своём
+       устройстве этот экран не появляется» такого человека сбивала с толку. */
+    '<div class="lvlhead"><div><div class="idx">вход</div>' +
+    '<h1>🐍 Фионика — кто вы?</h1></div></div>' +
+    '<p class="lede">Выберите свою дверь. Устройство её запомнит, и в следующий раз ' +
+    'сразу откроется нужное; за общим компьютером сюда можно вернуться кнопкой «Сменить роль».</p>' +
     '<div class="rolegrid">' +
       '<button class="rolecard" data-role="kid"><span class="roleico">🎒</span>' +
-        '<b>Я ученик</b><span class="dim">Заниматься. Нужен код или ссылка от учителя.</span></button>' +
+        '<b>Я ученик</b><span class="dim">Начать с первого урока или вернуться к своим занятиям по коду.</span></button>' +
       '<button class="rolecard" data-role="parent"><span class="roleico">👨‍👩‍👦</span>' +
         '<b>Я родитель</b><span class="dim">Смотреть занятия своего ребёнка и ставить расписание.</span></button>' +
       /* ⚠️ Роль называется по делу, а не по правам. Решение фаундера
@@ -10612,8 +10618,8 @@ function screenParentLogin(){
   app.innerHTML =
     '<div class="lvlhead"><div><div class="idx">вход родителя</div><h1>👨‍👩‍👦 Я родитель</h1></div></div>' +
     '<div class="card"><h3>Код ребёнка</h3>' +
-      '<p class="dim">Учитель дал ссылку или код ребёнка. Впишите код — откроется кабинет с расписанием ' +
-      'и отчётом по нему. Чужого прогресса вы не увидите.</p>' +
+      '<p class="dim">Код показан у ребёнка в профиле (👤) и на его карточке доступа; ещё его может дать учитель. ' +
+      'Впишите код — откроется кабинет с расписанием и отчётом по нему. Чужого прогресса вы не увидите.</p>' +
       '<div class="admgate"><input type="text" id="plcode" placeholder="например, roman-3f7a" ' +
         'autocomplete="off" spellcheck="false"><button class="rbtn check" id="plgo">Войти</button></div>' +
       '<div class="msg" id="plmsg"></div>' +
@@ -10633,9 +10639,24 @@ function screenParentLogin(){
       msg.innerHTML = "<b>Сервер не подключён</b>Без него занятия ребёнка посмотреть неоткуда.";
       return;
     }
-    becomeParent(v, "");
-    screenParent(v);
+    /* ⚠️ Опечатка в коде раньше молча открывала кабинет «ученика, который ещё
+       не заходил» — и родитель ставил расписание ребёнку, которого нет.
+       Поэтому код сперва ищется на сервере. Не нашёлся — говорим об этом, а
+       второе «Войти» с тем же кодом открывает кабинет: репетитор мог дать
+       код раньше, чем ребёнок начал. Сервер не ответил — пускаем, как прежде. */
+    function open(){ becomeParent(v, ""); screenParent(v); }
+    if (plSure === v) return open();
+    msg.className = "msg show"; msg.innerHTML = "<b>Ищу код…</b>";
+    Cloud.load(v).then(function(r){
+      if (r && r.found) return open();
+      plSure = v;
+      msg.className = "msg show warn";
+      msg.innerHTML = "<b>По коду «" + esc(v) + "» занятий пока нет</b>" +
+        "Если ребёнок уже занимался — в коде, скорее всего, опечатка: сверьте его с профилем ребёнка. " +
+        "Если он ещё не начинал — нажмите «Войти» ещё раз: кабинет откроется, и расписание можно поставить заранее.";
+    }, open);
   }
+  var plSure = "";
   document.getElementById("plgo").onclick = go;
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") go(); });
   document.getElementById("plback").onclick = screenRoles;
@@ -10730,7 +10751,17 @@ function screenAdminLogin(){
     '<div class="card"><div class="admgate">' +
       '<input type="password" id="apass" placeholder="пароль" autocomplete="current-password" spellcheck="false">' +
       '<button class="rbtn check" id="apgo">Войти</button>' +
-    '</div><div class="msg" id="apmsg"></div></div>';
+    '</div><div class="msg" id="apmsg"></div>' +
+    '<p class="dim" style="margin-top:12px">Забыли пароль — его не восстановить: он хранится только в этом ' +
+    'браузере. Очистите данные сайта в настройках браузера и заведите кабинет заново; ученики вернутся ' +
+    'из файла списка или по их кодам.</p></div>' +
+    /* ⚠️ Без этой кнопки экран был тупиком: кто нажал «Войти в кабинет» по
+       ошибке — чаще всего ребёнок за общим компьютером, — выйти мог только
+       стрелкой браузера или через логотип, о котором не догадаться. */
+    '<div class="pager"><button class="bigbtn ghost" id="apback">← Не сейчас</button></div>';
+  /* ⚠️ Не goHome: дом устройства-кабинета — сам кабинет, и кнопка вела бы
+     обратно на этот же пароль. Не вошёл — значит вышел: на вывеску. */
+  document.getElementById("apback").onclick = leaveRoom;
   var msg = document.getElementById("apmsg"), inp = document.getElementById("apass");
   function go(){
     if (adminPassOk(inp.value)){ adminUnlock(); becomeAdmin(); return screenKids(); }
@@ -11935,13 +11966,12 @@ function statsGridHTML(st){
        «сколько всего», а взрослый спрашивает «сколько сегодня». */
     statBox("Сегодня за тренажёром", fmtDur(dayMs(st, dayKey()))) +
     statBox("Пройдено уроков", solvedCount + " из " + CURRICULUM.total) +
-    statBox("Уроков готово", String(readyTotal)) +
     statBox("Звёзды", stars + " из " + (readyTotal * 3)) +
     statBox("Опыт", (st.xp || 0) + " XP") +
     statBox("Ранг", rankOf(st.xp || 0)) +
     statBox("Попыток всего", String(attempts)) +
     statBox("Подсказок взято", String(hints)) +
-    statBox("Время за тренажёром", fmtMins(timeMs)) +
+    statBox("Всего за тренажёром", fmtMins(timeMs)) +
     statBox("Последнее занятие", fmtWhen(last)) +
     statBox("Дней подряд", streakCurrentIn(coveredDays(st.days, st.shields)) +
       " (рекорд " + streakBestIn(coveredDays(st.days, st.shields)) + ")") +
@@ -12002,7 +12032,7 @@ function dinnerHTML(st){
       'что ребёнок уже прошёл.</p></div>';
   var l = CURRICULUM.byId(pick.lesson);
   return '<div class="dinner"><b>🍽 Вопрос за ужином</b>' +
-    '<p>Спроси: «что делает <code>' + esc(pick.it.sig) + '</code>?» — и попроси ' +
+    '<p>Спросите: «что делает <code>' + esc(pick.it.sig) + '</code>?» — и попросите ' +
     'показать на примере.</p>' +
     '<p class="dim">Правильный ответ: ' + esc(pick.it.what) + '.' +
     (l ? ' Это из урока «' + esc(l.title) + '».' : '') + '</p>' +
@@ -13180,9 +13210,22 @@ function groupAssignHW(ids, due){
 }
 
 function groupLoad(key){
-  if (!cloudEnabled()) return Promise.reject(new Error("Сервер не настроен."));
-  groupState.busy = true; groupState.error = ""; groupState.loaded = 0;
-  return Cloud.list(key).then(function(r){
+  /* ⚠️ serverOn, а не cloudEnabled: второе требует СВОЙ код ученика, а его на
+     устройстве репетитора нет. До 24.09.2026 группа там не грузилась вовсе и
+     молча висела на «Загружено 0 из 0…» — busy не сбрасывался. */
+  if (!serverOn()){
+    groupState.busy = false; groupState.error = "Сервер не настроен.";
+    return Promise.reject(new Error("Сервер не настроен."));
+  }
+  groupState.busy = true; groupState.error = ""; groupState.loaded = 0; groupState.missing = [];
+  /* ⚠️ Ключ сервера (ADMIN_KEY) один на весь сервер и открывает ВСЕХ учеников —
+     его знает только владелец. Репетитору его не дают, и раньше «Группа» у него
+     не открывалась вовсе, хотя сайт её обещает. Теперь без ключа группа — это
+     свой список учеников с вкладки «Ученики»: те же коды, по одному. */
+  var src = key ? Cloud.list(key) : Promise.resolve({
+    students: kidsList().map(function(k){ return { code: k.code }; })
+  });
+  return src.then(function(r){
     var st = (r.students || []).filter(function(x){ return x && x.code && !x.broken; });
     groupState.total = Math.min(st.length, GROUP_MAX);
     var rows = [], i = 0;
@@ -13194,6 +13237,7 @@ function groupLoad(key){
       var code = st[i++].code;
       return Cloud.load(code).then(function(res){
         if (res && res.found && res.data) rows.push(groupRow(code, ensureShape(res.data), res.serverAt || 0));
+        else groupState.missing.push(code);   /* заведён, но ещё не заходил */
         groupState.loaded++;
         var bar = document.getElementById("grpbar");
         if (bar) bar.textContent = "Загружено " + groupState.loaded + " из " + groupState.total + "…";
@@ -13224,14 +13268,19 @@ function screenGroup(){
     roomNavHTML("group") +
     '<p class="lede">Код проверил движок. Ваше дело — посмотреть, с кем поговорить.</p>';
 
-  h += '<div class="card"><h3>🔑 Ключ репетитора</h3>' +
-    '<div class="admrow"><label class="admlbl">ключ ' +
-      '<input type="password" id="grpkey" value="' + esc(adminKeySaved()) + '" autocomplete="off"></label>' +
-      '<button class="rbtn check" id="grpload">Загрузить группу</button></div>' +
+  var nKids = kidsList().length;
+  h += '<div class="card"><h3>👥 Ваши ученики одной таблицей</h3>' +
+    '<p class="dim">' + (nKids
+      ? 'Группа собирается из вашего списка на вкладке «Ученики»: ' + nKids + ' ' +
+        plural(nKids, "ученик", "ученика", "учеников") + '.'
+      : 'Список пуст: сначала заведите учеников или верните их по коду на вкладке «Ученики».') + '</p>' +
+    '<div class="admrow"><button class="rbtn check" id="grpload">Загрузить группу</button>' +
+      '<label class="admlbl">ключ сервера, если он у вас есть ' +
+      '<input type="password" id="grpkey" value="' + esc(adminKeySaved()) + '" autocomplete="off"></label></div>' +
     '<p class="dim" id="grpbar">' + (groupState.busy
       ? "Загружено " + groupState.loaded + " из " + groupState.total + "…"
-      : "Тот же ключ, что задан в настройках функции как ADMIN_KEY. Больше " +
-        GROUP_MAX + " учеников за раз не тянем.") + '</p>' +
+      : "Ключ нужен только владельцу сервера (ADMIN_KEY в настройках функции): с ним группа — все ученики " +
+        "на сервере, а не ваш список. Больше " + GROUP_MAX + " учеников за раз не тянем.") + '</p>' +
     (groupState.error ? '<div class="msg show bad"><b>Не получилось</b>' + esc(groupState.error) + '</div>' : '') +
     '</div>';
 
@@ -13261,7 +13310,10 @@ function screenGroup(){
       else planOk++;
     });
     h += '<div class="card"><h3>📊 За неделю</h3><ul class="trsum">' +
-      '<li>Учеников: <b>' + rows.length + '</b>.</li>' +
+      '<li>Учеников: <b>' + rows.length + '</b>.' + ((groupState.missing || []).length
+        ? ' Ещё не заходили: ' + groupState.missing.map(function(c){
+            var k = kidGet(c); return esc(k && k.name ? k.name : c); }).join(", ") + '.'
+        : '') + '</li>' +
       '<li>Уроков сдано: <b>' + weekAll + '</b>.</li>' +
       (planOk + planBehind
         ? '<li>По своей рамке идут или впереди: <b>' + planOk + '</b> из <b>' +
@@ -13325,8 +13377,7 @@ function screenGroup(){
     h += '</div></div>';
   } else if (!groupState.busy){
     h += '<div class="card"><h3>Группа не загружена</h3>' +
-      '<p class="dim">Введите ключ репетитора и нажмите «Загрузить группу». ' +
-      'Если сервер не настроен, сначала пройдите настройку в панели репетитора.</p></div>';
+      '<p class="dim">Нажмите «Загрузить группу» — придут все ученики из вашего списка.</p></div>';
   }
 
   h += '<div class="pager"><button class="bigbtn ghost" data-gback="1">← В панель репетитора</button>' +
@@ -13339,8 +13390,11 @@ function screenGroup(){
   var lb = document.getElementById("grpload");
   if (lb) lb.onclick = function(){
     var key = (document.getElementById("grpkey").value || "").trim();
-    if (!key){ groupState.error = "Нужен ключ репетитора."; return screenGroup(); }
-    adminKeyRemember(key);
+    if (!key && !kidsList().length){
+      groupState.error = "Список учеников пуст — заведите их на вкладке «Ученики».";
+      return screenGroup();
+    }
+    if (key) adminKeyRemember(key);
     groupState.busy = true; groupState.error = ""; screenGroup();
     groupLoad(key).then(screenGroup, screenGroup);
   };
@@ -15327,7 +15381,7 @@ window.addEventListener("resize", function(){
 
 /* Ссылка вида .../kodokvest/?parent=roman-3f7a закрепляет устройство за
    РОДИТЕЛЕМ этого ребёнка: дальше оно всегда открывается в кабинет родителя.
-   Имя ребёнка может ехать в &n=… — сервер имён не хранит, а родителю приятнее
+   Имя ребёнка может ехать в #n=… — сервер имён не хранит, а родителю приятнее
    видеть имя, чем код. */
 (function(){
   if (typeof Cloud === "undefined" || typeof S === "undefined") return;
@@ -15335,7 +15389,7 @@ window.addEventListener("resize", function(){
   if (!m) return;
   var code = Cloud.validCode(decodeURIComponent(m[1]));
   if (!code) return;
-  var nm = /[?&]n=([^&]+)/.exec(location.search || "");
+  var nm = /^#n=([^&]+)/.exec(location.hash || "") || /[?&]n=([^&]+)/.exec(location.search || "");
   S.admin.parentOf = code;
   S.admin.parentLabel = nm ? decodeURIComponent(nm[1]).slice(0, 40) : "";
   /* родитель — не ученик и не админ; пароль администратора не трогаем */
@@ -15345,7 +15399,7 @@ window.addEventListener("resize", function(){
   try { saveLocal(); } catch(e){}
   try {
     if (history.replaceState)
-      history.replaceState(null, "", location.pathname + location.hash);
+      history.replaceState(null, "", location.pathname + (/^#n=/.test(location.hash) ? "" : location.hash));
   } catch(e){}
 })();
 
