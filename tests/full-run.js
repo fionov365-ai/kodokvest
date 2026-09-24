@@ -9077,6 +9077,40 @@ function checkEncoding(){
       if (String(g.STUCK_PRICE) !== appPrice)
         bad("[затыки] в игре порог из исходника не совпал с рабочим: " + g.STUCK_PRICE);
 
+      /* [возвращаемость] (24.09.2026): тот же счёт в кабинете — по СВОЕМУ
+         списку и без ключа сервера. ⚠️ Это копия op=stats, поэтому первое —
+         сверка с сервером на тех же снимках, до цифры. */
+      if (typeof g.groupStatsCalc === "function"){
+        const снимки = fs.readdirSync(stDir).filter(f => /\.json$/.test(f))
+          .map(f => JSON.parse(fs.readFileSync(path.join(stDir, f), "utf8")).data);
+        const голо = o => { const c = JSON.parse(JSON.stringify(o)); ["ok", "generatedAt", "local"].forEach(k => delete c[k]); return JSON.stringify(c); };
+        const свой = g.groupStatsCalc(снимки, Date.now());
+        if (голо(свой) !== голо(m2))
+          bad("[возвращаемость] счёт в кабинете разошёлся с сервером:\n    кабинет " + голо(свой) + "\n    сервер  " + голо(m2));
+        /* репетитор без ключа: двое своих учеников — и цифры только про них */
+        const kidsWas = g.state.admin.kids;
+        g.state.admin.kids = [{ code: "stat-a", name: "Аня" }, { code: "stat-b", name: "Боря" }];
+        g.groupState.rows = null; g.groupState.src = ""; g.grpStats.data = null;
+        g.screenGroup(); await tick();
+        const ключ = doc.getElementById("grpkey"); if (ключ) ключ.value = "";
+        const кн = doc.getElementById("grpstats");
+        if (!кн) bad("[возвращаемость] нет кнопки «Посчитать»");
+        else {
+          кн.click(); await tick(200);
+          const d = g.grpStats.data;
+          if (!d || !d.local) bad("[возвращаемость] без ключа ничего не посчиталось: " + (g.grpStats.error || JSON.stringify(d)));
+          else {
+            if (d.started !== 2 || d.week.eligible !== 2 || d.week.returned !== 1)
+              bad("[возвращаемость] по своему списку посчитано не про своих: " + JSON.stringify(d.week) + ", начавших " + d.started);
+            const tl = doc.getElementById("app").textContent;
+            if (!/по вашим ученикам/.test(tl)) bad("[возвращаемость] экран не сказал, что цифры — по вашему списку");
+            if (/Кодов на сервере/.test(tl)) bad("[возвращаемость] у своего списка подпись «кодов на сервере»");
+          }
+        }
+        g.state.admin.kids = kidsWas;
+        g.groupState.rows = null; g.groupState.src = "";
+      }
+
       g.grpStats.data = null;
       try { fs.rmSync(stDir, { recursive:true, force:true }); } catch(e){}
     }

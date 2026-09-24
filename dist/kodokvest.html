@@ -43998,16 +43998,68 @@ groupAssignVariant(exId, mins, due);
 
 var grpStats = { data: null, busy: false, error: "" };
 
+function groupStatsCalc(list, now){
+var DAY = 864e5, dayMs = function(k){ return Date.parse(k + "T12:00:00Z"); };
+var priceOf = function(g){ return ((g && g.attempts) || 0) + ((g && g.hints) || 0) * 2 + ((g && g.shown) ? 5 : 0); };
+var byLesson = {}, REACH = [20, 40, 60, 80, 100], reached = REACH.map(function(){ return 0; });
+var students = 0, started = 0, weekEligible = 0, weekReturned = 0, active4w = 0, recent = [];
+function rec(id){ return byLesson[id] || (byLesson[id] = { lesson: id, tried:0, solved:0, stuck:0, attemptsSum:0 }); }
+(list || []).forEach(function(data){
+data = data || {}; students++;
+var lg = data.log || {}, sm = data.stars || {}, seen = {};
+Object.keys(lg).forEach(function(k){ seen[k] = 1; });
+Object.keys(sm).forEach(function(k){ seen[k] = 1; });
+Object.keys(seen).forEach(function(id){
+var g = lg[id] || {}, done = sm[id] !== undefined;
+if (!done && !(g.attempts > 0)) return;
+var it = rec(id); it.tried++;
+if (done){ it.solved++; return; }
+if (priceOf(g) < STUCK_PRICE) return;
+it.stuck++; it.attemptsSum += (g.attempts || 0);
+});
+var days = Object.keys(data.days || {}).sort();
+if (!days.length) return;
+started++;
+var first = dayMs(days[0]);
+if (now - first >= 8 * DAY){
+weekEligible++;
+if (days.some(function(k){ var d = (dayMs(k) - first) / DAY; return d >= 1 && d <= 7; })) weekReturned++;
+}
+var solvedN = Object.keys(sm).length;
+REACH.forEach(function(n, i){ if (solvedN >= n) reached[i]++; });
+var l28 = 0;
+Object.keys(lg).forEach(function(k){ var g = lg[k] || {}; if (g.solvedAt && now - g.solvedAt <= 28 * DAY) l28++; });
+if (days.some(function(k){ return now - dayMs(k) <= 28 * DAY; })){ active4w++; recent.push(l28); }
+});
+var stuck = Object.keys(byLesson).map(function(k){ return byLesson[k]; })
+.filter(function(it){ return it.stuck > 0; })
+.sort(function(a, b){ return (b.stuck - a.stuck) || (b.tried - a.tried) ||
+(a.lesson < b.lesson ? -1 : a.lesson > b.lesson ? 1 : 0); })
+.slice(0, 12)
+.map(function(it){ return { lesson: it.lesson, tried: it.tried, solved: it.solved, stuck: it.stuck,
+avgAttempts: Math.round(it.attemptsSum / it.stuck) }; });
+recent.sort(function(a, b){ return a - b; });
+var median = recent.length ? (recent.length % 2 ? recent[(recent.length - 1) / 2]
+: (recent[recent.length / 2 - 1] + recent[recent.length / 2]) / 2) : 0;
+return { students: students, started: started,
+week: { eligible: weekEligible, returned: weekReturned },
+reach: REACH.map(function(n, i){ return { lessons: n, students: reached[i] }; }),
+month: { active: active4w, medianLessons: median }, stuck: stuck };
+}
+
 function groupStatsHTML(){
 var h = '<div class="card"><h3>📈 Возвращаемость</h3>' +
-'<p class="dim">Две главные цифры курса: вернулся ли ребёнок в первую неделю ' +
-'и доходит ли до конца мира. Считается по всем ученикам на сервере, не только по группе.</p>';
+'<p class="dim">Две главные цифры: вернулся ли ребёнок в первую неделю ' +
+'и доходит ли до конца мира. ' + (grpStats.data && !grpStats.data.local
+? 'Посчитано по ключу сервера — по всем ученикам на сервере, не только по вашим.'
+: 'Считается по вашим ученикам из списка; ключ сервера для этого не нужен.') + '</p>';
 if (grpStats.error)
 h += '<div class="msg show bad"><b>Не получилось</b>' + esc(grpStats.error) + '</div>';
 var m = grpStats.data;
 if (m){
 h += '<ul class="trsum">' +
-'<li>Кодов на сервере: <b>' + m.students + '</b>, начинали заниматься: <b>' + m.started + '</b>.</li>';
+'<li>' + (m.local ? 'Учеников с занятиями на сервере' : 'Кодов на сервере') + ': <b>' + m.students +
+'</b>, начинали заниматься: <b>' + m.started + '</b>.</li>';
 if (m.week.eligible)
 h += '<li>Вернулись в первую неделю: <b>' + m.week.returned + ' из ' + m.week.eligible +
 '</b> начавших неделю назад и раньше.</li>';
@@ -44039,7 +44091,7 @@ var h = '<div class="card"><h3>⛔ Где застревают</h3>' +
 'на строки, где застрявших больше, чем сдавших: там дело почти наверняка в уроке.</p>';
 if (!rows.length)
 return h + '<p class="dim">Никто нигде не застрял: нерешённых уроков с такой ценой ' +
-'на сервере нет.</p></div>';
+'у этих учеников нет.</p></div>';
 h += '<ul class="trsum">';
 rows.forEach(function(r){
 var l = CURRICULUM.byId(r.lesson);
@@ -44059,8 +44111,22 @@ function bindGroupStats(){
 var btn = document.getElementById("grpstats");
 if (!btn) return;
 btn.onclick = function(){
-var key = ((document.getElementById("grpkey") || {}).value || "").trim() || adminKeySaved();
-if (!key){ grpStats.error = "Нужен ключ репетитора — впишите его выше."; return screenGroup(); }
+var key = ((document.getElementById("grpkey") || {}).value || "").trim();
+
+if (!key){
+if (!kidsList().length){ grpStats.error = "Список учеников пуст — заведите их на вкладке «Ученики»."; return screenGroup(); }
+grpStats.busy = true; grpStats.error = ""; screenGroup();
+var ready = (groupState.rows && groupState.src === "list") ? Promise.resolve() : groupLoad("");
+return ready.then(function(){
+grpStats.busy = false;
+grpStats.data = groupStatsCalc(groupState.datas || [], Date.now());
+grpStats.data.local = true;
+screenGroup();
+}, function(err){
+grpStats.busy = false; grpStats.error = (err && err.message) || String(err);
+screenGroup();
+});
+}
 adminKeyRemember(key);
 grpStats.busy = true; grpStats.error = ""; screenGroup();
 Cloud.stats(key).then(function(m){
@@ -44169,6 +44235,7 @@ groupState.busy = false; groupState.error = "Сервер не настроен.
 return Promise.reject(new Error("Сервер не настроен."));
 }
 groupState.busy = true; groupState.error = ""; groupState.loaded = 0; groupState.missing = [];
+groupState.datas = []; groupState.src = key ? "server" : "list";    
 
 var src = key ? Cloud.list(key) : Promise.resolve({
 students: kidsList().map(function(k){ return { code: k.code }; })
@@ -44182,7 +44249,10 @@ function next(){
 if (i >= groupState.total) return rows;
 var code = st[i++].code;
 return Cloud.load(code).then(function(res){
-if (res && res.found && res.data) rows.push(groupRow(code, ensureShape(res.data), res.serverAt || 0));
+if (res && res.found && res.data){
+groupState.datas.push(JSON.parse(JSON.stringify(res.data)));
+rows.push(groupRow(code, ensureShape(res.data), res.serverAt || 0));
+}
 else groupState.missing.push(code);    
 groupState.loaded++;
 var bar = document.getElementById("grpbar");
@@ -46351,7 +46421,7 @@ weekFacts: weekFacts, parentReportText: parentReportText, askCardHTML: askCardHT
 worldCountdown: worldCountdown, welcomeBackHTML: welcomeBackHTML, daysSincePause: daysSincePause,
 nextTimeHTML: nextTimeHTML, nextZanDayKey: nextZanDayKey, PAUSE_DAYS: PAUSE_DAYS,
 zanAfterPause: zanAfterPause,
-grpStats: grpStats, stuckTopHTML: stuckTopHTML,
+groupStatsCalc: groupStatsCalc, grpStats: grpStats, stuckTopHTML: stuckTopHTML,
 playPack: playPack, playUnpack: playUnpack, playLink: playLink, screenPlay: screenPlay,
 presenceInfo: presenceInfo, presenceHTML: presenceHTML, PRESENCE_FRESH: PRESENCE_FRESH, PLACE_RU: PLACE_RU,
 presenceDetailHTML: presenceDetailHTML,
