@@ -7597,6 +7597,40 @@ function checkEncoding(){
       if (strip && /Загружаем/.test(strip.textContent))
         bad("[витрина] полоска рисунков осталась в загрузке");
 
+      /* «Сделать такую же» (24.09.2026): у каждой несобранной вещи — дорога.
+         ⚠️ Дорога честная: несобранный проект ведёт в первый нерешённый урок
+         курса ПО ПОРЯДКУ (новичка «Свой сайт» не шлём в середину курса), а
+         когда мир пройден — в сам проект. Кода проекта кнопка не открывает. */
+      if (typeof g.showcaseRoad === "function"){
+        const starsWas = JSON.parse(JSON.stringify(g.state.stars || {}));
+        const allWas = g.state.admin && g.state.admin.unlockAll;
+        if (g.state.admin) g.state.admin.unlockAll = false;   /* «открыть все уроки» открыл бы и все проекты */
+        g.state.stars = {};
+        g.screenShowcase(); await tick(60);
+        const карт = doc.querySelectorAll(".partcard").length;
+        const кнопок = doc.querySelectorAll("[data-showmake]").length;
+        if (кнопок !== карт) bad("[витрина] «Сделать такую же» есть у " + кнопок + " вещей из " + карт);
+        const l0 = w.CURRICULUM[0].lessons[0];
+        const last = (w.PROJECTS || []).filter(x => x.world === w.CURRICULUM.length)[0];
+        if (last){
+          const r = g.showcaseRoad(last);
+          if (!r || r.kind !== "lesson" || r.id !== l0.id)
+            bad("[витрина] дорога новичка к «" + last.title + "» ведёт не в первый урок курса: " + JSON.stringify(r));
+        }
+        const mk = doc.querySelector("[data-showmake]");
+        mk.click(); await tick(80);
+        if (g.place() !== "lesson") bad("[витрина] «Сделать такую же» привела на «" + g.place() + "», а не в урок");
+        /* мир 1 пройден — дорога к его проекту это сам проект */
+        const p1 = (w.PROJECTS || []).filter(x => x.world === 1)[0];
+        w.CURRICULUM[0].lessons.forEach(l => { g.state.stars[l.id] = 3; });
+        const r1 = g.showcaseRoad(p1);
+        if (!r1 || r1.kind !== "project" || r1.id !== p1.id)
+          bad("[витрина] мир 1 пройден, а дорога к «" + p1.title + "» не в проект: " + JSON.stringify(r1));
+        g.state.stars = starsWas;
+        if (g.state.admin) g.state.admin.unlockAll = allWas;
+        viewReset(g);
+      }
+
       g.state.projects = before;
     }
 

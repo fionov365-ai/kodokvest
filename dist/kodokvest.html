@@ -22406,6 +22406,38 @@ if (!w || !w.lessons || !w.lessons.length) return "после мира " + p.wor
 return "после урока " + w.lessons[w.lessons.length - 1].num;
 }
 
+function makeRoad(p, depth){
+depth = depth || 0;
+if (A.projectOpen(p)) return { kind: "project", id: p.id, note: "" };
+if (p.needs && depth < 5){
+var q = A.projectById(p.needs);
+if (q){
+var r = makeRoad(q, depth + 1);
+r.note = "сначала собирается «" + q.title + "»" + (r.note ? "; " + r.note : "");
+return r;
+}
+}
+if (p.world === 0) return { kind: "ai", note: "сначала упражнения раздела «Ты и ИИ»" };
+
+if (!CURRICULUM.world(p.world)) return null;
+var left = [];
+CURRICULUM.forEach(function(w){
+if (w.n > p.world) return;
+var ready = A.worldReadyLessons(w);
+(ready.length ? ready : w.lessons).forEach(function(l){ if (!A.solved(l.id)) left.push(l); });
+});
+if (!left.length) return null;
+return { kind: "lesson", id: left[0].id,
+note: "до неё " + left.length + " " + A.plural(left.length, "урок", "урока", "уроков") +
+" по порядку, начнём с урока " + left[0].num };
+}
+function goRoad(r){
+if (!r) return;
+if (r.kind === "project") return A.openProject(r.id);
+if (r.kind === "ai") return A.screenAILab();
+A.openLesson(r.id);
+}
+
 function screenShowcase(){
 var seq = A.enterScreen("home", "works");
 A.clearSession();
@@ -22427,8 +22459,11 @@ A.plural(list.length, "программа", "программы", "програ�
 '<p class="dim">Каждая собирается по шагам в конце своего мира: ребёнок дописывает её сам, ' +
 'а движок проверяет каждый шаг. Нажмите «Что печатает» — программа выполнится здесь и сейчас.</p>' +
 '<div class="shelf">';
+var roads = {};
 list.forEach(function(x){
 var p = x.p;
+var road = x.done ? null : makeRoad(p);
+if (road) roads[p.id] = road;
 h += '<div class="partcard"><div class="parthead">' +
 '<b>' + p.emoji + ' ' + A.esc(p.title) + (x.done ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
 '<span class="dim">' + A.esc(showcaseAfter(p)) + '</span></div>' +
@@ -22438,6 +22473,8 @@ h += '<div class="partcard"><div class="parthead">' +
 : '<div class="partbar"><button class="rbtn check" data-show="' + p.id + '">▶ Что печатает</button>' +
 (x.done ? '<button class="rbtn sec" data-showopen="' + p.id + '">Открыть мою</button>' : '') +
 '</div><pre class="showout" data-out="' + p.id + '" hidden></pre>') +
+(road ? '<div class="partbar"><button class="rbtn sec" data-showmake="' + p.id + '">🛠 Сделать такую же</button></div>' +
+(road.note ? '<p class="dim">' + A.esc(road.note[0].toUpperCase() + road.note.slice(1)) + '.</p>' : '') : '') +
 '</div>';
 });
 h += '</div>' +
@@ -22498,6 +22535,9 @@ A.plural(lines.length - SHOW_LINES, "строка", "строки", "строк"
 b.disabled = true;
 };
 });
+A.app.querySelectorAll("[data-showmake]").forEach(function(b){
+b.onclick = function(){ goRoad(roads[b.getAttribute("data-showmake")]); };
+});
 A.app.querySelectorAll("[data-showopen]").forEach(function(b){
 b.onclick = function(){ A.screenProjectDone(b.getAttribute("data-showopen")); };
 });
@@ -22541,7 +22581,7 @@ window.scrollTo({ top:0, behavior:"smooth" });
 }
 
 return { SHOW_LINES: SHOW_LINES, showcaseRun: showcaseRun,
-showcaseProjects: showcaseProjects, showcaseAfter: showcaseAfter,
+showcaseProjects: showcaseProjects, showcaseAfter: showcaseAfter, showcaseRoad: makeRoad,
 screenShowcase: screenShowcase };
 };
 
@@ -39910,12 +39950,19 @@ myTasksList: myTasksList, solvedCount: solvedCount, drawTurtle: drawTurtle,
 lessonBody: lessonBody, worldContent: worldContent,
 projectsList: projectsList, projectDone: projectDone,
 openGame: openGame, goHome: goHome, screenFolio: screenFolio,
-screenProjectDone: screenProjectDone, screenStale: screenStale
+screenProjectDone: screenProjectDone, screenStale: screenStale,
+
+projectOpen: projectOpen, projectById: projectById, solved: solved,
+worldReadyLessons: worldReadyLessons,
+openProject: function(){ return openProject.apply(null, arguments); },
+openLesson: function(){ return openLesson.apply(null, arguments); },
+screenAILab: function(){ return screenAILab.apply(null, arguments); }
 });
 var SHOW_LINES = SHOWCASE.SHOW_LINES,
 showcaseRun = SHOWCASE.showcaseRun,
 showcaseProjects = SHOWCASE.showcaseProjects,
 showcaseAfter = SHOWCASE.showcaseAfter,
+showcaseRoad = SHOWCASE.showcaseRoad,
 screenShowcase = SHOWCASE.screenShowcase;
 
 var VARIANT = KVSCREENS.variant({
@@ -46171,7 +46218,7 @@ lessonPrice: lessonPrice, STUCK_PRICE: STUCK_PRICE,
 screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
 groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
 screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
-showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
+showcaseAfter: showcaseAfter, showcaseRun: showcaseRun, showcaseRoad: showcaseRoad,
 screenVariant: screenVariant, screenVariantDone: screenVariantDone,
 variantOpenFor: variantOpenFor, variantStat: variantStat,
 variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant, variantSeedV2: VARIANT.seedV2, variantNewSeed: VARIANT.newSeed,

@@ -8036,12 +8036,20 @@ var SHOWCASE = KVSCREENS.showcase({
   lessonBody: lessonBody, worldContent: worldContent,
   projectsList: projectsList, projectDone: projectDone,
   openGame: openGame, goHome: goHome, screenFolio: screenFolio,
-  screenProjectDone: screenProjectDone, screenStale: screenStale
+  screenProjectDone: screenProjectDone, screenStale: screenStale,
+  /* «Сделать такую же»: дорога к проекту. ⚠️ Обёртками — проекты и «Ты и ИИ»
+     разложены по модулям ниже по файлу (§ 4.40). */
+  projectOpen: projectOpen, projectById: projectById, solved: solved,
+  worldReadyLessons: worldReadyLessons,
+  openProject: function(){ return openProject.apply(null, arguments); },
+  openLesson: function(){ return openLesson.apply(null, arguments); },
+  screenAILab: function(){ return screenAILab.apply(null, arguments); }
 });
 var SHOW_LINES = SHOWCASE.SHOW_LINES,
     showcaseRun = SHOWCASE.showcaseRun,
     showcaseProjects = SHOWCASE.showcaseProjects,
     showcaseAfter = SHOWCASE.showcaseAfter,
+    showcaseRoad = SHOWCASE.showcaseRoad,
     screenShowcase = SHOWCASE.screenShowcase;
 
 /* ================= пробный вариант экзамена =================
@@ -15800,7 +15808,7 @@ window.__game = {
   screenGroup: screenGroup, groupRow: groupRow, groupLoad: groupLoad,
   groupState: groupState, GROUP_MAX: GROUP_MAX, GROUP_QUIET_DAYS: GROUP_QUIET_DAYS,
   screenShowcase: screenShowcase, showcaseProjects: showcaseProjects,
-  showcaseAfter: showcaseAfter, showcaseRun: showcaseRun,
+  showcaseAfter: showcaseAfter, showcaseRun: showcaseRun, showcaseRoad: showcaseRoad,
   screenVariant: screenVariant, screenVariantDone: screenVariantDone,
   variantOpenFor: variantOpenFor, variantStat: variantStat,
   variantBuild: VARIANT.buildItems, variantMake: VARIANT.makeVariant, variantSeedV2: VARIANT.seedV2, variantNewSeed: VARIANT.newSeed,

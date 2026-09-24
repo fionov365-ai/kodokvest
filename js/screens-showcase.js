@@ -88,6 +88,47 @@ function showcaseAfter(p){
   return "после урока " + w.lessons[w.lessons.length - 1].num;
 }
 
+/* «Сделать такую же» (24.09.2026, приём Skysmart «Хотим так же!» из
+   docs/konkurenty-sajty-2026-09-24.md). ⚠️ Дорога к вещи, а не обещание:
+   проект открыт — кнопка ведёт в проект; нет — в первый нерешённый урок её
+   мира (он открыт всегда: замок держит только порядок внутри мира), и рядом
+   сказано, сколько уроков до неё осталось. Игра, которую открывает другой
+   проект, ведёт через тот проект; «Напарник» — через «Ты и ИИ». Кода
+   проекта кнопка не показывает — только дорогу к нему. */
+function makeRoad(p, depth){
+  depth = depth || 0;
+  if (A.projectOpen(p)) return { kind: "project", id: p.id, note: "" };
+  if (p.needs && depth < 5){
+    var q = A.projectById(p.needs);
+    if (q){
+      var r = makeRoad(q, depth + 1);
+      r.note = "сначала собирается «" + q.title + "»" + (r.note ? "; " + r.note : "");
+      return r;
+    }
+  }
+  if (p.world === 0) return { kind: "ai", note: "сначала упражнения раздела «Ты и ИИ»" };
+  /* ⚠️ Считаем ВСЮ дорогу до конца её мира, а не один мир: первый урок мира 5
+     формально открыт, но курс — одна дорога по порядку (карта пути), и
+     новичка «Свой сайт» не должен отправлять в середину курса. */
+  if (!CURRICULUM.world(p.world)) return null;
+  var left = [];
+  CURRICULUM.forEach(function(w){
+    if (w.n > p.world) return;
+    var ready = A.worldReadyLessons(w);
+    (ready.length ? ready : w.lessons).forEach(function(l){ if (!A.solved(l.id)) left.push(l); });
+  });
+  if (!left.length) return null;
+  return { kind: "lesson", id: left[0].id,
+    note: "до неё " + left.length + " " + A.plural(left.length, "урок", "урока", "уроков") +
+      " по порядку, начнём с урока " + left[0].num };
+}
+function goRoad(r){
+  if (!r) return;
+  if (r.kind === "project") return A.openProject(r.id);
+  if (r.kind === "ai") return A.screenAILab();
+  A.openLesson(r.id);
+}
+
 function screenShowcase(){
   var seq = A.enterScreen("home", "works");
   A.clearSession();
@@ -113,8 +154,11 @@ function screenShowcase(){
     '<p class="dim">Каждая собирается по шагам в конце своего мира: ребёнок дописывает её сам, ' +
     'а движок проверяет каждый шаг. Нажмите «Что печатает» — программа выполнится здесь и сейчас.</p>' +
     '<div class="shelf">';
+  var roads = {};
   list.forEach(function(x){
     var p = x.p;
+    var road = x.done ? null : makeRoad(p);
+    if (road) roads[p.id] = road;
     h += '<div class="partcard"><div class="parthead">' +
       '<b>' + p.emoji + ' ' + A.esc(p.title) + (x.done ? ' <span class="edittag done">собран ✓</span>' : '') + '</b>' +
       '<span class="dim">' + A.esc(showcaseAfter(p)) + '</span></div>' +
@@ -124,6 +168,8 @@ function screenShowcase(){
         : '<div class="partbar"><button class="rbtn check" data-show="' + p.id + '">▶ Что печатает</button>' +
           (x.done ? '<button class="rbtn sec" data-showopen="' + p.id + '">Открыть мою</button>' : '') +
           '</div><pre class="showout" data-out="' + p.id + '" hidden></pre>') +
+      (road ? '<div class="partbar"><button class="rbtn sec" data-showmake="' + p.id + '">🛠 Сделать такую же</button></div>' +
+        (road.note ? '<p class="dim">' + A.esc(road.note[0].toUpperCase() + road.note.slice(1)) + '.</p>' : '') : '') +
       '</div>';
   });
   h += '</div>' +
@@ -188,6 +234,9 @@ function screenShowcase(){
       b.disabled = true;
     };
   });
+  A.app.querySelectorAll("[data-showmake]").forEach(function(b){
+    b.onclick = function(){ goRoad(roads[b.getAttribute("data-showmake")]); };
+  });
   A.app.querySelectorAll("[data-showopen]").forEach(function(b){
     b.onclick = function(){ A.screenProjectDone(b.getAttribute("data-showopen")); };
   });
@@ -238,6 +287,6 @@ function screenShowcase(){
 
 
 return { SHOW_LINES: SHOW_LINES, showcaseRun: showcaseRun,
-         showcaseProjects: showcaseProjects, showcaseAfter: showcaseAfter,
+         showcaseProjects: showcaseProjects, showcaseAfter: showcaseAfter, showcaseRoad: makeRoad,
          screenShowcase: screenShowcase };
 };
