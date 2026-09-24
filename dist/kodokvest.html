@@ -24394,6 +24394,239 @@ return { screenToday: screenToday };
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.zan = function(A){
+
+function zanBlockLabel(b){
+if (b.k === "warm") return "Разминка";
+if (b.k === "lesson") return "Урок";
+if (b.k === "review") return "Повторение";
+return "Проверка понимания";
+}
+function zanBlockEmoji(b){
+return b.k === "warm" ? "🧩" : b.k === "lesson" ? "📘" : b.k === "review" ? "🔁" : "🔮";
+}
+function zanOpenBlock(b){
+
+if (b.k === "predict"){
+var mine = A.myPredictPick();
+if (mine) return A.openMyPredict(mine, b.id);
+
+if (b.id === "mine") return screenZan();
+}
+if (b.k === "warm" || b.k === "predict") A.openWarmup(b.id, {});
+else A.openLesson(b.id);
+}
+function screenZan(){
+A.enterScreen(undefined, "zan");
+var rec = A.zanOpen();
+var planned = A.frameOn();
+
+if (!rec){
+var plan = A.zanPlanFor(A.dayKey());
+var f = A.frame();
+var listHTML = plan.length
+? '<ol class="zanplan">' + plan.map(function(b){
+return '<li><span class="zi">' + zanBlockEmoji(b) + '</span>' +
+'<b>' + zanBlockLabel(b) + '</b> · ' + A.esc(b.title || b.id) + '</li>';
+}).join("") + '</ol>'
+: '<p class="dim">План пока пустой: не открыто ни одного урока. Пройди первый урок Мира 1 — и занятие соберётся само.</p>';
+A.app.innerHTML =
+'<div class="lvlhead"><div><div class="idx">' + (planned ? "занятие по расписанию" : "занятие") + '</div>' +
+'<h1>⏱ Занятие на ' + f.len + ' минут</h1></div>' +
+'<div class="right"><span class="tag">' + plan.length + ' ' + A.plural(plan.length, "шаг", "шага", "шагов") + '</span></div></div>' +
+'<p class="lede">Занятие — это не «сколько успеешь», а понятный кусок: вот столько минут, вот эти шаги, и всё. ' +
+'Урок посередине не обрывается: время только разрешает закончить, а не подгоняет.</p>' +
+'<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML +
+(A.zanAfterPause() ? '<p class="dim">👋 Сегодня занятие короче обычного: ты возвращаешься ' +
+'после перерыва, и вход идёт со знакомого. Полный план вернётся, как только занятия ' +
+'пойдут подряд.</p>' : '') + '</div>' +
+'<div class="winrow"><button class="bigbtn" id="zgo"' + (plan.length ? "" : " disabled") + '>Начать занятие</button>' +
+'<button class="bigbtn ghost" id="zback">← На «Сегодня»</button></div>';
+var zg = document.getElementById("zgo");
+if (zg && plan.length) zg.onclick = function(){ A.zanStart(); screenZan(); };
+document.getElementById("zback").onclick = A.screenToday;
+A.refreshTop();
+return;
+}
+
+var squeezed = A.zanSqueeze(rec);
+rec = A.zanOpen() || rec;
+
+var doneSet = {};
+(rec.done || []).forEach(function(x){ doneSet[x] = 1; });
+var rest = A.zanRemaining(rec);
+var next = rest[0] || null;
+var mins = A.zanMins(rec), pause = A.zanPauseMins(rec);
+var closed = A.zanClosedCount(rec);
+var pct = Math.min(100, Math.round((closed / Math.max(1, rec.plan.length)) * 100));
+
+var askNow = A.zanTimeUp(rec) && rest.length && (rec.done || []).length >= (rec.ask || 0);
+var restLessons = rest.filter(function(b){ return b.k === "lesson" || b.k === "review"; });
+var hasCheck = rest.some(function(b){ return b.k === "predict"; });
+
+if (A.zanOnBreak(rec)){
+var left = Math.max(1, Math.ceil((rec.breakUntil - Date.now()) / 60000));
+A.app.innerHTML =
+'<div class="lvlhead"><div><div class="idx">занятие на паузе</div>' +
+'<h1>☕ Перерыв</h1></div></div>' +
+'<div class="card"><p class="asktext">Отойди от экрана: попей воды, разомнись, посмотри в окно. ' +
+'Вернись примерно через <b>' + left + ' ' + A.plural(left, "минуту", "минуты", "минут") + '</b>.</p>' +
+'<p class="dim">Это время не считается работой — оно и не должно.</p>' +
+'<div class="winrow"><button class="bigbtn" id="zback2">Я вернулся</button></div></div>';
+document.getElementById("zback2").onclick = function(){
+var r = A.zanAll()[rec.key];
+A.zanBreakEnd(r);
+A.actMark();
+screenZan();
+};
+A.refreshTop();
+return;
+}
+
+var head = '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
+'<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
+'<div class="right"><span class="tag">' + closed + ' из ' + rec.plan.length + '</span></div></div>' +
+'<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
+'<p class="zanmeta">Работы: <b>' + mins + ' ' + A.plural(mins, "минута", "минуты", "минут") + '</b>' +
+(pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') + '</p>';
+
+var capNote = A.capNoteHTML();
+
+var breakNote = A.zanBreakDue(rec)
+? '<div class="daybanner rest">☕ <b>Работаешь уже ' + mins + ' ' +
+A.plural(mins, "минуту", "минуты", "минут") + '.</b> Самое время сделать перерыв — ' +
+'после него дальше пойдёт легче.</div>'
+: "";
+
+var cutNote = "";
+if (squeezed)
+cutNote = '<div class="daybanner rest">📌 <b>Сегодня идёт тяжелее обычного.</b> ' +
+'Последний шаг перенесли на следующее занятие, чтобы ты успел дойти до конца. ' +
+'Он не пропал — вернётся сам.</div>';
+
+var plan = '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
+rec.plan.map(function(b){
+var isDone = !!doneSet[b.k + ":" + b.id];
+var isCut = A.zanIsCut(rec, b);
+var cur = !isDone && !isCut && next && next.id === b.id && next.k === b.k;
+return '<li class="' + (isDone ? "done" : (isCut ? "cut" : (cur ? "cur" : ""))) + '">' +
+'<span class="zi">' + (isDone ? "✓" : (isCut ? "📌" : zanBlockEmoji(b))) + '</span>' +
+'<b>' + zanBlockLabel(b) + '</b> · ' + A.esc(b.title || b.id) +
+(isCut ? ' <span class="dim">перенесли на следующий раз</span>' : '') +
+(cur && !askNow ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + A.esc(b.id) + '">Открыть</button>' : '') +
+'</li>';
+}).join("") + '</ol></div>';
+
+var tail;
+if (askNow){
+tail = '<div class="card zanask"><h3>⏱ ' + rec.len + ' минут прошло</h3>' +
+'<p>Занятие можно закрывать — ты своё отработал. Или сделать ещё шаг, если сегодня идёт хорошо. ' +
+'Решай сам.</p><div class="winrow">' +
+'<button class="bigbtn" id="zstop">Закончить занятие</button>' +
+(restLessons.length ? '<button class="bigbtn ghost" id="zone">Ещё один урок</button>' : '') +
+(hasCheck && restLessons.length ? '<button class="bigbtn ghost" id="zcheck">Только проверку и всё</button>' : '') +
+'</div><p class="dim">Что не успели — не пропадёт: перенесётся на следующее занятие.</p></div>';
+} else {
+tail = '<div class="winrow">' +
+(next ? '<button class="bigbtn" id="zgo2">Продолжить занятие</button>' : '') +
+'<button class="bigbtn ghost" id="zend">Закончить занятие</button></div>' +
+'<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
+'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
+}
+
+if (A.capHard() && !askNow){
+tail = '<div class="card"><h3>🌙 На сегодня всё</h3>' +
+'<p>Дневной предел, о котором вы договорились со взрослым, уже пройден. ' +
+'Новые шаги откроются завтра — занятие можно закрыть.</p>' +
+'<div class="winrow"><button class="bigbtn" id="zend">Закончить занятие</button></div></div>';
+plan = plan.replace(/<button class="rbtn check zopen"[^<]*<\/button>/g, "");
+}
+
+var breakBtn = (!askNow && !A.capHard() && next)
+? '<div class="winrow"><button class="bigbtn ghost" id="zbreak">☕ Перерыв ' + A.ZAN_BREAK + ' минут</button></div>'
+: "";
+
+A.app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn + A.liveRowHTML();
+A.bindLiveRow(screenZan);
+
+A.app.querySelectorAll(".zopen").forEach(function(b){
+b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
+});
+var zg2 = document.getElementById("zgo2");
+if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
+var zend = document.getElementById("zend");
+if (zend) zend.onclick = function(){ screenZanDone(A.zanFinish("hand") || rec); };
+var zbr = document.getElementById("zbreak");
+if (zbr) zbr.onclick = function(){ A.zanBreakStart(A.zanAll()[rec.key]); screenZan(); };
+var zstop = document.getElementById("zstop");
+if (zstop) zstop.onclick = function(){ screenZanDone(A.zanFinish("time") || rec); };
+var zone = document.getElementById("zone");
+if (zone) zone.onclick = function(){
+var r = A.zanAll()[rec.key];
+if (r){ r.ask = (r.done || []).length + 1; A.save(); }
+var step = A.zanRemaining(r || rec)[0];
+if (step) zanOpenBlock(step); else screenZan();
+};
+var zcheck = document.getElementById("zcheck");
+if (zcheck) zcheck.onclick = function(){
+var r = A.zanAll()[rec.key];
+if (!r) return screenZan();
+A.zanCutToCheck(r);
+var step = A.zanRemaining(r)[0];
+if (step) zanOpenBlock(step);
+else screenZanDone(A.zanFinish("choice") || r);
+};
+A.refreshTop();
+}
+
+function screenZanDone(rec){
+A.enterScreen(undefined, "zan");
+
+A.liveOffNow();
+var r = A.zanReport(rec, A.S());
+A.markActiveToday();
+A.app.innerHTML =
+'<div class="lvlhead"><div><div class="idx">занятие закрыто</div>' +
+'<h1>' + (r.full ? "🏁 Занятие пройдено" : "🏁 Занятие закончено") + '</h1></div></div>' +
+'<div class="card zandone">' +
+'<p class="zanwas"><b>' + A.esc(r.was) + '.</b></p>' +
+(r.full ? '<p>Весь план сделан.</p>'
+: '<p>План сделан не весь — и это нормально: занятие засчитано, потому что ты сел и работал.</p>') +
+(r.cutN ? '<p class="dim">📌 Перенесли на следующее занятие: ' + r.cutN + ' ' +
+A.plural(r.cutN, "шаг", "шага", "шагов") + '. Они не пропали.</p>' : '') +
+'<p class="dim">' + A.esc(r.got) + '</p>' +
+'</div>' +
+'<div class="card"><h3>Что увидит взрослый</h3>' +
+'<p class="dim">Ровно эти строки — ничего сверх них мы никому не показываем.</p>' +
+'<ul class="zanrep"><li>' + A.esc(r.was) + '</li><li>Похвалить: ' + A.esc(r.praise) + '</li>' +
+(r.cut ? '<li>' + A.esc(r.cut) + '</li>' : '') +
+'<li>' + A.esc(r.got) + '</li><li>' + A.esc(r.ask) + '</li></ul></div>' +
+
+'<div class="card"><h3>✍️ Задай задачу взрослому</h3>' +
+'<p>Придумай задачу, отправь ссылкой маме, папе или другу — и посмотри, ' +
+'решат ли. Проверять будет тренажёр, а не ты: сойтись должен вывод.</p>' +
+'<p class="dim">Составить задачу труднее, чем решить: придётся объяснить её словами так, ' +
+'чтобы человек понял без твоей программы.</p>' +
+'<div class="admrow"><button class="rbtn check" id="zask">Задать задачу →</button></div></div>' +
+A.nextTimeHTML() +
+'<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
+'<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
+document.getElementById("ztoday").onclick = A.screenToday;
+document.getElementById("zmap").onclick = A.goHome;
+var za = document.getElementById("zask");
+if (za) za.onclick = function(){ A.screenMyTasks(); };
+A.sfx("win");
+A.refreshTop();
+}
+
+return { screenZan: screenZan, screenZanDone: screenZanDone, zanOpenBlock: zanOpenBlock };
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.shop = function(A){
 
 var PART_MAX = 40;           
@@ -38994,7 +39227,7 @@ isStudyDay: isStudyDay, studyDue: studyDue, agreedDays: agreedDays, agreedOn: ag
 scheduleDays: scheduleDays, hasSchedule: hasSchedule, toggleStudyDay: toggleStudyDay,
 frame: frame, frameOn: frameOn, frameTime: frameTime, frameStudyDay: frameStudyDay, isBreakDay: isBreakDay,
 zanOpen: zanOpen, zanOfDay: zanOfDay, zanClosedCount: zanClosedCount, zanMins: zanMins, zanStart: zanStart,
-screenZan: screenZan, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
+screenZan: function(){ return screenZan.apply(null, arguments); }, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
 ptaskPending: ptaskPending, ptaskMarkDone: ptaskMarkDone, openLesson: openLesson, screenWorlds: screenWorlds,
 installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
 openWarmup: function(){ return openWarmup.apply(null, arguments); },
@@ -39006,7 +39239,8 @@ var screenToday = TODAY.screenToday;
 
 var WARM = KVSCREENS.warm({
 app: app, esc: esc, hl: hl, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
-capHard: capHard, screenCapReached: screenCapReached, screenToday: screenToday, screenZan: screenZan,
+capHard: capHard, screenCapReached: screenCapReached, screenToday: screenToday,
+screenZan: function(){ return screenZan.apply(null, arguments); },
 wireHint: wireHint, errHTML: errHTML, markActiveToday: markActiveToday, dayKey: dayKey,
 zanNote: zanNote, zanOpen: zanOpen, save: save, takeShieldNote: takeShieldNote,
 confetti: confetti, closeWin: closeWin,
@@ -39646,188 +39880,22 @@ newSession: function(v){ session = v; return v; }
 });
 var screenFolio = FOLIO.screenFolio;
 
-function zanBlockLabel(b){
-if (b.k === "warm") return "Разминка";
-if (b.k === "lesson") return "Урок";
-if (b.k === "review") return "Повторение";
-return "Проверка понимания";
-}
-function zanBlockEmoji(b){
-return b.k === "warm" ? "🧩" : b.k === "lesson" ? "📘" : b.k === "review" ? "🔁" : "🔮";
-}
-function zanOpenBlock(b){
-
-if (b.k === "predict"){
-var mine = myPredictPick();
-if (mine) return openMyPredict(mine, b.id);
-
-if (b.id === "mine") return screenZan();
-}
-if (b.k === "warm" || b.k === "predict") openWarmup(b.id, {});
-else openLesson(b.id);
-}
-function screenZan(){
-enterScreen(undefined, "zan");
-var rec = zanOpen();
-var planned = frameOn();
-
-if (!rec){
-var plan = zanPlanFor(dayKey());
-var f = frame();
-var listHTML = plan.length
-? '<ol class="zanplan">' + plan.map(function(b){
-return '<li><span class="zi">' + zanBlockEmoji(b) + '</span>' +
-'<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) + '</li>';
-}).join("") + '</ol>'
-: '<p class="dim">План пока пустой: не открыто ни одного урока. Пройди первый урок Мира 1 — и занятие соберётся само.</p>';
-app.innerHTML =
-'<div class="lvlhead"><div><div class="idx">' + (planned ? "занятие по расписанию" : "занятие") + '</div>' +
-'<h1>⏱ Занятие на ' + f.len + ' минут</h1></div>' +
-'<div class="right"><span class="tag">' + plan.length + ' ' + plural(plan.length, "шаг", "шага", "шагов") + '</span></div></div>' +
-'<p class="lede">Занятие — это не «сколько успеешь», а понятный кусок: вот столько минут, вот эти шаги, и всё. ' +
-'Урок посередине не обрывается: время только разрешает закончить, а не подгоняет.</p>' +
-'<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML +
-(zanAfterPause() ? '<p class="dim">👋 Сегодня занятие короче обычного: ты возвращаешься ' +
-'после перерыва, и вход идёт со знакомого. Полный план вернётся, как только занятия ' +
-'пойдут подряд.</p>' : '') + '</div>' +
-'<div class="winrow"><button class="bigbtn" id="zgo"' + (plan.length ? "" : " disabled") + '>Начать занятие</button>' +
-'<button class="bigbtn ghost" id="zback">← На «Сегодня»</button></div>';
-var zg = document.getElementById("zgo");
-if (zg && plan.length) zg.onclick = function(){ zanStart(); screenZan(); };
-document.getElementById("zback").onclick = screenToday;
-refreshTop();
-return;
-}
-
-var squeezed = zanSqueeze(rec);
-rec = zanOpen() || rec;
-
-var doneSet = {};
-(rec.done || []).forEach(function(x){ doneSet[x] = 1; });
-var rest = zanRemaining(rec);
-var next = rest[0] || null;
-var mins = zanMins(rec), pause = zanPauseMins(rec);
-var closed = zanClosedCount(rec);
-var pct = Math.min(100, Math.round((closed / Math.max(1, rec.plan.length)) * 100));
-
-var askNow = zanTimeUp(rec) && rest.length && (rec.done || []).length >= (rec.ask || 0);
-var restLessons = rest.filter(function(b){ return b.k === "lesson" || b.k === "review"; });
-var hasCheck = rest.some(function(b){ return b.k === "predict"; });
-
-if (zanOnBreak(rec)){
-var left = Math.max(1, Math.ceil((rec.breakUntil - Date.now()) / 60000));
-app.innerHTML =
-'<div class="lvlhead"><div><div class="idx">занятие на паузе</div>' +
-'<h1>☕ Перерыв</h1></div></div>' +
-'<div class="card"><p class="asktext">Отойди от экрана: попей воды, разомнись, посмотри в окно. ' +
-'Вернись примерно через <b>' + left + ' ' + plural(left, "минуту", "минуты", "минут") + '</b>.</p>' +
-'<p class="dim">Это время не считается работой — оно и не должно.</p>' +
-'<div class="winrow"><button class="bigbtn" id="zback2">Я вернулся</button></div></div>';
-document.getElementById("zback2").onclick = function(){
-var r = zanAll()[rec.key];
-zanBreakEnd(r);
-actMark();
-screenZan();
-};
-refreshTop();
-return;
-}
-
-var head = '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
-'<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
-'<div class="right"><span class="tag">' + closed + ' из ' + rec.plan.length + '</span></div></div>' +
-'<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
-'<p class="zanmeta">Работы: <b>' + mins + ' ' + plural(mins, "минута", "минуты", "минут") + '</b>' +
-(pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') + '</p>';
-
-var capNote = capNoteHTML();
-
-var breakNote = zanBreakDue(rec)
-? '<div class="daybanner rest">☕ <b>Работаешь уже ' + mins + ' ' +
-plural(mins, "минуту", "минуты", "минут") + '.</b> Самое время сделать перерыв — ' +
-'после него дальше пойдёт легче.</div>'
-: "";
-
-var cutNote = "";
-if (squeezed)
-cutNote = '<div class="daybanner rest">📌 <b>Сегодня идёт тяжелее обычного.</b> ' +
-'Последний шаг перенесли на следующее занятие, чтобы ты успел дойти до конца. ' +
-'Он не пропал — вернётся сам.</div>';
-
-var plan = '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
-rec.plan.map(function(b){
-var isDone = !!doneSet[b.k + ":" + b.id];
-var isCut = zanIsCut(rec, b);
-var cur = !isDone && !isCut && next && next.id === b.id && next.k === b.k;
-return '<li class="' + (isDone ? "done" : (isCut ? "cut" : (cur ? "cur" : ""))) + '">' +
-'<span class="zi">' + (isDone ? "✓" : (isCut ? "📌" : zanBlockEmoji(b))) + '</span>' +
-'<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) +
-(isCut ? ' <span class="dim">перенесли на следующий раз</span>' : '') +
-(cur && !askNow ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + esc(b.id) + '">Открыть</button>' : '') +
-'</li>';
-}).join("") + '</ol></div>';
-
-var tail;
-if (askNow){
-tail = '<div class="card zanask"><h3>⏱ ' + rec.len + ' минут прошло</h3>' +
-'<p>Занятие можно закрывать — ты своё отработал. Или сделать ещё шаг, если сегодня идёт хорошо. ' +
-'Решай сам.</p><div class="winrow">' +
-'<button class="bigbtn" id="zstop">Закончить занятие</button>' +
-(restLessons.length ? '<button class="bigbtn ghost" id="zone">Ещё один урок</button>' : '') +
-(hasCheck && restLessons.length ? '<button class="bigbtn ghost" id="zcheck">Только проверку и всё</button>' : '') +
-'</div><p class="dim">Что не успели — не пропадёт: перенесётся на следующее занятие.</p></div>';
-} else {
-tail = '<div class="winrow">' +
-(next ? '<button class="bigbtn" id="zgo2">Продолжить занятие</button>' : '') +
-'<button class="bigbtn ghost" id="zend">Закончить занятие</button></div>' +
-'<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
-'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
-}
-
-if (capHard() && !askNow){
-tail = '<div class="card"><h3>🌙 На сегодня всё</h3>' +
-'<p>Дневной предел, о котором вы договорились со взрослым, уже пройден. ' +
-'Новые шаги откроются завтра — занятие можно закрыть.</p>' +
-'<div class="winrow"><button class="bigbtn" id="zend">Закончить занятие</button></div></div>';
-plan = plan.replace(/<button class="rbtn check zopen"[^<]*<\/button>/g, "");
-}
-
-var breakBtn = (!askNow && !capHard() && next)
-? '<div class="winrow"><button class="bigbtn ghost" id="zbreak">☕ Перерыв ' + ZAN_BREAK + ' минут</button></div>'
-: "";
-
-app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn + liveRowHTML();
-bindLiveRow(screenZan);
-
-app.querySelectorAll(".zopen").forEach(function(b){
-b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
+var ZAN = KVSCREENS.zan({
+app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+save: save, sfx: sfx, actMark: actMark, markActiveToday: markActiveToday, dayKey: dayKey,
+frame: frame, frameOn: frameOn, capHard: capHard, capNoteHTML: capNoteHTML,
+zanOpen: zanOpen, zanAll: zanAll, zanPlanFor: zanPlanFor, zanAfterPause: zanAfterPause, zanStart: zanStart,
+zanSqueeze: zanSqueeze, zanRemaining: zanRemaining, zanMins: zanMins, zanPauseMins: zanPauseMins,
+zanClosedCount: zanClosedCount, zanTimeUp: zanTimeUp, zanOnBreak: zanOnBreak, zanBreakEnd: zanBreakEnd,
+zanBreakDue: zanBreakDue, zanBreakStart: zanBreakStart, zanIsCut: zanIsCut, zanCutToCheck: zanCutToCheck,
+zanFinish: zanFinish, zanReport: zanReport, ZAN_BREAK: ZAN_BREAK, nextTimeHTML: nextTimeHTML,
+liveRowHTML: liveRowHTML, bindLiveRow: bindLiveRow, liveOffNow: liveOffNow,
+myPredictPick: myPredictPick, openMyPredict: openMyPredict, openWarmup: openWarmup, openLesson: openLesson,
+screenToday: screenToday,
+screenMyTasks: function(){ return screenMyTasks.apply(null, arguments); },
+S: function(){ return S; }
 });
-var zg2 = document.getElementById("zgo2");
-if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
-var zend = document.getElementById("zend");
-if (zend) zend.onclick = function(){ screenZanDone(zanFinish("hand") || rec); };
-var zbr = document.getElementById("zbreak");
-if (zbr) zbr.onclick = function(){ zanBreakStart(zanAll()[rec.key]); screenZan(); };
-var zstop = document.getElementById("zstop");
-if (zstop) zstop.onclick = function(){ screenZanDone(zanFinish("time") || rec); };
-var zone = document.getElementById("zone");
-if (zone) zone.onclick = function(){
-var r = zanAll()[rec.key];
-if (r){ r.ask = (r.done || []).length + 1; save(); }
-var step = zanRemaining(r || rec)[0];
-if (step) zanOpenBlock(step); else screenZan();
-};
-var zcheck = document.getElementById("zcheck");
-if (zcheck) zcheck.onclick = function(){
-var r = zanAll()[rec.key];
-if (!r) return screenZan();
-zanCutToCheck(r);
-var step = zanRemaining(r)[0];
-if (step) zanOpenBlock(step);
-else screenZanDone(zanFinish("choice") || r);
-};
-refreshTop();
-}
+var screenZan = ZAN.screenZan, screenZanDone = ZAN.screenZanDone, zanOpenBlock = ZAN.zanOpenBlock;
 
 function nextZanDayKey(){
 for (var i = 1; i <= 14; i++){
@@ -39887,46 +39955,6 @@ return '<div class="card comeback"><h3>👋 С возвращением</h3>' +
 '<button class="rbtn check" id="cbwarm">🎲 Начать с разминки</button>' +
 (next ? '<button class="rbtn sec" id="cbgo">▶ Сразу к уроку</button>' : '') +
 '</div></div>';
-}
-
-function screenZanDone(rec){
-enterScreen(undefined, "zan");
-
-liveOffNow();
-var r = zanReport(rec, S);
-markActiveToday();
-app.innerHTML =
-'<div class="lvlhead"><div><div class="idx">занятие закрыто</div>' +
-'<h1>' + (r.full ? "🏁 Занятие пройдено" : "🏁 Занятие закончено") + '</h1></div></div>' +
-'<div class="card zandone">' +
-'<p class="zanwas"><b>' + esc(r.was) + '.</b></p>' +
-(r.full ? '<p>Весь план сделан.</p>'
-: '<p>План сделан не весь — и это нормально: занятие засчитано, потому что ты сел и работал.</p>') +
-(r.cutN ? '<p class="dim">📌 Перенесли на следующее занятие: ' + r.cutN + ' ' +
-plural(r.cutN, "шаг", "шага", "шагов") + '. Они не пропали.</p>' : '') +
-'<p class="dim">' + esc(r.got) + '</p>' +
-'</div>' +
-'<div class="card"><h3>Что увидит взрослый</h3>' +
-'<p class="dim">Ровно эти строки — ничего сверх них мы никому не показываем.</p>' +
-'<ul class="zanrep"><li>' + esc(r.was) + '</li><li>Похвалить: ' + esc(r.praise) + '</li>' +
-(r.cut ? '<li>' + esc(r.cut) + '</li>' : '') +
-'<li>' + esc(r.got) + '</li><li>' + esc(r.ask) + '</li></ul></div>' +
-
-'<div class="card"><h3>✍️ Задай задачу взрослому</h3>' +
-'<p>Придумай задачу, отправь ссылкой маме, папе или другу — и посмотри, ' +
-'решат ли. Проверять будет тренажёр, а не ты: сойтись должен вывод.</p>' +
-'<p class="dim">Составить задачу труднее, чем решить: придётся объяснить её словами так, ' +
-'чтобы человек понял без твоей программы.</p>' +
-'<div class="admrow"><button class="rbtn check" id="zask">Задать задачу →</button></div></div>' +
-nextTimeHTML() +
-'<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
-'<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
-document.getElementById("ztoday").onclick = screenToday;
-document.getElementById("zmap").onclick = goHome;
-var za = document.getElementById("zask");
-if (za) za.onclick = function(){ screenMyTasks(); };
-sfx("win");
-refreshTop();
 }
 
 var HEAT_DAYS = 14;

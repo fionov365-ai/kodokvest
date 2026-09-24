@@ -6543,7 +6543,7 @@ var TODAY = KVSCREENS.today({
   scheduleDays: scheduleDays, hasSchedule: hasSchedule, toggleStudyDay: toggleStudyDay,
   frame: frame, frameOn: frameOn, frameTime: frameTime, frameStudyDay: frameStudyDay, isBreakDay: isBreakDay,
   zanOpen: zanOpen, zanOfDay: zanOfDay, zanClosedCount: zanClosedCount, zanMins: zanMins, zanStart: zanStart,
-  screenZan: screenZan, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
+  screenZan: function(){ return screenZan.apply(null, arguments); }, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
   ptaskPending: ptaskPending, ptaskMarkDone: ptaskMarkDone, openLesson: openLesson, screenWorlds: screenWorlds,
   installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
   openWarmup: function(){ return openWarmup.apply(null, arguments); },
@@ -6560,7 +6560,8 @@ var screenToday = TODAY.screenToday;
    того файла. Визуализатор — обёртками: VIZ присваивается ниже по файлу. */
 var WARM = KVSCREENS.warm({
   app: app, esc: esc, hl: hl, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
-  capHard: capHard, screenCapReached: screenCapReached, screenToday: screenToday, screenZan: screenZan,
+  capHard: capHard, screenCapReached: screenCapReached, screenToday: screenToday,
+  screenZan: function(){ return screenZan.apply(null, arguments); },
   wireHint: wireHint, errHTML: errHTML, markActiveToday: markActiveToday, dayKey: dayKey,
   zanNote: zanNote, zanOpen: zanOpen, save: save, takeShieldNote: takeShieldNote,
   confetti: confetti, closeWin: closeWin,
@@ -7397,218 +7398,27 @@ var FOLIO = KVSCREENS.folio({
 var screenFolio = FOLIO.screenFolio;
 
 
-/* ================= экран занятия =================
-   Ребёнок видит ПОЛОСУ занятия, а не обратный отсчёт: часы, отсчитывающие
-   время до конца, торопят, а весь продукт построен на том, что за медленность
-   не наказывают. Время здесь ничего не обрывает — оно только разрешает
-   закончить. */
-function zanBlockLabel(b){
-  if (b.k === "warm") return "Разминка";
-  if (b.k === "lesson") return "Урок";
-  if (b.k === "review") return "Повторение";
-  return "Проверка понимания";
-}
-function zanBlockEmoji(b){
-  return b.k === "warm" ? "🧩" : b.k === "lesson" ? "📘" : b.k === "review" ? "🔁" : "🔮";
-}
-function zanOpenBlock(b){
-  /* Проверка понимания: если сегодня ребёнок написал программу, из которой
-     получается честный вопрос, спрашиваем про НЕЁ, а не про чужую разминку.
-     Не получилось — разминка, как и раньше. Молча: обещать «спросим про твой
-     код» и не спросить хуже, чем не обещать. */
-  if (b.k === "predict"){
-    var mine = myPredictPick();
-    if (mine) return openMyPredict(mine, b.id);
-    /* id «mine» — это блок, заведённый ради своей программы, и разминки за
-       ним нет вовсе. Такое возможно, если программа успела вытесниться из
-       списка занятия: тогда честнее вернуть в занятие, чем высадить ребёнка
-       в чужом разделе. */
-    if (b.id === "mine") return screenZan();
-  }
-  if (b.k === "warm" || b.k === "predict") openWarmup(b.id, {});
-  else openLesson(b.id);
-}
-function screenZan(){
-  enterScreen(undefined, "zan");
-  var rec = zanOpen();
-  var planned = frameOn();
+/* ================= экран занятия и его итог =================
+   ⚠️ Уехали в js/screens-zan.js — разрез 24.09.2026. Замер и почему именно
+   так — в шапке того файла. «Свои задания» присваиваются НИЖЕ этого места —
+   обёрткой (§ 4.40); S — вызовом (§ 4, пункт 5). */
+var ZAN = KVSCREENS.zan({
+  app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+  save: save, sfx: sfx, actMark: actMark, markActiveToday: markActiveToday, dayKey: dayKey,
+  frame: frame, frameOn: frameOn, capHard: capHard, capNoteHTML: capNoteHTML,
+  zanOpen: zanOpen, zanAll: zanAll, zanPlanFor: zanPlanFor, zanAfterPause: zanAfterPause, zanStart: zanStart,
+  zanSqueeze: zanSqueeze, zanRemaining: zanRemaining, zanMins: zanMins, zanPauseMins: zanPauseMins,
+  zanClosedCount: zanClosedCount, zanTimeUp: zanTimeUp, zanOnBreak: zanOnBreak, zanBreakEnd: zanBreakEnd,
+  zanBreakDue: zanBreakDue, zanBreakStart: zanBreakStart, zanIsCut: zanIsCut, zanCutToCheck: zanCutToCheck,
+  zanFinish: zanFinish, zanReport: zanReport, ZAN_BREAK: ZAN_BREAK, nextTimeHTML: nextTimeHTML,
+  liveRowHTML: liveRowHTML, bindLiveRow: bindLiveRow, liveOffNow: liveOffNow,
+  myPredictPick: myPredictPick, openMyPredict: openMyPredict, openWarmup: openWarmup, openLesson: openLesson,
+  screenToday: screenToday,
+  screenMyTasks: function(){ return screenMyTasks.apply(null, arguments); },
+  S: function(){ return S; }
+});
+var screenZan = ZAN.screenZan, screenZanDone = ZAN.screenZanDone, zanOpenBlock = ZAN.zanOpenBlock;
 
-  if (!rec){
-    var plan = zanPlanFor(dayKey());
-    var f = frame();
-    var listHTML = plan.length
-      ? '<ol class="zanplan">' + plan.map(function(b){
-          return '<li><span class="zi">' + zanBlockEmoji(b) + '</span>' +
-            '<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) + '</li>';
-        }).join("") + '</ol>'
-      : '<p class="dim">План пока пустой: не открыто ни одного урока. Пройди первый урок Мира 1 — и занятие соберётся само.</p>';
-    app.innerHTML =
-      '<div class="lvlhead"><div><div class="idx">' + (planned ? "занятие по расписанию" : "занятие") + '</div>' +
-        '<h1>⏱ Занятие на ' + f.len + ' минут</h1></div>' +
-        '<div class="right"><span class="tag">' + plan.length + ' ' + plural(plan.length, "шаг", "шага", "шагов") + '</span></div></div>' +
-      '<p class="lede">Занятие — это не «сколько успеешь», а понятный кусок: вот столько минут, вот эти шаги, и всё. ' +
-      'Урок посередине не обрывается: время только разрешает закончить, а не подгоняет.</p>' +
-      '<div class="card"><h3>Что сегодня в занятии</h3>' + listHTML +
-        (zanAfterPause() ? '<p class="dim">👋 Сегодня занятие короче обычного: ты возвращаешься ' +
-          'после перерыва, и вход идёт со знакомого. Полный план вернётся, как только занятия ' +
-          'пойдут подряд.</p>' : '') + '</div>' +
-      '<div class="winrow"><button class="bigbtn" id="zgo"' + (plan.length ? "" : " disabled") + '>Начать занятие</button>' +
-      '<button class="bigbtn ghost" id="zback">← На «Сегодня»</button></div>';
-    var zg = document.getElementById("zgo");
-    if (zg && plan.length) zg.onclick = function(){ zanStart(); screenZan(); };
-    document.getElementById("zback").onclick = screenToday;
-    refreshTop();
-    return;
-  }
-
-  /* сжатие проверяется при каждом возврате на экран: время могло выйти, пока
-     ребёнок сидел в уроке */
-  var squeezed = zanSqueeze(rec);
-  rec = zanOpen() || rec;
-
-  var doneSet = {};
-  (rec.done || []).forEach(function(x){ doneSet[x] = 1; });
-  var rest = zanRemaining(rec);
-  var next = rest[0] || null;
-  var mins = zanMins(rec), pause = zanPauseMins(rec);
-  var closed = zanClosedCount(rec);
-  var pct = Math.min(100, Math.round((closed / Math.max(1, rec.plan.length)) * 100));
-
-  /* ⚠️ Спрашиваем ТОЛЬКО между шагами — урок посередине не режется ни при
-     каких обстоятельствах. Экран занятия и есть это «между», потому что
-     попасть сюда можно только закончив шаг или уйдя из него самому.
-     rec.ask помнит, на каком месте ребёнок сказал «ещё один урок»: пока он его
-     не СДЕЛАЛ, вопрос не повторяется. Считаем именно сделанные шаги, а не
-     закрытые: перенос по сжатию — не работа ребёнка, и засчитывать его за
-     обещанный урок было бы обманом в свою пользу. */
-  var askNow = zanTimeUp(rec) && rest.length && (rec.done || []).length >= (rec.ask || 0);
-  var restLessons = rest.filter(function(b){ return b.k === "lesson" || b.k === "review"; });
-  var hasCheck = rest.some(function(b){ return b.k === "predict"; });
-
-  /* идёт перерыв — экран занятия превращается в экран перерыва и ничего
-     больше не предлагает: смысл перерыва в том, чтобы отойти */
-  if (zanOnBreak(rec)){
-    var left = Math.max(1, Math.ceil((rec.breakUntil - Date.now()) / 60000));
-    app.innerHTML =
-      '<div class="lvlhead"><div><div class="idx">занятие на паузе</div>' +
-        '<h1>☕ Перерыв</h1></div></div>' +
-      '<div class="card"><p class="asktext">Отойди от экрана: попей воды, разомнись, посмотри в окно. ' +
-      'Вернись примерно через <b>' + left + ' ' + plural(left, "минуту", "минуты", "минут") + '</b>.</p>' +
-      '<p class="dim">Это время не считается работой — оно и не должно.</p>' +
-      '<div class="winrow"><button class="bigbtn" id="zback2">Я вернулся</button></div></div>';
-    document.getElementById("zback2").onclick = function(){
-      var r = zanAll()[rec.key];
-      zanBreakEnd(r);
-      actMark();
-      screenZan();
-    };
-    refreshTop();
-    return;
-  }
-
-  var head = '<div class="lvlhead"><div><div class="idx">идёт занятие</div>' +
-      '<h1>⏱ Занятие на ' + rec.len + ' минут</h1></div>' +
-      '<div class="right"><span class="tag">' + closed + ' из ' + rec.plan.length + '</span></div></div>' +
-    '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
-    '<p class="zanmeta">Работы: <b>' + mins + ' ' + plural(mins, "минута", "минуты", "минут") + '</b>' +
-      (pause >= 2 ? ' · перерыв: <b>' + pause + '</b>' : '') + '</p>';
-
-  var capNote = capNoteHTML();
-  /* мягкое предложение перерыва: длинное занятие, половина позади */
-  var breakNote = zanBreakDue(rec)
-    ? '<div class="daybanner rest">☕ <b>Работаешь уже ' + mins + ' ' +
-      plural(mins, "минуту", "минуты", "минут") + '.</b> Самое время сделать перерыв — ' +
-      'после него дальше пойдёт легче.</div>'
-    : "";
-
-  /* видимая пометка о сжатии: молча сокращать план нельзя */
-  var cutNote = "";
-  if (squeezed)
-    cutNote = '<div class="daybanner rest">📌 <b>Сегодня идёт тяжелее обычного.</b> ' +
-      'Последний шаг перенесли на следующее занятие, чтобы ты успел дойти до конца. ' +
-      'Он не пропал — вернётся сам.</div>';
-
-  var plan = '<div class="card"><h3>Шаги занятия</h3><ol class="zanplan">' +
-      rec.plan.map(function(b){
-        var isDone = !!doneSet[b.k + ":" + b.id];
-        var isCut = zanIsCut(rec, b);
-        var cur = !isDone && !isCut && next && next.id === b.id && next.k === b.k;
-        return '<li class="' + (isDone ? "done" : (isCut ? "cut" : (cur ? "cur" : ""))) + '">' +
-          '<span class="zi">' + (isDone ? "✓" : (isCut ? "📌" : zanBlockEmoji(b))) + '</span>' +
-          '<b>' + zanBlockLabel(b) + '</b> · ' + esc(b.title || b.id) +
-          (isCut ? ' <span class="dim">перенесли на следующий раз</span>' : '') +
-          (cur && !askNow ? ' <button class="rbtn check zopen" data-zk="' + b.k + '" data-zi="' + esc(b.id) + '">Открыть</button>' : '') +
-        '</li>';
-      }).join("") + '</ol></div>';
-
-  /* ---------- выбор, когда время вышло ----------
-     Три кнопки, а не две. Средняя — это СОГЛАСОВАННЫЙ объём: ребёнок сам
-     называет, сколько ещё сделает, вместо открытой двери «продолжай сколько
-     хочешь». Хвалить за продолжение нельзя ни словом: «молодец, что не
-     остановился» превращает занятие в гонку. */
-  var tail;
-  if (askNow){
-    tail = '<div class="card zanask"><h3>⏱ ' + rec.len + ' минут прошло</h3>' +
-      '<p>Занятие можно закрывать — ты своё отработал. Или сделать ещё шаг, если сегодня идёт хорошо. ' +
-      'Решай сам.</p><div class="winrow">' +
-        '<button class="bigbtn" id="zstop">Закончить занятие</button>' +
-        (restLessons.length ? '<button class="bigbtn ghost" id="zone">Ещё один урок</button>' : '') +
-        (hasCheck && restLessons.length ? '<button class="bigbtn ghost" id="zcheck">Только проверку и всё</button>' : '') +
-      '</div><p class="dim">Что не успели — не пропадёт: перенесётся на следующее занятие.</p></div>';
-  } else {
-    tail = '<div class="winrow">' +
-      (next ? '<button class="bigbtn" id="zgo2">Продолжить занятие</button>' : '') +
-      '<button class="bigbtn ghost" id="zend">Закончить занятие</button></div>' +
-      '<p class="dim">Закончить можно в любой момент — даже если сегодня не пошло. ' +
-      'Занятие всё равно засчитается: важнее, что ты сел, чем сколько успел.</p>';
-  }
-
-  /* ⚠️ Жёсткий потолок не обрывает начатое: кнопки «открыть» просто нет, а
-     занятие можно закрыть. Резать посередине нельзя ни таймеру, ни потолку. */
-  if (capHard() && !askNow){
-    tail = '<div class="card"><h3>🌙 На сегодня всё</h3>' +
-      '<p>Дневной предел, о котором вы договорились со взрослым, уже пройден. ' +
-      'Новые шаги откроются завтра — занятие можно закрыть.</p>' +
-      '<div class="winrow"><button class="bigbtn" id="zend">Закончить занятие</button></div></div>';
-    plan = plan.replace(/<button class="rbtn check zopen"[^<]*<\/button>/g, "");
-  }
-
-  var breakBtn = (!askNow && !capHard() && next)
-    ? '<div class="winrow"><button class="bigbtn ghost" id="zbreak">☕ Перерыв ' + ZAN_BREAK + ' минут</button></div>'
-    : "";
-
-  app.innerHTML = head + capNote + breakNote + cutNote + plan + tail + breakBtn + liveRowHTML();
-  bindLiveRow(screenZan);
-
-  app.querySelectorAll(".zopen").forEach(function(b){
-    b.onclick = function(){ zanOpenBlock({ k:b.getAttribute("data-zk"), id:b.getAttribute("data-zi") }); };
-  });
-  var zg2 = document.getElementById("zgo2");
-  if (zg2 && next) zg2.onclick = function(){ zanOpenBlock(next); };
-  var zend = document.getElementById("zend");
-  if (zend) zend.onclick = function(){ screenZanDone(zanFinish("hand") || rec); };
-  var zbr = document.getElementById("zbreak");
-  if (zbr) zbr.onclick = function(){ zanBreakStart(zanAll()[rec.key]); screenZan(); };
-  var zstop = document.getElementById("zstop");
-  if (zstop) zstop.onclick = function(){ screenZanDone(zanFinish("time") || rec); };
-  var zone = document.getElementById("zone");
-  if (zone) zone.onclick = function(){
-    var r = zanAll()[rec.key];
-    if (r){ r.ask = (r.done || []).length + 1; save(); }
-    var step = zanRemaining(r || rec)[0];
-    if (step) zanOpenBlock(step); else screenZan();
-  };
-  var zcheck = document.getElementById("zcheck");
-  if (zcheck) zcheck.onclick = function(){
-    var r = zanAll()[rec.key];
-    if (!r) return screenZan();
-    zanCutToCheck(r);
-    var step = zanRemaining(r)[0];
-    if (step) zanOpenBlock(step);
-    else screenZanDone(zanFinish("choice") || r);
-  };
-  refreshTop();
-}
 /* ===== в следующий раз =====
    Сессия имеет начало и конец — это красная линия продукта. Но «конец» не
    значит «обрыв»: занятие закончилось, а СЛЕДУЮЩЕЕ — названо: какой урок и
@@ -7689,52 +7499,6 @@ function welcomeBackHTML(){
    разница только в словах. Занятие, брошенное на первом уроке, тоже
    закрывается: иначе ребёнок, у которого не пошло, остаётся без финала, а
    взрослый — без отчёта ровно в тот день, когда отчёт нужнее всего. */
-function screenZanDone(rec){
-  enterScreen(undefined, "zan");
-  /* занятие закончилось — трансляция гаснет сама: обещание «выключается по
-     концу занятия» держит код, а не память ребёнка */
-  liveOffNow();
-  var r = zanReport(rec, S);
-  markActiveToday();
-  app.innerHTML =
-    '<div class="lvlhead"><div><div class="idx">занятие закрыто</div>' +
-      '<h1>' + (r.full ? "🏁 Занятие пройдено" : "🏁 Занятие закончено") + '</h1></div></div>' +
-    '<div class="card zandone">' +
-      '<p class="zanwas"><b>' + esc(r.was) + '.</b></p>' +
-      (r.full ? '<p>Весь план сделан.</p>'
-              : '<p>План сделан не весь — и это нормально: занятие засчитано, потому что ты сел и работал.</p>') +
-      (r.cutN ? '<p class="dim">📌 Перенесли на следующее занятие: ' + r.cutN + ' ' +
-        plural(r.cutN, "шаг", "шага", "шагов") + '. Они не пропали.</p>' : '') +
-      '<p class="dim">' + esc(r.got) + '</p>' +
-    '</div>' +
-    '<div class="card"><h3>Что увидит взрослый</h3>' +
-      '<p class="dim">Ровно эти строки — ничего сверх них мы никому не показываем.</p>' +
-      '<ul class="zanrep"><li>' + esc(r.was) + '</li><li>Похвалить: ' + esc(r.praise) + '</li>' +
-      (r.cut ? '<li>' + esc(r.cut) + '</li>' : '') +
-      '<li>' + esc(r.got) + '</li><li>' + esc(r.ask) + '</li></ul></div>' +
-    /* ⚠️ Обратное направление стоит ЗДЕСЬ, в конце занятия, и это не украшение.
-       Взрослый задаёт ребёнку — это контроль, и контролем одним подписку не
-       удержать. Ребёнок задаёт взрослому — это интерес: у работы появляется
-       зритель, а у ребёнка роль старшего (docs/foresight-2027.md § 16.4,
-       механика 3). Конец занятия — единственная точка, где оба только что
-       были рядом и оба свободны. */
-    '<div class="card"><h3>✍️ Задай задачу взрослому</h3>' +
-      '<p>Придумай задачу, отправь ссылкой маме, папе или другу — и посмотри, ' +
-      'решат ли. Проверять будет тренажёр, а не ты: сойтись должен вывод.</p>' +
-      '<p class="dim">Составить задачу труднее, чем решить: придётся объяснить её словами так, ' +
-      'чтобы человек понял без твоей программы.</p>' +
-      '<div class="admrow"><button class="rbtn check" id="zask">Задать задачу →</button></div></div>' +
-    nextTimeHTML() +
-    '<div class="winrow"><button class="bigbtn" id="ztoday">← На «Сегодня»</button>' +
-      '<button class="bigbtn ghost" id="zmap">К урокам</button></div>';
-  document.getElementById("ztoday").onclick = screenToday;
-  document.getElementById("zmap").onclick = goHome;
-  var za = document.getElementById("zask");
-  if (za) za.onclick = function(){ screenMyTasks(); };
-  sfx("win");
-  refreshTop();
-}
-
 /* ================= карта активности по дням и часам =================
    Отвечает не на «сколько», а на «КОГДА» — и это ровно то, чего взрослый не
    видит. Строка «занимался в 23:40» говорит ему больше любых процентов.

@@ -3613,6 +3613,84 @@ function checkEncoding(){
       viewReset(g);
     }
 
+    /* --- [двери-занятие] (24.09.2026): экран занятия и итог уехали в
+       js/screens-zan.js. По § 4.55 — нажатия: двери внутрь (адрес, «К занятию»
+       в шапке урока и разминки, окна победы урока и разминки — последнее идёт
+       через договор разминки обёрткой) и кнопки самого экрана (начать, открыть
+       шаг, перерыв и «я вернулся», время вышло, итог, «к урокам», «задать
+       задачу»). Условные состояния тест создаёт сам. ⚠️ Кнопки с data-go="zan"
+       в самом уроке нет — обработчик на неё есть, рисовать её некому. */
+    {
+      const снимок = JSON.parse(JSON.stringify(g.state));
+      g.state.admin.isAdmin = false; g.state.admin.parentOf = "";
+      g.state.stars = {}; w.CURRICULUM[0].lessons.slice(0, 10).forEach(l => { g.state.stars[l.id] = 3; });
+      g.state.zan = {};
+      const экран = () => doc.getElementById("app").textContent;
+      const жми = async (el, что, куда) => {
+        if (!el) return bad("[двери-занятие] нет кнопки: " + что);
+        el.click(); await tick(80);
+        if (куда && g.place() !== куда) bad("[двери-занятие] «" + что + "» привела на «" + g.place() + "», а не на «" + куда + "»");
+      };
+      w.history.replaceState(null, "", w.location.pathname + "#zan");
+      g.routeHash(); await tick(60);
+      if (g.place() !== "zan") bad("[двери-занятие] адрес #zan привёл на «" + g.place() + "»");
+      g.screenZan(); await tick();
+      await жми(doc.getElementById("zgo"), "Начать занятие", "zan");
+      await жми(doc.querySelector(".zopen"), "Открыть шаг занятия", null);
+      if (!/^(lesson|warmup)$/.test(g.place())) bad("[двери-занятие] шаг занятия открыл «" + g.place() + "»");
+      await жми(doc.getElementById("btn-back"), "«К занятию» в шапке", "zan");
+      /* шаг-урок открывает та же функция, что и кнопка «Открыть» (первый шаг
+         плана бывает разминкой — тогда кнопка урока не нажимается вовсе) */
+      try { g.zanOpenBlock({ k: "lesson", id: w.CURRICULUM[0].lessons[0].id }); }
+      catch (e) { bad("[двери-занятие] шаг-урок занятия упал: " + e.message); }
+      await tick(80);
+      if (g.place() !== "lesson") bad("[двери-занятие] шаг-урок занятия открыл «" + g.place() + "», а не урок");
+      g.screenZan(); await tick();
+      /* окно победы урока во время занятия */
+      const l11 = w.CURRICULUM[0].lessons[10], тело = CONTENT.world1[l11.id];
+      g.openLesson(l11.id); await tick(80);
+      const st = studioOf();
+      if (!st || !тело) bad("[двери-занятие] урок для победы не открылся");
+      else {
+        st.editor.setCode(тело.task.solution);
+        st.querySelector('[data-role="check"]').click(); await tick(80);
+        if (!won()) bad("[двери-занятие] урок не засчитан: " + msgText());
+        else await жми(doc.getElementById("wzan"), "победа урока → «К занятию»", "zan");
+      }
+      /* окно победы разминки во время занятия (договор разминки — обёрткой) */
+      const пред = g.warmupsOpen().filter(x => x.type !== "memory" && x.type !== "blocks")[0];
+      if (!пред) bad("[двери-занятие] нет открытой разминки «угадай вывод»");
+      else {
+        g.openWarmup(пред.id); await tick(80);
+        await жми(doc.getElementById("btn-back"), "«К занятию» в шапке разминки", "zan");
+        g.openWarmup(пред.id); await tick(80);
+        const ws = studioOf();
+        ws.editor.setCode(w.Runtime.get("mini").run(пред.code, {}).output);
+        ws.querySelector('[data-role="check"]').click(); await tick(80);
+        if (!won()) bad("[двери-занятие] разминка не засчитана: " + msgText());
+        else await жми(doc.getElementById("wzan"), "победа разминки → «К занятию»", "zan");
+      }
+      /* перерыв и возвращение */
+      g.screenZan(); await tick();
+      await жми(doc.getElementById("zbreak"), "Перерыв", "zan");
+      if (!doc.getElementById("zback2")) bad("[двери-занятие] после «Перерыв» нет экрана перерыва");
+      await жми(doc.getElementById("zback2"), "Я вернулся", "zan");
+      /* время вышло: «закончить» ведёт в итог */
+      const рек = g.zanAll()[g.zanOpen().key];
+      рек.sec = (рек.len || 30) * 60;
+      g.screenZan(); await tick();
+      await жми(doc.getElementById("zstop"), "Закончить занятие (время вышло)", "zan");
+      if (!doc.getElementById("ztoday") || !/Похвалить/.test(экран())) bad("[двери-занятие] итог занятия не открылся");
+      await жми(doc.getElementById("zmap"), "итог → «К урокам»", "home");
+      g.zanStart(); g.screenZan(); await tick();
+      await жми(doc.getElementById("zend"), "Закончить занятие", "zan");
+      await жми(doc.getElementById("zask"), "итог → «Задать задачу»", "mytasks");
+      Object.keys(g.state).forEach(k => { delete g.state[k]; });
+      Object.assign(g.state, снимок);
+      w.history.replaceState(null, "", w.location.pathname);
+      viewReset(g);
+    }
+
     /* --- [дом-взрослого] (24.09.2026): вывеска на устройстве взрослого ---
        Устройство репетитора или родителя без своих уроков звали «Мои уроки →»
        и вели на пустую карту миров. Кнопка обязана назвать кабинет роли и
