@@ -34919,7 +34919,9 @@ S.now = { at: Date.now(), place: curPlace, lesson: curLessonId || null };
 if (g) g.pauseMs += 10000;
 zanTick(10, false);
 }
-if (live || g) save();
+
+if (live) save();
+else if (g) saveLocal();
 }
 function actStart(){
 if (actTick) return;
@@ -35591,14 +35593,28 @@ return "<b>Код ученика не задан</b>Без кода сервер
 " его нельзя. Впишите код в поле выше и нажмите «Записать код».";
 }
 
+function progressKey(x){
+var o = ensureShape(JSON.parse(JSON.stringify(x || {})));
+CLOUD_SKIP.concat(["savedAt"]).forEach(function(k){ delete o[k]; });
+return (function st(v){
+if (Array.isArray(v)) return "[" + v.map(st).join(",") + "]";
+if (v && typeof v === "object")
+return "{" + Object.keys(v).sort().map(function(k){ return JSON.stringify(k) + ":" + st(v[k]); }).join(",") + "}";
+return JSON.stringify(v);
+})(o);
+}
+
 function cloudPull(){
 if (!cloudEnabled()) return Promise.resolve(false);
 cloudState.busy = true;
 return Cloud.load().then(function(res){
 cloudState.busy = false; cloudState.lastError = null; cloudState.lastSync = Date.now();
+
+cloudState.serverSame = false;
 if (!res.found || !res.data) return false;
 var before = JSON.stringify(localSnapshot());
 applyProgress(res.data);
+cloudState.serverSame = progressKey(cloudSnapshot()) === progressKey(res.data);
 return JSON.stringify(localSnapshot()) !== before;
 }, function(err){
 cloudState.busy = false; cloudState.lastError = err.message || String(err);
@@ -35609,6 +35625,10 @@ throw err;
 function cloudPush(){
 if (!cloudEnabled()) return Promise.resolve(false);
 cloudState.busy = true;
+
+cloudState.lastPush = Date.now();
+
+cancelPush();
 return Cloud.save(cloudSnapshot()).then(function(){
 cloudState.busy = false; cloudState.lastError = null;
 cloudState.lastSync = Date.now(); cloudState.lastPush = Date.now();
@@ -46076,7 +46096,8 @@ cloudPull().then(function(changed){
 refreshTop();
 
 if (changed && document.querySelector(".worlds")) screenWorlds();
-return cloudPush();
+
+return cloudState.serverSame ? false : cloudPush();
 }).catch(function(){ refreshTop(); });
 }
 }
@@ -46180,7 +46201,7 @@ BADGES: BADGES, STREAK_BADGES: STREAK_BADGES, awardStreak: awardStreak,
 CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
 stopTimer: stopTimer, adminUnlock: adminUnlock, adminLock: adminLock, adminGate: adminGate,
 getSession: function(){ return session; },
-mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
+mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress, progressKey: progressKey,
 localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelSet,
 blankProgress: blankProgress, ensureShape: ensureShape,
 clearResults: clearResults, clearAll: clearAll,

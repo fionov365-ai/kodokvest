@@ -1559,7 +1559,14 @@ function tickOnce(){
     if (g) g.pauseMs += 10000;
     zanTick(10, false);
   }
-  if (live || g) save();
+  /* ⚠️ Пауза — только в память устройства, НЕ на сервер (24.09.2026). До этого
+     открытый урок без ребёнка отправлял снимок раз в 25 секунд бесконечно —
+     144 записи в час на забытую вкладку, — и хуже того: «сейчас в тренажёре»
+     считается по времени последней записи, так что родитель видел «🟢 урок 2»
+     в полночь при вкладке, брошенной днём. Накопленная пауза уедет со
+     следующей настоящей записью, когда ребёнок вернётся. */
+  if (live) save();
+  else if (g) saveLocal();
 }
 function actStart(){
   if (actTick) return;
@@ -2523,14 +2530,32 @@ function cloudOffWhy(what){
 }
 
 /* забрать с сервера и слить с тем, что уже есть здесь */
+/* Прогресс как смысл, а не как текст: ключи по порядку, без отметки времени
+   сохранения. Нужно, чтобы понять, есть ли у устройства то, чего нет на
+   сервере, — порядок полей и savedAt этого не меняют. */
+function progressKey(x){
+  var o = ensureShape(JSON.parse(JSON.stringify(x || {})));
+  CLOUD_SKIP.concat(["savedAt"]).forEach(function(k){ delete o[k]; });
+  return (function st(v){
+    if (Array.isArray(v)) return "[" + v.map(st).join(",") + "]";
+    if (v && typeof v === "object")
+      return "{" + Object.keys(v).sort().map(function(k){ return JSON.stringify(k) + ":" + st(v[k]); }).join(",") + "}";
+    return JSON.stringify(v);
+  })(o);
+}
+
 function cloudPull(){
   if (!cloudEnabled()) return Promise.resolve(false);
   cloudState.busy = true;
   return Cloud.load().then(function(res){
     cloudState.busy = false; cloudState.lastError = null; cloudState.lastSync = Date.now();
+    /* serverSame: после слияния у устройства нет ничего сверх сервера —
+       отправлять обратно нечего (см. первую отрисовку) */
+    cloudState.serverSame = false;
     if (!res.found || !res.data) return false;
     var before = JSON.stringify(localSnapshot());
     applyProgress(res.data);
+    cloudState.serverSame = progressKey(cloudSnapshot()) === progressKey(res.data);
     return JSON.stringify(localSnapshot()) !== before;
   }, function(err){
     cloudState.busy = false; cloudState.lastError = err.message || String(err);
@@ -2542,6 +2567,12 @@ function cloudPull(){
 function cloudPush(){
   if (!cloudEnabled()) return Promise.resolve(false);
   cloudState.busy = true;
+  /* отметка — в МОМЕНТ отправки, а не по ответу: иначе отложенная отправка,
+     заведённая, пока летит эта, считала, что давно ничего не уходило, и
+     слала то же самое через 2 секунды (так было сразу после регистрации) */
+  cloudState.lastPush = Date.now();
+  /* и отложенная больше не нужна: этот снимок везёт всё, что она везла бы */
+  cancelPush();
   return Cloud.save(cloudSnapshot()).then(function(){
     cloudState.busy = false; cloudState.lastError = null;
     cloudState.lastSync = Date.now(); cloudState.lastPush = Date.now();
@@ -15641,7 +15672,10 @@ function bootRender(){
       refreshTop();
       /* перерисовываем только карту миров — не выдёргиваем ученика из урока */
       if (changed && document.querySelector(".worlds")) screenWorlds();
-      return cloudPush();
+      /* ⚠️ Раньше здесь была отправка при КАЖДОМ открытии страницы — даже
+         когда устройство только что взяло с сервера ровно то, что там лежит.
+         Отправляем, только если у устройства есть своё (занимался без сети). */
+      return cloudState.serverSame ? false : cloudPush();
     }).catch(function(){ refreshTop(); });
   }
 }
@@ -15770,7 +15804,7 @@ window.__game = {
   CUSTOM: CUSTOM, sameDrawing: sameDrawing, editUnits: editUnits, setStars: setStars,
   stopTimer: stopTimer, adminUnlock: adminUnlock, adminLock: adminLock, adminGate: adminGate,
   getSession: function(){ return session; },
-  mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress,
+  mergeProgress: mergeProgress, cloudSnapshot: cloudSnapshot, applyProgress: applyProgress, progressKey: progressKey,
   localSnapshot: localSnapshot, adminLabel: adminLabel, adminLabelSet: adminLabelSet,
   blankProgress: blankProgress, ensureShape: ensureShape,
   clearResults: clearResults, clearAll: clearAll,

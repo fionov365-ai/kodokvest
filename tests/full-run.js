@@ -6114,6 +6114,29 @@ function checkEncoding(){
     g.tickOnce();
     if (g.state.log[lid].timeMs !== 10000) bad("[время] спрятанная вкладка накрутила время");
     hidden = false;
+
+    /* [синхронизация] (24.09.2026): рабочий тик ставит отправку на сервер, тик
+       паузы — нет. Раньше открытый урок без ребёнка слал снимок раз в 25 с
+       бесконечно, и «сейчас в тренажёре» (по времени последней записи) горело
+       у родителя, пока вкладка открыта. */
+    {
+      const былКод = w.Cloud.myCode();
+      w.Cloud.setCode("zamer-sinhr");
+      g.cancelPush();
+      g.setIdleForTest(600000); g.actMark(); g.tickOnce();
+      if (!g.cloudState.timer) bad("[синхронизация] рабочий тик не поставил отправку — присутствие и время не уедут");
+      g.cancelPush();
+      g.setIdleForTest(0); g.tickOnce();
+      if (g.cloudState.timer) bad("[синхронизация] тик паузы поставил отправку на сервер — забытая вкладка снова пишет без конца");
+      g.cancelPush();
+      if (былКод) w.Cloud.setCode(былКод); else w.Cloud.forgetCode();
+      /* «есть ли что отправить» не зависит от порядка полей и savedAt */
+      const x = { savedAt: 1, stars: { a: 3, b: 1 }, days: ["2026-09-01"] };
+      const y = { days: ["2026-09-01"], stars: { b: 1, a: 3 }, savedAt: 999 };
+      if (g.progressKey(x) !== g.progressKey(y)) bad("[синхронизация] одинаковый прогресс признан разным — отправка при каждом открытии вернётся");
+      if (g.progressKey(x) === g.progressKey({ savedAt: 1, stars: { a: 3, b: 2 }, days: ["2026-09-01"] }))
+        bad("[синхронизация] разный прогресс признан одинаковым — своё с устройства не уедет на сервер");
+    }
     g.setLessonForTest(null);
     g.setIdleForTest(6 * 60 * 1000);   /* вернуть боевой порог остальным проверкам */
 
