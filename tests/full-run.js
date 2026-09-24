@@ -4294,6 +4294,34 @@ function checkEncoding(){
     if (problems.length === p0) kalkChecked++;
   }
 
+  /* --- [канал]: блок «Канал для репетиторов» на /repetitoru/ (24.09.2026) ---
+     Блок собирает tools/kanal.js из content/kanal.json. Сторож: страница =
+     сборка; адрес — настоящий адрес своей площадки; без адресов блока нет
+     (ссылка на несуществующий канал хуже её отсутствия); с адресом блок
+     встаёт с кнопками и оговоркой про Telegram. */
+  let kanalChecked = 0;
+  {
+    const p0 = problems.length;
+    const K = require(path.join(root, "tools/kanal.js"));
+    const page = fs.readFileSync(path.join(root, K.FILE), "utf8");
+    const now = (page.match(K.RX) || [])[0];
+    if (!now) bad("[канал] на /repetitoru/ нет меток kanal:start / kanal:end");
+    else if (now !== K.render(root))
+      bad("[канал] блок на /repetitoru/ разошёлся с content/kanal.json — запустите node tools/kanal.js");
+    const c = K.conf(root);
+    K.PLACES.forEach(p => {
+      const u = String(c[p.key] || "").trim();
+      if (u && !p.rx.test(u)) bad("[канал] адрес «" + u + "» не похож на адрес: " + p.label);
+    });
+    const пусто = K.render(root, { vk: "", max: "", tg: "" });
+    if (/href=/.test(пусто)) bad("[канал] без адресов на странице осталась ссылка");
+    const полно = K.render(root, { vk: "https://vk.com/fionika_rep", max: "", tg: "https://t.me/fionika_rep" });
+    if (!/<section id="kanal">/.test(полно) || (полно.match(/class="btn( ghost)?"/g) || []).length !== 2 || !/VPN|не у всех/.test(полно))
+      bad("[канал] с адресами блок собрался не так: " + полно.slice(0, 120));
+    if (/style="/.test(полно)) bad("[канал] в блоке инлайн-стиль");
+    if (problems.length === p0) kanalChecked++;
+  }
+
   let cardRowChecked = 0;
   {
     const p0 = problems.length;
@@ -13470,6 +13498,7 @@ function checkEncoding(){
   console.log(`сетка номеров экзамена совпадает с продуктом: ${setkaChecked ? "да" : "нет"}`);
   console.log(`лента «Что нового» сверена с git: ${lentaChecked ? "да" : "нет"}`);
   console.log(`калькулятор баллов ОГЭ сверен со шкалой: ${kalkChecked ? "да" : "нет"}`);
+  console.log(`блок канала для репетиторов сверен: ${kanalChecked ? "да" : "нет"}`);
   console.log(`контракты экранов без undefined: ${contractsChecked ? "да" : "нет"}`);
   /* ================= [сборка] снятие комментариев ничего не съело =========
      ⚠️ Однофайловая сборка идёт без комментариев (build.js, 525 КБ экономии),
