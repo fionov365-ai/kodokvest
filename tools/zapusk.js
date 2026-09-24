@@ -10,7 +10,7 @@
    Ничего не правит и никуда не ходит — только читает файлы. */
 const fs = require("fs"), path = require("path");
 const root = path.join(__dirname, "..");
-const ПОТОЛОК = 3145728;                      /* тот же, что в build.js */
+const ПОТОЛОК = 4194304;                      /* 4 МиБ, тот же, что в тесте [два контура]; поднят с 3 МиБ 24.09.2026 */
 const АДРЕС = "fionov365-ai.github.io";
 const ходовые = /\.(html|xml|txt|js|json|css|webmanifest)$/;
 const читать = p => fs.readFileSync(path.join(root, p), "utf8");
