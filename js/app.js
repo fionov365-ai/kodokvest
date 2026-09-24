@@ -4417,7 +4417,7 @@ var HOME = KVSCREENS.home({
   screenWorld: screenWorld, screenTrain: screenTrain,
   /* ⚠️ Обёрткой: портфолио — модуль ниже по файлу (§ 4.40). */
   screenFolio: function(){ screenFolio(); },
-  screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
+  screenToday: function(){ screenToday(); }, screenReview: screenReview, screenHW: function(){ screenHW(); },
   /* ⚠️ Обёрткой: «Своё задание» с 15.09.2026 модуль ниже по файлу (§ 4.40). */
   screenMyTasks: function(e){ screenMyTasks(e); },
   /* ⚠️ Обёрткой: экраны разминки с 15.09.2026 модуль ниже по файлу (§ 4.40). */
@@ -6531,244 +6531,28 @@ var ACCOUNT = KVSCREENS.account({
   newSession: function(v){ session = v; }
 });
 var screenAccount = ACCOUNT.screenAccount, copyText = ACCOUNT.copyText;
-/* ================= экран: Сегодня (стрик + задача дня) =================
-   Показывает, сколько дней подряд ребёнок занимался, рекорд, полоску за
-   неделю и одну «задачу дня» — детерминированно выбранную по дате разминку.
-   Вне сотни уроков, звёзд не даёт. Смысл — привычка заходить каждый день.
-   ============================================================ */
-function weekStripHTML(){
-  var today = dayKey();
-  var cells = "";
-  for (var i = 6; i >= 0; i--){
-    var key = shiftDay(today, -i);
-    var d = new Date(key + "T12:00:00");
-    var on = activeOn(key);
-    var sh = !on && shieldedOn(key);
-    var isToday = key === today;
-    var study = isStudyDay(key);
-    var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
-      (isToday ? " today" : "") + (study ? " study" : "");
-    cells += '<div class="' + cls + '"><span class="wkd">' + WD_SHORT[d.getDay()] + '</span>' +
-      '<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡️" : (study ? "📌" : "·"))) + '</span></div>';
-  }
-  return '<div class="weekstrip">' + cells + '</div>';
-}
+/* ================= экран: Сегодня =================
+   ⚠️ Уехал в js/screens-today.js — разрез 24.09.2026. Замер и почему именно
+   так — в шапке того файла. Разминка присваивается НИЖЕ этого места —
+   обёртками (§ 4.40); S и session — вызовами (§ 4, пункт 5). */
+var TODAY = KVSCREENS.today({
+  app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+  dayKey: dayKey, shiftDay: shiftDay, dayMs: dayMs, fmtDur: fmtDur, WD_SHORT: WD_SHORT, WD_ORDER: WD_ORDER,
+  activeOn: activeOn, shieldedOn: shieldedOn, takeShieldNote: takeShieldNote, dailyPick: dailyPick, dailyDone: dailyDone,
+  isStudyDay: isStudyDay, studyDue: studyDue, agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
+  scheduleDays: scheduleDays, hasSchedule: hasSchedule, toggleStudyDay: toggleStudyDay,
+  frame: frame, frameOn: frameOn, frameTime: frameTime, frameStudyDay: frameStudyDay, isBreakDay: isBreakDay,
+  zanOpen: zanOpen, zanOfDay: zanOfDay, zanClosedCount: zanClosedCount, zanMins: zanMins, zanStart: zanStart,
+  screenZan: screenZan, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
+  ptaskPending: ptaskPending, ptaskMarkDone: ptaskMarkDone, openLesson: openLesson, screenWorlds: screenWorlds,
+  installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
+  openWarmup: function(){ return openWarmup.apply(null, arguments); },
+  screenWarmups: function(){ return screenWarmups.apply(null, arguments); },
+  S: function(){ return S; },
+  newSession: function(v){ session = v; return v; }
+});
+var screenToday = TODAY.screenToday;
 
-/* запас щитов на экране «Сегодня»: сколько на руках и что они делают */
-/* ⚠️ Блока «Щиты» на экране БОЛЬШЕ НЕТ, и это план, п. 4.4: щит работает
-   молча. Сам механизм цел — пропущенный день закрывается сам, когда ребёнок
-   вернётся (useShield в markActiveToday). А рассказывать про запас щитов
-   значит заводить разговор о том, что серия может оборваться, — то есть
-   ровно тот страх, который мы объявили красной линией. Молчание тут не
-   умолчание: ребёнку нечего с этим делать, тратить щит руками нельзя. */
-
-/* карточка занятия на экране «Сегодня»: главная кнопка дня */
-function zanCardHTML(){
-  var open = zanOpen(), f = frame();
-  var doneToday = zanOfDay(dayKey()).filter(function(z){ return z.end; }).length;
-  var restDay = frameOn() && !frameStudyDay(dayKey());
-  if (open){
-    var closed = zanClosedCount(open);
-    var pct = Math.min(100, Math.round((closed / Math.max(1, open.plan.length)) * 100));
-    return '<div class="card zancard on"><h3>⏱ Занятие идёт</h3>' +
-      '<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
-      '<p>Сделано ' + open.done.length + ' из ' + open.plan.length +
-      ((open.cut || []).length ? ', перенесено ' + open.cut.length : '') + '. Работы: ' +
-      zanMins(open) + ' ' + plural(zanMins(open), "минута", "минуты", "минут") + '.</p>' +
-      '<div class="winrow"><button class="bigbtn" id="zancont">Продолжить занятие</button></div></div>';
-  }
-  if (doneToday){
-    return '<div class="card zancard done"><h3>🏁 Занятие сегодня пройдено</h3>' +
-      '<p>' + (doneToday > 1 ? "Занятий сегодня: " + doneToday + "." : "Одно занятие закрыто.") +
-      ' Можно заниматься дальше просто так — это ничего не меняет и ни на что не влияет.</p>' +
-      '<div class="winrow"><button class="bigbtn ghost" id="zanmore">Открыть ещё занятие</button></div></div>';
-  }
-  if (capHard())
-    return '<div class="card zancard"><h3>🌙 На сегодня всё</h3>' +
-      '<p>Сегодня за тренажёром уже ' + todayMinutes() + ' ' +
-      plural(todayMinutes(), "минута", "минуты", "минут") +
-      ' — столько вы договорились со взрослым. Новое занятие откроется завтра.</p></div>';
-  return '<div class="card zancard"><h3>⏱ Занятие на ' + f.len + ' минут</h3>' +
-    '<p>' + (restDay
-      ? "Сегодня по расписанию день отдыха — но если хочется, занятие можно провести."
-      : "Разминка, уроки и проверка в конце. Ты заранее знаешь, сколько это займёт и когда конец.") + '</p>' +
-    '<div class="winrow"><button class="bigbtn" id="zanstart">Начать занятие</button></div></div>';
-}
-/* задания от взрослого: показываем только невыполненные */
-function ptaskCardHTML(){
-  var list = ptaskPending();
-  if (!list.length) return "";
-  return '<div class="card ptcard"><h3>✉️ Задание от взрослого</h3>' +
-    list.slice(0, 3).map(function(x){
-      var l = x.ref ? CURRICULUM.byId(x.ref) : null;
-      return '<div class="ptrow"><span>' + esc(x.text) + '</span>' +
-        (x.t === "ask"
-          ? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
-          : '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + esc(x.ref) + '">' +
-            /* ⚠️ Стояло (l ? "Открыть" : "Открыть") — обе ветки одинаковы, то есть
-               проверка урока не делала ничего. Задумано было назвать урок: ребёнок
-               видит просьбу взрослого и сразу знает, куда она ведёт. 18.09.2026. */
-            (l ? "Открыть урок «" + esc(l.title) + "»" : "Открыть") + '</button>') + '</div>';
-    }).join("") +
-    '<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
-}
-
-function screenToday(){
-  enterScreen(undefined, "today");
-  session = { id:null, attempts:0, hints:0, shown:false };
-  var doneToday = activeOn(dayKey());
-  var pick = dailyPick();
-  var taskDone = dailyDone();
-  var due = studyDue();
-  var days = agreedDays();        /* рамка взрослого сильнее своего расписания */
-
-  /* ⚠️ ОГОНЁК СТАЛ УГОВОРОМ (план, п. 4.4). Раньше здесь стояло число дней
-     подряд, рекорд и запас щитов — то есть три способа сказать «тебе есть
-     что терять». Красная линия продукта звучит ровно наоборот: «страх
-     потерять серию» — то, чего мы не делаем.
-
-     Что осталось: уговор (какие дни недели условлены), сегодняшний день и
-     календарь занятий. Календарь — единственная честная вещь во всём блоке:
-     он показывает, как было, и ничего не требует.
-
-     ⚠️ Щит никуда не делся, он работает МОЛЧА: пропущенный день закрывается
-     сам, когда ребёнок вернётся. Рассказывать про запас щитов — значит снова
-     заводить разговор о том, что серия может оборваться. */
-  var уговор = days.length
-    ? "Уговор: " + days.length + " " + plural(days.length, "день", "дня", "дней") + " в неделю"
-    : "Уговор пока не назначен";
-  var часЗанятия = frameOn() ? frameTime() : "";
-  var сегодня = doneToday
-    ? "Сегодня уже занимался."
-    : (due
-        ? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
-        : "Сегодня можно отдыхать — это не учебный день.");
-
-  var hero = '<div class="streakhero">' +
-    '<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
-    '<div class="streaknum">' + esc(уговор) + '</div>' +
-    '<div class="streaksub">' + esc(сегодня) +
-      (doneToday ? "" : " Один урок или одна разминка — и день засчитан.") + '</div>' +
-    weekStripHTML() +
-  '</div>';
-
-  /* Сколько сегодня работал — ребёнку тоже: он спрашивает «сколько я уже
-     позанимался?» ровно так же, как взрослый. Число честное: чистая работа
-     без пауз, из карты часов. */
-  var todayMs = dayMs(S, dayKey());
-  var timeCard = todayMs
-    ? '<div class="card"><h3>⏱ Сегодня за тренажёром</h3>' +
-      '<p class="lede"><b>' + fmtDur(todayMs) + '</b> чистой работы.</p>' +
-      '<p class="dim">Это только то время, когда ты действительно работал: ' +
-      'открытая вкладка, пока тебя нет за столом, сюда не считается.</p></div>'
-    : "";
-
-  var taskCard;
-  if (!pick){
-    /* Ноль открытых разминок — это нормальное начало пути, а не поломка */
-    taskCard = '<div class="card"><h3>🔥 Задача дня появится совсем скоро</h3>' +
-      '<p>Она берётся из разминок, а разминка открывается после урока, на котором ' +
-      'её можно прочитать. Пройди первые уроки Мира 1 — и задача дня появится тут сама.</p></div>';
-  } else {
-    var isBlocks = pick.type === "blocks";
-    var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
-    taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
-      '<div class="dctop"><span class="dcemoji">' + pick.emoji + '</span>' +
-        '<div class="dcttl"><div class="dckicker">🔥 Задача дня · ' + typeLbl + '</div>' +
-        '<b>' + esc(pick.title) + '</b></div>' +
-        '<span class="tag">' + esc(pick.tag) + '</span></div>' +
-      '<p class="dcintro">' + esc(pick.intro) + '</p>' +
-      (taskDone
-        ? '<div class="dcstatus done">✓ Выполнена сегодня. Новая задача — завтра.</div>' +
-          '<div class="winrow"><button class="bigbtn ghost" id="dopen">Пройти ещё раз</button>' +
-          '<button class="bigbtn ghost" id="dwarm">Ещё размяться</button></div>'
-        : '<div class="winrow"><button class="bigbtn" id="dopen">Открыть задачу дня</button></div>') +
-    '</div>';
-  }
-
-  /* «щит спас серию» — показываем один раз, сразу после спасения */
-  var saved = takeShieldNote();
-
-  /* напоминание по расписанию — только внутри сайта */
-  var banner = "";
-  if (agreedOn()){
-    if (studyDue())
-      banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
-        (часЗанятия ? ", занятие в " + esc(часЗанятия) : "") + '.</b> ' +
-        'Начни занятие, чтобы не пропустить.</div>';
-    else if (agreedStudyDay(dayKey()))
-      banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
-    else
-      banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
-  }
-
-  /* редактор дней занятий: понедельник … воскресенье.
-     Если рамку задал взрослый — показываем её и НЕ даём двигать: рамка это
-     уговор двоих, а не настройка ребёнка. Своё расписание при этом никуда не
-     девается и вернётся, если рамку снимут. */
-  var schedBox;
-  if (frameOn()){
-    var fd = frame().days.slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
-      .map(function(n){ return WD_SHORT[n]; }).join(", ");
-    schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
-      '<p>Занятия по ' + fd + ', по ' + frame().len + ' минут. Это назначил взрослый.</p>' +
-      (isBreakDay(dayKey()) ? '<p class="dim">Сегодня каникулы — пропуск запланирован, это не прогул.</p>' : '') +
-      '</div>';
-  } else {
-    var chips = WD_ORDER.map(function(n){
-      var sel = scheduleDays().indexOf(n) >= 0;
-      return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + WD_SHORT[n] + '</button>';
-    }).join("");
-    schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
-      '<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
-      'Если не выбрано ничего — напоминаний нет.</p>' +
-      '<div class="wdrow">' + chips + '</div>' +
-      (hasSchedule() ? '<p class="dim">Учебные дни: ' +
-        scheduleDays().slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
-          .map(function(n){ return WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
-      '</div>';
-  }
-
-  app.innerHTML =
-    '<div class="lvlhead"><div><div class="idx">уговор и задача дня</div><h1>🔥 Сегодня</h1></div>' +
-      '<div class="right"><span class="tag">' + (doneToday ? "сегодня сделано" : due ? "сегодня учебный день" : "сегодня свободно") + '</span></div></div>' +
-    /* ⚠️ Ни слова про «серию, которую жалко прерывать» — раньше это стояло
-       прямо здесь и было честной формулировкой красной линии, только с той
-       стороны, с которой её быть не должно. */
-    '<p class="lede">Здесь уговор: в какие дни вы договорились заниматься, и что уже сделано. ' +
-    'Пропущенный день ничего не сжигает — календарь просто покажет, как было. ' +
-    'Звёзды тут не начисляются: важна не серия, а возвращение.</p>' +
-    installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
-    '<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-
-  wireInstallTip(app);
-  var dopen = document.getElementById("dopen");
-  if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
-  var dwarm = document.getElementById("dwarm");
-  if (dwarm) dwarm.onclick = screenWarmups;
-  app.querySelectorAll("[data-wd]").forEach(function(b){
-    b.onclick = function(){ toggleStudyDay(+b.getAttribute("data-wd")); screenToday(); };
-  });
-  var zs = document.getElementById("zanstart");
-  if (zs) zs.onclick = function(){ zanStart(); screenZan(); };
-  var zc = document.getElementById("zancont");
-  if (zc) zc.onclick = screenZan;
-  var zm = document.getElementById("zanmore");
-  if (zm) zm.onclick = function(){ zanStart(); screenZan(); };
-  app.querySelectorAll("[data-ptdone]").forEach(function(b){
-    b.onclick = function(){ ptaskMarkDone(b.getAttribute("data-ptdone")); screenToday(); };
-  });
-  app.querySelectorAll("[data-ptopen]").forEach(function(b){
-    b.onclick = function(){
-      ptaskMarkDone(b.getAttribute("data-ptopen"));
-      var ref = b.getAttribute("data-ptref");
-      if (ref) openLesson(ref); else screenWorlds();
-    };
-  });
-  document.getElementById("tomap").onclick = goHome;
-  refreshTop();
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
 
 /* ================= экраны разминки =================
    ⚠️ Уехали в js/screens-warm.js — разрез 15.09.2026. Слой данных разминки

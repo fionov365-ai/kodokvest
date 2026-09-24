@@ -24184,6 +24184,216 @@ memFrame: memFrame, memAnswers: memAnswers, memNorm: memNorm };
 <script>
 
 window.KVSCREENS = window.KVSCREENS || {};
+KVSCREENS.today = function(A){
+
+function weekStripHTML(){
+var today = A.dayKey();
+var cells = "";
+for (var i = 6; i >= 0; i--){
+var key = A.shiftDay(today, -i);
+var d = new Date(key + "T12:00:00");
+var on = A.activeOn(key);
+var sh = !on && A.shieldedOn(key);
+var isToday = key === today;
+var study = A.isStudyDay(key);
+var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
+(isToday ? " today" : "") + (study ? " study" : "");
+cells += '<div class="' + cls + '"><span class="wkd">' + A.WD_SHORT[d.getDay()] + '</span>' +
+'<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡️" : (study ? "📌" : "·"))) + '</span></div>';
+}
+return '<div class="weekstrip">' + cells + '</div>';
+}
+
+function zanCardHTML(){
+var open = A.zanOpen(), f = A.frame();
+var doneToday = A.zanOfDay(A.dayKey()).filter(function(z){ return z.end; }).length;
+var restDay = A.frameOn() && !A.frameStudyDay(A.dayKey());
+if (open){
+var closed = A.zanClosedCount(open);
+var pct = Math.min(100, Math.round((closed / Math.max(1, open.plan.length)) * 100));
+return '<div class="card zancard on"><h3>⏱ Занятие идёт</h3>' +
+'<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
+'<p>Сделано ' + open.done.length + ' из ' + open.plan.length +
+((open.cut || []).length ? ', перенесено ' + open.cut.length : '') + '. Работы: ' +
+A.zanMins(open) + ' ' + A.plural(A.zanMins(open), "минута", "минуты", "минут") + '.</p>' +
+'<div class="winrow"><button class="bigbtn" id="zancont">Продолжить занятие</button></div></div>';
+}
+if (doneToday){
+return '<div class="card zancard done"><h3>🏁 Занятие сегодня пройдено</h3>' +
+'<p>' + (doneToday > 1 ? "Занятий сегодня: " + doneToday + "." : "Одно занятие закрыто.") +
+' Можно заниматься дальше просто так — это ничего не меняет и ни на что не влияет.</p>' +
+'<div class="winrow"><button class="bigbtn ghost" id="zanmore">Открыть ещё занятие</button></div></div>';
+}
+if (A.capHard())
+return '<div class="card zancard"><h3>🌙 На сегодня всё</h3>' +
+'<p>Сегодня за тренажёром уже ' + A.todayMinutes() + ' ' +
+A.plural(A.todayMinutes(), "минута", "минуты", "минут") +
+' — столько вы договорились со взрослым. Новое занятие откроется завтра.</p></div>';
+return '<div class="card zancard"><h3>⏱ Занятие на ' + f.len + ' минут</h3>' +
+'<p>' + (restDay
+? "Сегодня по расписанию день отдыха — но если хочется, занятие можно провести."
+: "Разминка, уроки и проверка в конце. Ты заранее знаешь, сколько это займёт и когда конец.") + '</p>' +
+'<div class="winrow"><button class="bigbtn" id="zanstart">Начать занятие</button></div></div>';
+}
+
+function ptaskCardHTML(){
+var list = A.ptaskPending();
+if (!list.length) return "";
+return '<div class="card ptcard"><h3>✉️ Задание от взрослого</h3>' +
+list.slice(0, 3).map(function(x){
+var l = x.ref ? CURRICULUM.byId(x.ref) : null;
+return '<div class="ptrow"><span>' + A.esc(x.text) + '</span>' +
+(x.t === "ask"
+? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
+: '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + A.esc(x.ref) + '">' +
+
+(l ? "Открыть урок «" + A.esc(l.title) + "»" : "Открыть") + '</button>') + '</div>';
+}).join("") +
+'<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
+}
+
+function screenToday(){
+A.enterScreen(undefined, "today");
+A.newSession({ id:null, attempts:0, hints:0, shown:false });
+var doneToday = A.activeOn(A.dayKey());
+var pick = A.dailyPick();
+var taskDone = A.dailyDone();
+var due = A.studyDue();
+var days = A.agreedDays();         
+
+var уговор = days.length
+? "Уговор: " + days.length + " " + A.plural(days.length, "день", "дня", "дней") + " в неделю"
+: "Уговор пока не назначен";
+var часЗанятия = A.frameOn() ? A.frameTime() : "";
+var сегодня = doneToday
+? "Сегодня уже занимался."
+: (due
+? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
+: "Сегодня можно отдыхать — это не учебный день.");
+
+var hero = '<div class="streakhero">' +
+'<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
+'<div class="streaknum">' + A.esc(уговор) + '</div>' +
+'<div class="streaksub">' + A.esc(сегодня) +
+(doneToday ? "" : " Один урок или одна разминка — и день засчитан.") + '</div>' +
+weekStripHTML() +
+'</div>';
+
+var todayMs = A.dayMs(A.S(), A.dayKey());
+var timeCard = todayMs
+? '<div class="card"><h3>⏱ Сегодня за тренажёром</h3>' +
+'<p class="lede"><b>' + A.fmtDur(todayMs) + '</b> чистой работы.</p>' +
+'<p class="dim">Это только то время, когда ты действительно работал: ' +
+'открытая вкладка, пока тебя нет за столом, сюда не считается.</p></div>'
+: "";
+
+var taskCard;
+if (!pick){
+
+taskCard = '<div class="card"><h3>🔥 Задача дня появится совсем скоро</h3>' +
+'<p>Она берётся из разминок, а разминка открывается после урока, на котором ' +
+'её можно прочитать. Пройди первые уроки Мира 1 — и задача дня появится тут сама.</p></div>';
+} else {
+var isBlocks = pick.type === "blocks";
+var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
+taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
+'<div class="dctop"><span class="dcemoji">' + pick.emoji + '</span>' +
+'<div class="dcttl"><div class="dckicker">🔥 Задача дня · ' + typeLbl + '</div>' +
+'<b>' + A.esc(pick.title) + '</b></div>' +
+'<span class="tag">' + A.esc(pick.tag) + '</span></div>' +
+'<p class="dcintro">' + A.esc(pick.intro) + '</p>' +
+(taskDone
+? '<div class="dcstatus done">✓ Выполнена сегодня. Новая задача — завтра.</div>' +
+'<div class="winrow"><button class="bigbtn ghost" id="dopen">Пройти ещё раз</button>' +
+'<button class="bigbtn ghost" id="dwarm">Ещё размяться</button></div>'
+: '<div class="winrow"><button class="bigbtn" id="dopen">Открыть задачу дня</button></div>') +
+'</div>';
+}
+
+var saved = A.takeShieldNote();
+
+var banner = "";
+if (A.agreedOn()){
+if (A.studyDue())
+banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
+(часЗанятия ? ", занятие в " + A.esc(часЗанятия) : "") + '.</b> ' +
+'Начни занятие, чтобы не пропустить.</div>';
+else if (A.agreedStudyDay(A.dayKey()))
+banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
+else
+banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
+}
+
+var schedBox;
+if (A.frameOn()){
+var fd = A.frame().days.slice().sort(function(a,b){ return A.WD_ORDER.indexOf(a) - A.WD_ORDER.indexOf(b); })
+.map(function(n){ return A.WD_SHORT[n]; }).join(", ");
+schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
+'<p>Занятия по ' + fd + ', по ' + A.frame().len + ' минут. Это назначил взрослый.</p>' +
+(A.isBreakDay(A.dayKey()) ? '<p class="dim">Сегодня каникулы — пропуск запланирован, это не прогул.</p>' : '') +
+'</div>';
+} else {
+var chips = A.WD_ORDER.map(function(n){
+var sel = A.scheduleDays().indexOf(n) >= 0;
+return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + A.WD_SHORT[n] + '</button>';
+}).join("");
+schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
+'<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
+'Если не выбрано ничего — напоминаний нет.</p>' +
+'<div class="wdrow">' + chips + '</div>' +
+(A.hasSchedule() ? '<p class="dim">Учебные дни: ' +
+A.scheduleDays().slice().sort(function(a,b){ return A.WD_ORDER.indexOf(a) - A.WD_ORDER.indexOf(b); })
+.map(function(n){ return A.WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
+'</div>';
+}
+
+A.app.innerHTML =
+'<div class="lvlhead"><div><div class="idx">уговор и задача дня</div><h1>🔥 Сегодня</h1></div>' +
+'<div class="right"><span class="tag">' + (doneToday ? "сегодня сделано" : due ? "сегодня учебный день" : "сегодня свободно") + '</span></div></div>' +
+
+'<p class="lede">Здесь уговор: в какие дни вы договорились заниматься, и что уже сделано. ' +
+'Пропущенный день ничего не сжигает — календарь просто покажет, как было. ' +
+'Звёзды тут не начисляются: важна не серия, а возвращение.</p>' +
+A.installTipHTML() + saved + banner + A.capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
+'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
+
+A.wireInstallTip(A.app);
+var dopen = document.getElementById("dopen");
+if (dopen && pick) dopen.onclick = function(){ A.openWarmup(pick.id, { daily:true }); };
+var dwarm = document.getElementById("dwarm");
+if (dwarm) dwarm.onclick = A.screenWarmups;
+A.app.querySelectorAll("[data-wd]").forEach(function(b){
+b.onclick = function(){ A.toggleStudyDay(+b.getAttribute("data-wd")); screenToday(); };
+});
+var zs = document.getElementById("zanstart");
+if (zs) zs.onclick = function(){ A.zanStart(); A.screenZan(); };
+var zc = document.getElementById("zancont");
+if (zc) zc.onclick = A.screenZan;
+var zm = document.getElementById("zanmore");
+if (zm) zm.onclick = function(){ A.zanStart(); A.screenZan(); };
+A.app.querySelectorAll("[data-ptdone]").forEach(function(b){
+b.onclick = function(){ A.ptaskMarkDone(b.getAttribute("data-ptdone")); screenToday(); };
+});
+A.app.querySelectorAll("[data-ptopen]").forEach(function(b){
+b.onclick = function(){
+A.ptaskMarkDone(b.getAttribute("data-ptopen"));
+var ref = b.getAttribute("data-ptref");
+if (ref) A.openLesson(ref); else A.screenWorlds();
+};
+});
+document.getElementById("tomap").onclick = A.goHome;
+A.refreshTop();
+window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+return { screenToday: screenToday };
+};
+
+</script>
+
+<script>
+
+window.KVSCREENS = window.KVSCREENS || {};
 KVSCREENS.shop = function(A){
 
 var PART_MAX = 40;           
@@ -37105,7 +37315,7 @@ aboutFootHTML: aboutFootHTML, wireAboutFoot: wireAboutFoot,
 screenWorld: screenWorld, screenTrain: screenTrain,
 
 screenFolio: function(){ screenFolio(); },
-screenToday: screenToday, screenReview: screenReview, screenHW: function(){ screenHW(); },
+screenToday: function(){ screenToday(); }, screenReview: screenReview, screenHW: function(){ screenHW(); },
 
 screenMyTasks: function(e){ screenMyTasks(e); },
 
@@ -38776,205 +38986,23 @@ newSession: function(v){ session = v; }
 });
 var screenAccount = ACCOUNT.screenAccount, copyText = ACCOUNT.copyText;
 
-function weekStripHTML(){
-var today = dayKey();
-var cells = "";
-for (var i = 6; i >= 0; i--){
-var key = shiftDay(today, -i);
-var d = new Date(key + "T12:00:00");
-var on = activeOn(key);
-var sh = !on && shieldedOn(key);
-var isToday = key === today;
-var study = isStudyDay(key);
-var cls = "wkcell" + (on ? " on" : "") + (sh ? " shielded" : "") +
-(isToday ? " today" : "") + (study ? " study" : "");
-cells += '<div class="' + cls + '"><span class="wkd">' + WD_SHORT[d.getDay()] + '</span>' +
-'<span class="wkdot">' + (on ? "🔥" : (sh ? "🛡️" : (study ? "📌" : "·"))) + '</span></div>';
-}
-return '<div class="weekstrip">' + cells + '</div>';
-}
-
-function zanCardHTML(){
-var open = zanOpen(), f = frame();
-var doneToday = zanOfDay(dayKey()).filter(function(z){ return z.end; }).length;
-var restDay = frameOn() && !frameStudyDay(dayKey());
-if (open){
-var closed = zanClosedCount(open);
-var pct = Math.min(100, Math.round((closed / Math.max(1, open.plan.length)) * 100));
-return '<div class="card zancard on"><h3>⏱ Занятие идёт</h3>' +
-'<div class="zanbar"><i style="width:' + pct + '%"></i></div>' +
-'<p>Сделано ' + open.done.length + ' из ' + open.plan.length +
-((open.cut || []).length ? ', перенесено ' + open.cut.length : '') + '. Работы: ' +
-zanMins(open) + ' ' + plural(zanMins(open), "минута", "минуты", "минут") + '.</p>' +
-'<div class="winrow"><button class="bigbtn" id="zancont">Продолжить занятие</button></div></div>';
-}
-if (doneToday){
-return '<div class="card zancard done"><h3>🏁 Занятие сегодня пройдено</h3>' +
-'<p>' + (doneToday > 1 ? "Занятий сегодня: " + doneToday + "." : "Одно занятие закрыто.") +
-' Можно заниматься дальше просто так — это ничего не меняет и ни на что не влияет.</p>' +
-'<div class="winrow"><button class="bigbtn ghost" id="zanmore">Открыть ещё занятие</button></div></div>';
-}
-if (capHard())
-return '<div class="card zancard"><h3>🌙 На сегодня всё</h3>' +
-'<p>Сегодня за тренажёром уже ' + todayMinutes() + ' ' +
-plural(todayMinutes(), "минута", "минуты", "минут") +
-' — столько вы договорились со взрослым. Новое занятие откроется завтра.</p></div>';
-return '<div class="card zancard"><h3>⏱ Занятие на ' + f.len + ' минут</h3>' +
-'<p>' + (restDay
-? "Сегодня по расписанию день отдыха — но если хочется, занятие можно провести."
-: "Разминка, уроки и проверка в конце. Ты заранее знаешь, сколько это займёт и когда конец.") + '</p>' +
-'<div class="winrow"><button class="bigbtn" id="zanstart">Начать занятие</button></div></div>';
-}
-
-function ptaskCardHTML(){
-var list = ptaskPending();
-if (!list.length) return "";
-return '<div class="card ptcard"><h3>✉️ Задание от взрослого</h3>' +
-list.slice(0, 3).map(function(x){
-var l = x.ref ? CURRICULUM.byId(x.ref) : null;
-return '<div class="ptrow"><span>' + esc(x.text) + '</span>' +
-(x.t === "ask"
-? '<button class="rbtn check" data-ptdone="' + x.key + '">Рассказал</button>'
-: '<button class="rbtn check" data-ptopen="' + x.key + '" data-ptref="' + esc(x.ref) + '">' +
-
-(l ? "Открыть урок «" + esc(l.title) + "»" : "Открыть") + '</button>') + '</div>';
-}).join("") +
-'<p class="dim">Звёзд за это не даётся: это просьба взрослого, а не урок из сотни.</p></div>';
-}
-
-function screenToday(){
-enterScreen(undefined, "today");
-session = { id:null, attempts:0, hints:0, shown:false };
-var doneToday = activeOn(dayKey());
-var pick = dailyPick();
-var taskDone = dailyDone();
-var due = studyDue();
-var days = agreedDays();         
-
-var уговор = days.length
-? "Уговор: " + days.length + " " + plural(days.length, "день", "дня", "дней") + " в неделю"
-: "Уговор пока не назначен";
-var часЗанятия = frameOn() ? frameTime() : "";
-var сегодня = doneToday
-? "Сегодня уже занимался."
-: (due
-? "Сегодня по уговору учебный день." + (часЗанятия ? " Занятие в " + часЗанятия + "." : "")
-: "Сегодня можно отдыхать — это не учебный день.");
-
-var hero = '<div class="streakhero">' +
-'<div class="flame' + (doneToday ? " lit" : "") + '">🔥</div>' +
-'<div class="streaknum">' + esc(уговор) + '</div>' +
-'<div class="streaksub">' + esc(сегодня) +
-(doneToday ? "" : " Один урок или одна разминка — и день засчитан.") + '</div>' +
-weekStripHTML() +
-'</div>';
-
-var todayMs = dayMs(S, dayKey());
-var timeCard = todayMs
-? '<div class="card"><h3>⏱ Сегодня за тренажёром</h3>' +
-'<p class="lede"><b>' + fmtDur(todayMs) + '</b> чистой работы.</p>' +
-'<p class="dim">Это только то время, когда ты действительно работал: ' +
-'открытая вкладка, пока тебя нет за столом, сюда не считается.</p></div>'
-: "";
-
-var taskCard;
-if (!pick){
-
-taskCard = '<div class="card"><h3>🔥 Задача дня появится совсем скоро</h3>' +
-'<p>Она берётся из разминок, а разминка открывается после урока, на котором ' +
-'её можно прочитать. Пройди первые уроки Мира 1 — и задача дня появится тут сама.</p></div>';
-} else {
-var isBlocks = pick.type === "blocks";
-var typeLbl = isBlocks ? "собери из блоков" : "угадай вывод";
-taskCard = '<div class="dailycard' + (taskDone ? " done" : "") + '">' +
-'<div class="dctop"><span class="dcemoji">' + pick.emoji + '</span>' +
-'<div class="dcttl"><div class="dckicker">🔥 Задача дня · ' + typeLbl + '</div>' +
-'<b>' + esc(pick.title) + '</b></div>' +
-'<span class="tag">' + esc(pick.tag) + '</span></div>' +
-'<p class="dcintro">' + esc(pick.intro) + '</p>' +
-(taskDone
-? '<div class="dcstatus done">✓ Выполнена сегодня. Новая задача — завтра.</div>' +
-'<div class="winrow"><button class="bigbtn ghost" id="dopen">Пройти ещё раз</button>' +
-'<button class="bigbtn ghost" id="dwarm">Ещё размяться</button></div>'
-: '<div class="winrow"><button class="bigbtn" id="dopen">Открыть задачу дня</button></div>') +
-'</div>';
-}
-
-var saved = takeShieldNote();
-
-var banner = "";
-if (agreedOn()){
-if (studyDue())
-banner = '<div class="daybanner due">🔔 <b>Сегодня учебный день' +
-(часЗанятия ? ", занятие в " + esc(часЗанятия) : "") + '.</b> ' +
-'Начни занятие, чтобы не пропустить.</div>';
-else if (agreedStudyDay(dayKey()))
-banner = '<div class="daybanner ok">✓ <b>Учебный день выполнен.</b> Сегодня ты уже занимался — молодец!</div>';
-else
-banner = '<div class="daybanner rest">Сегодня по расписанию день отдыха. Заглянуть можно и так — по желанию.</div>';
-}
-
-var schedBox;
-if (frameOn()){
-var fd = frame().days.slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
-.map(function(n){ return WD_SHORT[n]; }).join(", ");
-schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
-'<p>Занятия по ' + fd + ', по ' + frame().len + ' минут. Это назначил взрослый.</p>' +
-(isBreakDay(dayKey()) ? '<p class="dim">Сегодня каникулы — пропуск запланирован, это не прогул.</p>' : '') +
-'</div>';
-} else {
-var chips = WD_ORDER.map(function(n){
-var sel = scheduleDays().indexOf(n) >= 0;
-return '<button class="wdchip' + (sel ? " sel" : "") + '" data-wd="' + n + '">' + WD_SHORT[n] + '</button>';
-}).join("");
-schedBox = '<div class="card schedcard"><h3>📅 Дни занятий</h3>' +
-'<p class="dim">Отметь дни недели, когда планируешь заниматься. В такие дни на этом экране и на кнопке 🔥 появится напоминание. ' +
-'Если не выбрано ничего — напоминаний нет.</p>' +
-'<div class="wdrow">' + chips + '</div>' +
-(hasSchedule() ? '<p class="dim">Учебные дни: ' +
-scheduleDays().slice().sort(function(a,b){ return WD_ORDER.indexOf(a) - WD_ORDER.indexOf(b); })
-.map(function(n){ return WD_SHORT[n]; }).join(", ") + '.</p>' : '') +
-'</div>';
-}
-
-app.innerHTML =
-'<div class="lvlhead"><div><div class="idx">уговор и задача дня</div><h1>🔥 Сегодня</h1></div>' +
-'<div class="right"><span class="tag">' + (doneToday ? "сегодня сделано" : due ? "сегодня учебный день" : "сегодня свободно") + '</span></div></div>' +
-
-'<p class="lede">Здесь уговор: в какие дни вы договорились заниматься, и что уже сделано. ' +
-'Пропущенный день ничего не сжигает — календарь просто покажет, как было. ' +
-'Звёзды тут не начисляются: важна не серия, а возвращение.</p>' +
-installTipHTML() + saved + banner + capNoteHTML() + zanCardHTML() + ptaskCardHTML() + hero + timeCard + taskCard + schedBox +
-'<div class="pager"><button class="bigbtn ghost" id="tomap" data-home="1">← На главную</button></div>';
-
-wireInstallTip(app);
-var dopen = document.getElementById("dopen");
-if (dopen && pick) dopen.onclick = function(){ openWarmup(pick.id, { daily:true }); };
-var dwarm = document.getElementById("dwarm");
-if (dwarm) dwarm.onclick = screenWarmups;
-app.querySelectorAll("[data-wd]").forEach(function(b){
-b.onclick = function(){ toggleStudyDay(+b.getAttribute("data-wd")); screenToday(); };
+var TODAY = KVSCREENS.today({
+app: app, esc: esc, plural: plural, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,
+dayKey: dayKey, shiftDay: shiftDay, dayMs: dayMs, fmtDur: fmtDur, WD_SHORT: WD_SHORT, WD_ORDER: WD_ORDER,
+activeOn: activeOn, shieldedOn: shieldedOn, takeShieldNote: takeShieldNote, dailyPick: dailyPick, dailyDone: dailyDone,
+isStudyDay: isStudyDay, studyDue: studyDue, agreedDays: agreedDays, agreedOn: agreedOn, agreedStudyDay: agreedStudyDay,
+scheduleDays: scheduleDays, hasSchedule: hasSchedule, toggleStudyDay: toggleStudyDay,
+frame: frame, frameOn: frameOn, frameTime: frameTime, frameStudyDay: frameStudyDay, isBreakDay: isBreakDay,
+zanOpen: zanOpen, zanOfDay: zanOfDay, zanClosedCount: zanClosedCount, zanMins: zanMins, zanStart: zanStart,
+screenZan: screenZan, capHard: capHard, capNoteHTML: capNoteHTML, todayMinutes: todayMinutes,
+ptaskPending: ptaskPending, ptaskMarkDone: ptaskMarkDone, openLesson: openLesson, screenWorlds: screenWorlds,
+installTipHTML: installTipHTML, wireInstallTip: wireInstallTip,
+openWarmup: function(){ return openWarmup.apply(null, arguments); },
+screenWarmups: function(){ return screenWarmups.apply(null, arguments); },
+S: function(){ return S; },
+newSession: function(v){ session = v; return v; }
 });
-var zs = document.getElementById("zanstart");
-if (zs) zs.onclick = function(){ zanStart(); screenZan(); };
-var zc = document.getElementById("zancont");
-if (zc) zc.onclick = screenZan;
-var zm = document.getElementById("zanmore");
-if (zm) zm.onclick = function(){ zanStart(); screenZan(); };
-app.querySelectorAll("[data-ptdone]").forEach(function(b){
-b.onclick = function(){ ptaskMarkDone(b.getAttribute("data-ptdone")); screenToday(); };
-});
-app.querySelectorAll("[data-ptopen]").forEach(function(b){
-b.onclick = function(){
-ptaskMarkDone(b.getAttribute("data-ptopen"));
-var ref = b.getAttribute("data-ptref");
-if (ref) openLesson(ref); else screenWorlds();
-};
-});
-document.getElementById("tomap").onclick = goHome;
-refreshTop();
-window.scrollTo({ top:0, behavior:"smooth" });
-}
+var screenToday = TODAY.screenToday;
 
 var WARM = KVSCREENS.warm({
 app: app, esc: esc, hl: hl, enterScreen: enterScreen, refreshTop: refreshTop, goHome: goHome,

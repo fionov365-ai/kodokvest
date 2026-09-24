@@ -3538,6 +3538,81 @@ function checkEncoding(){
       viewReset(g);
     }
 
+    /* --- [двери-сегодня] (24.09.2026): «Сегодня» уехал в js/screens-today.js ---
+       По § 4.55 каждая дверь ЖМЁТСЯ и проверяется, куда привела: обработчик,
+       который ищет экран в момент нажатия, при отрисовке молчит. Условные
+       кнопки (итог занятия, задание взрослого, задача дня) тест создаёт сам. */
+    {
+      const снимок = JSON.parse(JSON.stringify(g.state));
+      /* устройство ребёнка (кабинет взрослого вместо Главного открыл бы свой
+         экран) и пройденные уроки мира 1 — иначе нет ни одной разминки, а
+         значит и задачи дня */
+      g.state.admin.isAdmin = false; g.state.admin.parentOf = "";
+      g.state.stars = {}; w.CURRICULUM[0].lessons.slice(0, 10).forEach(l => { g.state.stars[l.id] = 3; });
+      const тут = () => g.place() === "today";
+      const жми = async (el, что) => {
+        if (!el) return bad("[двери-сегодня] нет кнопки: " + что);
+        el.click(); await tick(60);
+        if (!тут()) bad("[двери-сегодня] «" + что + "» привела на «" + g.place() + "», а не на «Сегодня»");
+      };
+      g.screenWorlds(); await tick();
+      await жми(doc.getElementById("btn-today"), "Сегодня в шапке");
+      g.screenWorlds(); await tick();
+      await жми(doc.getElementById("go-today"), "карточка «Сегодня» на Главном");
+      w.history.replaceState(null, "", w.location.pathname + "#today");
+      g.routeHash(); await tick(60);
+      if (!тут()) bad("[двери-сегодня] адрес #today привёл на «" + g.place() + "»");
+      g.screenZan(); await tick();
+      await жми(doc.getElementById("zback"), "назад с экрана занятия");
+      g.screenZan(); await tick();
+      await жми(doc.getElementById("btn-back"), "«назад» в шапке на экране занятия");
+      g.zanStart(); const итог = g.zanFinish("hand");
+      g.screenZanDone(итог); await tick();
+      await жми(doc.getElementById("ztoday"), "итог занятия → «Сегодня»");
+      g.screenAssign({ t: "ask", text: "Расскажи, что делает цикл" }); await tick();
+      await жми(doc.getElementById("aback"), "задание взрослого → «На «Сегодня»»");
+      g.screenAssign({ t: "ask", text: "Расскажи про список" }); await tick();
+      await жми(doc.getElementById("adone"), "задание взрослого → «Рассказал»");
+      const дня = g.dailyPick();
+      if (!дня) bad("[двери-сегодня] задачи дня нет — дверь из неё не проверить");
+      else {
+        g.openWarmup(дня.id, { daily: true }); await tick(80);
+        await жми(doc.querySelector("[data-go]"), "назад из задачи дня");
+      }
+      /* и двери НАРУЖУ — через договор: значением отданное undefined падает
+         только при нажатии */
+      const изСегодня = async (sel, куда, что) => {
+        g.screenToday(); await tick(40);
+        const el = doc.querySelector(sel);
+        if (!el) return bad("[двери-сегодня] на «Сегодня» нет кнопки: " + что);
+        el.click(); await tick(80);
+        if (g.place() !== куда) bad("[двери-сегодня] «" + что + "» привела на «" + g.place() + "», а не на «" + куда + "»");
+      };
+      g.state.zan = {}; g.state.daily = {};
+      await изСегодня("#dopen", "warmup", "Открыть задачу дня");
+      g.state.daily[g.dayKey()] = 1;
+      await изСегодня("#dwarm", "warm", "Ещё размяться");
+      await изСегодня("#zanstart", "zan", "Начать занятие");
+      await изСегодня("#zancont", "zan", "Продолжить занятие");
+      g.zanFinish("hand");
+      await изСегодня("#zanmore", "zan", "Ещё занятие");
+      g.zanFinish("hand");
+      g.screenAssign({ t: "do", text: "Пройди урок", ref: w.CURRICULUM[0].lessons[0].id }); await tick();
+      await изСегодня("[data-ptopen]", "lesson", "задание взрослого: открыть урок");
+      g.screenAssign({ t: "ask", text: "Расскажи про условие" }); await tick();
+      await изСегодня("[data-ptdone]", "today", "задание взрослого: «Рассказал»");
+      g.screenToday(); await tick(40);
+      const чип = doc.querySelector("[data-wd]");
+      if (чип){ const было = JSON.stringify(g.state.schedule || null); чип.click(); await tick(40);
+        if (!тут() || JSON.stringify(g.state.schedule || null) === было) bad("[двери-сегодня] день расписания не отметился"); }
+      await изСегодня("#tomap", g.place() === "today" ? "home" : "home", "На главную");
+
+      Object.keys(g.state).forEach(k => { delete g.state[k]; });
+      Object.assign(g.state, снимок);
+      w.history.replaceState(null, "", w.location.pathname);
+      viewReset(g);
+    }
+
     /* --- [дом-взрослого] (24.09.2026): вывеска на устройстве взрослого ---
        Устройство репетитора или родителя без своих уроков звали «Мои уроки →»
        и вели на пустую карту миров. Кнопка обязана назвать кабинет роли и
