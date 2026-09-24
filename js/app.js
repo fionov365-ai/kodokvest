@@ -5164,6 +5164,7 @@ function openLesson(id){
     syncTopHeight();
     taskPinShow(app.querySelector(".goal"));
     window.scrollTo({ top:0, behavior:"smooth" });
+    if (firstEver) tourMaybe(seq);           /* три шага по первому уроку, один раз */
   });
 }
 
@@ -9532,7 +9533,84 @@ var screenSeq = 0;
 /* Через claimScreen проходит ЛЮБАЯ смена экрана: и enterScreen, и урок, и
    проект. Поэтому черновик уходящего урока сохраняется именно здесь — одним
    местом на все переходы, включая переход с урока сразу на другой урок. */
-function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
+function claimScreen(){ draftFlush(); taskPinHide(); tourStop(); return ++screenSeq; }
+
+/* ================= тур по первому уроку: три шага =================
+   24.09.2026, приём Яндекс Учебника из docs/konkurenty-sajty-2026-09-24.md
+   («быстренько покажем, что к чему»). Полоска «Что дальше» ПЕРЕЧИСЛЯЕТ
+   кнопки; тур ПОКАЗЫВАЕТ их на экране по одной — подсвечивает настоящее
+   место и говорит, что там делать.
+   ⚠️ Один раз и не стена: карточка внизу, урок под ней живой, «Пропустить»
+   и Esc закрывают сразу, и больше тур не приходит (отметка в localStorage —
+   это удобство устройства, а не прогресс: на сервер не едет). Уход с урока
+   убирает тур (claimScreen). Показывается только тому, у кого ещё ни один
+   урок не пройден, — тем же условием, что и полоска «Что дальше». */
+var TOUR_KEY = "kodokvest_tour1";
+var TOUR = [
+  /* ⚠️ Без «слева/справа»: на телефоне колонки встают одна под другой */
+  { sel: ".lcol-read .card", t: "Сначала — объяснение с примером",
+    p: "Прочитай и нажми «▶ Запустить пример»: код в примере можно менять и смотреть, что выйдет." },
+  { sel: "#studio", t: "Это твой редактор, задание — прямо над ним",
+    p: "Пиши код здесь. «▶ Запустить» покажет, что он делает. Запускать можно сколько угодно — звёзды за это не снимают." },
+  { sel: '#studio [data-role="check"]', t: "Готово — жми «✓ Проверить»",
+    p: "Тренажёр засчитает урок. Не выходит — «💡 Подсказка» ниже объяснит, как думать, но решение за тебя не напишет." }
+];
+var tourAt = -1;
+function tourSeen(){ try { return localStorage.getItem(TOUR_KEY) === "1"; } catch(e){ return true; } }
+function tourStop(done){
+  if (done){ try { localStorage.setItem(TOUR_KEY, "1"); } catch(e){} }
+  tourAt = -1;
+  var c = document.getElementById("tourcard"); if (c) c.remove();
+  document.querySelectorAll(".tourhl").forEach(function(e){ e.classList.remove("tourhl"); });
+  var hb = document.querySelector(".howbar"); if (hb) hb.style.display = "";
+}
+function tourShow(i){
+  document.querySelectorAll(".tourhl").forEach(function(e){ e.classList.remove("tourhl"); });
+  var s = TOUR[i], el = document.querySelector(s.sel);
+  if (!el) return tourStop(true);          /* нечего показать — не мучаем */
+  tourAt = i;
+  el.classList.add("tourhl");
+  var c = document.getElementById("tourcard");
+  if (!c){
+    c = document.createElement("div");
+    c.id = "tourcard"; c.className = "tourcard"; c.setAttribute("role", "dialog");
+    c.setAttribute("aria-live", "polite");
+    document.body.appendChild(c);
+  }
+  var last = i === TOUR.length - 1;
+  c.innerHTML = '<div class="tourstep">Шаг ' + (i + 1) + ' из ' + TOUR.length + '</div>' +
+    '<b>' + esc(s.t) + '</b><p>' + esc(s.p) + '</p><div class="tourbar">' +
+    '<button class="rbtn sec" data-tour="skip">Пропустить</button>' +
+    '<button class="rbtn check" data-tour="next">' + (last ? "Понятно" : "Дальше →") + '</button></div>';
+  c.querySelector('[data-tour="skip"]').onclick = function(){ tourStop(true); };
+  c.querySelector('[data-tour="next"]').onclick = function(){ last ? tourStop(true) : tourShow(i + 1); };
+  /* ⚠️ Низ подсвеченного места — НАД карточкой: на первом шаге под ней
+     оказывалась та самая «▶ Запустить пример», о которой шаг говорит.
+     Место выше свободного окна — пусть срежется верх, а не кнопки внизу. */
+  c.classList.remove("tourtop");
+  /* ⚠️ "instant": у html стоит плавная прокрутка, и замер сразу после неё
+     видел СТАРОЕ место — докрутка уводила объяснение за верх экрана */
+  if (el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "instant" });
+  var ch = c.offsetHeight || 0, room = window.innerHeight - ch - 24, r = el.getBoundingClientRect();
+  if (r.bottom > room && window.scrollBy) window.scrollBy({ top: r.bottom - room, behavior: "instant" });
+  /* липкая колонка от прокрутки не сдвигается — тогда карточка уходит наверх */
+  r = el.getBoundingClientRect();
+  if (r.bottom > room && r.top > ch + 32) c.classList.add("tourtop");
+  var nb = c.querySelector('[data-tour="next"]'); if (nb.focus) nb.focus({ preventScroll: true });
+}
+function tourMaybe(seq){
+  if (tourSeen()) return;
+  setTimeout(function(){
+    if (screenStale(seq) || tourAt >= 0) return;
+    /* полоска «Что дальше» говорит то же словами — пока идёт тур, она лишняя */
+    var hb = document.querySelector(".howbar"); if (hb) hb.style.display = "none";
+    /* урок только что поехал наверх ПЛАВНО — доводим мгновенно, иначе эта
+       прокрутка доедет уже поверх тура и уведёт подсветку за экран */
+    try { window.scrollTo({ top: 0, behavior: "instant" }); } catch(e){}
+    tourShow(0);
+  }, 0);
+}
+document.addEventListener("keydown", function(e){ if (e.key === "Escape" && tourAt >= 0) tourStop(true); });
 function screenStale(n){ return n !== screenSeq; }
 /* ⚠️ Хэш отсюда ушёл: адресом теперь целиком заведует routeFor. Осталась
    вторая половина, к хэшу отношения не имевшая, — `?admin` в запросе.

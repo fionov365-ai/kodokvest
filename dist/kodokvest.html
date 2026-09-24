@@ -2140,6 +2140,20 @@ transition:.2s;cursor:pointer}
 align-items:stretch}
 .ltabs:not(.ltsm) .ltab{justify-content:flex-start;padding:9px 11px}
 }
+.tourcard{position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:60;
+width:min(520px, calc(100% - 24px)); background:var(--panel); color:var(--ink);
+border:2px solid var(--acc); border-radius:16px; padding:14px 16px;
+box-shadow:0 18px 40px -16px rgba(20,20,60,.45)}
+.tourcard .tourstep{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--acc)}
+.tourcard b{display:block; font-size:17px; margin:4px 0 2px}
+.tourcard p{margin:0 0 10px; color:var(--soft); font-size:15px; line-height:1.45}
+.tourcard .tourbar{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap}
+.tourcard .rbtn{min-height:44px}
+.tourhl{position:relative; z-index:2; border-radius:14px;
+box-shadow:0 0 0 3px var(--acc), 0 0 0 9px color-mix(in srgb, var(--acc) 22%, transparent) !important;
+transition:box-shadow .2s}
+@media (prefers-reduced-motion:reduce){ .tourhl{transition:none} }
+.tourcard.tourtop{bottom:auto; top:16px}
 
 </style>
 <!-- Тема ставится ДО первой отрисовки и до загрузки js/app.js. Если сделать
@@ -37663,6 +37677,7 @@ refreshTop();
 syncTopHeight();
 taskPinShow(app.querySelector(".goal"));
 window.scrollTo({ top:0, behavior:"smooth" });
+if (firstEver) tourMaybe(seq);            
 });
 }
 
@@ -41126,7 +41141,70 @@ return claimScreen();
 
 var screenSeq = 0;
 
-function claimScreen(){ draftFlush(); taskPinHide(); return ++screenSeq; }
+function claimScreen(){ draftFlush(); taskPinHide(); tourStop(); return ++screenSeq; }
+
+var TOUR_KEY = "kodokvest_tour1";
+var TOUR = [
+
+{ sel: ".lcol-read .card", t: "Сначала — объяснение с примером",
+p: "Прочитай и нажми «▶ Запустить пример»: код в примере можно менять и смотреть, что выйдет." },
+{ sel: "#studio", t: "Это твой редактор, задание — прямо над ним",
+p: "Пиши код здесь. «▶ Запустить» покажет, что он делает. Запускать можно сколько угодно — звёзды за это не снимают." },
+{ sel: '#studio [data-role="check"]', t: "Готово — жми «✓ Проверить»",
+p: "Тренажёр засчитает урок. Не выходит — «💡 Подсказка» ниже объяснит, как думать, но решение за тебя не напишет." }
+];
+var tourAt = -1;
+function tourSeen(){ try { return localStorage.getItem(TOUR_KEY) === "1"; } catch(e){ return true; } }
+function tourStop(done){
+if (done){ try { localStorage.setItem(TOUR_KEY, "1"); } catch(e){} }
+tourAt = -1;
+var c = document.getElementById("tourcard"); if (c) c.remove();
+document.querySelectorAll(".tourhl").forEach(function(e){ e.classList.remove("tourhl"); });
+var hb = document.querySelector(".howbar"); if (hb) hb.style.display = "";
+}
+function tourShow(i){
+document.querySelectorAll(".tourhl").forEach(function(e){ e.classList.remove("tourhl"); });
+var s = TOUR[i], el = document.querySelector(s.sel);
+if (!el) return tourStop(true);           
+tourAt = i;
+el.classList.add("tourhl");
+var c = document.getElementById("tourcard");
+if (!c){
+c = document.createElement("div");
+c.id = "tourcard"; c.className = "tourcard"; c.setAttribute("role", "dialog");
+c.setAttribute("aria-live", "polite");
+document.body.appendChild(c);
+}
+var last = i === TOUR.length - 1;
+c.innerHTML = '<div class="tourstep">Шаг ' + (i + 1) + ' из ' + TOUR.length + '</div>' +
+'<b>' + esc(s.t) + '</b><p>' + esc(s.p) + '</p><div class="tourbar">' +
+'<button class="rbtn sec" data-tour="skip">Пропустить</button>' +
+'<button class="rbtn check" data-tour="next">' + (last ? "Понятно" : "Дальше →") + '</button></div>';
+c.querySelector('[data-tour="skip"]').onclick = function(){ tourStop(true); };
+c.querySelector('[data-tour="next"]').onclick = function(){ last ? tourStop(true) : tourShow(i + 1); };
+
+c.classList.remove("tourtop");
+
+if (el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "instant" });
+var ch = c.offsetHeight || 0, room = window.innerHeight - ch - 24, r = el.getBoundingClientRect();
+if (r.bottom > room && window.scrollBy) window.scrollBy({ top: r.bottom - room, behavior: "instant" });
+
+r = el.getBoundingClientRect();
+if (r.bottom > room && r.top > ch + 32) c.classList.add("tourtop");
+var nb = c.querySelector('[data-tour="next"]'); if (nb.focus) nb.focus({ preventScroll: true });
+}
+function tourMaybe(seq){
+if (tourSeen()) return;
+setTimeout(function(){
+if (screenStale(seq) || tourAt >= 0) return;
+
+var hb = document.querySelector(".howbar"); if (hb) hb.style.display = "none";
+
+try { window.scrollTo({ top: 0, behavior: "instant" }); } catch(e){}
+tourShow(0);
+}, 0);
+}
+document.addEventListener("keydown", function(e){ if (e.key === "Escape" && tourAt >= 0) tourStop(true); });
 function screenStale(n){ return n !== screenSeq; }
 
 function clearAdminQuery(){

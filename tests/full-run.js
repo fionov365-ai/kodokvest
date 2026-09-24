@@ -3495,6 +3495,49 @@ function checkEncoding(){
     if (typeof g.openExamMap === "function"){ g.openExamMap("all"); await tick(); }
     w.location.hash = ""; viewReset(g);
 
+    /* --- [тур]: три шага по первому уроку (24.09.2026) ---
+       Один раз, только тому, у кого не пройден ни один урок; шаги по очереди
+       подсвечивают настоящие места; «Понятно», «Пропустить» и Esc закрывают
+       навсегда; уход с урока убирает тур, не отмечая его увиденным. */
+    {
+      const звёзды = JSON.parse(JSON.stringify(g.state.stars || {}));
+      const ls = w.localStorage, КЛЮЧ = "kodokvest_tour1", былоЛс = ls.getItem(КЛЮЧ);
+      const карта = () => doc.getElementById("tourcard");
+      const шаг = () => (карта() ? карта().querySelector(".tourstep").textContent : "нет");
+      const далее = () => карта().querySelector('[data-tour="next"]').click();
+      const урок = async () => { g.openLesson(w.CURRICULUM[0].lessons[0].id); await tick(80); };
+      g.state.stars = {}; ls.removeItem(КЛЮЧ);
+      await урок();
+      if (шаг() !== "Шаг 1 из 3") bad("[тур] новичку на первом уроке тур не показан: " + шаг());
+      else {
+        if (!doc.querySelector(".lcol-read .tourhl")) bad("[тур] первый шаг не подсветил объяснение");
+        const hb = doc.querySelector(".howbar");
+        if (hb && hb.style.display !== "none") bad("[тур] полоска «Что дальше» видна одновременно с туром");
+        далее(); далее();
+        if (шаг() !== "Шаг 3 из 3" || !doc.querySelector('#studio [data-role="check"].tourhl'))
+          bad("[тур] третий шаг не на кнопке «Проверить»: " + шаг());
+        далее();
+        if (карта()) bad("[тур] «Понятно» не закрыло тур");
+        if (ls.getItem(КЛЮЧ) !== "1") bad("[тур] пройденный тур не отмечен — придёт снова");
+        if (doc.querySelectorAll(".tourhl").length) bad("[тур] после конца осталась подсветка");
+        await урок();
+        if (карта()) bad("[тур] тур показан второй раз");
+      }
+      ls.removeItem(КЛЮЧ); await урок();
+      g.screenWorlds(); await tick(40);
+      if (карта()) bad("[тур] уход с урока не убрал тур");
+      if (ls.getItem(КЛЮЧ)) bad("[тур] уход с урока отметил тур увиденным");
+      await урок();
+      doc.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape" }));
+      if (карта() || ls.getItem(КЛЮЧ) !== "1") bad("[тур] Esc не закрыл тур насовсем");
+      ls.removeItem(КЛЮЧ); g.state.stars = { "print-first": 3 };
+      await урок();
+      if (карта()) bad("[тур] показан тому, кто уже проходил уроки");
+      g.state.stars = звёзды;
+      if (былоЛс === null) ls.removeItem(КЛЮЧ); else ls.setItem(КЛЮЧ, былоЛс);
+      viewReset(g);
+    }
+
     /* --- [код-на-витрине]: поле «Уже есть код?» (24.09.2026) ---
        Витрина узнаёт код по виду и ведёт на #kidlogin= / #parentlogin= /
        #variant= / #proverka=. Здесь: (1) адреса открывают свой экран с
