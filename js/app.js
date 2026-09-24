@@ -10556,6 +10556,7 @@ var ABOUT = KVSCREENS.about({
   openLesson: openLesson, openExamMap: openExamMap, examTally: examTally,
   serverOn: serverOn, myCode: myCode, doLogin: doLogin, becomeKid: becomeKid,
   isAdminDevice: isAdminDevice, isParentDevice: isParentDevice,
+  goHome: goHome, adminUnlocked: adminUnlocked,
   S: function(){ return S; },
   newSession: function(v){ session = v; return v; }
 });

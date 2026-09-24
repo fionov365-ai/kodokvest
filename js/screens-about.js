@@ -930,6 +930,16 @@ function screenAbout(){
      взрослого тоже считается профилем: заводить ребёнка поверх открытого
      кабинета — не то, зачем родитель зашёл на вывеску. */
   var known = !!(A.myCode() || A.S().name || A.isAdminDevice() || A.isParentDevice());
+  /* ⚠️ Устройство взрослого без своих уроков звали «Мои уроки →» — а уроков
+     на нём нет: кабинет репетитора и родителя — отдельная роль, и кнопка вела
+     на пустую карту миров (найдено проверкой 24.09.2026). Дом у такой роли —
+     её кабинет, и надпись называет его, как кнопка в шапке (homeLabel). */
+  var adultHome = !started && !A.myCode() && !A.S().name && (A.isAdminDevice() || A.isParentDevice());
+  var mainLbl = started ? "Продолжить занятия →"
+    : !adultHome ? "Мои уроки →"
+    : A.isParentDevice() ? "Кабинет родителя →"
+    : A.adminUnlocked() ? "Кабинет репетитора →" : "🔒 Войти в кабинет →";
+  var mainAct = adultHome ? "home" : "on";
 
   var h = '<div class="land">';
 
@@ -976,8 +986,7 @@ function screenAbout(){
       '<p class="landlede">Ребёнок пишет код сам — а вы видите это без аккаунтов, звонков и рассрочек.</p>' +
       (started || known
         ? '<div class="landcta">' +
-            '<button class="bigbtn" data-land="on">' +
-              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+            '<button class="bigbtn" data-land="' + mainAct + '">' + mainLbl + '</button>' +
             '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
           '</div>'
         : '<div class="ldauth" id="ldauth"></div>') +
@@ -1209,8 +1218,7 @@ function screenAbout(){
          «↑ Завести профиль» — теперь то же действие, что у верхней кнопки. */
       '<div class="landcta">' +
         (started || known
-          ? '<button class="bigbtn" data-land="on">' +
-              (started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+          ? '<button class="bigbtn" data-land="' + mainAct + '">' + mainLbl + '</button>' +
             '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
           : '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
       '</div>' +
@@ -1224,6 +1232,7 @@ function screenAbout(){
     b.onclick = function(){
       var k = b.getAttribute("data-land");
       if (k === "on") return A.screenWorlds();
+      if (k === "home") return A.goHome();          /* кабинет своей роли */
       if (k === "try") return A.openLesson(CURRICULUM[0].lessons[0].id);
       if (k === "parent") return A.screenProverka();
       /* ⚠️ Ведёт СРАЗУ на вкладку ЕГЭ, а не на «Темы»: пришедший с вывески за

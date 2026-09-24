@@ -25894,6 +25894,13 @@ var started = Object.keys(A.S().stars).length;
 
 var known = !!(A.myCode() || A.S().name || A.isAdminDevice() || A.isParentDevice());
 
+var adultHome = !started && !A.myCode() && !A.S().name && (A.isAdminDevice() || A.isParentDevice());
+var mainLbl = started ? "Продолжить занятия →"
+: !adultHome ? "Мои уроки →"
+: A.isParentDevice() ? "Кабинет родителя →"
+: A.adminUnlocked() ? "Кабинет репетитора →" : "🔒 Войти в кабинет →";
+var mainAct = adultHome ? "home" : "on";
+
 var h = '<div class="land">';
 
 var nums = [
@@ -25922,8 +25929,7 @@ h += '<section class="landhero rv">' +
 '<p class="landlede">Ребёнок пишет код сам — а вы видите это без аккаунтов, звонков и рассрочек.</p>' +
 (started || known
 ? '<div class="landcta">' +
-'<button class="bigbtn" data-land="on">' +
-(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+'<button class="bigbtn" data-land="' + mainAct + '">' + mainLbl + '</button>' +
 '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>' +
 '</div>'
 : '<div class="ldauth" id="ldauth"></div>') +
@@ -26049,8 +26055,7 @@ c.oge + ' задач в формате ОГЭ, ' + c.ege + ' — в формат
 
 '<div class="landcta">' +
 (started || known
-? '<button class="bigbtn" data-land="on">' +
-(started ? "Продолжить занятия →" : "Мои уроки →") + '</button>' +
+? '<button class="bigbtn" data-land="' + mainAct + '">' + mainLbl + '</button>' +
 '<button class="bigbtn ghost" data-land="in">Войти или сменить роль</button>'
 : '<button class="bigbtn" data-land="try">Начать первый урок →</button>') +
 '</div>' +
@@ -26064,6 +26069,7 @@ A.app.querySelectorAll("[data-land]").forEach(function(b){
 b.onclick = function(){
 var k = b.getAttribute("data-land");
 if (k === "on") return A.screenWorlds();
+if (k === "home") return A.goHome();           
 if (k === "try") return A.openLesson(CURRICULUM[0].lessons[0].id);
 if (k === "parent") return A.screenProverka();
 
@@ -41853,6 +41859,7 @@ screenWorlds: screenWorlds, screenRoles: screenRoles, screenProverka: screenProv
 openLesson: openLesson, openExamMap: openExamMap, examTally: examTally,
 serverOn: serverOn, myCode: myCode, doLogin: doLogin, becomeKid: becomeKid,
 isAdminDevice: isAdminDevice, isParentDevice: isParentDevice,
+goHome: goHome, adminUnlocked: adminUnlocked,
 S: function(){ return S; },
 newSession: function(v){ session = v; return v; }
 });

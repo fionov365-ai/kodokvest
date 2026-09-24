@@ -3538,6 +3538,30 @@ function checkEncoding(){
       viewReset(g);
     }
 
+    /* --- [дом-взрослого] (24.09.2026): вывеска на устройстве взрослого ---
+       Устройство репетитора или родителя без своих уроков звали «Мои уроки →»
+       и вели на пустую карту миров. Кнопка обязана назвать кабинет роли и
+       вести в него. */
+    {
+      const было = JSON.parse(JSON.stringify({ stars: g.state.stars, name: g.state.name, admin: g.state.admin }));
+      const былКод = w.Cloud.myCode();
+      w.Cloud.forgetCode(); g.state.stars = {}; g.state.name = "";
+      const главная = () => { const b = doc.querySelector('.landcta .bigbtn:not(.ghost)'); return b ? b.textContent : "нет кнопки"; };
+      g.becomeAdmin(); g.adminLock();
+      g.screenAbout(); await tick();
+      if (/Мои уроки/.test(главная()) || !/Войти в кабинет/.test(главная()))
+        bad("[дом-взрослого] на запертом устройстве репетитора вывеска зовёт «" + главная() + "»");
+      const кн = doc.querySelector('.landcta .bigbtn:not(.ghost)');
+      if (кн){ кн.click(); await tick(); if (g.place() !== "adminlogin") bad("[дом-взрослого] кнопка репетитора привела на «" + g.place() + "»"); }
+      g.state.admin.isAdmin = false;
+      g.becomeParent("rebenok-dom", "");
+      g.screenAbout(); await tick();
+      if (!/Кабинет родителя/.test(главная())) bad("[дом-взрослого] на устройстве родителя вывеска зовёт «" + главная() + "»");
+      g.state.stars = было.stars; g.state.name = было.name; g.state.admin = было.admin;
+      if (былКод) w.Cloud.setCode(былКод);
+      viewReset(g);
+    }
+
     /* --- [код-на-витрине]: поле «Уже есть код?» (24.09.2026) ---
        Витрина узнаёт код по виду и ведёт на #kidlogin= / #parentlogin= /
        #variant= / #proverka=. Здесь: (1) адреса открывают свой экран с
